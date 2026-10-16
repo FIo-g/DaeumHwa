@@ -31,6 +31,45 @@ describe('result helpers', () => {
     })
   })
 
+  it('copies AppError.details into error.details', async () => {
+    const result = await toActionResult(async () => {
+      throw new AppError('CONFLICT', '다른 사람이 먼저 고쳤습니다.', { currentVersion: 3 })
+    })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.details).toEqual({ currentVersion: 3 })
+  })
+
+  it('omits details when AppError has none', async () => {
+    const result = await toActionResult(async () => {
+      throw new AppError('NOT_FOUND', '없습니다.')
+    })
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: '없습니다.' },
+    })
+  })
+
+  it('fail includes details only when provided', () => {
+    expect(fail('CONFLICT', '충돌', { currentVersion: 3 })).toEqual({
+      ok: false,
+      error: { code: 'CONFLICT', message: '충돌', details: { currentVersion: 3 } },
+    })
+    expect(fail('CONFLICT', '충돌')).not.toHaveProperty('error.details')
+  })
+
+  it('never leaks details from a plain Error', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const result = await toActionResult(async () => {
+      throw Object.assign(new Error('boom'), { details: { secret: true } })
+    })
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'BAD_STATE', message: '알 수 없는 오류가 발생했습니다.' },
+    })
+    expect(spy).toHaveBeenCalled()
+  })
+
   it('maps ZodError to VALIDATION with a generic Korean message', async () => {
     const result = await toActionResult(async () => z.object({ a: z.string() }).parse({ a: 1 }))
     expect(result).toEqual({

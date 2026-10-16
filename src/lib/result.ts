@@ -3,14 +3,16 @@ import { ZodError } from 'zod'
 import { type ErrorCode, isAppError } from '@/lib/errors'
 
 export type ActionResult<T> =
-  { ok: true; data: T } | { ok: false; error: { code: ErrorCode; message: string } }
+  | { ok: true; data: T }
+  | { ok: false; error: { code: ErrorCode; message: string; details?: unknown } }
 
 export function ok<T>(data: T): ActionResult<T> {
   return { ok: true, data }
 }
 
-export function fail(code: ErrorCode, message: string): ActionResult<never> {
-  return { ok: false, error: { code, message } }
+export function fail(code: ErrorCode, message: string, details?: unknown): ActionResult<never> {
+  if (details === undefined) return { ok: false, error: { code, message } }
+  return { ok: false, error: { code, message, details } }
 }
 
 /**
@@ -22,7 +24,7 @@ export async function toActionResult<T>(fn: () => Promise<T>): Promise<ActionRes
     return ok(await fn())
   } catch (e) {
     unstable_rethrow(e)
-    if (isAppError(e)) return fail(e.code, e.message)
+    if (isAppError(e)) return fail(e.code, e.message, e.details)
     if (e instanceof ZodError) return fail('VALIDATION', '입력값이 올바르지 않습니다.')
     console.error(e)
     return fail('BAD_STATE', '알 수 없는 오류가 발생했습니다.')

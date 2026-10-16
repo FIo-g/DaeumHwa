@@ -114,7 +114,11 @@ describe('manuscript actions', () => {
     const stale = await saveChapterAction({ chapterId: chapter.id, body: 'b', expectedVersion: 1 })
     expect(stale).toEqual({
       ok: false,
-      error: { code: 'CONFLICT', message: '다른 곳에서 먼저 수정된 원고가 있습니다.' },
+      error: {
+        code: 'CONFLICT',
+        message: '다른 곳에서 먼저 수정된 원고가 있습니다.',
+        details: { currentVersion: 2 },
+      },
     })
   })
 
