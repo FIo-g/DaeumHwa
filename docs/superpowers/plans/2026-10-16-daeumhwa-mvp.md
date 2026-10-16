@@ -45,7 +45,7 @@
 - Waves (→ = must finish first):
   - W0: T00
   - W1: T01 → (T02 ∥ T03a) → T03b → T03c
-  - W2: T04 ∥ T05 ∥ T06 ∥ T07 ∥ T08 ∥ T09
+  - W2: T04 ∥ T05 ∥ T06 ∥ T07 ∥ T08 ∥ T09 ∥ T12a
   - W3: T10 ∥ T11 ∥ T12 ∥ (T13 → T16) ∥ T14 ∥ T15
   - W4: T17 ∥ (T18 → T19) ∥ T20 ∥ T21 ∥ T22 ∥ T23 ∥ T24 ∥ T25
   - W5: T26 (integration + E2E) ∥ T27 (eval harness)
@@ -481,15 +481,24 @@ export async function createTestThread(db: Db, workId: string, o: { title: strin
 
 ---
 
+### Task T12a: Extraction schema and proposal mapping (Wave 2)
+
+**Files:**
+- Create: `src/ai/extraction.ts`, test `src/ai/extraction.test.ts`
+
+**Interfaces:**
+- Consumes: T01 (`ENTRY_KINDS`, `FACT_STATUSES`, `NewProposal`, `ProposalSource`, `EntryKind`), T02 `stripJosa`.
+- Produces: the `src/ai/extraction.ts` items described in Task T12's Produces list (`ExtractionSchema`, `Extraction`, `ExtractionContext`, `PendingThreadEvent`, `extractionToProposals`). Tests: the "extraction:" cases in T12 Step 1. Pure module (no DB, no AI).
+
 ### Task T12: Interview (F1) — AI tasks and service
 
 **Files:**
-- Create: `src/ai/tasks/interview-question.ts`, `src/ai/tasks/interview-extract.ts`, `src/ai/extraction.ts`, `src/server/interview.ts`, `src/server/actions/interview.ts`, tests `src/ai/tasks/interview.test.ts`, `src/ai/extraction.test.ts`, `src/server/interview.test.ts`
+- Create: `src/ai/tasks/interview-question.ts`, `src/ai/tasks/interview-extract.ts`, `src/server/interview.ts`, `src/server/actions/interview.ts`, tests `src/ai/tasks/interview.test.ts`, `src/server/interview.test.ts` (`src/ai/extraction.ts` comes from T12a)
 
 **Interfaces:**
-- Consumes: T08 (`AiTaskDef`, `runAiTask`, `getAiClient`), T03b `insertProposals`, T05 `listEntries` (or direct queries), T02 `stripJosa`, `findMentions`.
+- Consumes: T08 (`AiTaskDef`, `runAiTask`, `getAiClient`), T12a (`ExtractionSchema`, `extractionToProposals`), T03b `insertProposals`, T05 `listEntries` (or direct queries), T02 `stripJosa`, `findMentions`.
 - Produces:
-  - `src/ai/extraction.ts` (shared with T13): `ExtractionSchema` (zod, exact):
+  - `src/ai/extraction.ts` (built in T12a; shared with T13/T16): `ExtractionSchema` (zod, exact):
     ```ts
     z.object({
       summary: z.string().nullable(),
@@ -538,7 +547,7 @@ export async function createTestThread(db: Db, workId: string, o: { title: strin
 - Create: `src/ai/tasks/chapter-extract.ts`, `src/ai/tasks/continuity-check.ts`, `src/ai/tasks/proofread.ts`, `src/server/chapter-check.ts`, `src/server/actions/checks.ts`, tests `src/ai/tasks/{chapter-extract,continuity-check,proofread}.test.ts`, `src/server/chapter-check.test.ts`
 
 **Interfaces:**
-- Consumes: T08 (`runAiTask`, `buildContextPack`, `renderContextPack`, `resolveRefs`), T12 (`ExtractionSchema`, `extractionToProposals`), T07 (`replaceOpenIssues`, `NewIssue`), T03b (`insertProposals`, `deletePendingProposals`), T02 (`locateQuote`, `splitSentences`, `findNamingIssues`, `ruleBasedSpellcheck`, `findMentions`).
+- Consumes: T08 (`runAiTask`, `buildContextPack`, `renderContextPack`, `resolveRefs`), T12a (`ExtractionSchema`, `extractionToProposals`), T07 (`replaceOpenIssues`, `NewIssue`), T03b (`insertProposals`, `deletePendingProposals`), T02 (`locateQuote`, `splitSentences`, `findNamingIssues`, `ruleBasedSpellcheck`, `findMentions`).
 - Produces:
   - `chapterExtractTask: AiTaskDef<ChapterExtractInput, Extraction>`; `ChapterExtractInput = { chapterText: string; chapterPosition: number; chapterTitle: string; known: { name: string; kind: EntryKind; aliases: string[] }[]; openThreads: { ref: string; title: string; description: string }[]; knownFacts: { ref: string; subjectName: string; content: string }[]; model?: string }`; effort `medium`, maxTokens 16000; `model` passthrough (import uses `getImportModel()`). System prompt (exact):
     ```
@@ -677,7 +686,7 @@ export async function createTestThread(db: Db, workId: string, o: { title: strin
 - Create: `src/server/imports.ts`, `src/server/actions/imports.ts`, `src/inngest/client.ts`, `src/inngest/functions.ts`, `src/app/api/inngest/route.ts`, `src/app/api/import-jobs/[jobId]/route.ts`, `src/app/api/import-jobs/[jobId]/advance/route.ts`, test `src/server/imports.test.ts`
 
 **Interfaces:**
-- Consumes: T04 `createChaptersBulk`, T08 (`runAiTask`, `getImportModel`, `AppError AI_LIMIT`), T13 `chapterExtractTask`, T12 `extractionToProposals`, T03b (`insertProposals`, access).
+- Consumes: T04 `createChaptersBulk`, T08 (`runAiTask`, `getImportModel`, `AppError AI_LIMIT`), T13 `chapterExtractTask`, T12a `extractionToProposals`, T03b (`insertProposals`, access).
 - Produces:
   - `createImportJob(db, actor, input: { workId: string; fileName: string; totalChapters: number }): Promise<ImportJobRow>` (editor; status `uploading`; totalChapters 1–2000 else `VALIDATION '회차 수가 올바르지 않습니다.'`).
   - `appendImportChapters(db, actor, input: { jobId: string; chapters: { title: string; body: string }[] }): Promise<{ appended: number; received: number }>` (editor; status must be `uploading` → else `BAD_STATE`; > 50 chapters → `VALIDATION '한 번에 50화까지 올릴 수 있습니다.'`; creates chapters (status `done`, version source `import`) and appends ids to `chapterIds`; exceeding `totalChapters` → `VALIDATION`).

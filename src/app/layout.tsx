@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/sonner";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -13,7 +14,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className={cn("h-full antialiased", "font-sans", geist.variable)}>
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }
