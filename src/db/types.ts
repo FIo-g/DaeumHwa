@@ -238,6 +238,13 @@ export interface ExportPayload {
   exportedAt: string
   work: WorkRow
   chapters: ChapterRow[]
+  chapterVersions: ChapterVersionRow[]
+  comments: CommentRow[]
+  issues: IssueRow[]
+  proposals: ProposalRow[]
+  interviewSessions: InterviewSessionRow[]
+  interviewTurns: InterviewTurnRow[]
+  aiRuns: AiRunRow[]
   entries: EntryRow[]
   facts: FactRow[]
   threads: ThreadRow[]

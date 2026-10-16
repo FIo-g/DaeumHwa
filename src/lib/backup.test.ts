@@ -19,6 +19,13 @@ const payload = {
     },
     { id: 'c1', position: 1, title: '시작', body: '첫 화 본문', status: 'done', publishedOn: null },
   ],
+  chapterVersions: [],
+  comments: [],
+  issues: [],
+  proposals: [],
+  interviewSessions: [],
+  interviewTurns: [],
+  aiRuns: [],
   entries: [
     {
       id: 'e1',

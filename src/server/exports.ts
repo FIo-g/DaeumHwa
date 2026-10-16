@@ -1,10 +1,17 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import {
+  aiRuns,
   changeLog,
+  chapterVersions,
   chapters,
+  comments,
   facts,
+  interviewSessions,
+  interviewTurns,
+  issues,
   namingRules,
+  proposals,
   relations,
   scheduleItems,
   styleCards,
@@ -14,9 +21,12 @@ import {
   wikiEntries,
   works,
 } from '@/db/schema'
-import type { Actor, ExportPayload } from '@/db/types'
+import type { ExportPayload, Actor, AiTaskName } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { requireWorkRole } from '@/server/access'
+
+/** AI tasks whose finished outputs belong in the backup (authored content, not every AI call). */
+const EXPORTED_AI_TASKS: AiTaskName[] = ['reader-sim', 'direction-advice', 'draft-chapter']
 
 /**
  * Whole-work backup payload (owner only). Includes archived rows; every query is scoped to
@@ -40,6 +50,32 @@ export async function buildExportPayload(
         .from(chapters)
         .where(eq(chapters.workId, workId))
         .orderBy(asc(chapters.position), asc(chapters.id))
+      const chapterIds = chapterRows.map((c) => c.id)
+
+      // Chapter versions have no work_id column; they are reached through their chapter.
+      const chapterVersionRows =
+        chapterIds.length === 0
+          ? []
+          : await tx
+              .select()
+              .from(chapterVersions)
+              .where(inArray(chapterVersions.chapterId, chapterIds))
+              .orderBy(asc(chapterVersions.createdAt), asc(chapterVersions.id))
+      const commentRows = await tx
+        .select()
+        .from(comments)
+        .where(eq(comments.workId, workId))
+        .orderBy(asc(comments.createdAt), asc(comments.id))
+      const issueRows = await tx
+        .select()
+        .from(issues)
+        .where(eq(issues.workId, workId))
+        .orderBy(asc(issues.createdAt), asc(issues.id))
+      const proposalRows = await tx
+        .select()
+        .from(proposals)
+        .where(eq(proposals.workId, workId))
+        .orderBy(asc(proposals.createdAt), asc(proposals.id))
       const entries = await tx
         .select()
         .from(wikiEntries)
@@ -74,6 +110,33 @@ export async function buildExportPayload(
               .from(threadEntries)
               .where(inArray(threadEntries.threadId, threadIds))
 
+      // Interview turns have no work_id column; they are reached through their session.
+      const interviewSessionRows = await tx
+        .select()
+        .from(interviewSessions)
+        .where(eq(interviewSessions.workId, workId))
+        .orderBy(asc(interviewSessions.createdAt), asc(interviewSessions.id))
+      const sessionIds = interviewSessionRows.map((s) => s.id)
+      const interviewTurnRows =
+        sessionIds.length === 0
+          ? []
+          : await tx
+              .select()
+              .from(interviewTurns)
+              .where(inArray(interviewTurns.sessionId, sessionIds))
+              .orderBy(asc(interviewTurns.createdAt), asc(interviewTurns.id))
+      const aiRunRows = await tx
+        .select()
+        .from(aiRuns)
+        .where(
+          and(
+            eq(aiRuns.workId, workId),
+            eq(aiRuns.status, 'done'),
+            inArray(aiRuns.task, EXPORTED_AI_TASKS),
+          ),
+        )
+        .orderBy(asc(aiRuns.createdAt), asc(aiRuns.id))
+
       const relationRows = await tx
         .select()
         .from(relations)
@@ -106,6 +169,7 @@ export async function buildExportPayload(
         exportedAt: new Date().toISOString(),
         work,
         chapters: chapterRows,
+        chapterVersions: chapterVersionRows,
         entries,
         facts: factRows,
         threads: threadRows,
@@ -114,6 +178,12 @@ export async function buildExportPayload(
         relations: relationRows,
         namingRules: namingRuleRows,
         styleCards: styleCardRows,
+        comments: commentRows,
+        issues: issueRows,
+        proposals: proposalRows,
+        interviewSessions: interviewSessionRows,
+        interviewTurns: interviewTurnRows,
+        aiRuns: aiRunRows,
         changes: changeRows,
         scheduleItems: scheduleRows,
       }

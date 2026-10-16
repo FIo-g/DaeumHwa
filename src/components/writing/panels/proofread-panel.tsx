@@ -1,0 +1,161 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { AiBadge } from '@/components/app/ai-badge'
+import { EmptyState } from '@/components/app/empty-state'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { runAction } from '@/lib/client/run-action'
+import { runProofreadAction } from '@/server/actions/checks'
+import type { Highlight, WorkspaceApi, WritingData } from '../types'
+import { EDITOR_ONLY_NOTE, canEditChapter, rangeOf } from './shared'
+
+type ProofreadPanelProps = {
+  data: WritingData
+  api: WorkspaceApi
+  text: string
+}
+
+// Mirrors ProofreadSuggestion from the server checker. Kept local so this client file imports no server code.
+type ProofreadItem = {
+  source: 'rule' | 'ai'
+  quote: string
+  replacement: string
+  kind: 'spelling' | 'spacing' | 'grammar' | 'awkward'
+  reason: string
+  start: number
+  end: number
+}
+
+const KIND_LABEL: Record<ProofreadItem['kind'], string> = {
+  spelling: '맞춤법',
+  spacing: '띄어쓰기',
+  grammar: '문법',
+  awkward: '어색한 표현',
+}
+
+/**
+ * Proofreading (F14). "규칙 검사" runs the built-in checks; "AI 교정" adds model suggestions.
+ * Applying a suggestion replaces its quote in the editor. Saving stays with the author.
+ */
+export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
+  const editable = canEditChapter(data)
+  const [items, setItems] = useState<ProofreadItem[] | null>(null)
+  const [running, setRunning] = useState<'rule' | 'ai' | null>(null)
+
+  const highlights = useMemo<Highlight[]>(
+    () =>
+      (items ?? []).flatMap((item, index) => {
+        const range = rangeOf(text, item.quote, item.start)
+        if (!range) return []
+        return [{ id: `proofread-${index}`, start: range.start, end: range.end, kind: 'spelling' }]
+      }),
+    [items, text],
+  )
+
+  useEffect(() => {
+    api.setHighlights('proofread', highlights)
+  }, [api, highlights])
+
+  useEffect(() => {
+    return () => api.setHighlights('proofread', [])
+  }, [api])
+
+  async function run(useAi: boolean) {
+    setRunning(useAi ? 'ai' : 'rule')
+    const result = await runAction(
+      runProofreadAction({ chapterId: data.chapter.id, text: api.getText(), useAi }),
+    )
+    setRunning(null)
+    if (result) setItems(result.suggestions)
+  }
+
+  function apply(item: ProofreadItem): boolean {
+    const replaced = api.replaceQuote(item.quote, item.replacement, item.start)
+    if (!replaced) {
+      toast.error('원고가 바뀌어 문장을 찾지 못했습니다. 다시 검사해 주세요.')
+      return false
+    }
+    setItems((prev) => (prev ? prev.filter((x) => x !== item) : prev))
+    return true
+  }
+
+  /** Applies every rule suggestion from the end of the text backwards, so earlier offsets stay valid. */
+  function applyAllRules() {
+    if (!items) return
+    const rules = items.filter((item) => item.source === 'rule').sort((a, b) => b.start - a.start)
+    const done = rules.filter((item) => api.replaceQuote(item.quote, item.replacement, item.start))
+    if (done.length < rules.length) {
+      toast.error(`${rules.length - done.length}곳은 원고가 바뀌어 고치지 못했습니다.`)
+    }
+    if (done.length > 0) {
+      toast.success(`${done.length}곳을 고쳤습니다.`)
+      setItems((prev) => (prev ? prev.filter((x) => !done.includes(x)) : prev))
+    }
+  }
+
+  const ruleCount = items?.filter((item) => item.source === 'rule').length ?? 0
+
+  return (
+    <section aria-label="맞춤법과 표현" className="grid gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {editable ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={running !== null}
+              onClick={() => void run(false)}
+            >
+              {running === 'rule' ? '검사 중…' : '규칙 검사'}
+            </Button>
+            <Button size="sm" disabled={running !== null} onClick={() => void run(true)}>
+              {running === 'ai' ? '교정 중… (AI)' : 'AI 교정'}
+            </Button>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>
+        )}
+        {editable && ruleCount > 0 && (
+          <Button size="sm" variant="ghost" onClick={applyAllRules}>
+            모두 적용 (규칙)
+          </Button>
+        )}
+      </div>
+
+      {items === null && (
+        <p className="text-sm text-muted-foreground">
+          규칙 검사는 흔한 맞춤법과 띄어쓰기 오류를 바로 찾습니다. AI 교정은 어색한 표현까지
+          찾습니다.
+        </p>
+      )}
+
+      {items !== null && items.length === 0 && <EmptyState title="고칠 곳을 찾지 못했습니다." />}
+
+      <ul className="grid gap-2">
+        {(items ?? []).map((item, index) => (
+          <li key={`${item.start}-${index}`} className="grid gap-2 rounded-lg border p-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
+              {item.source === 'ai' && <AiBadge />}
+            </div>
+            <p className="text-sm leading-6">
+              <span className="line-through decoration-destructive">{item.quote}</span>
+              <span aria-hidden="true"> → </span>
+              <span className="font-medium">{item.replacement}</span>
+            </p>
+            <p className="text-sm text-muted-foreground">{item.reason}</p>
+            {editable && (
+              <div>
+                <Button size="sm" variant="outline" onClick={() => apply(item)}>
+                  적용
+                </Button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}

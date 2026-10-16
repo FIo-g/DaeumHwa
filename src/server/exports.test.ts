@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Db } from '@/db/client'
 import {
   changeLog,
+  chapterVersions,
   chapters,
+  comments,
   namingRules,
   relations,
   scheduleItems,
@@ -139,6 +141,54 @@ describe('buildExportPayload', () => {
     expect(payload.scheduleItems.map((s) => s.title)).toEqual(['1권 마감'])
   })
 
+  it('includes chapter versions and comments of the work, not of another work', async () => {
+    const owner = await createTestUser(db)
+    const mine = await seedWork(owner.id, '내 작품')
+    const theirs = await seedWork(owner.id, '다른 작품')
+
+    await db.insert(chapterVersions).values([
+      {
+        chapterId: mine.chapter.id,
+        version: 1,
+        title: '1화',
+        body: '내 버전 본문',
+        charCount: 6,
+        source: 'save',
+        createdBy: owner.id,
+      },
+      {
+        chapterId: theirs.chapter.id,
+        version: 1,
+        title: '1화',
+        body: '남의 버전 본문',
+        charCount: 7,
+        source: 'save',
+        createdBy: owner.id,
+      },
+    ])
+    await db.insert(comments).values([
+      {
+        workId: mine.work.id,
+        chapterId: mine.chapter.id,
+        authorId: owner.id,
+        body: '내 작품 댓글',
+      },
+      {
+        workId: theirs.work.id,
+        chapterId: theirs.chapter.id,
+        authorId: owner.id,
+        body: '다른 작품 댓글',
+      },
+    ])
+
+    const payload = await buildExportPayload(db, { userId: owner.id }, mine.work.id)
+
+    expect(payload.chapterVersions.map((v) => v.body)).toEqual(['내 버전 본문'])
+    expect(payload.chapterVersions[0].chapterId).toBe(mine.chapter.id)
+    expect(payload.comments.map((c) => c.body)).toEqual(['내 작품 댓글'])
+    expect(payload.comments[0].workId).toBe(mine.work.id)
+  })
+
   it('never includes rows of another work', async () => {
     const owner = await createTestUser(db)
     const mine = await seedWork(owner.id, '내 작품')
@@ -175,6 +225,13 @@ describe('buildExportPayload', () => {
     expect(payload.styleCards).toEqual([])
     expect(payload.changes).toEqual([])
     expect(payload.scheduleItems).toEqual([])
+    expect(payload.chapterVersions).toEqual([])
+    expect(payload.comments).toEqual([])
+    expect(payload.issues).toEqual([])
+    expect(payload.proposals).toEqual([])
+    expect(payload.interviewSessions).toEqual([])
+    expect(payload.interviewTurns).toEqual([])
+    expect(payload.aiRuns).toEqual([])
   })
 
   it('rejects an editor with FORBIDDEN (owner only)', async () => {
