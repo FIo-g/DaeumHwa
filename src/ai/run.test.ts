@@ -26,7 +26,7 @@ const task: AiTaskDef<{ q: string }, { text: string }> = {
 
 const failingClient: AiClient = {
   provider: 'anthropic',
-  defaultModel: 'claude-opus-5-5',
+  defaultModel: 'claude-haiku-5-5',
   async generateObject() {
     throw new Error('boom')
   },
@@ -39,7 +39,7 @@ const failingClient: AiClient = {
 function billedFailureClient(usage: { inputTokens: number; outputTokens: number }): AiClient {
   return {
     provider: 'anthropic',
-    defaultModel: 'claude-opus-5-5',
+    defaultModel: 'claude-haiku-5-5',
     async generateObject() {
       throw new AppError('AI_ERROR', '응답이 너무 길어 중간에 끊겼습니다.', { usage })
     },

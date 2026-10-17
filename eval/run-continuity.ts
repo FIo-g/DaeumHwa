@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { AnthropicAiClient } from '@/ai/anthropic'
+import { getAiClient } from '@/ai'
 import { buildContextPack } from '@/ai/context'
 import { FakeAiClient } from '@/ai/fake'
 import { runAiTask } from '@/ai/run'
@@ -19,6 +19,7 @@ import {
   type IssueKind,
   THREAD_STATUSES,
 } from '@/db/types'
+import { getAiProvider } from '@/lib/ai-mode'
 import { createTestDb } from '@/test/db'
 import {
   createTestChapter,
@@ -32,13 +33,15 @@ import { type ExpectedIssue, type FoundIssue, type IssueScore, scoreIssues } fro
 // Continuity accuracy eval (spec §12). Loads the made-up fixture novel into an in-memory database,
 // runs the continuity check on every chapter, and scores the reported issues against answers.json.
 //
-//   pnpm eval:continuity           real API (needs ANTHROPIC_API_KEY), otherwise prints a skip message
+//   pnpm eval:continuity           real API (needs ANTHROPIC_API_KEY or OPENCODE_API_KEY), otherwise prints a skip message
 //   pnpm eval:continuity --fake    deterministic fake client, checks the run flow only
 
 const FIXTURE_DIR = path.resolve(process.cwd(), 'eval/fixtures/continuity')
 const RESULTS_DIR = path.resolve(process.cwd(), 'eval/results')
 const SKIP_MESSAGE =
-  'ANTHROPIC_API_KEY가 없어 평가를 건너뜁니다. --fake로 실행 흐름만 확인할 수 있습니다.'
+  'AI 키(ANTHROPIC_API_KEY 또는 OPENCODE_API_KEY)가 없어 평가를 건너뜁니다. --fake로 실행 흐름만 확인할 수 있습니다.'
+const FAKE_PROVIDER_SKIP_MESSAGE =
+  'AI_PROVIDER=fake 설정으로 평가를 건너뜁니다. 실제 평가는 AI_PROVIDER를 비우거나 anthropic, opencode로 설정하세요. --fake로 실행 흐름만 확인할 수 있습니다.'
 
 const WorkFixtureSchema = z.object({
   title: z.string(),
@@ -287,8 +290,10 @@ function printSummary(
 
 async function main(): Promise<void> {
   const useFake = process.argv.includes('--fake')
-  if (!useFake && (process.env.ANTHROPIC_API_KEY ?? '').trim() === '') {
-    console.log(SKIP_MESSAGE)
+  if (!useFake && getAiProvider() === 'fake') {
+    console.log(
+      process.env.AI_PROVIDER?.trim() === 'fake' ? FAKE_PROVIDER_SKIP_MESSAGE : SKIP_MESSAGE,
+    )
     return
   }
 
@@ -297,7 +302,7 @@ async function main(): Promise<void> {
   const bodies = loadChapterBodies(work)
   checkAnswers(answers, bodies)
 
-  const client: AiClient = useFake ? new FakeAiClient() : new AnthropicAiClient()
+  const client: AiClient = useFake ? new FakeAiClient() : getAiClient()
   const db = await createTestDb()
   const owner = await createTestUser(db)
   const workRow = await createTestWork(db, owner.id, { title: work.title })
@@ -348,7 +353,7 @@ async function main(): Promise<void> {
     outFile,
     `${JSON.stringify(
       {
-        mode: useFake ? 'fake' : 'anthropic',
+        mode: client.provider,
         model: client.defaultModel,
         createdAt: new Date().toISOString(),
         expected,

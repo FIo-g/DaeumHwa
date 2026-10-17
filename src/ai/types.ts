@@ -27,7 +27,7 @@ export interface StreamTextArgs {
 }
 
 export interface AiClient {
-  provider: 'anthropic' | 'fake'
+  provider: 'anthropic' | 'opencode' | 'fake'
   defaultModel: string
   generateObject<T>(
     args: GenerateObjectArgs<T>,

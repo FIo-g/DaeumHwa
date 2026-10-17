@@ -1,10 +1,11 @@
 import Anthropic, { APIError, AuthenticationError, RateLimitError } from '@anthropic-ai/sdk'
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import { z } from 'zod'
 import { AppError } from '@/lib/errors'
+import { providerDefaultModel } from '@/ai/models'
 import type { AiClient, AiUsage, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 
-const DEFAULT_MODEL = 'claude-opus-5-5'
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01'
 /** Models that accept server-side fallback on the beta Messages API. */
 const FALLBACK_MODELS = new Set([
@@ -17,6 +18,24 @@ const FALLBACK_MODELS = new Set([
 const REFUSAL_MESSAGE = 'AI가 이 요청을 처리하지 않았습니다.'
 const MAX_TOKENS_MESSAGE = 'AI 응답이 너무 길어 중간에 끊겼습니다.'
 const FORMAT_MESSAGE = 'AI 응답 형식이 올바르지 않습니다.'
+const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
+
+export interface AnthropicClientOptions {
+  /** Label reported as `provider`. OpenCode Go reuses this client with its own label. */
+  provider?: 'anthropic' | 'opencode'
+  /** Send server-side fallback for Opus-class models. Off for gateways that do not support it. */
+  serverFallback?: boolean
+  /**
+   * Gateway fallback for output_config. Structured calls then go through messages.create and the
+   * answer text is parsed here, so a gateway that rejects output_config (a 400) or ignores it (a
+   * prose answer) is seen with its billed usage. Each such model gets one plain-JSON retry, marked
+   * for JSON mode only after that retry succeeds. A stream rejected for output_config (effort) is
+   * retried once without it.
+   */
+  jsonFallback?: boolean
+  /** Models known to lack structured output. They use JSON mode from the first call. */
+  jsonModels?: readonly string[]
+}
 
 /** The part of a (beta or non-beta) message stream that streamText uses. */
 interface TextStream {
@@ -38,44 +57,135 @@ type ObjectResponse<T> = {
   model: string
 }
 
+type ObjectResult<T> = { object: T; usage: AiUsage; model: string }
+
+/** The API billed a structured answer that was not valid JSON for the schema. Triggers the JSON retry. */
+class UnstructuredAnswer extends Error {
+  readonly usage: AiUsage
+
+  constructor(usage: AiUsage) {
+    super('Structured answer did not match the schema')
+    this.name = 'UnstructuredAnswer'
+    this.usage = usage
+  }
+}
+
 /** Anthropic-backed client. `sdk` can be injected in tests; by default a real SDK client is created. */
 export class AnthropicAiClient implements AiClient {
-  readonly provider = 'anthropic' as const
+  readonly provider: 'anthropic' | 'opencode'
   readonly defaultModel: string
   private readonly sdk: Anthropic
+  private readonly serverFallback: boolean
+  private readonly jsonFallback: boolean
+  /** Models that use JSON mode on this client instance. */
+  private readonly jsonModels: Set<string>
+  /** Models whose stream rejected output_config (effort); they stream without it. */
+  private readonly streamPlainModels = new Set<string>()
 
-  constructor(sdk?: Anthropic, defaultModel?: string) {
+  constructor(sdk?: Anthropic, defaultModel?: string, options: AnthropicClientOptions = {}) {
+    this.provider = options.provider ?? 'anthropic'
     this.sdk = sdk ?? new Anthropic()
-    this.defaultModel = defaultModel ?? (process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL)
+    this.defaultModel = defaultModel ?? providerDefaultModel('anthropic')
+    this.serverFallback = options.serverFallback ?? true
+    this.jsonFallback = options.jsonFallback ?? false
+    this.jsonModels = new Set(options.jsonModels ?? [])
   }
 
-  async generateObject<T>(args: GenerateObjectArgs<T>) {
+  async generateObject<T>(args: GenerateObjectArgs<T>): Promise<ObjectResult<T>> {
     const model = args.model ?? this.defaultModel
+    if (this.jsonModels.has(model)) return this.generateObjectAsJson(args, model, NO_USAGE)
+    try {
+      return await this.generateObjectStructured(args, model)
+    } catch (error) {
+      if (!this.jsonFallback || !isStructuredOutputRejection(error)) throw toAiError(error)
+      const billed = error instanceof UnstructuredAnswer ? error.usage : NO_USAGE
+      const result = await this.generateObjectAsJson(args, model, billed)
+      this.jsonModels.add(model)
+      return result
+    }
+  }
+
+  /** Structured output through the SDK parse helpers. Errors are returned raw for the caller to map. */
+  private async generateObjectStructured<T>(
+    args: GenerateObjectArgs<T>,
+    model: string,
+  ): Promise<ObjectResult<T>> {
+    if (this.jsonFallback) return this.structuredThroughCreate(args, model)
     const system = systemBlocks(args.system)
     const messages = [{ role: 'user' as const, content: args.prompt }]
-    try {
-      if (usesFallback(model)) {
-        const response = await this.sdk.beta.messages.parse({
-          model,
-          max_tokens: args.maxTokens,
-          system,
-          messages,
-          output_config: { format: betaZodOutputFormat(args.schema), effort: args.effort },
-          betas: [FALLBACK_BETA],
-          fallbacks: 'default',
-        })
-        return objectResult(response as ObjectResponse<T>)
-      }
-      const response = await this.sdk.messages.parse({
+    if (this.usesServerFallback(model)) {
+      const response = await this.sdk.beta.messages.parse({
         model,
         max_tokens: args.maxTokens,
         system,
         messages,
-        output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
+        output_config: { format: betaZodOutputFormat(args.schema), effort: args.effort },
+        betas: [FALLBACK_BETA],
+        fallbacks: 'default',
       })
       return objectResult(response as ObjectResponse<T>)
+    }
+    const response = await this.sdk.messages.parse({
+      model,
+      max_tokens: args.maxTokens,
+      system,
+      messages,
+      output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
+    })
+    return objectResult(response as ObjectResponse<T>)
+  }
+
+  /**
+   * Structured output for gateways that may ignore output_config. The answer text is parsed here,
+   * so a prose or off-schema answer arrives with its billed usage and goes to the JSON retry.
+   */
+  private async structuredThroughCreate<T>(
+    args: GenerateObjectArgs<T>,
+    model: string,
+  ): Promise<ObjectResult<T>> {
+    const response = await this.sdk.messages.create({
+      model,
+      max_tokens: args.maxTokens,
+      system: systemBlocks(args.system),
+      messages: [{ role: 'user' as const, content: args.prompt }],
+      output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
+    })
+    const usage = usageOf(response.usage)
+    assertStopReason(response.stop_reason, usage)
+    const checked = safeParseAnswer(args.schema, textOf(response.content))
+    if (!checked.success) throw new UnstructuredAnswer(usage)
+    return { object: checked.data, usage, model: response.model }
+  }
+
+  /**
+   * Plain-text JSON mode for gateways that do not forward output_config. No output_config and
+   * no fallbacks are sent; the first JSON object in the answer is parsed and schema-checked.
+   * `billed` is usage from earlier attempts for the same call, so it is counted here too.
+   */
+  private async generateObjectAsJson<T>(
+    args: GenerateObjectArgs<T>,
+    model: string,
+    billed: AiUsage,
+  ): Promise<ObjectResult<T>> {
+    try {
+      const response = await this.sdk.messages.create({
+        model,
+        max_tokens: args.maxTokens,
+        system: systemBlocks(args.system),
+        messages: [
+          {
+            role: 'user' as const,
+            content: `${args.prompt}\n\n${jsonInstruction(args.schema)}`,
+          },
+        ],
+      })
+      const usage = addUsage(billed, usageOf(response.usage))
+      assertStopReason(response.stop_reason, usage)
+      const checked = safeParseAnswer(args.schema, textOf(response.content))
+      if (!checked.success) throw aiErrorWithUsage(FORMAT_MESSAGE, usage)
+      return { object: checked.data, usage, model: response.model }
     } catch (error) {
-      throw toAiError(error)
+      throw toAiError(error, billed)
     }
   }
 
@@ -94,37 +204,69 @@ export class AnthropicAiClient implements AiClient {
     model: string,
     channel: TextChannel,
   ): Promise<{ text: string; usage: AiUsage; model: string }> {
+    const sendEffort = !(this.jsonFallback && this.streamPlainModels.has(model))
     try {
-      const params = {
-        model,
-        max_tokens: args.maxTokens,
-        system: systemBlocks(args.system),
-        messages: [{ role: 'user' as const, content: args.prompt }],
-        output_config: { effort: args.effort },
-      }
-      const stream: TextStream = usesFallback(model)
-        ? this.sdk.beta.messages.stream({
-            ...params,
-            betas: [FALLBACK_BETA],
-            fallbacks: 'default',
-          })
-        : this.sdk.messages.stream(params)
-      stream.on('text', (delta: string) => channel.push(delta))
-      const message = await stream.finalMessage()
-      assertStopReason(message.stop_reason, message.usage)
-      channel.close()
-      return {
-        text: message.content
-          .map((block) => (block.type === 'text' ? (block.text ?? '') : ''))
-          .join(''),
-        usage: usageOf(message.usage),
-        model: message.model,
-      }
+      return await this.streamOnce(args, model, channel, sendEffort)
     } catch (error) {
-      const aiError = toAiError(error)
-      channel.fail(aiError)
-      throw aiError
+      // Only before any text reached the caller, so the retry cannot repeat output.
+      if (
+        this.jsonFallback &&
+        sendEffort &&
+        !channel.started &&
+        isStructuredOutputRejection(error)
+      ) {
+        try {
+          const result = await this.streamOnce(args, model, channel, false)
+          this.streamPlainModels.add(model)
+          return result
+        } catch (retryError) {
+          return this.failStream(channel, retryError)
+        }
+      }
+      return this.failStream(channel, error)
     }
+  }
+
+  private async streamOnce(
+    args: StreamTextArgs,
+    model: string,
+    channel: TextChannel,
+    sendEffort: boolean,
+  ): Promise<{ text: string; usage: AiUsage; model: string }> {
+    const params = {
+      model,
+      max_tokens: args.maxTokens,
+      system: systemBlocks(args.system),
+      messages: [{ role: 'user' as const, content: args.prompt }],
+      ...(sendEffort ? { output_config: { effort: args.effort } } : {}),
+    }
+    const stream: TextStream = this.usesServerFallback(model)
+      ? this.sdk.beta.messages.stream({
+          ...params,
+          betas: [FALLBACK_BETA],
+          fallbacks: 'default',
+        })
+      : this.sdk.messages.stream(params)
+    stream.on('text', (delta: string) => channel.push(delta))
+    const message = await stream.finalMessage()
+    const usage = usageOf(message.usage)
+    assertStopReason(message.stop_reason, usage)
+    channel.close()
+    return {
+      text: textOf(message.content),
+      usage,
+      model: message.model,
+    }
+  }
+
+  private failStream(channel: TextChannel, error: unknown): never {
+    const aiError = toAiError(error)
+    channel.fail(aiError)
+    throw aiError
+  }
+
+  private usesServerFallback(model: string): boolean {
+    return this.serverFallback && FALLBACK_MODELS.has(model)
   }
 }
 
@@ -132,27 +274,86 @@ function systemBlocks(text: string) {
   return [{ type: 'text' as const, text, cache_control: { type: 'ephemeral' as const } }]
 }
 
-function usesFallback(model: string): boolean {
-  return FALLBACK_MODELS.has(model)
+/**
+ * True when the gateway rejected the structured-output or effort parameters: a 400 naming them,
+ * or an answer that was billed but did not match the schema (a gateway that ignored output_config).
+ */
+const REJECTED_PARAMETER = /output_config|json[ _]schema|response_format|output_format|effort/i
+
+function isStructuredOutputRejection(error: unknown): boolean {
+  if (error instanceof UnstructuredAnswer) return true
+  return error instanceof APIError && error.status === 400 && REJECTED_PARAMETER.test(error.message)
 }
 
-function objectResult<T>(response: ObjectResponse<T>): {
-  object: T
-  usage: AiUsage
-  model: string
-} {
-  assertStopReason(response.stop_reason, response.usage)
+/** Instruction appended to the prompt in JSON mode; the schema is derived from the zod schema. */
+function jsonInstruction(schema: z.ZodType): string {
+  return [
+    'Respond with only one JSON object that matches this JSON Schema.',
+    'Do not add explanations or code fences.',
+    JSON.stringify(z.toJSONSchema(schema)),
+  ].join('\n')
+}
+
+function textOf(content: { type: string; text?: string }[]): string {
+  return content.map((block) => (block.type === 'text' ? (block.text ?? '') : '')).join('')
+}
+
+/** Parses the first JSON object in `text` and checks it against the schema. */
+function safeParseAnswer<T>(
+  schema: z.ZodType<T>,
+  text: string,
+): { success: true; data: T } | { success: false } {
+  const value = parseJsonObject(text)
+  if (value === undefined) return { success: false }
+  const checked = schema.safeParse(value)
+  return checked.success ? { success: true, data: checked.data } : { success: false }
+}
+
+/** Returns the first balanced JSON object in `text`, or undefined when there is none or it is invalid. */
+function parseJsonObject(text: string): unknown {
+  const start = text.indexOf('{')
+  if (start === -1) return undefined
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        try {
+          return JSON.parse(text.slice(start, i + 1)) as unknown
+        } catch {
+          return undefined
+        }
+      }
+    }
+  }
+  return undefined
+}
+
+function objectResult<T>(response: ObjectResponse<T>): ObjectResult<T> {
+  const usage = usageOf(response.usage)
+  assertStopReason(response.stop_reason, usage)
   if (response.parsed_output === null) {
-    throw aiErrorWithUsage(FORMAT_MESSAGE, response.usage)
+    throw aiErrorWithUsage(FORMAT_MESSAGE, usage)
   }
   return {
     object: response.parsed_output,
-    usage: usageOf(response.usage),
+    usage,
     model: response.model,
   }
 }
 
-function assertStopReason(stopReason: string | null, usage: ResponseUsage): void {
+function assertStopReason(stopReason: string | null, usage: AiUsage): void {
   if (stopReason === 'refusal') throw aiErrorWithUsage(REFUSAL_MESSAGE, usage)
   if (stopReason === 'max_tokens') throw aiErrorWithUsage(MAX_TOKENS_MESSAGE, usage)
 }
@@ -161,16 +362,26 @@ function assertStopReason(stopReason: string | null, usage: ResponseUsage): void
  * AI_ERROR for a call the API already billed. `details.usage` lets run.ts count those tokens;
  * run.ts strips it before the error reaches the browser.
  */
-function aiErrorWithUsage(message: string, usage: ResponseUsage): AppError {
-  return new AppError('AI_ERROR', message, { usage: usageOf(usage) })
+function aiErrorWithUsage(message: string, usage: AiUsage): AppError {
+  return new AppError('AI_ERROR', message, { usage })
 }
 
 function usageOf(usage: ResponseUsage): AiUsage {
   return { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens }
 }
 
-/** Converts any SDK or unexpected error into the Korean AI_ERROR the app shows. */
-function toAiError(error: unknown): AppError {
+function addUsage(a: AiUsage, b: AiUsage): AiUsage {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+  }
+}
+
+/**
+ * Converts any SDK or unexpected error into the Korean AI_ERROR the app shows. `billed` is usage
+ * from earlier attempts of the same call; it is attached so run.ts still counts it.
+ */
+function toAiError(error: unknown, billed: AiUsage = NO_USAGE): AppError {
   if (error instanceof AppError) return error
   let reason: string
   if (error instanceof AuthenticationError) {
@@ -184,7 +395,12 @@ function toAiError(error: unknown): AppError {
   } else {
     reason = String(error)
   }
-  return new AppError('AI_ERROR', `AI 호출에 실패했습니다: ${reason.slice(0, 120)}`)
+  const billedAny = billed.inputTokens > 0 || billed.outputTokens > 0
+  return new AppError(
+    'AI_ERROR',
+    `AI 호출에 실패했습니다: ${reason.slice(0, 120)}`,
+    billedAny ? { usage: billed } : undefined,
+  )
 }
 
 /**
@@ -196,9 +412,16 @@ class TextChannel {
   private waiter: (() => void) | null = null
   private closed = false
   private failure: { error: unknown } | null = null
+  private pushed = false
+
+  /** True once any text was pushed. */
+  get started(): boolean {
+    return this.pushed
+  }
 
   push(text: string): void {
     if (this.closed) return
+    this.pushed = true
     this.queue.push(text)
     this.wake()
   }

@@ -1,17 +1,25 @@
-import { isDemoMode } from '@/lib/ai-mode'
+import { getAiProvider } from '@/lib/ai-mode'
 import { AnthropicAiClient } from '@/ai/anthropic'
 import { FakeAiClient } from '@/ai/fake'
+import { OpencodeAiClient } from '@/ai/opencode'
+import { providerDefaultModel, providerImportModel } from '@/ai/models'
 import type { AiClient } from '@/ai/types'
-
-const DEFAULT_MODEL = 'claude-opus-5-5'
 
 let cached: AiClient | null = null
 let override: AiClient | null = null
 
-/** The AI client for this process: the fake client in demo mode, otherwise the Anthropic client. */
+/** The AI client for this process, chosen by the resolved AI provider. */
 export function getAiClient(): AiClient {
   if (override) return override
-  if (!cached) cached = isDemoMode() ? new FakeAiClient() : new AnthropicAiClient()
+  if (!cached) {
+    const provider = getAiProvider()
+    cached =
+      provider === 'fake'
+        ? new FakeAiClient()
+        : provider === 'opencode'
+          ? new OpencodeAiClient()
+          : new AnthropicAiClient()
+  }
   return cached
 }
 
@@ -21,12 +29,12 @@ export function setAiClientForTests(client: AiClient | null): void {
   cached = null
 }
 
-/** Default model for interactive tasks. Never defaults to a cheaper model. */
+/** Default model for interactive tasks (claude-haiku-5-5 unless the provider's model env var is set). */
 export function getDefaultModel(): string {
-  return process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL
+  return providerDefaultModel(getAiProvider())
 }
 
 /** Model for manuscript import extraction; falls back to the default model. */
 export function getImportModel(): string {
-  return process.env.ANTHROPIC_MODEL_IMPORT?.trim() || getDefaultModel()
+  return providerImportModel(getAiProvider())
 }

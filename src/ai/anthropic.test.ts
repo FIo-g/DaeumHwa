@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { AnthropicAiClient } from '@/ai/anthropic'
@@ -89,6 +89,35 @@ const baseArgs = {
   maxTokens: 1000,
   fake: () => ({ answer: '가짜', score: 0 }),
 }
+
+describe('AnthropicAiClient defaults', () => {
+  const saved = process.env.ANTHROPIC_MODEL
+  afterEach(() => {
+    if (saved === undefined) delete process.env.ANTHROPIC_MODEL
+    else process.env.ANTHROPIC_MODEL = saved
+  })
+
+  it('defaults to claude-haiku-5-5 when ANTHROPIC_MODEL is unset', () => {
+    delete process.env.ANTHROPIC_MODEL
+    const { sdk } = stubSdk()
+    expect(new AnthropicAiClient(sdk).defaultModel).toBe('claude-haiku-5-5')
+  })
+
+  it('reads ANTHROPIC_MODEL when no model is passed', () => {
+    process.env.ANTHROPIC_MODEL = 'claude-sonnet-5-5'
+    const { sdk } = stubSdk()
+    expect(new AnthropicAiClient(sdk).defaultModel).toBe('claude-sonnet-5-5')
+  })
+
+  it('sends no fallback params for the haiku default', async () => {
+    delete process.env.ANTHROPIC_MODEL
+    const { sdk, calls } = stubSdk({ parseResult: okResponse('claude-haiku-5-5') })
+    await new AnthropicAiClient(sdk).generateObject(baseArgs)
+    expect(calls[0].path).toBe('messages.parse')
+    expect((calls[0].params as { model: string }).model).toBe('claude-haiku-5-5')
+    expect(calls[0].params).not.toHaveProperty('fallbacks')
+  })
+})
 
 describe('AnthropicAiClient.generateObject', () => {
   it('sends a cached system prompt, the zod output format and effort, and returns parsed output', async () => {

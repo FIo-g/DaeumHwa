@@ -80,7 +80,7 @@ export type AdvanceResult = {
 }
 
 /**
- * The extraction task with the import model (ANTHROPIC_MODEL_IMPORT). runAiTask reads the model
+ * The extraction task with the import model (ANTHROPIC_MODEL_IMPORT or OPENCODE_MODEL_IMPORT). runAiTask reads the model
  * from the task definition, so the override lives here rather than in the shared task.
  */
 const importExtractTask: AiTaskDef<ChapterExtractInput, Extraction> = {
