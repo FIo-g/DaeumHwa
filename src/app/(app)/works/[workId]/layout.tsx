@@ -18,12 +18,7 @@ export default async function WorkLayout({
 
   return (
     <div className="flex flex-1 flex-col md:flex-row">
-      <WorkSidebar
-        workId={workId}
-        workTitle={work.title}
-        role={work.role}
-        pendingCount={pendingCount}
-      />
+      <WorkSidebar workId={workId} workTitle={work.title} pendingCount={pendingCount} />
       <div className="min-w-0 flex-1 px-4 py-6 md:px-8">{children}</div>
     </div>
   )

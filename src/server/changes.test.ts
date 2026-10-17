@@ -88,6 +88,12 @@ describe('recordChange and listChanges', () => {
       proposerType: 'author',
       summary: '작가 수정',
     })
+    // Two calls can read the same clock value, and then the order falls to the random ids.
+    // Pin the AI row to an earlier time so the newest-first order is fixed.
+    await db
+      .update(changeLog)
+      .set({ createdAt: sql`timestamptz '2026-10-16 05:00:00+00'` })
+      .where(eq(changeLog.summary, 'AI 제안 생성'))
 
     const aiOnly = await listChanges(db, { userId: owner.id }, work.id, { proposerType: 'ai' })
     expect(aiOnly.map((c) => c.summary)).toEqual(['AI 제안 생성'])
@@ -367,6 +373,11 @@ describe('revertChange', () => {
       actorId: owner.id,
       summary: '이름 변경',
     })
+    // Pin the first change to an earlier time: two calls can read the same clock value.
+    await db
+      .update(changeLog)
+      .set({ createdAt: sql`timestamptz '2026-10-16 04:59:00+00'` })
+      .where(eq(changeLog.id, first.id))
     await recordChange(db, {
       workId: work.id,
       targetTable: 'wiki_entries',
@@ -633,5 +644,61 @@ describe('revertChange on thread links', () => {
 
     row = await db.select().from(threads).where(eq(threads.id, thread.id)).limit(1)
     expect(row[0].status).toBe('resolved')
+  })
+})
+
+describe('revertChange on changes that share a timestamp', () => {
+  // Two updates to one entry with the same created_at. The id decides which one is newest,
+  // the same (created_at, id) order listChanges uses for its revertable flag.
+  async function tiedChanges(workId: string, targetId: string, actorId: string) {
+    const [low, high] = [randomUUID(), randomUUID()].sort()
+    const stamp = sql`timestamptz '2026-10-16 05:00:00+00'`
+    // The higher id is inserted first, so heap order alone does not give the newest row.
+    for (const id of [high, low]) {
+      await db.insert(changeLog).values({
+        id,
+        workId,
+        targetTable: 'wiki_entries',
+        targetId,
+        action: 'update',
+        before: { summary: `이전 요약 ${id.slice(0, 4)}` },
+        after: null,
+        proposerType: 'author',
+        actorId,
+        summary: `변경 ${id.slice(0, 4)}`,
+        createdAt: stamp,
+      })
+    }
+    return { low, high }
+  }
+
+  it('reverts the change that listChanges marks as the newest', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const entry = await createTestEntry(db, work.id, { name: '이서윤' })
+    const { high } = await tiedChanges(work.id, entry.id, owner.id)
+
+    const rows = await listChanges(db, { userId: owner.id }, work.id)
+    expect(rows.find((r) => r.id === high)?.revertable).toBe(true)
+
+    const reverted = await revertChange(db, { userId: owner.id }, high)
+    expect(reverted.action).toBe('revert')
+    expect(reverted.revertsChangeId).toBe(high)
+  })
+
+  it('refuses an older change that shares the timestamp with a later one', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const entry = await createTestEntry(db, work.id, { name: '이서윤' })
+    const { low } = await tiedChanges(work.id, entry.id, owner.id)
+
+    const rows = await listChanges(db, { userId: owner.id }, work.id)
+    expect(rows.find((r) => r.id === low)?.revertable).toBe(false)
+
+    await expectAppError(
+      revertChange(db, { userId: owner.id }, low),
+      'CONFLICT',
+      '이후 변경이 있어 먼저 그 변경을 되돌려야 합니다.',
+    )
   })
 })

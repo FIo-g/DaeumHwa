@@ -23,7 +23,7 @@ import type { Actor, ImportJobRow, ImportJobStatus, ProposalRow } from '@/db/typ
 import { inngest, isInngestEnabled } from '@/inngest/client'
 import { isAppError, AppError } from '@/lib/errors'
 import { isPlausibleIsoDate } from '@/lib/dates'
-import { stripJosa } from '@/lib/korean'
+import { findNameMatch } from '@/lib/korean'
 import {
   type NewProposal,
   type ProposalPayloadMap,
@@ -58,13 +58,15 @@ const CANCEL_MESSAGE = '이미 끝났거나 취소된 작업입니다.'
 const LIMIT_PAUSE_MESSAGE = '오늘 AI 사용량 한도에 도달해 일시정지했습니다. 내일 이어서 진행하세요.'
 const GENERIC_ERROR_MESSAGE = '가져오기 중 오류가 발생했습니다. 다시 시작해 주세요.'
 const MISSING_CHAPTER_MESSAGE = '회차를 찾을 수 없습니다. 작업을 취소하고 다시 올려 주세요.'
+/** Shown when the author's other AI runs fill the per-user cap. The job keeps running. */
+export const BUSY_MESSAGE = '다른 AI 작업이 끝나면 이어서 진행합니다.'
+/** A chapter claim older than this belongs to a call that died, and may be taken over. */
+const CLAIM_TTL_MS = 10 * 60 * 1000
 
 type ImportState = ImportJobRow['state']
 type KnownEntity = ImportState['knownEntities'][number]
-/** A chapter an author skipped after it stopped the job. Kept in state.skipped. */
-type SkippedChapter = { chapterId: string; position: number; title: string; reason: string }
-// skipImportChapter writes `skipped` into the jsonb state. The column type in schema.ts does not list it yet.
-type ImportStateWithSkips = ImportState & { skipped?: SkippedChapter[] }
+/** The chapter one advance call is working on. Kept in state.inFlight while its AI call runs. */
+type InFlightClaim = NonNullable<ImportState['inFlight']>
 type ThreadCreatePayload = ProposalPayloadMap['thread_create']
 type ThreadCreateItem = Extract<NewProposal, { type: 'thread_create' }>
 type EntryCreateItem = Extract<NewProposal, { type: 'entry_create' }>
@@ -225,6 +227,11 @@ export async function startImportJob(db: Db, actor: Actor, jobId: string): Promi
 /**
  * Processes the chapter at the cursor. Callers check access. Returns the job status; a job that
  * is not running is returned unchanged. The AI daily limit pauses the job instead of failing it.
+ * The per-user AI run cap keeps the job running and returns BUSY_MESSAGE, so the caller retries.
+ *
+ * Before its AI call, a call claims the chapter in state.inFlight. A call that finds a fresh claim
+ * returns the current status without calling the AI. The cursor moves only while the claim is
+ * still this call's, so one chapter is billed once even when two calls overlap.
  */
 export async function advanceImportJob(
   db: Db,
@@ -239,12 +246,11 @@ export async function advanceImportJob(
   if (!chapter) return toResult(await failJob(db, jobId, MISSING_CHAPTER_MESSAGE))
 
   const entries = await loadEntries(db, job.workId)
-  const dbKeys = new Set(entries.flatMap((e) => [e.name, ...e.aliases]).map(nameKey))
+  const dbNames = new Set(entries.flatMap((e) => namesOf(e)).map((n) => n.trim()))
   const known: KnownEntity[] = [
     ...entries.map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases })),
-    ...job.state.knownEntities.filter((k) => !dbKeys.has(nameKey(k.name))),
+    ...job.state.knownEntities.filter((k) => !dbNames.has(k.name.trim())),
   ]
-  const knownKeys = new Set(known.flatMap((k) => [k.name, ...k.aliases]).map(nameKey))
 
   const openRows = await loadOpenThreads(db, job.workId)
   const dbTitles = new Set(openRows.map((t) => t.title))
@@ -266,6 +272,11 @@ export async function advanceImportJob(
     content: f.content,
   }))
 
+  // Claim the chapter before the AI call. A call that starts while this one is in flight sees the
+  // claim and does not bill the same chapter again.
+  const claimAt = await claimChapter(db, jobId, job.cursor, new Date())
+  if (!claimAt) return toResult(await loadJob(db, jobId))
+
   let output: Extraction
   try {
     const result = await runAiTask(
@@ -284,11 +295,18 @@ export async function advanceImportJob(
     )
     output = result.output
   } catch (error) {
+    // The per-user AI run cap is full. runAiTask checks it before any AI call, so nothing was
+    // billed. The job keeps running at this chapter and the caller retries later.
+    if (isAppError(error) && error.code === 'CONFLICT') {
+      await releaseClaim(db, jobId, claimAt)
+      const current = toResult(await loadJob(db, jobId))
+      return current.status === 'running' ? { ...current, message: BUSY_MESSAGE } : current
+    }
     if (isAppError(error) && error.code === 'AI_LIMIT') {
-      return toResult(await pauseJob(db, jobId, LIMIT_PAUSE_MESSAGE))
+      return toResult(await pauseJob(db, jobId, LIMIT_PAUSE_MESSAGE, claimAt))
     }
     const message = isAppError(error) ? error.message : GENERIC_ERROR_MESSAGE
-    return toResult(await failJob(db, jobId, stoppedAt(chapter.position, message)))
+    return toResult(await failJob(db, jobId, stoppedAt(chapter.position, message), claimAt))
   }
 
   // Entries the job already knows about are dropped here; extractionToProposals only knows the
@@ -321,13 +339,13 @@ export async function advanceImportJob(
   }
   const extraction: Extraction = {
     ...output,
-    entries: output.entries.filter((e) => !knownKeys.has(nameKey(e.name))),
+    entries: output.entries.filter((e) => !findNameMatch(e.name, known, namesOf)),
   }
   const { proposals: items, pendingThreadEvents } = extractionToProposals(extraction, context)
 
   // Spread keeps any `skipped` list the job already has.
   const nextState: ImportState = {
-    ...job.state,
+    ...withoutClaim(job.state),
     knownEntities: mergeEntities([
       ...job.state.knownEntities,
       ...items.filter(isEntryCreate).map((i) => ({
@@ -347,12 +365,26 @@ export async function advanceImportJob(
   let saved: ImportJobRow | null = null
   try {
     saved = await db.transaction(async (tx) => {
+      const pendingRows = await tx
+        .select()
+        .from(proposals)
+        .where(
+          and(
+            eq(proposals.workId, job.workId),
+            eq(proposals.source, 'import'),
+            eq(proposals.sourceRef, jobId),
+            eq(proposals.status, 'pending'),
+            inArray(proposals.type, ['thread_create', 'fact_create', 'relation_create']),
+          ),
+        )
+        .orderBy(asc(proposals.createdAt))
+      const kept = dropRepeatedProposals(items, pendingRows, known)
       const [won] = await tx
         .update(importJobs)
         .set({
           cursor: job.cursor + 1,
           processedChapters: sql`${importJobs.processedChapters} + 1`,
-          proposalCount: sql`${importJobs.proposalCount} + ${items.length}`,
+          proposalCount: sql`${importJobs.proposalCount} + ${kept.length}`,
           state: nextState,
           status: finished ? 'done' : 'running',
           finishedAt: finished ? now : null,
@@ -363,36 +395,28 @@ export async function advanceImportJob(
             eq(importJobs.id, jobId),
             eq(importJobs.cursor, job.cursor),
             eq(importJobs.status, 'running'),
+            claimedBy(claimAt),
           ),
         )
         .returning()
-      // Another call advanced or paused the job first: write nothing and report its state.
+      // Another call advanced, paused or cancelled the job, or took the claim over: write nothing.
       if (!won) return null
 
-      const pendingRows = await tx
-        .select()
-        .from(proposals)
-        .where(
-          and(
-            eq(proposals.workId, job.workId),
-            eq(proposals.source, 'import'),
-            eq(proposals.sourceRef, jobId),
-            eq(proposals.type, 'thread_create'),
-            eq(proposals.status, 'pending'),
-          ),
-        )
-        .orderBy(asc(proposals.createdAt))
-      await attachPendingEvents(tx, chapter.id, pendingThreadEvents, items, pendingRows)
-      await insertProposals(tx, job.workId, items)
+      const pendingThreadRows = pendingRows.filter((r) => r.type === 'thread_create')
+      await attachPendingEvents(tx, chapter.id, pendingThreadEvents, items, pendingThreadRows)
+      await insertProposals(tx, job.workId, kept)
       return won
     })
   } catch (error) {
     // Proposal rows failed validation or could not be written. The cursor did not move, so the
     // job stops here and can be resumed once the cause is fixed.
     const message = isAppError(error) ? error.message : GENERIC_ERROR_MESSAGE
-    return toResult(await failJob(db, jobId, stoppedAt(chapter.position, message)))
+    return toResult(await failJob(db, jobId, stoppedAt(chapter.position, message), claimAt))
   }
-  if (!saved) return toResult(await loadJob(db, jobId))
+  if (!saved) {
+    await releaseClaim(db, jobId, claimAt)
+    return toResult(await loadJob(db, jobId))
+  }
   return toResult(saved)
 }
 
@@ -452,7 +476,7 @@ export async function skipImportChapter(
 
     const finished = job.cursor + 1 >= job.totalChapters
     const now = new Date()
-    const state: ImportStateWithSkips = {
+    const state: ImportState = {
       ...job.state,
       skipped: [
         ...skippedOf(job.state),
@@ -510,11 +534,6 @@ export async function listImportJobs(
 }
 
 // ---- helpers ----
-
-/** Name comparison key: trimmed, with a trailing particle removed (서윤이 -> 서윤). */
-function nameKey(name: string): string {
-  return stripJosa(name.trim())
-}
 
 function toResult(job: ImportJobRow): AdvanceResult {
   return {
@@ -618,31 +637,108 @@ function stoppedAt(position: number, message: string): string {
   return `${position}화에서 멈췄습니다: ${message}`
 }
 
-function skippedOf(state: ImportState): SkippedChapter[] {
-  return (state as ImportStateWithSkips).skipped ?? []
+function skippedOf(state: ImportState): NonNullable<ImportState['skipped']> {
+  return state.skipped ?? []
 }
 
-async function pauseJob(db: Db, jobId: string, message: string): Promise<ImportJobRow> {
-  return setRunningJobState(db, jobId, 'paused', message)
+/** The job state without the chapter claim, so a saved state never keeps a stale one. */
+function withoutClaim(state: ImportState): ImportState {
+  const rest: ImportState = { ...state }
+  delete rest.inFlight
+  return rest
 }
 
-async function failJob(db: Db, jobId: string, message: string): Promise<ImportJobRow> {
-  return setRunningJobState(db, jobId, 'error', message)
+async function pauseJob(
+  db: Db,
+  jobId: string,
+  message: string,
+  claimAt: string,
+): Promise<ImportJobRow> {
+  return setRunningJobState(db, jobId, 'paused', message, claimAt)
 }
 
-/** Moves a running job to paused or error with a message. Returns the current row if it was not running. */
+async function failJob(
+  db: Db,
+  jobId: string,
+  message: string,
+  claimAt?: string,
+): Promise<ImportJobRow> {
+  return setRunningJobState(db, jobId, 'error', message, claimAt)
+}
+
+/**
+ * Moves a running job to paused or error with a message. When `claimAt` is given, this call's
+ * claim is dropped in the same statement. Returns the current row if the job was not running.
+ */
 async function setRunningJobState(
   db: Db,
   jobId: string,
   status: 'paused' | 'error',
   message: string,
+  claimAt?: string,
 ): Promise<ImportJobRow> {
   const [row] = await db
     .update(importJobs)
-    .set({ status, error: message, updatedAt: new Date() })
+    .set({
+      status,
+      error: message,
+      updatedAt: new Date(),
+      state: claimAt === undefined ? undefined : releasedClaim(claimAt),
+    })
     .where(and(eq(importJobs.id, jobId), eq(importJobs.status, 'running')))
     .returning()
-  return row ?? loadJob(db, jobId)
+  if (row) return row
+  if (claimAt !== undefined) await releaseClaim(db, jobId, claimAt)
+  return loadJob(db, jobId)
+}
+
+/**
+ * Claims the chapter at `cursor` for one advance call before its AI call. One conditional UPDATE:
+ * it succeeds only while no claim is held or the held claim is older than CLAIM_TTL_MS.
+ * Returns the claim's `at` value, or undefined when another call holds the chapter.
+ */
+async function claimChapter(
+  db: Db,
+  jobId: string,
+  cursor: number,
+  now: Date,
+): Promise<string | undefined> {
+  const at = now.toISOString()
+  const staleBefore = new Date(now.getTime() - CLAIM_TTL_MS).toISOString()
+  const claim: InFlightClaim = { cursor, at }
+  const [row] = await db
+    .update(importJobs)
+    .set({
+      state: sql`jsonb_set(${importJobs.state}, '{inFlight}', ${JSON.stringify(claim)}::jsonb)`,
+    })
+    .where(
+      and(
+        eq(importJobs.id, jobId),
+        eq(importJobs.cursor, cursor),
+        eq(importJobs.status, 'running'),
+        sql`(${importJobs.state}->'inFlight' IS NULL OR (${importJobs.state}->'inFlight'->>'at')::timestamptz < ${staleBefore}::timestamptz)`,
+      ),
+    )
+    .returning({ id: importJobs.id })
+  return row ? at : undefined
+}
+
+/** True in SQL while the job's chapter claim is the one `claimAt` names. */
+function claimedBy(claimAt: string) {
+  return sql`${importJobs.state}->'inFlight'->>'at' = ${claimAt}`
+}
+
+/** SQL for the job state with `inFlight` dropped, but only while `claimAt` is still the held claim. */
+function releasedClaim(claimAt: string) {
+  return sql`CASE WHEN ${claimedBy(claimAt)} THEN ${importJobs.state} - 'inFlight' ELSE ${importJobs.state} END`
+}
+
+/** Drops this call's chapter claim without changing the job status. */
+async function releaseClaim(db: Db, jobId: string, claimAt: string): Promise<void> {
+  await db
+    .update(importJobs)
+    .set({ state: releasedClaim(claimAt) })
+    .where(eq(importJobs.id, jobId))
 }
 
 function isEntryCreate(item: NewProposal): item is EntryCreateItem {
@@ -653,10 +749,68 @@ function isThreadCreate(item: NewProposal): item is ThreadCreateItem {
   return item.type === 'thread_create'
 }
 
+/** Drops repeats by exact trimmed name. Names are never stripped of particles here: 김서아 and 김서은 stay apart. */
 function mergeEntities(list: KnownEntity[]): KnownEntity[] {
   const seen = new Set<string>()
   return list.filter((entity) => {
-    const key = nameKey(entity.name)
+    const key = entity.name.trim()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function namesOf(entity: { name: string; aliases: string[] }): string[] {
+  return [entity.name, ...entity.aliases]
+}
+
+/** The stored name an incoming name refers to (exact first, then particle-stripped), or the trimmed input. */
+function canonicalName(name: string, known: KnownEntity[]): string {
+  return findNameMatch(name, known, namesOf)?.name ?? name.trim()
+}
+
+function collapseSpaces(s: string): string {
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+function factKey(subjectName: string, content: string, known: KnownEntity[]): string {
+  return `fact|${canonicalName(subjectName, known)}|${collapseSpaces(content)}`
+}
+
+/** Relations are undirected, so the pair is sorted before it is keyed. */
+function relationKey(a: string, b: string, kind: string, known: KnownEntity[]): string {
+  const pair = [canonicalName(a, known), canonicalName(b, known)].sort()
+  return `relation|${pair.join('|')}|${collapseSpaces(kind)}`
+}
+
+/**
+ * Drops fact and relation proposals that repeat one this job already proposed, either still
+ * pending from an earlier chapter or earlier in this chapter. Returns the items to insert.
+ */
+function dropRepeatedProposals(
+  items: NewProposal[],
+  pendingRows: ProposalRow[],
+  known: KnownEntity[],
+): NewProposal[] {
+  const seen = new Set<string>()
+  for (const row of pendingRows) {
+    if (row.type === 'fact_create') {
+      const p = parseProposalPayload('fact_create', row.payload)
+      seen.add(factKey(p.subjectName, p.content, known))
+    } else if (row.type === 'relation_create') {
+      const p = parseProposalPayload('relation_create', row.payload)
+      seen.add(relationKey(p.sourceName, p.targetName, p.kind, known))
+    }
+  }
+  return items.filter((item) => {
+    let key: string
+    if (item.type === 'fact_create') {
+      key = factKey(item.payload.subjectName, item.payload.content, known)
+    } else if (item.type === 'relation_create') {
+      key = relationKey(item.payload.sourceName, item.payload.targetName, item.payload.kind, known)
+    } else {
+      return true
+    }
     if (seen.has(key)) return false
     seen.add(key)
     return true

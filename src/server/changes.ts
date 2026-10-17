@@ -64,7 +64,9 @@ export async function recordChange(db: Db, input: RecordChangeInput): Promise<Ch
       revertsChangeId: input.revertsChangeId ?? null,
       summary: input.summary,
       // clock_timestamp() instead of now(): changes made in one transaction must stay ordered.
-      createdAt: sql`clock_timestamp()`,
+      // The clock can tie (PGlite reports milliseconds), so each change also lands at least one
+      // microsecond after the work's latest change. Ties would fall back to the random id order.
+      createdAt: sql`greatest(clock_timestamp(), (select max(cl.created_at) from change_log cl where cl.work_id = ${input.workId}) + interval '1 microsecond')`,
     })
     .returning()
   return row
@@ -589,7 +591,8 @@ export async function revertChange(db: Db, actor: Actor, changeId: string): Prom
           eq(changeLog.targetId, original.targetId),
         ),
       )
-      .orderBy(desc(changeLog.createdAt))
+      // Same (created_at, id) order as listChanges, so both agree on the newest change.
+      .orderBy(desc(changeLog.createdAt), desc(changeLog.id))
       .limit(1)
     if (latest?.id !== original.id) {
       throw new AppError('CONFLICT', '이후 변경이 있어 먼저 그 변경을 되돌려야 합니다.')

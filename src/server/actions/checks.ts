@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import type { ActionResult } from '@/lib/result'
+import { ProofreadBodySchema } from '@/app/api/works/[workId]/chapters/shared'
 import { requireRowWork } from '@/server/access'
 import { revalidateWork, withAction } from '@/server/action-helpers'
 import {
@@ -15,10 +16,9 @@ const RunChapterCheckSchema = z.object({
   chapterId: z.uuid(),
 })
 
-const RunProofreadSchema = z.object({
+// Same body rules as the proofread route (text length cap included).
+const RunProofreadSchema = ProofreadBodySchema.extend({
   chapterId: z.uuid(),
-  text: z.string().optional(),
-  useAi: z.boolean(),
 })
 
 export async function runChapterCheckAction(

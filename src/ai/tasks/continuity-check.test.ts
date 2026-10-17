@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ContextPack } from '@/ai/context'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
+import type { IssueKind } from '@/db/types'
 
 const pack: ContextPack = {
   position: 1,
@@ -42,9 +43,11 @@ const input = { chapterText, chapterPosition: 1, chapterTitle: '1화', pack }
 function issue(
   overrides: Partial<{
     quote: string
+    kind: IssueKind
     factRef: string | null
     entryRef: string | null
     explanation: string
+    suggestion: string
   }>,
 ) {
   return {
@@ -103,6 +106,33 @@ describe('continuityCheckTask.postProcess', () => {
         suggestion: '서윤은 왼손으로 검을 쥐었다.',
       },
     ])
+  })
+
+  it('clears the suggestion for thread and timeline issues, which need advice rather than a sentence swap', () => {
+    for (const kind of ['thread', 'timeline'] as const) {
+      const processed = continuityCheckTask.postProcess?.(
+        { issues: [issue({ kind, explanation: '떡밥을 회수하는 조언' })] },
+        input,
+      )
+      expect(processed?.issues).toHaveLength(1)
+      expect(processed?.issues[0].kind).toBe(kind)
+      expect(processed?.issues[0].suggestion).toBe('')
+      expect(processed?.issues[0].explanation).toBe('떡밥을 회수하는 조언')
+    }
+  })
+
+  it('keeps the suggestion for contradiction issues that offer a corrected sentence', () => {
+    const processed = continuityCheckTask.postProcess?.({ issues: [issue({})] }, input)
+    expect(processed?.issues[0].suggestion).toBe('서윤은 왼손으로 검을 쥐었다.')
+  })
+
+  it('clears a suggestion that just repeats the quote, since it is not a fix', () => {
+    const processed = continuityCheckTask.postProcess?.(
+      { issues: [issue({ suggestion: chapterText })] },
+      input,
+    )
+    expect(processed?.issues).toHaveLength(1)
+    expect(processed?.issues[0].suggestion).toBe('')
   })
 
   it('dedupes issues that point at the same located range', () => {
@@ -187,6 +217,16 @@ describe('continuityCheckTask prompt isolation', () => {
     }
     const prompt = continuityCheckTask.buildPrompt({ ...input, pack: poisoned })
     expect(countOf(prompt, '</wiki>')).toBe(1)
+  })
+
+  it('tells the model that suggestion is a drop-in replacement for quote or empty when the fix is advice', () => {
+    const rule = continuityCheckTask.system
+      .split('\n')
+      .find((line) => line.startsWith('- suggestion에는'))
+    expect(rule).toBeDefined()
+    expect(rule).toContain('quote')
+    expect(rule).toContain('빈 문자열')
+    expect(rule).toContain('explanation')
   })
 
   it('tells the model that tagged content is data, not instructions', () => {

@@ -119,6 +119,40 @@ describe('runChapterCheck', () => {
     })
   })
 
+  it('keeps a correct name that contains a variant, and flags the bare variant once with a suggestion', async () => {
+    await db.insert(namingRules).values({ workId, canonical: '카일론', variants: ['카일'] })
+
+    const correct = await createTestChapter(db, workId, { position: 1, body: '카일론이 웃었다.' })
+    const correctResult = await runChapterCheck(
+      db,
+      actor(owner.id),
+      { chapterId: correct.id },
+      new FakeAiClient(),
+    )
+    expect(correctResult.namingIssueCount).toBe(0)
+    expect(correctResult.issues.filter((i: IssueRow) => i.kind === 'naming')).toEqual([])
+    const correctRows = await db
+      .select()
+      .from(issues)
+      .where(and(eq(issues.chapterId, correct.id), eq(issues.kind, 'naming')))
+    expect(correctRows).toEqual([])
+
+    const bare = await createTestChapter(db, workId, { position: 2, body: '카일이 웃었다.' })
+    const bareResult = await runChapterCheck(
+      db,
+      actor(owner.id),
+      { chapterId: bare.id },
+      new FakeAiClient(),
+    )
+    expect(bareResult.namingIssueCount).toBe(1)
+    const naming = bareResult.issues.filter((i: IssueRow) => i.kind === 'naming')
+    expect(naming).toHaveLength(1)
+    expect(naming[0]).toMatchObject({
+      quote: '카일이 웃었다.',
+      suggestion: '카일론이 웃었다.',
+    })
+  })
+
   it('re-running replaces open issues but keeps a dismissed one', async () => {
     const chapter = await createTestChapter(db, workId, {
       position: 1,

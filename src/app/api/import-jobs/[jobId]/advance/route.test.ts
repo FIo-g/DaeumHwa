@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeAiClient } from '@/ai/fake'
 import { setAiClientForTests } from '@/ai'
 import type { Db } from '@/db/client'
+import { aiRuns } from '@/db/schema'
 import { createTestDb } from '@/test/db'
 import { addTestMember, createTestUser, createTestWork } from '@/test/factories'
 
@@ -81,6 +82,27 @@ describe('POST /api/import-jobs/[jobId]/advance', () => {
     expect(res.status).toBe(403)
     expect(await res.json()).toEqual({ error: '이 작업을 할 권한이 없습니다.' })
   })
+
+  it('answers with the waiting message and status running while the author has too many AI runs', async () => {
+    await db.insert(aiRuns).values(
+      [1, 2, 3].map(() => ({
+        workId,
+        userId: state.user?.id ?? '',
+        task: 'chapter-extract' as const,
+        status: 'running' as const,
+        model: 'fake',
+      })),
+    )
+    const res = await POST(new Request('http://localhost/x', { method: 'POST' }), context(jobId))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({
+      status: 'running',
+      processed: 0,
+      total: 1,
+      done: false,
+      message: '다른 AI 작업이 끝나면 이어서 진행합니다.',
+    })
+  }, 10_000)
 
   it('advances one chapter for an editor and returns the job status', async () => {
     const res = await POST(new Request('http://localhost/x', { method: 'POST' }), context(jobId))

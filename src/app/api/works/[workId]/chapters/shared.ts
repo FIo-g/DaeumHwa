@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import type { Db } from '@/db/client'
 import type { Actor } from '@/db/types'
 import { AppError } from '@/lib/errors'
@@ -9,6 +9,18 @@ import { revalidateWork, withAction } from '@/server/action-helpers'
 // should block the client queue (Next dispatches Server Actions one at a time), so the writing
 // panels call these routes with fetch instead. The response is the same ActionResult the
 // matching server action returned, with HTTP 200 for both outcomes.
+
+/**
+ * Longest manuscript text one proofread request may carry. Longer bodies are rejected at the
+ * schema, before the service runs. The AI pass has a lower cap of its own (MAX_PROOFREAD_AI_CHARS).
+ */
+export const PROOFREAD_TEXT_MAX_CHARS = 200_000
+
+/** Body of the proofread route and of the matching server action. */
+export const ProofreadBodySchema = z.object({
+  text: z.string().max(PROOFREAD_TEXT_MAX_CHARS).optional(),
+  useAi: z.boolean(),
+})
 
 /**
  * Checks the session, parses the JSON body with `schema`, verifies that the chapter belongs to

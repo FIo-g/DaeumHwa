@@ -28,11 +28,11 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 const { POST } = await import('./route')
 
-function request(): Request {
+function request(payload: unknown = { text: '되요 원고.', useAi: false }): Request {
   return new Request('http://localhost/api/works/x/chapters/y/proofread', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: '되요 원고.', useAi: false }),
+    body: JSON.stringify(payload),
   })
 }
 
@@ -87,5 +87,35 @@ describe('POST /api/works/[workId]/chapters/[chapterId]/proofread', () => {
     state.user = { id: viewer.id, name: viewer.name, email: viewer.email }
     const res = await POST(request(), context({ workId, chapterId }))
     expect(await res.json()).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  })
+
+  it('accepts text at exactly the 200000-character input limit', async () => {
+    const res = await POST(
+      request({ text: '가'.repeat(200_000), useAi: false }),
+      context({ workId, chapterId }),
+    )
+    expect(await res.json()).toMatchObject({ ok: true, data: { suggestions: expect.any(Array) } })
+  })
+
+  it('rejects text over the 200000-character input limit with VALIDATION', async () => {
+    const res = await POST(
+      request({ text: '가'.repeat(200_001), useAi: false }),
+      context({ workId, chapterId }),
+    )
+    expect(await res.json()).toEqual({
+      ok: false,
+      error: { code: 'VALIDATION', message: '입력값이 올바르지 않습니다.' },
+    })
+  })
+
+  it('rejects AI proofreading of text over the 30000-character AI limit with the service message', async () => {
+    const res = await POST(
+      request({ text: '가'.repeat(30_001), useAi: true }),
+      context({ workId, chapterId }),
+    )
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION', message: expect.stringContaining('너무 깁니다') },
+    })
   })
 })

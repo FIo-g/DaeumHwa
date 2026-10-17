@@ -1,6 +1,6 @@
 import { getDb } from '@/db/client'
 import { requireWorkRole, requireRowWork } from '@/server/access'
-import { advanceImportJob } from '@/server/imports'
+import { advanceImportJob, BUSY_MESSAGE } from '@/server/imports'
 import { getSessionUser } from '@/server/session'
 import { jsonError, serviceError } from '@/app/api/import-jobs/shared'
 
@@ -9,6 +9,8 @@ import { jsonError, serviceError } from '@/app/api/import-jobs/shared'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
+/** Pause before answering a busy chapter, so the page's retry loop does not spin on the cap. */
+const BUSY_RETRY_MS = 2000
 
 export async function POST(
   _request: Request,
@@ -23,6 +25,9 @@ export async function POST(
     const workId = await requireRowWork(db, 'import_jobs', jobId)
     await requireWorkRole(db, workId, user.id, 'editor')
     const result = await advanceImportJob(db, jobId, { userId: user.id })
+    if (result.status === 'running' && result.message === BUSY_MESSAGE) {
+      await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_MS))
+    }
     return Response.json(result, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return serviceError(error)

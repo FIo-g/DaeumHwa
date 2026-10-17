@@ -22,7 +22,12 @@ export default async function ChapterWritingPage({
         title={chapterLabel(data.chapter.position, data.chapter.title)}
         description={data.workTitle}
       />
-      <WritingWorkspace key={data.chapter.id} data={data} loadServerCopy={loadChapterAction} />
+      <WritingWorkspace
+        key={data.chapter.id}
+        data={data}
+        loadServerCopy={loadChapterAction}
+        userId={actor.userId}
+      />
     </div>
   )
 }

@@ -474,6 +474,10 @@ export const importJobs = pgTable(
       .$type<{
         knownEntities: { name: string; kind: EntryKind; aliases: string[] }[]
         threadTitles: string[]
+        /** Chapters an author skipped after they stopped the job (imports.ts). */
+        skipped?: { chapterId: string; position: number; title: string; reason: string }[]
+        /** Work-in-progress marker stored by imports.ts: the cursor and the time it was set. */
+        inFlight?: { cursor: number; at: string }
       }>()
       .notNull()
       .default(sql`'{"knownEntities":[],"threadTitles":[]}'::jsonb`),

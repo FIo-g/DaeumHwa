@@ -6,14 +6,11 @@ import { MenuIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import type { Role } from '@/db/types'
 import { cn } from '@/lib/utils'
 
 type WorkSidebarProps = {
   workId: string
   workTitle: string
-  /** Every member sees the same links; the settings page itself shows read-only views to non-owners. */
-  role: Role
   pendingCount: number
 }
 
@@ -95,7 +92,10 @@ function NavList({
   )
 }
 
-/** Work-section navigation: a fixed sidebar on wide screens, a sheet on narrow ones. */
+/**
+ * Work-section navigation: a fixed sidebar on wide screens, a sheet on narrow ones.
+ * Every member sees the same links; the settings page itself shows read-only views to non-owners.
+ */
 export function WorkSidebar({ workId, workTitle, pendingCount }: WorkSidebarProps) {
   const [open, setOpen] = useState(false)
   return (

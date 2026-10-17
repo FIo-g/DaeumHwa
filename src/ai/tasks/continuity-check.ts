@@ -55,10 +55,20 @@ export const CONTINUITY_SYSTEM = `당신은 장기 연재 웹소설의 설정 �
 - 위키의 사실에 "N화부터", "~N화" 같은 유효 범위가 있으면 이 회차 시점에 유효한 것만 기준으로 삼는다. 이야기 속에서 상태가 바뀌는 전개 자체는 오기가 아니다. 설명 없이 위키와 어긋날 때만 지적한다.
 - [가정]이나 [미정] 사실과 어긋나면 severity를 "low"로 두고 explanation에 "가정/미정 설정과 다릅니다"라고 밝힌다.
 - 표기 규칙(<naming>) 위반, 심지 않은 떡밥을 회수하는 문제, 시간선 모순도 찾는다.
-- suggestion에는 원고를 고친 문장을 쓰거나, 위키를 고쳐야 할 수도 있다고 제안한다.
+- suggestion에는 quote를 통째로 바꿔 넣을 수 있는 완성된 고친 문장만 쓴다. 문장을 고쳐서 풀 수 없는 문제(떡밥 회수, 시간선, 위키를 고쳐야 하는 경우)는 suggestion을 빈 문자열("")로 두고, 조언은 explanation에 쓴다.
 - 확신이 없으면 지적하지 않는다. 지적할 것이 없으면 빈 배열을 돌려준다.
 ${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
+
+/**
+ * The UI applies suggestion as replacement text for the quote, so only a real sentence fix may stay.
+ * Thread and timeline issues need advice, and a suggestion that repeats the quote changes nothing.
+ */
+function usableSuggestion(issue: ContinuityIssue): string {
+  if (issue.kind === 'thread' || issue.kind === 'timeline') return ''
+  if (issue.suggestion.trim() === issue.quote.trim()) return ''
+  return issue.suggestion
+}
 
 /**
  * Locates each issue's quote in the chapter and resolves its refs. Drops issues whose quote is not
@@ -217,6 +227,7 @@ export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> =
         ...l.issue,
         factRef: l.issue.factRef,
         entryRef: l.issue.entryRef,
+        suggestion: usableSuggestion(l.issue),
       })),
     }
   },

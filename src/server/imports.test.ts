@@ -4,8 +4,8 @@ import type { Extraction } from '@/ai/extraction'
 import { FakeAiClient } from '@/ai/fake'
 import type { GenerateObjectArgs } from '@/ai/types'
 import type { Db } from '@/db/client'
-import { chapters, proposals, relations } from '@/db/schema'
-import type { Actor } from '@/db/types'
+import { aiRuns, chapters, importJobs, proposals, relations } from '@/db/schema'
+import type { Actor, ImportJobRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { createTestDb } from '@/test/db'
 import {
@@ -64,10 +64,45 @@ function emptyExtraction(overrides: Partial<Extraction> = {}): Extraction {
   return { summary: null, entries: [], facts: [], threads: [], relations: [], ...overrides }
 }
 
+/** Holds every AI call until `open` is called, so a second advance can start while the first is in flight. */
+class GatedClient extends ScriptedClient {
+  calls = 0
+  private release: () => void = () => {}
+  private readonly gate: Promise<void>
+
+  constructor(respond: (prompt: string) => unknown) {
+    super(respond)
+    this.gate = new Promise<void>((resolve) => {
+      this.release = resolve
+    })
+  }
+
+  override async generateObject<T>(args: GenerateObjectArgs<T>) {
+    this.calls += 1
+    await this.gate
+    return super.generateObject(args)
+  }
+
+  open(): void {
+    this.release()
+  }
+}
+
+async function waitUntil(condition: () => boolean): Promise<void> {
+  for (let i = 0; i < 200 && !condition(); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  expect(condition()).toBe(true)
+}
+
 function positionOf(prompt: string): number {
   const match = /<manuscript position="(\d+)"/.exec(prompt)
   if (!match) throw new Error('no manuscript position in prompt')
   return Number(match[1])
+}
+
+function entryNamed(name: string): Extraction['entries'][number] {
+  return { name, kind: 'character', aliases: [], summary: '', fields: [] }
 }
 
 const SEOYUN_ENTRY = {
@@ -129,6 +164,31 @@ describe('import jobs', () => {
     })
     await appendImportChapters(db, actor, { jobId: job.id, chapters: CHAPTERS })
     return job.id
+  }
+
+  /** Creates a job with the given chapters and starts it. Returns the job id. */
+  async function startedJob(list: { title: string; body: string }[]): Promise<string> {
+    const job = await createImportJob(db, actor, {
+      workId,
+      fileName: 'novel.txt',
+      totalChapters: list.length,
+    })
+    await appendImportChapters(db, actor, { jobId: job.id, chapters: list })
+    await startImportJob(db, actor, job.id)
+    return job.id
+  }
+
+  /** Marks the AI runs of the owner as running, as if other AI tasks were in flight. */
+  async function occupyAiSlots(count: number): Promise<void> {
+    await db.insert(aiRuns).values(
+      Array.from({ length: count }, () => ({
+        workId,
+        userId: owner.id,
+        task: 'chapter-extract' as const,
+        status: 'running' as const,
+        model: 'fake',
+      })),
+    )
   }
 
   async function expectAppError(promise: Promise<unknown>, code: string, message?: string) {
@@ -356,25 +416,171 @@ describe('import jobs', () => {
       expect(client.prompts).toHaveLength(0)
     })
 
-    it('processes each chapter once when two calls run at the same time', async () => {
+    it('calls the AI at most once per chapter when two calls run at the same time', async () => {
       const jobId = await uploadedJob()
       await startImportJob(db, actor, jobId)
       const client = new ScriptedClient(basicRespond)
 
-      const [a, b] = await Promise.all([
+      await Promise.all([
         advanceImportJob(db, jobId, { client }),
         advanceImportJob(db, jobId, { client }),
       ])
-      expect(a.processed).toBe(1)
-      expect(b.processed).toBe(1)
 
+      // Every AI call is for a different chapter, and the cursor counts exactly those calls.
+      const positions = client.prompts.map(positionOf)
+      expect(new Set(positions).size).toBe(positions.length)
       const job = await getImportJob(db, actor, jobId)
-      expect(job.cursor).toBe(1)
-      expect(job.processedChapters).toBe(1)
+      expect(job.cursor).toBe(positions.length)
+      expect(job.processedChapters).toBe(positions.length)
       const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
-      // One chapter's worth of proposals: 1 entry, 1 fact, 1 summary.
-      expect(rows).toHaveLength(3)
-      expect(job.proposalCount).toBe(3)
+      expect(job.proposalCount).toBe(rows.length)
+    })
+
+    it('does not call the AI again while another call holds the chapter', async () => {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      const client = new GatedClient(basicRespond)
+
+      const first = advanceImportJob(db, jobId, { client })
+      await waitUntil(() => client.calls === 1)
+      const second = await advanceImportJob(db, jobId, { client })
+      expect(second).toEqual({
+        status: 'running',
+        processed: 0,
+        total: 3,
+        done: false,
+        message: null,
+      })
+      expect(client.calls).toBe(1)
+
+      client.open()
+      expect(await first).toMatchObject({ status: 'running', processed: 1 })
+      expect(client.calls).toBe(1)
+      const job = await getImportJob(db, actor, jobId)
+      expect(job.state).not.toHaveProperty('inFlight')
+    })
+
+    it('takes over a chapter claim that is older than ten minutes', async () => {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      const old = new Date(Date.now() - 11 * 60 * 1000).toISOString()
+      await db
+        .update(importJobs)
+        .set({
+          state: {
+            knownEntities: [],
+            threadTitles: [],
+            inFlight: { cursor: 0, at: old },
+          } as ImportJobRow['state'],
+        })
+        .where(eq(importJobs.id, jobId))
+
+      const client = new ScriptedClient(basicRespond)
+      const result = await advanceImportJob(db, jobId, { client })
+      expect(result.processed).toBe(1)
+      expect(client.prompts).toHaveLength(1)
+    })
+
+    it('releases the chapter claim when the AI call fails', async () => {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      const failing = new ScriptedClient(() => {
+        throw new AppError('AI_ERROR', 'AI 호출에 실패했습니다: timeout')
+      })
+      await advanceImportJob(db, jobId, { client: failing })
+      const failed = await getImportJob(db, actor, jobId)
+      expect(failed.state).not.toHaveProperty('inFlight')
+
+      await startImportJob(db, actor, jobId)
+      const retried = await advanceImportJob(db, jobId, {
+        client: new ScriptedClient(basicRespond),
+      })
+      expect(retried.processed).toBe(1)
+    })
+
+    it('keeps the job running and skips the AI call when the author has too many AI runs', async () => {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      await occupyAiSlots(3)
+      const client = new ScriptedClient(basicRespond)
+
+      const busy = await advanceImportJob(db, jobId, { client })
+      expect(busy).toEqual({
+        status: 'running',
+        processed: 0,
+        total: 3,
+        done: false,
+        message: '다른 AI 작업이 끝나면 이어서 진행합니다.',
+      })
+      expect(client.prompts).toHaveLength(0)
+      const job = await getImportJob(db, actor, jobId)
+      expect(job.status).toBe('running')
+      expect(job.error).toBeNull()
+      expect(job.cursor).toBe(0)
+      expect(job.state).not.toHaveProperty('inFlight')
+
+      await db.update(aiRuns).set({ status: 'done' }).where(eq(aiRuns.userId, owner.id))
+      const next = await advanceImportJob(db, jobId, { client })
+      expect(next.processed).toBe(1)
+      expect(client.prompts.map(positionOf)).toEqual([1])
+    })
+
+    it('keeps names that differ by one syllable as separate entries', async () => {
+      const jobId = await startedJob([
+        { title: '1화', body: '김서아가 왔다.' },
+        { title: '2화', body: '김서은이 왔다.' },
+        { title: '3화', body: '김서아가 웃었다.' },
+      ])
+      const scripted: Record<number, Extraction> = {
+        1: emptyExtraction({ entries: [entryNamed('김서아')] }),
+        2: emptyExtraction({ entries: [entryNamed('김서은')] }),
+        3: emptyExtraction({ entries: [entryNamed('김서아가')] }),
+      }
+      const client = new ScriptedClient((prompt) => scripted[positionOf(prompt)])
+      for (let i = 0; i < 3; i++) await advanceImportJob(db, jobId, { client })
+
+      const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+      const created = rows
+        .filter((r) => r.type === 'entry_create')
+        .map((r) => (r.payload as { name: string }).name)
+      expect(created).toEqual(['김서아', '김서은'])
+    })
+
+    it('does not propose a fact or relation that repeats one this job already proposed', async () => {
+      const jobId = await startedJob([
+        { title: '1화', body: '서윤과 지후가 만났다.' },
+        { title: '2화', body: '다시 만났다.' },
+      ])
+      const fact = {
+        subjectName: '서윤',
+        content: '서윤은 고아다.',
+        evidence: '서윤은 말이 없었다.',
+        suggestedStatus: 'confirmed' as const,
+        supersedesFactRef: null,
+      }
+      const relation = {
+        sourceName: '서윤',
+        targetName: '지후',
+        kind: '친구',
+        description: '같은 학교',
+        evidence: '만났다.',
+      }
+      const first = emptyExtraction({ facts: [fact], relations: [relation] })
+      // Same fact with extra spacing, and the same pair reversed with the same kind.
+      const second = emptyExtraction({
+        facts: [{ ...fact, content: '서윤은  고아다.' }],
+        relations: [{ ...relation, sourceName: '지후', targetName: '서윤' }],
+      })
+      const client = new ScriptedClient((prompt) => (positionOf(prompt) === 1 ? first : second))
+      await advanceImportJob(db, jobId, { client })
+      const result = await advanceImportJob(db, jobId, { client })
+      expect(result).toMatchObject({ status: 'done', processed: 2 })
+
+      const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+      expect(rows.filter((r) => r.type === 'fact_create')).toHaveLength(1)
+      expect(rows.filter((r) => r.type === 'relation_create')).toHaveLength(1)
+      const job = await getImportJob(db, actor, jobId)
+      expect(job.proposalCount).toBe(rows.length)
     })
 
     it('pauses the job with the Korean message when the daily AI limit is reached', async () => {
