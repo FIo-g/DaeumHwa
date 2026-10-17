@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { FakeAiClient } from '@/ai/fake'
@@ -35,6 +35,25 @@ const failingClient: AiClient = {
   },
 }
 
+/** Client whose call failed after the API billed tokens (refusal, max_tokens, missing output). */
+function billedFailureClient(usage: { inputTokens: number; outputTokens: number }): AiClient {
+  return {
+    provider: 'anthropic',
+    defaultModel: 'claude-opus-5-5',
+    async generateObject() {
+      throw new AppError('AI_ERROR', '응답이 너무 길어 중간에 끊겼습니다.', { usage })
+    },
+    streamText() {
+      return {
+        textStream: (async function* () {})(),
+        final: Promise.reject(
+          new AppError('AI_ERROR', '응답이 너무 길어 중간에 끊겼습니다.', { usage }),
+        ),
+      }
+    },
+  }
+}
+
 const ENV_KEYS = ['AI_DAILY_TOKEN_LIMIT'] as const
 const saved: Record<string, string | undefined> = {}
 
@@ -61,12 +80,17 @@ async function setup(): Promise<{ db: Db; userId: string; workId: string }> {
 async function insertRun(
   db: Db,
   userId: string,
-  values: { inputTokens: number; outputTokens: number; createdAt?: Date },
+  values: {
+    inputTokens: number
+    outputTokens: number
+    createdAt?: Date
+    status?: 'done' | 'running' | 'error'
+  },
 ): Promise<void> {
   await db.insert(aiRuns).values({
     userId,
     task: 'proofread',
-    status: 'done',
+    status: values.status ?? 'done',
     model: 'test',
     inputTokens: values.inputTokens,
     outputTokens: values.outputTokens,
@@ -138,6 +162,155 @@ describe('runAiTask', () => {
   })
 })
 
+describe('failed runs', () => {
+  it('counts tokens the API billed before the call failed', async () => {
+    const { db, userId, workId } = await setup()
+    const client = billedFailureClient({ inputTokens: 100, outputTokens: 200 })
+    const error = await runAiTask(db, { userId, workId }, task, { q: 'x' }, client).catch(
+      (e: unknown) => e,
+    )
+    expect(error).toMatchObject({ code: 'AI_ERROR' })
+    // The browser must not receive the usage details.
+    expect((error as AppError).details).toBeUndefined()
+
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.status).toBe('error')
+    expect(row.inputTokens).toBe(100)
+    expect(row.outputTokens).toBe(200)
+    expect(await getTodayUsage(db, userId)).toBe(300)
+  })
+
+  it('counts billed tokens for a stream that fails after the API call', async () => {
+    const { db, userId, workId } = await setup()
+    const client = billedFailureClient({ inputTokens: 40, outputTokens: 60 })
+    const { done } = await startAiStream(
+      db,
+      { userId, workId },
+      {
+        task: 'draft-chapter',
+        effort: 'high',
+        maxTokens: 500,
+        system: 's',
+        prompt: 'p',
+        fake: () => '',
+      },
+      client,
+    )
+    const error = await done.catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'AI_ERROR' })
+    expect((error as AppError).details).toBeUndefined()
+
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.status).toBe('error')
+    expect(row.inputTokens).toBe(40)
+    expect(row.outputTokens).toBe(60)
+  })
+
+  it('keeps the usage of a successful call when postProcess throws', async () => {
+    const { db, userId, workId } = await setup()
+    const client: AiClient = {
+      ...failingClient,
+      async generateObject(args) {
+        return {
+          object: args.fake(),
+          usage: { inputTokens: 50, outputTokens: 70 },
+          model: 'm',
+        }
+      },
+    }
+    const withBadPost: AiTaskDef<{ q: string }, { text: string }> = {
+      ...task,
+      postProcess: () => {
+        throw new Error('bad post')
+      },
+    }
+    await expect(
+      runAiTask(db, { userId, workId }, withBadPost, { q: 'x' }, client),
+    ).rejects.toMatchObject({ code: 'AI_ERROR' })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.status).toBe('error')
+    expect(row.inputTokens).toBe(50)
+    expect(row.outputTokens).toBe(70)
+  })
+
+  it('records zero tokens for an error that carries no usage', async () => {
+    const { db, userId, workId } = await setup()
+    const client: AiClient = {
+      ...failingClient,
+      async generateObject() {
+        throw new AppError('AI_LIMIT', '한도')
+      },
+    }
+    await expect(runAiTask(db, { userId, workId }, task, { q: 'x' }, client)).rejects.toMatchObject(
+      { code: 'AI_LIMIT' },
+    )
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.inputTokens).toBe(0)
+    expect(row.outputTokens).toBe(0)
+  })
+})
+
+describe('concurrent runs', () => {
+  it('rejects a new run while the user already has 3 running runs', async () => {
+    const { db, userId, workId } = await setup()
+    for (let i = 0; i < 3; i++)
+      await insertRun(db, userId, { inputTokens: 0, outputTokens: 0, status: 'running' })
+    const error = await runAiTask(
+      db,
+      { userId, workId },
+      task,
+      { q: 'x' },
+      new FakeAiClient(),
+    ).catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'CONFLICT' })
+    expect((error as AppError).code).not.toBe('AI_LIMIT')
+    const rows = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(rows).toHaveLength(3)
+  })
+
+  it('also applies to startAiStream', async () => {
+    const { db, userId, workId } = await setup()
+    for (let i = 0; i < 3; i++)
+      await insertRun(db, userId, { inputTokens: 0, outputTokens: 0, status: 'running' })
+    await expect(
+      startAiStream(
+        db,
+        { userId, workId },
+        {
+          task: 'draft-chapter',
+          effort: 'high',
+          maxTokens: 500,
+          system: 's',
+          prompt: 'p',
+          fake: () => '',
+        },
+        new FakeAiClient(),
+      ),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
+  it('allows a run when fewer than 3 are running, and ignores running rows older than 10 minutes', async () => {
+    const { db, userId, workId } = await setup()
+    await insertRun(db, userId, { inputTokens: 0, outputTokens: 0, status: 'running' })
+    await insertRun(db, userId, { inputTokens: 0, outputTokens: 0, status: 'running' })
+    const old = new Date(Date.now() - 11 * 60 * 1000)
+    await insertRun(db, userId, {
+      inputTokens: 0,
+      outputTokens: 0,
+      status: 'running',
+      createdAt: old,
+    })
+    const { output } = await runAiTask(
+      db,
+      { userId, workId },
+      task,
+      { q: 'ok' },
+      new FakeAiClient(),
+    )
+    expect(output).toEqual({ text: '답: ok' })
+  })
+})
+
 describe('getTodayUsage', () => {
   it('counts only runs since Seoul midnight', async () => {
     const { db, userId } = await setup()
@@ -177,6 +350,31 @@ describe('assertWithinLimit', () => {
     ).rejects.toMatchObject({ code: 'AI_LIMIT' })
     const after = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
     expect(after).toHaveLength(before.length)
+  })
+
+  it('accepts thousands separators and underscores in AI_DAILY_TOKEN_LIMIT', async () => {
+    const { db, userId } = await setup()
+    process.env.AI_DAILY_TOKEN_LIMIT = '500,000'
+    await insertRun(db, userId, { inputTokens: 300_000, outputTokens: 199_999 })
+    await expect(assertWithinLimit(db, userId)).resolves.toBeUndefined()
+    await insertRun(db, userId, { inputTokens: 1, outputTokens: 0 })
+    await expect(assertWithinLimit(db, userId)).rejects.toMatchObject({ code: 'AI_LIMIT' })
+
+    process.env.AI_DAILY_TOKEN_LIMIT = '1_000'
+    await expect(assertWithinLimit(db, userId)).rejects.toMatchObject({ code: 'AI_LIMIT' })
+  })
+
+  it('falls back to the default with a warning when AI_DAILY_TOKEN_LIMIT is unreadable', async () => {
+    const { db, userId } = await setup()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      process.env.AI_DAILY_TOKEN_LIMIT = 'five hundred'
+      await insertRun(db, userId, { inputTokens: 2_000_000, outputTokens: 0 })
+      await expect(assertWithinLimit(db, userId)).resolves.toBeUndefined()
+      expect(warn).toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('AI_DAILY_TOKEN_LIMIT=0 disables the limit', async () => {

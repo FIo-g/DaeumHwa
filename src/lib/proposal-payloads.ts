@@ -61,7 +61,7 @@ const ThreadCreateSchema = z.object({
 const ThreadEventSchema = z.object({
   threadId: z.string(),
   threadTitle: z.string(),
-  kind: z.enum(['developed', 'resolved', 'discarded']),
+  kind: z.enum(['planted', 'developed', 'resolved', 'discarded']),
   chapterId: z.string().nullable(),
   note: z.string(),
   evidence: z.string(),
@@ -115,6 +115,17 @@ export type NewProposal = {
     chapterId: string | null
   }
 }[ProposalType]
+
+/**
+ * Text key for duplicate checks: whitespace collapsed, trimmed, and trailing sentence marks
+ * removed, so "검을 쓴다." and "검을 쓴다" compare equal.
+ */
+export function normalizeProposalText(s: string): string {
+  return s
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.。…!?]+$/, '')
+}
 
 export function parseProposalPayload<K extends ProposalType>(
   type: K,

@@ -12,7 +12,8 @@ import { listChangesAction, revertChangeAction } from '@/server/actions/history'
 import { ChangeDiff } from './change-diff'
 import { CHANGE_TARGET_LABEL, HISTORY_PAGE_SIZE } from './history-config'
 
-export type ChangeView = ChangeRow & { actorName: string | null }
+/** A change row as the history list receives it. `revertable` is false once a later change exists. */
+export type ChangeView = ChangeRow & { actorName: string | null; revertable: boolean }
 
 type ChangeListProps = {
   workId: string
@@ -54,7 +55,7 @@ export function ChangeList({
         workId,
         targetTable,
         proposerType,
-        beforeCreatedAt: new Date(last.createdAt).toISOString(),
+        beforeId: last.id,
       }),
     )
     setBusy(false)
@@ -113,10 +114,16 @@ export function ChangeList({
                     title="이 변경을 되돌릴까요?"
                     description="되돌리기는 새 이력으로 남습니다."
                     confirmLabel="되돌리기"
+                    disabled={!row.revertable}
                     onConfirm={() => revert(row.id)}
                   >
                     되돌리기
                   </ConfirmButton>
+                )}
+                {canEdit && !row.revertable && (
+                  <span className="self-center text-xs text-muted-foreground">
+                    이후 변경이 있어 되돌릴 수 없습니다.
+                  </span>
                 )}
               </div>
               {open && (

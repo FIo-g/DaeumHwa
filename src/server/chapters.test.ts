@@ -198,6 +198,54 @@ describe('saveChapter', () => {
     expect(await listVersions(db, actor, chapter.id)).toHaveLength(3)
   })
 
+  it('keepHistory save adds its own row instead of merging into the other device row', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-16T01:00:00Z'))
+    const { actor, work } = await setup()
+    const chapter = await createChapter(db, actor, { workId: work.id, body: '초안' })
+    vi.setSystemTime(new Date('2026-10-16T01:01:00Z'))
+    await saveChapter(db, actor, { chapterId: chapter.id, body: '첫 저장', expectedVersion: 1 })
+    vi.setSystemTime(new Date('2026-10-16T01:02:00Z'))
+    await saveChapter(db, actor, { chapterId: chapter.id, body: '노트북 본문', expectedVersion: 2 })
+    // Same user, same window: this overwrite must not replace the row that holds 노트북 본문.
+    vi.setSystemTime(new Date('2026-10-16T01:03:00Z'))
+    await saveChapter(db, actor, {
+      chapterId: chapter.id,
+      body: '폰 본문',
+      expectedVersion: 3,
+      keepHistory: true,
+    })
+
+    const versions = await listVersions(db, actor, chapter.id)
+    expect(versions).toHaveLength(3)
+    expect((await getVersion(db, actor, versions[0].id)).body).toBe('폰 본문')
+    expect((await getVersion(db, actor, versions[1].id)).body).toBe('노트북 본문')
+    expect((await getVersion(db, actor, versions[2].id)).body).toBe('초안')
+  })
+
+  it('a normal save after a keepHistory save still coalesces into that row', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-16T01:00:00Z'))
+    const { actor, work } = await setup()
+    const chapter = await createChapter(db, actor, { workId: work.id, body: '초안' })
+    vi.setSystemTime(new Date('2026-10-16T01:01:00Z'))
+    await saveChapter(db, actor, { chapterId: chapter.id, body: '노트북 본문', expectedVersion: 1 })
+    vi.setSystemTime(new Date('2026-10-16T01:02:00Z'))
+    await saveChapter(db, actor, {
+      chapterId: chapter.id,
+      body: '폰 본문',
+      expectedVersion: 2,
+      keepHistory: true,
+    })
+    vi.setSystemTime(new Date('2026-10-16T01:03:00Z'))
+    await saveChapter(db, actor, { chapterId: chapter.id, body: '폰 다음', expectedVersion: 3 })
+
+    const versions = await listVersions(db, actor, chapter.id)
+    expect(versions).toHaveLength(3)
+    expect((await getVersion(db, actor, versions[0].id)).body).toBe('폰 다음')
+    expect((await getVersion(db, actor, versions[1].id)).body).toBe('노트북 본문')
+  })
+
   it('ai_draft and restore sources always add a new version row', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-16T01:00:00Z'))
@@ -367,6 +415,23 @@ describe('setChapterStatus and setChapterPublishedOn', () => {
     const cleared = await setChapterPublishedOn(db, actor, chapter.id, null)
     expect(cleared.publishedOn).toBeNull()
     await expectAppError(setChapterPublishedOn(db, actor, chapter.id, '10/20'), 'VALIDATION')
+  })
+
+  it('rejects implausible calendar dates and keeps the last saved value', async () => {
+    const { actor, work } = await setup()
+    const chapter = await createChapter(db, actor, { workId: work.id })
+    await setChapterPublishedOn(db, actor, chapter.id, '2026-10-20')
+    await expectAppError(
+      setChapterPublishedOn(db, actor, chapter.id, '0002-10-17'),
+      'VALIDATION',
+      '연재일 형식이 올바르지 않습니다.',
+    )
+    await expectAppError(setChapterPublishedOn(db, actor, chapter.id, '2026-02-31'), 'VALIDATION')
+    await expectAppError(setChapterPublishedOn(db, actor, chapter.id, '2101-01-01'), 'VALIDATION')
+    const [row] = await listChapters(db, actor, work.id)
+    expect(row.publishedOn).toBe('2026-10-20')
+    const accepted = await setChapterPublishedOn(db, actor, chapter.id, '2026-10-17')
+    expect(accepted.publishedOn).toBe('2026-10-17')
   })
 })
 

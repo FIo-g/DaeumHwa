@@ -6,10 +6,10 @@ import { AiBadge } from '@/components/app/ai-badge'
 import { EmptyState } from '@/components/app/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
-import { runProofreadAction } from '@/server/actions/checks'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
-import { EDITOR_ONLY_NOTE, canEditChapter, rangeOf } from './shared'
+import { EDITOR_ONLY_NOTE, canEditChapter, offerUndo, rangeOf } from './shared'
 
 type ProofreadPanelProps = {
   data: WritingData
@@ -64,19 +64,26 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
 
   async function run(useAi: boolean) {
     setRunning(useAi ? 'ai' : 'rule')
+    // A route handler, not a Server Action: the AI pass can take a while, and Server Actions
+    // run one at a time, so autosave would wait behind it.
     const result = await runAction(
-      runProofreadAction({ chapterId: data.chapter.id, text: api.getText(), useAi }),
+      postAction<{ suggestions: ProofreadItem[]; runId: string | null }>(
+        `/api/works/${data.workId}/chapters/${data.chapter.id}/proofread`,
+        { text: api.getText(), useAi },
+      ),
     )
     setRunning(null)
     if (result) setItems(result.suggestions)
   }
 
   function apply(item: ProofreadItem): boolean {
+    const before = api.getText()
     const replaced = api.replaceQuote(item.quote, item.replacement, item.start)
     if (!replaced) {
       toast.error('원고가 바뀌어 문장을 찾지 못했습니다. 다시 검사해 주세요.')
       return false
     }
+    offerUndo(api, before, '문장을 바꿨습니다.')
     setItems((prev) => (prev ? prev.filter((x) => x !== item) : prev))
     return true
   }
@@ -85,12 +92,14 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
   function applyAllRules() {
     if (!items) return
     const rules = items.filter((item) => item.source === 'rule').sort((a, b) => b.start - a.start)
+    const before = api.getText()
     const done = rules.filter((item) => api.replaceQuote(item.quote, item.replacement, item.start))
     if (done.length < rules.length) {
       toast.error(`${rules.length - done.length}곳은 원고가 바뀌어 고치지 못했습니다.`)
     }
     if (done.length > 0) {
-      toast.success(`${done.length}곳을 고쳤습니다.`)
+      // One snapshot for the whole batch, so a single 되돌리기 restores every change.
+      offerUndo(api, before, `${done.length}곳을 고쳤습니다.`)
       setItems((prev) => (prev ? prev.filter((x) => !done.includes(x)) : prev))
     }
   }

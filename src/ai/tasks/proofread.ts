@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { neutralizeTags, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import { locateQuote } from '@/lib/korean/sentences'
 
@@ -28,6 +29,7 @@ export const PROOFREAD_SYSTEM = `당신은 한국어 웹소설 교정자다. 원
 - 대사 속 구어체, 사투리, 인물 말투, 의도된 비문은 고치지 않는다. 문체를 바꾸는 제안은 하지 않는다.
 - kind는 spelling(맞춤법), spacing(띄어쓰기), grammar(문법), awkward(어색한 표현) 중 하나다.
 - reason에는 왜 고치는지 한 문장으로 쓴다.
+${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
 
 export const proofreadTask: AiTaskDef<{ text: string }, ProofreadOutput> = {
@@ -35,7 +37,7 @@ export const proofreadTask: AiTaskDef<{ text: string }, ProofreadOutput> = {
   effort: 'medium',
   maxTokens: 16000,
   system: PROOFREAD_SYSTEM,
-  buildPrompt: ({ text }) => `<manuscript>\n${text}\n</manuscript>`,
+  buildPrompt: ({ text }) => `<manuscript>\n${neutralizeTags(text)}\n</manuscript>`,
   schema: ProofreadSchema,
   fake: () => ({ suggestions: [] }),
   postProcess(output, input) {

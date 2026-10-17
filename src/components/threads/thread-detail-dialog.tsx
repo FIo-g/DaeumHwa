@@ -145,7 +145,7 @@ export function ThreadDetailDialog({
                       <ConfirmButton
                         size="sm"
                         title="이 기록을 보관할까요?"
-                        description="보관한 기록은 타임라인에서 사라집니다. 떡밥의 현재 상태는 바뀌지 않습니다."
+                        description="보관한 기록은 타임라인에서 사라지고, 떡밥 상태는 남은 기록에 맞춰 다시 계산됩니다."
                         confirmLabel="보관"
                         onConfirm={() => archiveEvent(event.id)}
                       >

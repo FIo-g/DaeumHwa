@@ -24,6 +24,13 @@ function createDb(): Db {
     const client = postgres(process.env.DATABASE_URL as string, { prepare: false, max: 5 })
     return drizzlePostgres(client, { schema })
   }
+  // Vercel has a read-only filesystem and throws away local files, so a PGlite fallback
+  // there would either crash on the first write or lose data. Fail with a clear message.
+  if (process.env.VERCEL) {
+    throw new Error(
+      'DATABASE_URL 환경변수가 없습니다. Vercel(Production·Preview) 프로젝트 설정에 Postgres 연결 주소를 넣어 주세요.',
+    )
+  }
   const dataDir = process.env.PGLITE_DATA_DIR || '.data/pglite'
   // PGlite does not create parent directories for its data dir.
   mkdirSync(dataDir, { recursive: true })
@@ -47,6 +54,8 @@ export async function closeDb(): Promise<void> {
   if (getDriverKind() === 'postgres') {
     await (client as { end: () => Promise<void> }).end()
   } else {
+    // Closing a PGlite instance that never finished starting up hangs, so wait for it first.
+    await (client as PGlite).waitReady
     await (client as PGlite).close()
   }
 }

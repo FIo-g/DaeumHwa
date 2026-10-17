@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { chapters, facts, wikiEntries } from '@/db/schema'
 import type {
@@ -11,9 +11,18 @@ import type {
   ProposerType,
 } from '@/db/types'
 import { AppError } from '@/lib/errors'
-import { stripJosa } from '@/lib/korean/josa'
 import { requireRowWork, requireWorkRole } from '@/server/access'
-import { type RecordChangeInput, recordChange } from '@/server/changes'
+import {
+  detachFromPredecessor,
+  preview,
+  type RecordChangeInput,
+  recordChange,
+} from '@/server/changes'
+import { findEntryByName, relinkFactsForEntry } from '@/server/entry-integrity'
+
+// Facts keep the name-matching and entry-link helpers in entry-integrity.ts, so changes.ts can
+// use them without importing this file. Re-exported here for existing callers.
+export { findEntryByName, preview, relinkFactsForEntry }
 
 // Shared by wiki.ts, naming.ts and styles.ts. Lives here because facts need entry lookups
 // and wiki entries need facts; keeping it in one direction avoids an import cycle.
@@ -34,39 +43,6 @@ export function logChange(
     proposalId: o?.proposalId ?? null,
     actorId: actor.userId,
   })
-}
-
-/** Short one-line text for change summaries. */
-export function preview(text: string, max = 40): string {
-  const oneLine = text.replace(/\s+/g, ' ').trim()
-  return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine
-}
-
-/** The text itself and the text without trailing particles (서윤이가 -> 서윤). */
-function nameCandidates(text: string): string[] {
-  const trimmed = text.trim()
-  if (!trimmed) return []
-  return [...new Set([trimmed, stripJosa(trimmed)])]
-}
-
-/** Finds the active entry of a work whose name or alias matches `name`. Names win over aliases. */
-export async function findEntryByName(
-  db: Db,
-  workId: string,
-  name: string,
-): Promise<EntryRow | null> {
-  const candidates = nameCandidates(name)
-  if (candidates.length === 0) return null
-  const rows = await db
-    .select()
-    .from(wikiEntries)
-    .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
-    .orderBy(asc(wikiEntries.name))
-  return (
-    rows.find((e) => candidates.includes(e.name)) ??
-    rows.find((e) => e.aliases.some((alias) => candidates.includes(alias))) ??
-    null
-  )
 }
 
 /** The entry must belong to the work. Archived entries are allowed as link targets. */
@@ -98,27 +74,6 @@ export async function assertChapterInWork(
   if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
 }
 
-/**
- * Links unlinked facts of the work whose subject is the entry's name or an alias.
- * Returns the number of facts linked. No change_log row: linking is derived.
- */
-export async function relinkFactsForEntry(db: Db, entry: EntryRow): Promise<number> {
-  const names = [entry.name, ...entry.aliases]
-  const orphans = await db
-    .select({ id: facts.id, subjectName: facts.subjectName })
-    .from(facts)
-    .where(and(eq(facts.workId, entry.workId), isNull(facts.entryId), isNull(facts.archivedAt)))
-  const ids = orphans
-    .filter((f) => nameCandidates(f.subjectName).some((c) => names.includes(c)))
-    .map((f) => f.id)
-  if (ids.length === 0) return 0
-  await db
-    .update(facts)
-    .set({ entryId: entry.id, updatedAt: new Date() })
-    .where(inArray(facts.id, ids))
-  return ids.length
-}
-
 // ---- Reads ----
 
 export type FactView = FactRow & {
@@ -136,6 +91,23 @@ export type FactListFilter = {
   includeSuperseded?: boolean
 }
 
+function liveSuccessor(
+  successorId: string | null,
+  byId: Map<
+    string,
+    { id: string; content: string; validFromPosition: number | null; archivedAt: Date | null }
+  >,
+): FactView['supersededBy'] {
+  if (!successorId) return null
+  const successor = byId.get(successorId)
+  if (!successor || successor.archivedAt) return null
+  return {
+    id: successor.id,
+    content: successor.content,
+    validFromPosition: successor.validFromPosition,
+  }
+}
+
 /** Facts of a work. Active facts come first, then by status (confirmed, assumed, undecided), then by creation. */
 export async function listFacts(
   db: Db,
@@ -149,7 +121,13 @@ export async function listFacts(
   if (o.chapterId) conditions.push(eq(facts.sourceChapterId, o.chapterId))
   if (o.status) conditions.push(eq(facts.status, o.status))
   if (!o.includeArchived) conditions.push(isNull(facts.archivedAt))
-  if (!o.includeSuperseded) conditions.push(isNull(facts.supersededByFactId))
+  // A fact counts as superseded only while its replacement is live. Archived replacements are
+  // skipped so the fact stays visible (see archiveFact, which normally re-links the fact already).
+  if (!o.includeSuperseded) {
+    conditions.push(
+      sql`(${facts.supersededByFactId} is null or exists (select 1 from facts as successor where successor.id = ${facts.supersededByFactId} and successor.archived_at is not null))`,
+    )
+  }
 
   const rows = await db
     .select({
@@ -173,6 +151,7 @@ export async function listFacts(
             id: facts.id,
             content: facts.content,
             validFromPosition: facts.validFromPosition,
+            archivedAt: facts.archivedAt,
           })
           .from(facts)
           .where(inArray(facts.id, successorIds))
@@ -189,14 +168,12 @@ export async function listFacts(
           archived: r.chapterArchivedAt !== null,
         }
       : null,
-    supersededBy: r.fact.supersededByFactId
-      ? (successorById.get(r.fact.supersededByFactId) ?? null)
-      : null,
+    supersededBy: liveSuccessor(r.fact.supersededByFactId, successorById),
   }))
 
   return views.sort(
     (a, b) =>
-      Number(a.supersededByFactId !== null) - Number(b.supersededByFactId !== null) ||
+      Number(a.supersededBy !== null) - Number(b.supersededBy !== null) ||
       STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
       a.createdAt.getTime() - b.createdAt.getTime(),
   )
@@ -381,12 +358,14 @@ export async function archiveFact(
       .set({ archivedAt: now, updatedAt: now })
       .where(eq(facts.id, factId))
       .returning()
+    // If this fact replaced an earlier one, that one becomes valid again (or points at a live successor).
+    const predecessor = await detachFromPredecessor(tx, workId, actor.userId, current, o)
     await logChange(tx, actor, o, {
       workId,
       targetTable: 'facts',
       targetId: factId,
       action: 'archive',
-      before: current,
+      before: predecessor ? { ...current, reopenedPredecessor: predecessor } : current,
       after: row,
       summary: `사실 보관: ${preview(row.content)}`,
     })
@@ -408,7 +387,16 @@ export async function supersedeFact(
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const old = await loadFact(db, input.factId)
   if (old.archivedAt) throw new AppError('BAD_STATE', '보관된 사실은 바꿀 수 없습니다.')
-  if (old.supersededByFactId) throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실입니다.')
+  if (old.supersededByFactId) {
+    const [successor] = await db
+      .select({ archivedAt: facts.archivedAt })
+      .from(facts)
+      .where(eq(facts.id, old.supersededByFactId))
+      .limit(1)
+    if (successor && !successor.archivedAt) {
+      throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실입니다.')
+    }
+  }
   if (input.fromPosition <= (old.validFromPosition ?? 0)) {
     throw new AppError('VALIDATION', '바뀌는 회차는 기존 사실이 유효해진 회차 이후여야 합니다.')
   }

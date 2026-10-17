@@ -10,5 +10,10 @@ export async function extractDocxText(bytes: ArrayBuffer): Promise<string> {
     arrayBuffer: bytes,
     buffer: bytes as unknown as Buffer,
   })
-  return result.value.replace(/\r\n?/g, '\n')
+  // mammoth ends every paragraph with a blank line ("\n\n"). Collapse those so each paragraph
+  // takes one line, as TXT imports do, and drop the final line break.
+  return result.value
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .replace(/\n$/, '')
 }

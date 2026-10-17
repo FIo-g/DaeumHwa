@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
+import { clearUserDrafts } from '@/lib/client/local-store'
+import { flushPendingSaves } from '@/lib/client/use-autosave'
 import type { SessionUser } from '@/server/session'
 
 /** Top bar for signed-in pages: logo, user name and sign-out. */
@@ -12,6 +14,9 @@ export function TopBar({ user }: { user: SessionUser }) {
   const router = useRouter()
 
   async function signOut() {
+    // Save the open edit first. Drafts are cleared only when every edit reached the server, so
+    // unsaved text stays on the device under this user and is never shown to anyone else.
+    const flushed = await flushPendingSaves()
     try {
       const result = await authClient.signOut()
       if (result.error) {
@@ -22,6 +27,7 @@ export function TopBar({ user }: { user: SessionUser }) {
       toast.error('잠시 후 다시 시도해 주세요.')
       return
     }
+    if (flushed) await clearUserDrafts(user.id)
     router.replace('/login')
     router.refresh()
   }

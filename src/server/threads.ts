@@ -13,7 +13,7 @@ import type {
 import { AppError } from '@/lib/errors'
 import { THREAD_EVENT_LABEL, THREAD_STATUS_LABEL } from '@/lib/labels'
 import { requireRowWork, requireWorkRole } from '@/server/access'
-import { recordChange } from '@/server/changes'
+import { recordChange, syncThreadFromEvents, threadSnapshot } from '@/server/changes'
 
 // Threads (떡밥) are the foreshadowing ledger. Every write records change_log rows in the same
 // transaction. Thread status moves only through addThreadEvent (the ordering rules live there).
@@ -68,17 +68,6 @@ function requireTitle(title: string): string {
   const trimmed = title.trim()
   if (!trimmed) throw new AppError('VALIDATION', '떡밥 제목을 입력하세요.')
   return trimmed
-}
-
-/** Thread row plus its entry links, the shape stored in change_log snapshots. */
-async function threadSnapshot(db: Db, threadId: string) {
-  const [row] = await db.select().from(threads).where(eq(threads.id, threadId)).limit(1)
-  if (!row) throw new AppError('NOT_FOUND', NOT_FOUND_MESSAGE)
-  const links = await db
-    .select({ entryId: threadEntries.entryId })
-    .from(threadEntries)
-    .where(eq(threadEntries.threadId, threadId))
-  return { ...row, relatedEntryIds: links.map((l) => l.entryId) }
 }
 
 /** Position of a chapter that belongs to the work. Other works' chapters get NOT_FOUND. */
@@ -512,7 +501,10 @@ export async function archiveThread(
   })
 }
 
-/** Archives one timeline event. The thread's status is not recomputed from the remaining events. */
+/**
+ * Archives one timeline event. The thread's status and planted/resolved chapters are then
+ * re-derived from the remaining events, and that change is logged with this one.
+ */
 export async function archiveThreadEvent(
   db: Db,
   actor: Actor,
@@ -545,6 +537,10 @@ export async function archiveThreadEvent(
       actorId: actor.userId,
       proposalId: o?.proposalId ?? null,
       summary: `떡밥 기록 '${THREAD_EVENT_LABEL[before.kind]}' 보관`,
+    })
+    await syncThreadFromEvents(tx, actor, workId, before.threadId, {
+      proposerType: o?.proposerType,
+      proposalId: o?.proposalId,
     })
     return updated
   })

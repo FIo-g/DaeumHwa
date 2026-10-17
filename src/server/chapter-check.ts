@@ -7,9 +7,10 @@ import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
 import { type ProofreadKind, proofreadTask } from '@/ai/tasks/proofread'
 import type { Db } from '@/db/client'
-import { chapters, facts, wikiEntries } from '@/db/schema'
+import { chapters, facts, proposals, relations, threads, wikiEntries } from '@/db/schema'
 import type { Actor, ChapterRow, IssueRow, ProposalRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
+import { normalizeProposalText } from '@/lib/proposal-payloads'
 import { findNamingIssues } from '@/lib/korean/naming'
 import { ruleBasedSpellcheck } from '@/lib/korean/spelling-rules'
 import { locateQuote, sentenceAt } from '@/lib/korean/sentences'
@@ -44,6 +45,9 @@ export type SpellChecker = {
   id: string
   check(text: string): Promise<ProofreadSuggestion[]>
 }
+
+/** Longest text sent to the AI proofreader in one call. Longer text is rejected before any model call. */
+export const MAX_PROOFREAD_AI_CHARS = 30_000
 
 const RULE_KINDS: Record<string, ProofreadKind> = {
   andwae: 'spacing',
@@ -134,6 +138,14 @@ export async function runChapterCheck(
     .from(wikiEntries)
     .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
   const rules = await listNamingRules(db, actor, workId)
+  const threadRows = await db
+    .select({ id: threads.id, title: threads.title, status: threads.status })
+    .from(threads)
+    .where(and(eq(threads.workId, workId), isNull(threads.archivedAt)))
+  const relationRows = await db
+    .select()
+    .from(relations)
+    .where(and(eq(relations.workId, workId), isNull(relations.archivedAt)))
 
   const knownFacts = pack.entries.flatMap((entry) =>
     entry.facts.map((fact) => ({ ref: fact.ref, subjectName: entry.name, content: fact.content })),
@@ -142,6 +154,7 @@ export async function runChapterCheck(
     ref: t.ref,
     title: t.title,
     description: t.description,
+    status: t.status,
   }))
 
   const [continuity, extract] = await Promise.all([
@@ -205,25 +218,60 @@ export async function runChapterCheck(
       aliases: e.aliases,
       kind: e.kind,
     })),
-    threadRefs: new Map(pack.threads.map((t) => [t.ref, { id: t.id, title: t.title }])),
+    threadRefs: new Map(
+      pack.threads.map((t) => [t.ref, { id: t.id, title: t.title, status: t.status }]),
+    ),
     factRefs: new Map([...resolveRefs(pack).facts].map(([ref, fact]) => [ref, { id: fact.id }])),
+    existingThreads: threadRows,
+    existingRelations: relationRows.map((r) => ({
+      sourceId: r.sourceEntryId,
+      targetId: r.targetEntryId,
+      kind: r.kind,
+      directed: r.directed,
+      endPosition: r.endPosition,
+    })),
   })
 
   const proposalRows = await db.transaction(async (tx) => {
     await deletePendingProposals(tx, { workId, source: 'post_chapter', chapterId: chapter.id })
+    // Facts already on a card (current ones only) and facts still waiting in the queue. The
+    // chapter's own old post_chapter proposals were deleted above, so they cannot block a rerun.
     const existingFacts = await tx
       .select({ entryId: facts.entryId, content: facts.content })
       .from(facts)
-      .where(and(eq(facts.workId, workId), isNull(facts.archivedAt)))
-    const existingKeys = new Set(
-      existingFacts.filter((f) => f.entryId !== null).map((f) => `${f.entryId}|${f.content}`),
-    )
+      .where(
+        and(
+          eq(facts.workId, workId),
+          isNull(facts.archivedAt),
+          isNull(facts.supersededByFactId),
+          isNull(facts.validToPosition),
+        ),
+      )
+    const pendingFacts = await tx
+      .select({ payload: proposals.payload })
+      .from(proposals)
+      .where(
+        and(
+          eq(proposals.workId, workId),
+          eq(proposals.status, 'pending'),
+          eq(proposals.type, 'fact_create'),
+        ),
+      )
+    const existingKeys = new Set([
+      ...existingFacts
+        .filter((f) => f.entryId !== null)
+        .map((f) => `${f.entryId}|${normalizeProposalText(f.content)}`),
+      ...pendingFacts.flatMap(({ payload }) => {
+        const p = payload as { entryId?: string | null; content?: string }
+        return p.entryId && p.content ? [`${p.entryId}|${normalizeProposalText(p.content)}`] : []
+      }),
+    ])
     const fresh = items.filter(
       (item) =>
         !(
           item.type === 'fact_create' &&
           item.payload.entryId !== null &&
-          existingKeys.has(`${item.payload.entryId}|${item.payload.content}`)
+          existingKeys.has(`${item.payload.entryId}|${normalizeProposalText(item.payload.content)}`)
         ),
     )
     return insertProposals(tx, workId, fresh)
@@ -275,6 +323,12 @@ export async function runProofread(
 ): Promise<{ suggestions: ProofreadSuggestion[]; runId: string | null }> {
   const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId)
   const text = input.text ?? chapter.body
+  if (input.useAi && text.length > MAX_PROOFREAD_AI_CHARS) {
+    throw new AppError(
+      'VALIDATION',
+      `교정할 원고가 너무 깁니다. ${MAX_PROOFREAD_AI_CHARS / 10_000}만 자 이하로 나누어 교정해 주세요.`,
+    )
+  }
 
   const ruleSuggestions = await ruleSpellChecker.check(text)
   const ai = input.useAi

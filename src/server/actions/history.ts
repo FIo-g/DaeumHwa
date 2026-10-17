@@ -5,7 +5,7 @@ import { CHANGE_TARGETS, PROPOSER_TYPES } from '@/db/types'
 import type { ChangeRow } from '@/db/types'
 import type { ActionResult } from '@/lib/result'
 import { revalidateWork, withAction } from '@/server/action-helpers'
-import { listChanges, revertChange } from '@/server/changes'
+import { listChanges, revertChange, type ChangeView } from '@/server/changes'
 
 const RevertChangeSchema = z.object({
   changeId: z.uuid(),
@@ -15,7 +15,7 @@ const ListChangesSchema = z.object({
   workId: z.uuid(),
   targetTable: z.enum(CHANGE_TARGETS).optional(),
   proposerType: z.enum(PROPOSER_TYPES).optional(),
-  beforeCreatedAt: z.iso.datetime().optional(),
+  beforeId: z.uuid().optional(),
   limit: z.number().int().min(1).max(100).optional(),
 })
 
@@ -28,14 +28,9 @@ export async function revertChangeAction(input: unknown): Promise<ActionResult<C
   })
 }
 
-export async function listChangesAction(
-  input: unknown,
-): Promise<ActionResult<(ChangeRow & { actorName: string | null })[]>> {
+export async function listChangesAction(input: unknown): Promise<ActionResult<ChangeView[]>> {
   return withAction(async (db, actor) => {
-    const { workId, beforeCreatedAt, ...filter } = ListChangesSchema.parse(input)
-    return listChanges(db, actor, workId, {
-      ...filter,
-      beforeCreatedAt: beforeCreatedAt ? new Date(beforeCreatedAt) : undefined,
-    })
+    const { workId, ...filter } = ListChangesSchema.parse(input)
+    return listChanges(db, actor, workId, filter)
   })
 }

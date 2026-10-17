@@ -134,6 +134,13 @@ export function ManuscriptEditor({
 
 /** Sets the textarea height to its content height. Never touches the value. */
 function fit(el: HTMLTextAreaElement) {
+  const { scrollX, scrollY } = window
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
+  // Collapsing to auto height shortens the document for one layout pass, and the browser clamps
+  // the page scroll. Put it back so typing at the end of a long chapter does not jump to the top.
+  // Only restore when it changed, so an in-flight smooth scroll is not cut short.
+  if (window.scrollX !== scrollX || window.scrollY !== scrollY) {
+    window.scrollTo({ left: scrollX, top: scrollY, behavior: 'instant' })
+  }
 }

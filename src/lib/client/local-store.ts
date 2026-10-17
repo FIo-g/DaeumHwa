@@ -34,22 +34,37 @@ async function withDb<T>(fallback: T, run: (db: IDBPDatabase) => Promise<T>): Pr
   }
 }
 
-export function saveDraft(chapterId: string, draft: LocalDraft): Promise<void> {
+/**
+ * Drafts are keyed by user and chapter, so two people who use the same browser never see each
+ * other's unsaved text.
+ */
+export function draftKey(userId: string, chapterId: string): string {
+  return `${userId}:${chapterId}`
+}
+
+export function saveDraft(key: string, draft: LocalDraft): Promise<void> {
   return withDb(undefined, async (db) => {
-    await db.put(DRAFTS, draft, chapterId)
+    await db.put(DRAFTS, draft, key)
   })
 }
 
-export function getDraft(chapterId: string): Promise<LocalDraft | undefined> {
-  return withDb(
-    undefined,
-    async (db) => (await db.get(DRAFTS, chapterId)) as LocalDraft | undefined,
-  )
+export function getDraft(key: string): Promise<LocalDraft | undefined> {
+  return withDb(undefined, async (db) => (await db.get(DRAFTS, key)) as LocalDraft | undefined)
 }
 
-export function clearDraft(chapterId: string): Promise<void> {
+export function clearDraft(key: string): Promise<void> {
   return withDb(undefined, async (db) => {
-    await db.delete(DRAFTS, chapterId)
+    await db.delete(DRAFTS, key)
+  })
+}
+
+/** Removes every draft that belongs to one user. Used on sign-out. */
+export function clearUserDrafts(userId: string): Promise<void> {
+  const prefix = `${userId}:`
+  return withDb(undefined, async (db) => {
+    const keys = await db.getAllKeys(DRAFTS)
+    const own = keys.filter((key) => String(key).startsWith(prefix))
+    await Promise.all(own.map((key) => db.delete(DRAFTS, key)))
   })
 }
 

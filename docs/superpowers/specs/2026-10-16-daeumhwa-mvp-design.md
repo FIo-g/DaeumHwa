@@ -155,7 +155,7 @@ PostgreSQL (Neon / 로컬 PGlite)
   - `entry_update`: { entryId, entryName, patch: { summary?, aliases?, fields? } }
   - `fact_create`: { subjectName, entryId|null, content, suggestedStatus, sourceChapterId|null, evidence, supersedesFactId|null } (supersedesFactId가 있으면 승인 시 "그 회차부터 바뀜"으로 처리)
   - `thread_create`: { title, description, status('planned'|'planted'), plantedChapterId|null, targetChapterPosition|null, importance, relatedNames[], evidence, events: [{ kind('developed'|'resolved'), chapterId, evidence }] }
-  - `thread_event`: { threadId, threadTitle, kind('developed'|'resolved'|'discarded'), chapterId|null, note, evidence }
+  - `thread_event`: { threadId, threadTitle, kind('planted'|'developed'|'resolved'|'discarded'), chapterId|null, note, evidence }
   - `relation_create`: { sourceName, targetName, kind, description, directed, startPosition|null, evidence }
   - `chapter_summary`: { chapterId, summary }
   - `style_card`: { entryName|null, name, tone, rules, examples }

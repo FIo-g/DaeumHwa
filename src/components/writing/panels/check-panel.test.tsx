@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { ChapterRow, IssueRow, ProposalRow, Role } from '@/db/types'
 import type { ProposalView } from '@/server/proposals'
-import { runChapterCheckAction } from '@/server/actions/checks'
 import { listProposalsAction } from '@/server/actions/proposals'
 import { resolveIssueAction } from '@/server/actions/issues'
 import type { SelectionRange, WritingData } from '../types'
 import { CheckPanel } from './check-panel'
 
-vi.mock('@/server/actions/checks', () => ({
-  runChapterCheckAction: vi.fn(),
-  runProofreadAction: vi.fn(),
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 
 vi.mock('@/server/actions/issues', () => ({
@@ -31,7 +30,6 @@ vi.mock('@/server/actions/wiki', () => ({
   supersedeFactAction: vi.fn(),
 }))
 
-const runCheck = vi.mocked(runChapterCheckAction)
 const resolveIssue = vi.mocked(resolveIssueAction)
 const listProposals = vi.mocked(listProposalsAction)
 
@@ -135,19 +133,64 @@ function makeProposal(): ProposalView {
   } as unknown as ProposalView
 }
 
+/** An editor whose text really changes, so undo can be checked against the document. */
+function makeTextApi(initial: string) {
+  let text = initial
+  return {
+    getText: vi.fn(() => text),
+    replaceRange: vi.fn((start: number, end: number, replacement: string) => {
+      text = text.slice(0, start) + replacement + text.slice(end)
+    }),
+    replaceQuote: vi.fn((quote: string, replacement: string, hintStart?: number) => {
+      const index = text.indexOf(quote, hintStart ?? 0)
+      if (index < 0) return false
+      text = text.slice(0, index) + replacement + text.slice(index + quote.length)
+      return true
+    }),
+    appendText: vi.fn(),
+    setHighlights: vi.fn(),
+    focusRange: vi.fn(),
+    getSelection: vi.fn((): SelectionRange | null => null),
+    saveNow: vi.fn(async () => {}),
+    refresh: vi.fn(),
+    type(extra: string) {
+      text += extra
+    },
+  }
+}
+
+/** The action of the most recent toast call, for pressing 되돌리기. */
+function lastToastAction(): () => void {
+  const calls = vi.mocked(toast).mock.calls
+  const options = calls[calls.length - 1][1] as unknown as { action: { onClick: () => void } }
+  return options.action.onClick
+}
+
+const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>()
+
 beforeEach(() => {
   vi.clearAllMocks()
+  fetchMock.mockReset()
+  vi.stubGlobal('fetch', fetchMock)
   resolveIssue.mockResolvedValue({ ok: true, data: makeIssue({ status: 'accepted' }) })
   listProposals.mockResolvedValue({ ok: true, data: [makeProposal()] })
 })
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function respondWith(body: unknown): void {
+  fetchMock.mockResolvedValue(Response.json(body))
+}
 
 afterEach(() => {
   cleanup()
 })
 
 describe('CheckPanel', () => {
-  it('saves the chapter before running the chapter check', async () => {
-    runCheck.mockResolvedValue({
+  it('saves the chapter before running the chapter check through its route', async () => {
+    respondWith({
       ok: true,
       data: { issues: [], proposals: [], runIds: [], namingIssueCount: 0 },
     })
@@ -156,11 +199,27 @@ describe('CheckPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '회차 점검' }))
 
-    await waitFor(() => expect(runCheck).toHaveBeenCalledWith({ chapterId: 'c1' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/works/work-1/chapters/c1/check')
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('POST')
     expect(api.saveNow).toHaveBeenCalledTimes(1)
     expect(api.saveNow.mock.invocationCallOrder[0]).toBeLessThan(
-      runCheck.mock.invocationCallOrder[0],
+      fetchMock.mock.invocationCallOrder[0],
     )
+  })
+
+  it('sends the slow AI check as a fetch, not a Server Action, while the request stays open', async () => {
+    // The check never resolves here, like a slow AI call. The panel must not queue it as a
+    // Server Action, which would block autosave until it returns.
+    fetchMock.mockReturnValue(new Promise<Response>(() => {}))
+    const api = makeApi()
+    render(<CheckPanel data={makeData({ issues: [] })} api={api} text="본문" />)
+
+    fireEvent.click(screen.getByRole('button', { name: '회차 점검' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/works/work-1/chapters/c1/check')
+    expect(screen.getByRole('button', { name: '점검 중… (AI)' })).toBeTruthy()
   })
 
   it('shows the manuscript sentence and the wiki evidence side by side', () => {
@@ -188,7 +247,7 @@ describe('CheckPanel', () => {
   })
 
   it('opens the approval dialog with the count when the check finds wiki candidates', async () => {
-    runCheck.mockResolvedValue({
+    respondWith({
       ok: true,
       data: {
         issues: [],
@@ -207,6 +266,62 @@ describe('CheckPanel', () => {
       chapterId: 'c1',
       status: 'pending',
     })
+  })
+
+  it('shows no fix button when the suggestion is empty', () => {
+    render(
+      <CheckPanel
+        data={makeData({ issues: [makeIssue({ suggestion: '' })] })}
+        api={makeApi()}
+        text={`안녕.\n${QUOTE}`}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: '제안대로 고치기' })).toBeNull()
+  })
+
+  it('shows no fix button for thread or timeline issues, whose advice cannot replace a sentence', () => {
+    render(
+      <CheckPanel
+        data={makeData({
+          issues: [
+            makeIssue({ id: 'issue-t', kind: 'thread' }),
+            makeIssue({ id: 'issue-l', kind: 'timeline' }),
+          ],
+        })}
+        api={makeApi()}
+        text={`안녕.\n${QUOTE}`}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: '제안대로 고치기' })).toBeNull()
+  })
+
+  it('undoes an applied fix from the toast while the text is unchanged', async () => {
+    const text = `안녕.\n${QUOTE}`
+    const api = makeTextApi(text)
+    render(<CheckPanel data={makeData()} api={api} text={text} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '제안대로 고치기' }))
+    await waitFor(() => expect(resolveIssue).toHaveBeenCalled())
+    expect(api.getText()).toBe(`안녕.\n${SUGGESTION}`)
+
+    lastToastAction()()
+    expect(api.getText()).toBe(text)
+  })
+
+  it('does not undo a fix when the text changed after it', async () => {
+    const text = `안녕.\n${QUOTE}`
+    const api = makeTextApi(text)
+    render(<CheckPanel data={makeData()} api={api} text={text} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '제안대로 고치기' }))
+    await waitFor(() => expect(resolveIssue).toHaveBeenCalled())
+    api.type(' 그리고 더 썼다.')
+
+    lastToastAction()()
+    expect(api.getText()).toBe(`안녕.\n${SUGGESTION} 그리고 더 썼다.`)
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith('그 사이 원고가 바뀌어 되돌릴 수 없습니다.')
   })
 
   it('hides the check and fix controls for commenters', () => {

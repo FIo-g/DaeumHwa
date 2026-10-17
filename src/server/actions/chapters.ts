@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { CHAPTER_STATUSES, type ChapterRow } from '@/db/types'
+import { isPlausibleIsoDate } from '@/lib/dates'
 import type { ActionResult } from '@/lib/result'
 import { revalidateWork, withAction } from '@/server/action-helpers'
 import {
@@ -30,10 +31,7 @@ const SetStatusSchema = z.object({
 
 const SetPublishedOnSchema = z.object({
   chapterId: z.uuid(),
-  publishedOn: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable(),
+  publishedOn: z.string().refine(isPlausibleIsoDate).nullable(),
 })
 
 const MoveSchema = z.object({

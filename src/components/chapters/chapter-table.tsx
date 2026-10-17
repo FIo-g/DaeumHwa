@@ -3,7 +3,8 @@
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type ChangeEvent, useState } from 'react'
+import { type KeyboardEvent, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
@@ -20,7 +21,7 @@ import {
 } from '@/components/ui/table'
 import type { ChapterStatus } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
-import { formatKoreanDateTime } from '@/lib/dates'
+import { formatKoreanDateTime, isPlausibleIsoDate } from '@/lib/dates'
 import { CHAPTER_STATUS_LABEL, chapterLabel } from '@/lib/labels'
 import type { ActionResult } from '@/lib/result'
 import {
@@ -165,10 +166,9 @@ export function ChapterTable({ workId, chapters, canEdit }: ChapterTableProps) {
                   </TableCell>
                   <TableCell>
                     <PublishedOnInput
-                      key={`${chapter.id}-${chapter.publishedOn ?? ''}`}
                       position={chapter.position}
                       value={chapter.publishedOn}
-                      disabled={!canEdit || archived || busy}
+                      disabled={!canEdit || archived}
                       onSave={(next) =>
                         perform(
                           `date-${chapter.id}`,
@@ -273,21 +273,66 @@ type PublishedOnInputProps = {
   onSave: (publishedOn: string | null) => Promise<boolean>
 }
 
-/** Publish date input. A failed save puts the last saved date back into the field. */
+/**
+ * Publish date input. Typing only edits a local draft; the value is saved on blur or Enter,
+ * so partial keyboard entry such as `0002-10-17` never reaches the server.
+ * A failed or invalid save puts the last saved date back into the field.
+ */
 function PublishedOnInput({ position, value, disabled, onSave }: PublishedOnInputProps) {
-  async function onChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget
-    const saved = await onSave(input.value === '' ? null : input.value)
-    if (!saved) input.value = value ?? ''
+  const saved = value ?? ''
+  const [draft, setDraft] = useState(saved)
+  // Re-sync the draft when the saved value changes (after a refresh) without an effect.
+  const [lastSaved, setLastSaved] = useState(saved)
+  if (lastSaved !== saved) {
+    setLastSaved(saved)
+    setDraft(saved)
+  }
+  const savingRef = useRef(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function commit() {
+    if (savingRef.current) return
+    // A half-typed date reads as '' but is not a request to clear the date.
+    const input = inputRef.current
+    if (input?.validity.badInput) {
+      toast.error('연재일이 올바르지 않습니다.')
+      input.value = saved
+      setDraft(saved)
+      return
+    }
+    if (draft === saved) return
+    if (draft !== '' && !isPlausibleIsoDate(draft)) {
+      toast.error('연재일이 올바르지 않습니다.')
+      setDraft(saved)
+      return
+    }
+    savingRef.current = true
+    try {
+      const ok = await onSave(draft === '' ? null : draft)
+      if (!ok) setDraft(saved)
+    } finally {
+      savingRef.current = false
+    }
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    void commit()
   }
 
   return (
     <Input
+      ref={inputRef}
       type="date"
       aria-label={`${position}화 연재일`}
-      defaultValue={value ?? ''}
+      min="2000-01-01"
+      max="2100-12-31"
+      value={draft}
       disabled={disabled}
-      onChange={onChange}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onBlur={() => void commit()}
+      onKeyDown={onKeyDown}
       className="w-40"
     />
   )

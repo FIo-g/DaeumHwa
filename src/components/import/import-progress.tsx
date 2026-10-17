@@ -13,6 +13,7 @@ import { runAction } from '@/lib/client/run-action'
 import {
   cancelImportJobAction,
   pauseImportJobAction,
+  skipImportChapterAction,
   startImportJobAction,
 } from '@/server/actions/imports'
 
@@ -43,7 +44,10 @@ const CANCELABLE: ImportJobStatus[] = ['uploading', 'running', 'paused', 'error'
 export type ImportJobSnapshot = Pick<
   ImportJobRow,
   'id' | 'fileName' | 'status' | 'runner' | 'processedChapters' | 'totalChapters' | 'error'
->
+> & {
+  /** Positions of the chapters the author skipped after they stopped the job. */
+  skipped: number[]
+}
 
 export function toSnapshot(job: ImportJobRow): ImportJobSnapshot {
   return {
@@ -54,6 +58,7 @@ export function toSnapshot(job: ImportJobRow): ImportJobSnapshot {
     processedChapters: job.processedChapters,
     totalChapters: job.totalChapters,
     error: job.error,
+    skipped: skippedPositionsOf(job.state),
   }
 }
 
@@ -168,6 +173,23 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
     }
   }
 
+  // Skips the chapter that stopped the job, then resumes it at the next chapter.
+  async function skip() {
+    setBusy(true)
+    const skippedRow = await runAction(skipImportChapterAction({ jobId }), {
+      success: '이 화를 건너뛰었습니다.',
+    })
+    if (skippedRow) {
+      setNotice(null)
+      setJob(toSnapshot(skippedRow))
+      if (skippedRow.status !== 'done') {
+        const resumed = await runAction(startImportJobAction({ jobId }))
+        if (resumed) setJob(toSnapshot(resumed))
+      }
+    }
+    setBusy(false)
+  }
+
   async function cancel() {
     const row = await runAction(cancelImportJobAction({ jobId }), {
       success: '가져오기를 취소했습니다.',
@@ -189,6 +211,7 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
   const canResume = canEdit && (status === 'paused' || status === 'error')
   const canRetry = canEdit && status === 'running' && runner === 'client' && notice !== null
   const canCancel = canEdit && CANCELABLE.includes(status)
+  const canSkip = canEdit && status === 'error'
 
   return (
     <section aria-label="가져오기 진행 상황" className="grid gap-4 rounded-xl border p-5">
@@ -226,6 +249,12 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
         <p className="text-sm text-muted-foreground">취소한 가져오기입니다.</p>
       )}
 
+      {job.skipped.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {`건너뛴 회차: ${job.skipped.map((position) => `${position}화`).join(', ')}`}
+        </p>
+      )}
+
       {job.error && (
         <Alert>
           <AlertDescription>{job.error}</AlertDescription>
@@ -252,6 +281,17 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
           <Button onClick={start} disabled={busy}>
             재개
           </Button>
+        )}
+        {canSkip && (
+          <ConfirmButton
+            title="이 화를 건너뛸까요?"
+            description="이 화에서는 설정 후보를 뽑지 않고 다음 화로 넘어갑니다. 원고는 그대로 남습니다."
+            confirmLabel="건너뛰기"
+            onConfirm={skip}
+            disabled={busy}
+          >
+            이 화 건너뛰기
+          </ConfirmButton>
         )}
         {canRetry && (
           <Button variant="outline" onClick={retry} disabled={busy}>
@@ -301,6 +341,15 @@ async function fetchPoll(jobId: string): Promise<PollResult | null> {
   } catch {
     return null
   }
+}
+
+/** Positions of the skipped chapters, read from the job state. The server writes `state.skipped`. */
+function skippedPositionsOf(state: ImportJobRow['state']): number[] {
+  const skipped: unknown = (state as { skipped?: unknown }).skipped
+  if (!Array.isArray(skipped)) return []
+  return skipped.flatMap((item: unknown) =>
+    isRecord(item) && typeof item.position === 'number' ? [item.position] : [],
+  )
 }
 
 function readPoll(value: unknown): PollResult | null {

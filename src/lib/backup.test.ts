@@ -140,3 +140,83 @@ describe('backupFileName and safeName', () => {
     expect(safeName('가'.repeat(50))).toHaveLength(40)
   })
 })
+
+describe('chapters that share a position', () => {
+  const archived = {
+    id: 'old-chapter',
+    position: 5,
+    title: '5화',
+    body: 'ARCHIVED BODY',
+    status: 'draft',
+    publishedOn: null,
+    archivedAt: '2026-10-15T00:00:00.000Z',
+  }
+  const live = {
+    id: 'new-chapter',
+    position: 5,
+    title: '5화',
+    body: 'REAL BODY',
+    status: 'draft',
+    publishedOn: null,
+    archivedAt: null,
+  }
+
+  function payloadWith(chapters: unknown[]): ExportPayload {
+    return { ...payload, chapters } as unknown as ExportPayload
+  }
+
+  it.each([
+    ['archived first', [archived, live]],
+    ['live first', [live, archived]],
+  ])('keeps every chapter file when %s', (_label, chapters) => {
+    const files = buildBackupFiles(payloadWith(chapters))
+    const paths = files.map((f) => f.path)
+    expect(new Set(paths).size).toBe(paths.length)
+
+    const entries = unzipSync(zipBackup(files))
+    const bodies = Object.keys(entries)
+      .filter((path) => path.startsWith('chapters/'))
+      .map((path) => new TextDecoder().decode(entries[path]))
+    expect(bodies.some((text) => text.includes('REAL BODY'))).toBe(true)
+    expect(bodies.some((text) => text.includes('ARCHIVED BODY'))).toBe(true)
+  })
+
+  it('keeps the plain file name for the live chapter and marks the archived one', () => {
+    const files = buildBackupFiles(payloadWith([archived, live]))
+    const liveFile = files.find((f) => f.path === 'chapters/005-5화.md')
+    expect(liveFile?.content).toContain('REAL BODY')
+    expect(liveFile?.content).not.toContain('보관된 회차')
+
+    const archivedFile = files.find(
+      (f) => f.path.startsWith('chapters/005-') && f.path !== 'chapters/005-5화.md',
+    )
+    expect(archivedFile?.path).toContain('보관됨')
+    expect(archivedFile?.content).toContain('보관된 회차')
+    expect(archivedFile?.content).toContain('ARCHIVED BODY')
+  })
+
+  it('never produces duplicate paths, even when three chapters share a position', () => {
+    const second = { ...archived, id: 'aaaaaaaa1', body: 'SECOND ARCHIVED' }
+    const third = { ...archived, id: 'aaaaaaaa2', body: 'THIRD ARCHIVED' }
+    const files = buildBackupFiles(payloadWith([second, live, third]))
+    const paths = files.map((f) => f.path)
+    expect(new Set(paths.map((p) => p.toLowerCase())).size).toBe(paths.length)
+
+    const entries = unzipSync(zipBackup(files))
+    const texts = Object.keys(entries).map((path) => new TextDecoder().decode(entries[path]))
+    expect(texts.some((text) => text.includes('SECOND ARCHIVED'))).toBe(true)
+    expect(texts.some((text) => text.includes('THIRD ARCHIVED'))).toBe(true)
+    expect(texts.some((text) => text.includes('REAL BODY'))).toBe(true)
+  })
+})
+
+describe('zipBackup duplicate guard', () => {
+  it('throws instead of silently replacing a file with the same path', () => {
+    expect(() =>
+      zipBackup([
+        { path: 'chapters/001-a.md', content: 'first' },
+        { path: 'chapters/001-a.md', content: 'second' },
+      ]),
+    ).toThrow('백업 파일 경로가 겹칩니다')
+  })
+})

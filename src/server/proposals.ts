@@ -1,6 +1,6 @@
-import { and, eq, inArray, type SQL } from 'drizzle-orm'
+import { and, count, eq, inArray, isNotNull, isNull, min, notInArray, type SQL } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { chapters, facts, proposals, threads, wikiEntries } from '@/db/schema'
+import { chapters, facts, proposals, relations, threads, wikiEntries } from '@/db/schema'
 import type {
   Actor,
   EntryRow,
@@ -12,7 +12,11 @@ import type {
   ProposalType,
 } from '@/db/types'
 import { AppError, isAppError } from '@/lib/errors'
-import { type ProposalPayloadMap, parseProposalPayload } from '@/lib/proposal-payloads'
+import {
+  normalizeProposalText,
+  type ProposalPayloadMap,
+  parseProposalPayload,
+} from '@/lib/proposal-payloads'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import {
   assertChapterInWork,
@@ -173,6 +177,34 @@ export async function listProposals(
   return o.limit !== undefined ? views.slice(0, o.limit) : views
 }
 
+/**
+ * Pending import proposals counted per import job, in one grouped query (no rows loaded).
+ * Viewer role. Non-members get NOT_FOUND.
+ */
+export async function countImportBatches(
+  db: Db,
+  actor: Actor,
+  workId: string,
+): Promise<{ sourceRef: string; count: number }[]> {
+  await requireWorkRole(db, workId, actor.userId, 'viewer')
+  const rows = await db
+    .select({ sourceRef: proposals.sourceRef, total: count() })
+    .from(proposals)
+    .where(
+      and(
+        eq(proposals.workId, workId),
+        eq(proposals.status, 'pending'),
+        eq(proposals.source, 'import'),
+        isNotNull(proposals.sourceRef),
+      ),
+    )
+    .groupBy(proposals.sourceRef)
+    .orderBy(min(proposals.createdAt))
+  return rows.flatMap((row) =>
+    row.sourceRef ? [{ sourceRef: row.sourceRef, count: Number(row.total) }] : [],
+  )
+}
+
 // ---- Lookups scoped to the proposal's work ----
 
 function missingCard(name: string): AppError {
@@ -244,6 +276,10 @@ function factSourceType(source: ProposalSource): FactSourceType {
 // ---- Apply ----
 
 type ApplyResult = { targetId: string | null; notes: string[] }
+
+const DUPLICATE_FACT_NOTE = '이미 같은 사실이 있어 새로 추가하지 않았습니다.'
+const DUPLICATE_RELATION_NOTE = '이미 같은 관계가 있어 새로 만들지 않았습니다.'
+const DUPLICATE_THREAD_NOTE = '이미 같은 떡밥이 있어 새로 만들지 않았습니다.'
 
 /** Applies one validated payload through the wiki services. Runs inside the approval transaction. */
 async function applyProposal(
@@ -336,6 +372,34 @@ async function applyProposal(
         )
         return { targetId: newFact.id, notes: [] }
       }
+      // Same content on the same card (or on the same unlinked subject) is already on the wiki.
+      const cardId = p.entryId ?? (await findEntryByName(tx, workId, p.subjectName))?.id ?? null
+      const content = normalizeProposalText(p.content)
+      const current = await tx
+        .select({
+          id: facts.id,
+          entryId: facts.entryId,
+          subjectName: facts.subjectName,
+          content: facts.content,
+        })
+        .from(facts)
+        .where(
+          and(
+            eq(facts.workId, workId),
+            isNull(facts.archivedAt),
+            isNull(facts.supersededByFactId),
+            isNull(facts.validToPosition),
+          ),
+        )
+      const duplicate = current.find(
+        (f) =>
+          normalizeProposalText(f.content) === content &&
+          (cardId !== null
+            ? f.entryId === cardId
+            : f.entryId === null && f.subjectName.trim() === p.subjectName.trim()),
+      )
+      if (duplicate) return { targetId: duplicate.id, notes: [DUPLICATE_FACT_NOTE] }
+
       const fact = await createFact(
         tx,
         actor,
@@ -356,29 +420,49 @@ async function applyProposal(
 
     case 'thread_create': {
       const p = payload as ProposalPayloadMap['thread_create']
-      // Interview ideas are not on the page yet, so they start as planned.
-      const status = proposal.source === 'interview' ? 'planned' : p.status
-      const relatedEntryIds: string[] = []
-      for (const name of p.relatedNames) {
-        const entry = await findEntryByName(tx, workId, name)
-        if (entry && !relatedEntryIds.includes(entry.id)) relatedEntryIds.push(entry.id)
-      }
-      const thread = await createThread(
-        tx,
-        actor,
-        {
-          workId,
-          title: p.title,
-          description: p.description,
-          status,
-          plantedChapterId: status === 'planted' ? p.plantedChapterId : null,
-          targetChapterPosition: p.targetChapterPosition,
-          importance: p.importance,
-          relatedEntryIds,
-        },
-        o,
-      )
+      // A thread with the same title that is still open is reused instead of duplicated.
+      const title = normalizeProposalText(p.title)
+      const openThreads = await tx
+        .select({ id: threads.id, title: threads.title })
+        .from(threads)
+        .where(
+          and(
+            eq(threads.workId, workId),
+            isNull(threads.archivedAt),
+            notInArray(threads.status, ['resolved', 'discarded']),
+          ),
+        )
+      const existing = openThreads.find((t) => normalizeProposalText(t.title) === title)
       const notes: string[] = []
+      let threadId: string
+      if (existing) {
+        threadId = existing.id
+        notes.push(DUPLICATE_THREAD_NOTE)
+      } else {
+        // Interview ideas are not on the page yet, so they start as planned.
+        const status = proposal.source === 'interview' ? 'planned' : p.status
+        const relatedEntryIds: string[] = []
+        for (const name of p.relatedNames) {
+          const entry = await findEntryByName(tx, workId, name)
+          if (entry && !relatedEntryIds.includes(entry.id)) relatedEntryIds.push(entry.id)
+        }
+        const thread = await createThread(
+          tx,
+          actor,
+          {
+            workId,
+            title: p.title,
+            description: p.description,
+            status,
+            plantedChapterId: status === 'planted' ? p.plantedChapterId : null,
+            targetChapterPosition: p.targetChapterPosition,
+            importance: p.importance,
+            relatedEntryIds,
+          },
+          o,
+        )
+        threadId = thread.id
+      }
       const positions = await chapterPositions(
         tx,
         workId,
@@ -397,7 +481,7 @@ async function applyProposal(
             tx,
             actor,
             {
-              threadId: thread.id,
+              threadId,
               kind: event.kind,
               chapterId: event.chapterId,
               evidence: event.evidence,
@@ -409,7 +493,7 @@ async function applyProposal(
           notes.push(`떡밥 '${p.title}' 기록을 건너뛰었습니다: ${e.message}`)
         }
       }
-      return { targetId: thread.id, notes }
+      return { targetId: threadId, notes }
     }
 
     case 'thread_event': {
@@ -439,6 +523,24 @@ async function applyProposal(
       const startPosition =
         p.startPosition ??
         (proposal.chapterId ? await chapterPosition(tx, workId, proposal.chapterId) : null)
+      // The same pair with the same kind that is still open (or overlaps) is already linked.
+      const active = await tx
+        .select()
+        .from(relations)
+        .where(and(eq(relations.workId, workId), isNull(relations.archivedAt)))
+      const kind = normalizeProposalText(p.kind)
+      const duplicate = active.find((r) => {
+        if (normalizeProposalText(r.kind) !== kind) return false
+        const forward = r.sourceEntryId === source.id && r.targetEntryId === target.id
+        const backward =
+          !r.directed &&
+          !p.directed &&
+          r.sourceEntryId === target.id &&
+          r.targetEntryId === source.id
+        if (!forward && !backward) return false
+        return r.endPosition === null || startPosition === null || r.endPosition >= startPosition
+      })
+      if (duplicate) return { targetId: duplicate.id, notes: [DUPLICATE_RELATION_NOTE] }
       const relation = await createRelation(
         tx,
         actor,
@@ -493,6 +595,23 @@ async function applyProposal(
 // ---- Approve / reject ----
 
 /**
+ * An edited fact subject re-links the fact by name: the card matched before is dropped, so the
+ * typed subject decides (createFact looks the new name up). A blank or unchanged subject keeps
+ * the link.
+ */
+function reconcileFactSubject(
+  type: ProposalType,
+  original: unknown,
+  merged: Record<string, unknown>,
+): Record<string, unknown> {
+  if (type !== 'fact_create') return merged
+  const before = ((original as Partial<ProposalPayloadMap['fact_create']>).subjectName ?? '').trim()
+  const after = typeof merged.subjectName === 'string' ? merged.subjectName.trim() : ''
+  if (after === '' || after === before) return merged
+  return { ...merged, entryId: null }
+}
+
+/**
  * Approves one pending proposal: applies its payload (after merging and re-validating any edits)
  * and marks it approved, in one transaction. Editor role.
  */
@@ -512,7 +631,10 @@ export async function approveProposal(
   if (current.status !== 'pending') throw new AppError('BAD_STATE', ALREADY_DECIDED_MESSAGE)
 
   const merged = input.payloadOverride
-    ? { ...(current.payload as Record<string, unknown>), ...input.payloadOverride }
+    ? reconcileFactSubject(current.type, current.payload, {
+        ...(current.payload as Record<string, unknown>),
+        ...input.payloadOverride,
+      })
     : current.payload
   // Validated before any write, so an invalid edit leaves the proposal pending.
   const payload = parseProposalPayload(current.type, merged)

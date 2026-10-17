@@ -27,6 +27,8 @@ export type LoadServerCopy = (input: { chapterId: string }) => Promise<ActionRes
 type WritingWorkspaceProps = {
   data: WritingData
   loadServerCopy: LoadServerCopy
+  /** Signed-in user, so device drafts are kept per user. Without it no draft is kept on this device. */
+  userId?: string
 }
 
 const ignore = () => {}
@@ -35,7 +37,7 @@ const ignore = () => {}
  * The writing screen: toolbar, manuscript editor and the side panel. Owns the autosave loop and
  * exposes the WorkspaceApi that side panels use to read and change the text.
  */
-export function WritingWorkspace({ data, loadServerCopy }: WritingWorkspaceProps) {
+export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorkspaceProps) {
   const router = useRouter()
   const { chapter, role, workId } = data
   const canEdit = (role === 'owner' || role === 'editor') && !chapter.archivedAt
@@ -57,6 +59,7 @@ export function WritingWorkspace({ data, loadServerCopy }: WritingWorkspaceProps
 
   const autosave = useAutosave({
     chapterId: chapter.id,
+    userId,
     initialTitle: chapter.title,
     initialBody: chapter.body,
     initialVersion: chapter.version,
@@ -147,6 +150,7 @@ export function WritingWorkspace({ data, loadServerCopy }: WritingWorkspaceProps
   function handleBlur() {
     void saveNow()
     const cursor = textareaRef.current?.selectionStart ?? null
+    // Sends a cursor, so the server skips revalidation for this call (see saveResumePointAction).
     void saveResumePointAction({ workId, chapterId: chapter.id, cursor, path })
   }
 
@@ -186,11 +190,14 @@ export function WritingWorkspace({ data, loadServerCopy }: WritingWorkspaceProps
     setConflictPending(true)
     const nextTitle = title
     const nextBody = textRef.current
+    // keepHistory: the server copy being replaced must keep its own history row, even when the
+    // other device saved within the coalesce window.
     const result = await saveChapterAction({
       chapterId: chapter.id,
       title: nextTitle,
       body: nextBody,
       expectedVersion: version,
+      keepHistory: true,
     })
     setConflictPending(false)
     if (!result.ok) {
@@ -272,6 +279,7 @@ export function WritingWorkspace({ data, loadServerCopy }: WritingWorkspaceProps
         <RecoveryDialog
           open={autosave.recoverable !== null}
           savedAt={autosave.recoverable?.savedAt ?? null}
+          stale={autosave.recoverableStale}
           onRecover={autosave.acceptRecovery}
           onDiscard={autosave.discardRecovery}
         />

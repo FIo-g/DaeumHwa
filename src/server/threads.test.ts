@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Db } from '@/db/client'
 import { changeLog, threadEvents, threads } from '@/db/schema'
@@ -444,5 +444,86 @@ describe('updateThread, archiveThread and archiveThreadEvent', () => {
     expect((await listThreads(db, actor, work.id))[0].eventCount).toBe(1)
     const [row] = await db.select().from(threadEvents).where(eq(threadEvents.id, note.id))
     expect(row.archivedAt).not.toBeNull()
+  })
+})
+
+describe('archiveThreadEvent keeps the thread status in line with its timeline', () => {
+  it('archiving the resolving event returns the thread to planted, and it can be resolved again', async () => {
+    const { actor, work, chapterAt } = await makeWork()
+    const ch1 = await chapterAt(1)
+    const ch3 = await chapterAt(3)
+    const thread = await createThread(db, actor, {
+      workId: work.id,
+      title: '반지',
+      status: 'planted',
+      plantedChapterId: ch1.id,
+    })
+    const resolved = await addThreadEvent(db, actor, {
+      threadId: thread.id,
+      kind: 'resolved',
+      chapterId: ch3.id,
+    })
+
+    await archiveThreadEvent(db, actor, resolved.id)
+
+    const row = await threadRow(thread.id)
+    expect(row.status).toBe('planted')
+    expect(row.resolvedChapterId).toBeNull()
+    expect(row.plantedChapterId).toBe(ch1.id)
+    const updates = await db
+      .select()
+      .from(changeLog)
+      .where(and(eq(changeLog.targetId, thread.id), eq(changeLog.action, 'update')))
+    expect(updates.map((c) => c.summary)).toContain("떡밥 '반지' 상태: 심음")
+    await expect(
+      addThreadEvent(db, actor, { threadId: thread.id, kind: 'resolved', chapterId: ch3.id }),
+    ).resolves.toMatchObject({ kind: 'resolved' })
+  })
+
+  it('archiving a note writes only the event archive row, no thread change', async () => {
+    const { actor, work, chapterAt } = await makeWork()
+    const ch1 = await chapterAt(1)
+    const thread = await createThread(db, actor, {
+      workId: work.id,
+      title: '반지',
+      status: 'planted',
+      plantedChapterId: ch1.id,
+    })
+    const note = await addThreadEvent(db, actor, {
+      threadId: thread.id,
+      kind: 'note',
+      note: '메모',
+    })
+    const before = await changeCount(work.id)
+
+    await archiveThreadEvent(db, actor, note.id)
+
+    expect(await changeCount(work.id)).toBe(before + 1)
+    const latest = await db
+      .select()
+      .from(changeLog)
+      .where(eq(changeLog.workId, work.id))
+      .orderBy(desc(changeLog.createdAt))
+      .limit(1)
+    expect(latest[0].targetTable).toBe('thread_events')
+    expect(latest[0].action).toBe('archive')
+  })
+
+  it('archiving the planting of a planted-only thread returns it to planned', async () => {
+    const { actor, work, chapterAt } = await makeWork()
+    const ch1 = await chapterAt(1)
+    const thread = await createThread(db, actor, {
+      workId: work.id,
+      title: '반지',
+      status: 'planted',
+      plantedChapterId: ch1.id,
+    })
+    const detail = await getThread(db, actor, thread.id)
+
+    await archiveThreadEvent(db, actor, detail.events[0].id)
+
+    const row = await threadRow(thread.id)
+    expect(row.status).toBe('planned')
+    expect(row.plantedChapterId).toBeNull()
   })
 })

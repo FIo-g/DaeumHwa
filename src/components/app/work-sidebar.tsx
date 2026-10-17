@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 type WorkSidebarProps = {
   workId: string
   workTitle: string
+  /** Every member sees the same links; the settings page itself shows read-only views to non-owners. */
   role: Role
   pendingCount: number
 }
@@ -20,8 +21,6 @@ type NavItem = {
   key: string
   label: string
   path: string
-  /** Shown only to owners. */
-  ownerOnly?: boolean
   badge?: 'pending'
 }
 
@@ -35,7 +34,7 @@ const MAIN_ITEMS: NavItem[] = [
   { key: 'schedule', label: '일정', path: '/schedule' },
   { key: 'advice', label: '방향 조언', path: '/advice' },
   { key: 'reader-sim', label: '독자 시뮬레이션', path: '/reader-sim' },
-  { key: 'settings', label: '작품 설정', path: '/settings', ownerOnly: true },
+  { key: 'settings', label: '작품 설정', path: '/settings' },
 ]
 
 const SECONDARY_ITEMS: NavItem[] = [
@@ -50,21 +49,17 @@ function isActive(pathname: string, href: string, homeHref: string): boolean {
 
 function NavList({
   workId,
-  role,
   pendingCount,
   onNavigate,
 }: {
   workId: string
-  role: Role
   pendingCount: number
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
   const base = `/works/${workId}`
-  const isOwner = role === 'owner'
 
   const renderItem = (item: NavItem) => {
-    if (item.ownerOnly && !isOwner) return null
     const href = `${base}${item.path}`
     const active = isActive(pathname, href, base)
     return (
@@ -101,7 +96,7 @@ function NavList({
 }
 
 /** Work-section navigation: a fixed sidebar on wide screens, a sheet on narrow ones. */
-export function WorkSidebar({ workId, workTitle, role, pendingCount }: WorkSidebarProps) {
+export function WorkSidebar({ workId, workTitle, pendingCount }: WorkSidebarProps) {
   const [open, setOpen] = useState(false)
   return (
     <>
@@ -118,7 +113,6 @@ export function WorkSidebar({ workId, workTitle, role, pendingCount }: WorkSideb
             <div className="px-4 pb-6">
               <NavList
                 workId={workId}
-                role={role}
                 pendingCount={pendingCount}
                 onNavigate={() => setOpen(false)}
               />
@@ -129,7 +123,7 @@ export function WorkSidebar({ workId, workTitle, role, pendingCount }: WorkSideb
       </div>
       <aside className="hidden w-56 shrink-0 flex-col gap-4 border-r px-3 py-6 md:flex">
         <p className="truncate px-3 text-sm font-semibold">{workTitle}</p>
-        <NavList workId={workId} role={role} pendingCount={pendingCount} />
+        <NavList workId={workId} pendingCount={pendingCount} />
       </aside>
     </>
   )

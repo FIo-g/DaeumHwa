@@ -67,6 +67,78 @@ describe('computeSchedule', () => {
     expect(r.bufferRunsOutOn).toBe('2026-10-16')
   })
 
+  it("gives today's slots to chapters already published today before the buffer", () => {
+    // 2026-10-16 is a Friday publish day. Chapter 1 went out today, so today's only slot is used.
+    const r = computeSchedule(
+      input({
+        chapters: [
+          { id: 'c1', position: 1, title: '', status: 'done', publishedOn: '2026-10-16' },
+          { id: 'c2', position: 2, title: '', status: 'done', publishedOn: null },
+          { id: 'c3', position: 3, title: '', status: 'done', publishedOn: null },
+        ],
+      }),
+      '2026-10-16',
+    )
+    expect(r.bufferCount).toBe(2)
+    expect(r.slots[0]).toEqual({
+      date: '2026-10-19',
+      chapterId: 'c2',
+      chapterTitle: '2화',
+      position: 2,
+    })
+    expect(r.slots[1]).toEqual({
+      date: '2026-10-20',
+      chapterId: 'c3',
+      chapterTitle: '3화',
+      position: 3,
+    })
+    expect(r.bufferRunsOutOn).toBe('2026-10-21')
+  })
+
+  it("only takes today's slots used by today's publications when there are several per day", () => {
+    const r = computeSchedule(
+      input({
+        settings: { ...settings, chaptersPerPublishDay: 2 },
+        chapters: [
+          { id: 'c1', position: 1, title: '', status: 'done', publishedOn: '2026-10-16' },
+          { id: 'c2', position: 2, title: '', status: 'done', publishedOn: null },
+          { id: 'c3', position: 3, title: '', status: 'done', publishedOn: null },
+        ],
+      }),
+      '2026-10-16',
+    )
+    expect(r.slots[0]).toEqual({
+      date: '2026-10-16',
+      chapterId: 'c2',
+      chapterTitle: '2화',
+      position: 2,
+    })
+    expect(r.slots[1]).toEqual({
+      date: '2026-10-19',
+      chapterId: 'c3',
+      chapterTitle: '3화',
+      position: 3,
+    })
+  })
+
+  it('does not reserve today for a publication dated yesterday', () => {
+    const r = computeSchedule(
+      input({
+        chapters: [
+          { id: 'c1', position: 1, title: '', status: 'done', publishedOn: '2026-10-15' },
+          { id: 'c2', position: 2, title: '', status: 'done', publishedOn: null },
+        ],
+      }),
+      '2026-10-16',
+    )
+    expect(r.slots[0]).toEqual({
+      date: '2026-10-16',
+      chapterId: 'c2',
+      chapterTitle: '2화',
+      position: 2,
+    })
+  })
+
   it('warns about an undone deadline within three days', () => {
     const r = computeSchedule(
       input({

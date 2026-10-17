@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,12 @@ type ProposalListProps = {
 }
 
 type Group = { key: string; label: string; items: ProposalView[] }
+
+/** Groups rendered at once. The rest load on "더 보기", so a big import does not mount everything. */
+const GROUP_PAGE_SIZE = 20
+
+// Cards keep their own edit state; memo stops an approval elsewhere in the list from re-rendering them.
+const MemoProposalCard = memo(ProposalCard)
 
 function chapterLabelOf(item: ProposalView, chapters: ProposalChapterOption[]): string {
   const chapter = item.chapterId ? chapters.find((c) => c.id === item.chapterId) : undefined
@@ -68,17 +74,20 @@ export function ProposalList({
   const [done, setDone] = useState<Set<string>>(() => new Set())
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
+  const [shownGroups, setShownGroups] = useState(GROUP_PAGE_SIZE)
 
   const visible = useMemo(() => proposals.filter((p) => !done.has(p.id)), [proposals, done])
+  const visibleIds = useMemo(() => new Set(visible.map((p) => p.id)), [visible])
   const groups = useMemo(
     () => buildGroups(visible, grouping, chapters),
     [visible, grouping, chapters],
   )
 
-  function markDone(ids: string[]) {
+  const markDone = useCallback((ids: string[]) => {
     setDone((prev) => new Set([...prev, ...ids]))
     setSelected((prev) => new Set([...prev].filter((id) => !ids.includes(id))))
-  }
+  }, [])
+  const handleDone = useCallback((id: string) => markDone([id]), [markDone])
 
   function toggle(id: string, on: boolean) {
     setSelected((prev) => {
@@ -105,7 +114,8 @@ export function ProposalList({
     return <EmptyState title="승인 대기 중인 제안이 없습니다." />
   }
 
-  const selectedIds = [...selected].filter((id) => visible.some((p) => p.id === id))
+  const selectedIds = [...selected].filter((id) => visibleIds.has(id))
+  const shown = groups.slice(0, shownGroups)
 
   return (
     <div className="grid gap-6">
@@ -118,10 +128,11 @@ export function ProposalList({
           >
             선택 승인 ({selectedIds.length})
           </Button>
+          <span className="text-sm text-muted-foreground">전체 {visible.length}건</span>
         </div>
       )}
 
-      {groups.map((group) => (
+      {shown.map((group) => (
         <section key={group.key} className="grid gap-3" aria-label={group.label}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold">
@@ -150,17 +161,25 @@ export function ProposalList({
                 />
               )}
               <div className="min-w-0 flex-1">
-                <ProposalCard
+                <MemoProposalCard
                   proposal={item}
                   workId={workId}
                   chapters={chapters}
-                  onDone={(id) => markDone([id])}
+                  onDone={handleDone}
                 />
               </div>
             </div>
           ))}
         </section>
       ))}
+
+      {groups.length > shownGroups && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => setShownGroups((n) => n + GROUP_PAGE_SIZE)}>
+            더 보기 (남은 {groups.length - shownGroups}묶음)
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

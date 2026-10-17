@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Persona } from '@/ai/personas'
+import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import { locateQuote, splitSentences } from '@/lib/korean'
 
@@ -12,6 +13,7 @@ export const READER_SIM_SYSTEM = `당신은 웹소설 플랫폼의 여러 독자
 - reaction은 confused(헷갈림), bored(지루함), excited(몰입), dropoff(이탈 위험), moved(감동) 중 하나다.
 - rating은 1~5 정수, dropOffRisk는 low, medium, high 중 하나다.
 - 칭찬과 문제점을 모두 구체적으로 쓰고, 작가가 고칠 수 있는 지점을 짚는다.
+${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
 
 const REACTIONS = ['confused', 'bored', 'excited', 'dropoff', 'moved'] as const
@@ -58,7 +60,8 @@ export const readerSimTask: AiTaskDef<ReaderSimInput, ReaderSimResult> = {
   postProcess: postProcessReaderSim,
 }
 
-function buildReaderSimPrompt(input: ReaderSimInput): string {
+function buildReaderSimPrompt(raw: ReaderSimInput): string {
+  const input = neutralizeDeep(raw)
   const summaries =
     input.previousSummaries.length > 0
       ? input.previousSummaries.map((s) => `- ${s.position}화: ${s.summary}`).join('\n')

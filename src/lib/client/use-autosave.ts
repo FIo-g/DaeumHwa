@@ -1,16 +1,33 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { clearDraft, getDraft, saveDraft, type LocalDraft } from '@/lib/client/local-store'
+import {
+  clearDraft,
+  draftKey,
+  getDraft,
+  saveDraft,
+  type LocalDraft,
+} from '@/lib/client/local-store'
 import type { ActionResult } from '@/lib/result'
 
 export type AutosaveStatus = 'saved' | 'dirty' | 'saving' | 'offline' | 'conflict' | 'error'
 
-export type AutosaveInput = { title: string; body: string; expectedVersion: number }
+export type AutosaveInput = {
+  title: string
+  body: string
+  expectedVersion: number
+  /** Set after a stale draft is recovered, so the server keeps the copy it replaces in history. */
+  keepHistory?: boolean
+}
 export type AutosaveResult = ActionResult<{ version: number; updatedAt: string }>
 
 export interface UseAutosaveOptions {
   chapterId: string
+  /**
+   * Signed-in user. Device drafts are stored per user. Without it no draft is kept on this device,
+   * so one person's unsaved text is never offered to another.
+   */
+  userId?: string
   initialTitle: string
   initialBody: string
   initialVersion: number
@@ -33,10 +50,24 @@ export interface UseAutosaveResult {
   /** Replaces the editor content, e.g. after the author picks the server copy on conflict. */
   replaceAll(title: string, body: string, version: number): void
   recoverable: LocalDraft | null
+  /** True when the recoverable draft was written against an older server version than the one shown. */
+  recoverableStale: boolean
   acceptRecovery(): void
   discardRecovery(): void
   /** Pauses server saves while an IME composition is open. */
   setComposing(composing: boolean): void
+}
+
+type Flusher = () => Promise<boolean>
+const flushers = new Set<Flusher>()
+
+/**
+ * Saves every mounted editor now. Resolves to true when none of them still has unsaved edits.
+ * Call it before signing out, so the last keystrokes reach the server first.
+ */
+export async function flushPendingSaves(): Promise<boolean> {
+  const results = await Promise.all(Array.from(flushers, (flush) => flush()))
+  return results.every(Boolean)
 }
 
 /**
@@ -47,6 +78,7 @@ export interface UseAutosaveResult {
 export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
   const {
     chapterId,
+    userId,
     initialTitle,
     initialBody,
     initialVersion,
@@ -60,32 +92,42 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
   const [status, setStatus] = useState<AutosaveStatus>('saved')
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [recoverable, setRecoverable] = useState<LocalDraft | null>(null)
+  const [recoverableStale, setRecoverableStale] = useState(false)
 
   const latest = useRef({ title: initialTitle, body: initialBody })
   const versionRef = useRef(initialVersion)
   const revisionRef = useRef(0)
   const dirtyRef = useRef(false)
   const composingRef = useRef(false)
+  const keepHistoryNextRef = useRef(false)
   const initialRef = useRef({ title: initialTitle, body: initialBody, version: initialVersion })
   const serverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const localTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inflight = useRef<Promise<void> | null>(null)
   const rerun = useRef(false)
   const saveRef = useRef(options.save)
-  const chapterRef = useRef(chapterId)
+  // Null when no user is known: then no device draft is read or written.
+  const draftKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     saveRef.current = options.save
-    chapterRef.current = chapterId
+    draftKeyRef.current = userId ? draftKey(userId, chapterId) : null
   })
 
   const writeLocal = useCallback(() => {
-    void saveDraft(chapterRef.current, {
+    const key = draftKeyRef.current
+    if (!key) return
+    void saveDraft(key, {
       title: latest.current.title,
       body: latest.current.body,
       savedAt: Date.now(),
       baseVersion: versionRef.current,
     })
+  }, [])
+
+  const dropLocal = useCallback(() => {
+    const key = draftKeyRef.current
+    if (key) void clearDraft(key)
   }, [])
 
   const cancelLocal = useCallback(() => {
@@ -107,17 +149,22 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
       const result = await saveRef.current({
         ...snapshot,
         expectedVersion: versionRef.current,
+        ...(keepHistoryNextRef.current ? { keepHistory: true } : {}),
       })
       if (result.ok) {
+        keepHistoryNextRef.current = false
         versionRef.current = result.data.version
         setVersionState(result.data.version)
         setLastSavedAt(new Date(result.data.updatedAt))
         if (revisionRef.current === revision) {
           dirtyRef.current = false
           cancelLocal()
-          void clearDraft(chapterRef.current)
+          dropLocal()
           setStatus('saved')
         } else {
+          // Edits arrived during the round-trip. Keep them on this device against the version
+          // the server now has, so they are not offered as stale later.
+          writeLocal()
           setStatus('dirty')
         }
         return true
@@ -128,7 +175,7 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
     }
     writeLocal()
     return false
-  }, [cancelLocal, writeLocal])
+  }, [cancelLocal, dropLocal, writeLocal])
 
   /** One save at a time. Edits that arrive while a save runs trigger one more save after it. */
   const runServerSave = useCallback((): Promise<void> => {
@@ -203,6 +250,18 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
     await runServerSave()
   }, [cancelServer, runServerSave])
 
+  // Lets the sign-out flow save this editor before it clears the device drafts.
+  useEffect(() => {
+    const flush: Flusher = async () => {
+      await saveNow()
+      return !dirtyRef.current
+    }
+    flushers.add(flush)
+    return () => {
+      flushers.delete(flush)
+    }
+  }, [saveNow])
+
   const replaceAll = useCallback(
     (nextTitle: string, nextBody: string, nextVersion: number) => {
       cancelServer()
@@ -211,41 +270,55 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
       versionRef.current = nextVersion
       revisionRef.current += 1
       dirtyRef.current = false
+      keepHistoryNextRef.current = false
       setTitleState(nextTitle)
       setBodyState(nextBody)
       setVersionState(nextVersion)
       setRecoverable(null)
+      setRecoverableStale(false)
       setStatus('saved')
-      void clearDraft(chapterRef.current)
+      dropLocal()
     },
-    [cancelLocal, cancelServer],
+    [cancelLocal, cancelServer, dropLocal],
   )
 
   const acceptRecovery = useCallback(() => {
     if (!recoverable) return
     const draft = recoverable
+    // A stale draft replaces a newer server copy, so that copy must stay in the version history.
+    keepHistoryNextRef.current = recoverableStale
     setRecoverable(null)
+    setRecoverableStale(false)
     applyEdit(draft.title, draft.body)
-  }, [applyEdit, recoverable])
+  }, [applyEdit, recoverable, recoverableStale])
 
   const discardRecovery = useCallback(() => {
     setRecoverable(null)
-    void clearDraft(chapterRef.current)
-  }, [])
+    setRecoverableStale(false)
+    dropLocal()
+  }, [dropLocal])
 
-  // Offer a device draft only when it was written against this version or a newer one and differs.
+  // Offer a device draft whenever its text differs from the server copy. A draft written against
+  // an older version is flagged as stale. A draft with the same text has nothing to recover.
   useEffect(() => {
+    if (!userId) return
     let cancelled = false
-    void getDraft(chapterId).then((draft) => {
+    const key = draftKey(userId, chapterId)
+    void getDraft(key).then((draft) => {
       if (cancelled || !draft) return
       const initial = initialRef.current
       const differs = draft.body !== initial.body || draft.title !== initial.title
-      if (draft.baseVersion >= initial.version && differs) setRecoverable(draft)
+      if (!differs) {
+        void clearDraft(key)
+        return
+      }
+      setRecoverableStale(draft.baseVersion < initial.version)
+      setRecoverable(draft)
     })
     return () => {
       cancelled = true
     }
-  }, [chapterId])
+  }, [chapterId, userId])
 
   // Flush when the tab is hidden or the editor unmounts, so the device keeps the latest text.
   useEffect(() => {
@@ -276,6 +349,7 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
     saveNow,
     replaceAll,
     recoverable,
+    recoverableStale,
     acceptRecovery,
     discardRecovery,
     setComposing,

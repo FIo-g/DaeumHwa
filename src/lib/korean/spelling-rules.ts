@@ -24,19 +24,54 @@ const RIEUL_BATCHIM = 8 // ㄹ
  * matched text is ignored, so a rule can use `replace` to decline a match.
  */
 export const SPELLING_RULES: SpellingRule[] = [
-  { id: 'doeyo', pattern: /되요/g, replace: () => '돼요', reason: "'되어요'의 준말은 '돼요'입니다." },
+  // No rule for 이였 -> 이었: 이었 follows a 받침 noun (학생이었다) but 였 follows
+  // 이-ending nouns too (고양이였다, 사이였다). Telling them apart needs a dictionary, so the
+  // AI proofread task handles it instead.
+  {
+    id: 'doeyo',
+    pattern: /되요/g,
+    replace: () => '돼요',
+    reason: "'되어요'의 준말은 '돼요'입니다.",
+  },
   { id: 'dwaet', pattern: /됬/g, replace: () => '됐', reason: "'되었다'의 준말은 '됐다'입니다." },
-  { id: 'doeseo', pattern: /되서/g, replace: () => '돼서', reason: "'되어서'의 준말은 '돼서'입니다." },
+  {
+    id: 'doeseo',
+    pattern: /되서/g,
+    replace: () => '돼서',
+    reason: "'되어서'의 준말은 '돼서'입니다.",
+  },
   {
     id: 'doedo',
     pattern: /되도(?!록)/g,
     replace: () => '돼도',
     reason: "'되어도'의 준말은 '돼도'입니다. ('되도록'은 맞습니다.)",
   },
-  { id: 'andwae', pattern: /안돼/g, replace: () => '안 돼', reason: "'안'은 뒤따르는 말과 띄어 씁니다." },
-  { id: 'anhdoe', pattern: /않되/g, replace: () => '안 돼', reason: "'아니하다'의 줄임은 '안'이고, '되다'는 '돼'입니다." },
-  { id: 'anhdwae', pattern: /않돼/g, replace: () => '안 돼', reason: "'아니하다'의 줄임은 '안'이고, '되다'는 '돼'입니다." },
-  { id: 'wenman', pattern: /왠만/g, replace: () => '웬만', reason: "'웬만하다'가 맞는 표기입니다." },
+  {
+    id: 'andwae',
+    pattern: /안돼/g,
+    replace: () => '안 돼',
+    reason: "'안'은 뒤따르는 말과 띄어 씁니다.",
+  },
+  {
+    // 않되 + 는/고/면 is 안 되-, but 않되 + 요/서/야 (or the end of the word) is 안 돼-.
+    id: 'anhdoe',
+    pattern: /않되(?=([가-힣])?)/g,
+    replace: (m) =>
+      m[1] === undefined || m[1] === '요' || m[1] === '서' || m[1] === '야' ? '안 돼' : '안 되',
+    reason: "'아니하다'의 줄임은 '안'이고, '되다'는 '돼'입니다.",
+  },
+  {
+    id: 'anhdwae',
+    pattern: /않돼/g,
+    replace: () => '안 돼',
+    reason: "'아니하다'의 줄임은 '안'이고, '되다'는 '돼'입니다.",
+  },
+  {
+    id: 'wenman',
+    pattern: /왠만/g,
+    replace: () => '웬만',
+    reason: "'웬만하다'가 맞는 표기입니다.",
+  },
   { id: 'wenji', pattern: /웬지/g, replace: () => '왠지', reason: "'왠지'가 맞는 표기입니다." },
   {
     id: 'wen',
@@ -45,7 +80,12 @@ export const SPELLING_RULES: SpellingRule[] = [
     reason: "'웬'은 '어떠한'의 뜻을 가진 관형사입니다.",
   },
   { id: 'wenil', pattern: /왠일/g, replace: () => '웬일', reason: "'웬일'이 맞는 표기입니다." },
-  { id: 'myeochil', pattern: /몇 ?일/g, replace: () => '며칠', reason: "'며칠'이 맞는 표기입니다." },
+  {
+    id: 'myeochil',
+    pattern: /몇 ?일/g,
+    replace: () => '며칠',
+    reason: "'며칠'이 맞는 표기입니다.",
+  },
   {
     id: 'eotteokhae',
     pattern: /어떻([해하])/g,
@@ -53,9 +93,24 @@ export const SPELLING_RULES: SpellingRule[] = [
     reason: "'어떡하다'가 맞는 표기입니다.",
   },
   { id: 'geumse', pattern: /금새/g, replace: () => '금세', reason: "'금세'가 맞는 표기입니다." },
-  { id: 'oraenman', pattern: /오랫만/g, replace: () => '오랜만', reason: "'오랜만'이 맞는 표기입니다." },
-  { id: 'heehan', pattern: /희안/g, replace: () => '희한', reason: "'희한하다'가 맞는 표기입니다." },
-  { id: 'seolgeoji', pattern: /설겆이/g, replace: () => '설거지', reason: "'설거지'가 맞는 표기입니다." },
+  {
+    id: 'oraenman',
+    pattern: /오랫만/g,
+    replace: () => '오랜만',
+    reason: "'오랜만'이 맞는 표기입니다.",
+  },
+  {
+    id: 'heehan',
+    pattern: /희안/g,
+    replace: () => '희한',
+    reason: "'희한하다'가 맞는 표기입니다.",
+  },
+  {
+    id: 'seolgeoji',
+    pattern: /설겆이/g,
+    replace: () => '설거지',
+    reason: "'설거지'가 맞는 표기입니다.",
+  },
   { id: 'yeokhal', pattern: /역활/g, replace: () => '역할', reason: "'역할'이 맞는 표기입니다." },
   {
     id: 'lge',
@@ -67,25 +122,64 @@ export const SPELLING_RULES: SpellingRule[] = [
     id: 'lgeol',
     pattern: /([가-힣])껄/g,
     // 껄 itself ends in ㄹ, so exclude it to keep the 껄껄 laugh sound.
-    replace: (m) =>
-      m[1] !== '껄' && jongseongIndex(m[1]) === RIEUL_BATCHIM ? `${m[1]}걸` : m[0],
+    replace: (m) => (m[1] !== '껄' && jongseongIndex(m[1]) === RIEUL_BATCHIM ? `${m[1]}걸` : m[0]),
     reason: "'-ㄹ걸'이 맞는 어미입니다.",
   },
-  { id: 'eoi', pattern: /어의없/g, replace: () => '어이없', reason: "'어이없다'가 맞는 표기입니다." },
-  { id: 'guji', pattern: /구지/g, replace: () => '굳이', reason: "'굳이'가 맞는 표기입니다." },
-  { id: 'hallyeogo', pattern: /할려/g, replace: () => '하려', reason: "'하려고'가 맞는 표기입니다." },
+  {
+    id: 'eoi',
+    pattern: /어의없/g,
+    replace: () => '어이없',
+    reason: "'어이없다'가 맞는 표기입니다.",
+  },
+  // Only the standalone adverb: 구지 inside a name (구지현, 김구지) is left alone.
+  {
+    id: 'guji',
+    pattern: /(?<![가-힣])구지(?![가-힣])/g,
+    replace: () => '굳이',
+    reason: "'굳이'가 맞는 표기입니다.",
+  },
+  {
+    id: 'hallyeogo',
+    pattern: /할려/g,
+    replace: () => '하려',
+    reason: "'하려고'가 맞는 표기입니다.",
+  },
   {
     id: 'geonne',
     pattern: /건(내|냈)/g,
     replace: (m) => (m[1] === '내' ? '건네' : '건넸'),
     reason: "'건네다'의 활용형은 '건네', '건넸'입니다.",
   },
-  { id: 'kkaekkeusi', pattern: /깨끗히/g, replace: () => '깨끗이', reason: "'깨끗이'가 맞는 표기입니다." },
-  { id: 'teumteumi', pattern: /틈틈히/g, replace: () => '틈틈이', reason: "'틈틈이'가 맞는 표기입니다." },
-  { id: 'ilili', pattern: /일일히/g, replace: () => '일일이', reason: "'일일이'가 맞는 표기입니다." },
-  { id: 'seolleom', pattern: /설레임/g, replace: () => '설렘', reason: "'설렘'이 맞는 표기입니다." },
-  { id: 'geoyeyo', pattern: /거에요/g, replace: () => '거예요', reason: "'거예요'가 맞는 표기입니다." },
-  { id: 'ieot', pattern: /이였/g, replace: () => '이었', reason: "'이었다'가 맞는 표기입니다." },
+  {
+    id: 'kkaekkeusi',
+    pattern: /깨끗히/g,
+    replace: () => '깨끗이',
+    reason: "'깨끗이'가 맞는 표기입니다.",
+  },
+  {
+    id: 'teumteumi',
+    pattern: /틈틈히/g,
+    replace: () => '틈틈이',
+    reason: "'틈틈이'가 맞는 표기입니다.",
+  },
+  {
+    id: 'ilili',
+    pattern: /일일히/g,
+    replace: () => '일일이',
+    reason: "'일일이'가 맞는 표기입니다.",
+  },
+  {
+    id: 'seolleom',
+    pattern: /설레임/g,
+    replace: () => '설렘',
+    reason: "'설렘'이 맞는 표기입니다.",
+  },
+  {
+    id: 'geoyeyo',
+    pattern: /거에요/g,
+    replace: () => '거예요',
+    reason: "'거예요'가 맞는 표기입니다.",
+  },
 ]
 
 /**

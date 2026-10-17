@@ -1,18 +1,25 @@
-import { eq } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
+import { eq, type SQL, sql } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Db } from '@/db/client'
-import { chapters, threadEntries, threads, wikiEntries } from '@/db/schema'
+import { changeLog, chapters, facts, threadEntries, threads, wikiEntries } from '@/db/schema'
+import type { Actor } from '@/db/types'
 import { createTestDb } from '@/test/db'
 import {
   addTestMember,
   createTestChapter,
   createTestEntry,
+  createTestFact,
   createTestThread,
   createTestUser,
   createTestWork,
 } from '@/test/factories'
 import { AppError } from '@/lib/errors'
+import { getEntryAppearances } from './appearances'
 import { listChanges, recordChange, revertChange } from './changes'
+import { archiveFact, factsValidAt, listFacts, supersedeFact } from './facts'
+import { addThreadEvent, createThread, updateThread } from './threads'
+import { archiveEntry, createEntry, updateEntry } from './wiki'
 
 let db: Db
 
@@ -98,6 +105,123 @@ describe('recordChange and listChanges', () => {
     await addTestMember(db, work.id, viewer.id, 'viewer')
     await expect(listChanges(db, { userId: viewer.id }, work.id)).resolves.toEqual([])
     await expectAppError(listChanges(db, { userId: stranger.id }, work.id), 'NOT_FOUND')
+  })
+})
+
+describe('listChanges paging and revertable flag', () => {
+  // Inserts change rows with explicit ids and timestamps (the SQL expression decides the precision).
+  async function insertChanges(
+    workId: string,
+    targetId: string,
+    actorId: string,
+    createdAt: (i: number) => SQL,
+    count: number,
+  ): Promise<string[]> {
+    const ids = Array.from({ length: count }, () => randomUUID())
+    await db.insert(changeLog).values(
+      ids.map((id, i) => ({
+        id,
+        workId,
+        targetTable: 'wiki_entries' as const,
+        targetId,
+        action: 'update' as const,
+        before: null,
+        after: null,
+        proposerType: 'author' as const,
+        actorId,
+        summary: `변경 ${i}`,
+        createdAt: createdAt(i),
+      })),
+    )
+    return ids
+  }
+
+  it('pages through rows that share a millisecond without skipping any', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const entry = await createTestEntry(db, work.id, { name: '이서윤' })
+    // 150 microseconds apart: about seven rows share each millisecond.
+    const ids = await insertChanges(
+      work.id,
+      entry.id,
+      owner.id,
+      (i) =>
+        sql`(timestamptz '2026-10-16 05:00:00.123000+00' + ${i * 150}::int * interval '1 microsecond')`,
+      130,
+    )
+
+    const seen: string[] = []
+    let beforeId: string | undefined
+    for (let page = 0; page < 5; page++) {
+      const rows = await listChanges(db, { userId: owner.id }, work.id, { limit: 50, beforeId })
+      seen.push(...rows.map((r) => r.id))
+      if (rows.length < 50) break
+      beforeId = rows[rows.length - 1].id
+    }
+    // Newest first: the last inserted row has the latest timestamp.
+    expect(seen).toEqual([...ids].reverse())
+  })
+
+  it('breaks identical timestamps by id so paging stays stable', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const entry = await createTestEntry(db, work.id, { name: '이서윤' })
+    const ids = await insertChanges(
+      work.id,
+      entry.id,
+      owner.id,
+      () => sql`timestamptz '2026-10-16 05:00:00.5+00'`,
+      60,
+    )
+
+    const first = await listChanges(db, { userId: owner.id }, work.id, { limit: 50 })
+    const second = await listChanges(db, { userId: owner.id }, work.id, {
+      limit: 50,
+      beforeId: first[first.length - 1].id,
+    })
+    const seen = [...first, ...second].map((r) => r.id)
+    expect(seen).toEqual([...ids].sort().reverse())
+  })
+
+  it('returns nothing for a cursor that belongs to another work', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const otherWork = await createTestWork(db, owner.id)
+    const entry = await createTestEntry(db, work.id, { name: '이서윤' })
+    const otherEntry = await createTestEntry(db, otherWork.id, { name: '다른 인물' })
+    await insertChanges(work.id, entry.id, owner.id, () => sql`now()`, 2)
+    const [foreignId] = await insertChanges(
+      otherWork.id,
+      otherEntry.id,
+      owner.id,
+      () => sql`now()`,
+      1,
+    )
+
+    const rows = await listChanges(db, { userId: owner.id }, work.id, { beforeId: foreignId })
+    expect(rows).toEqual([])
+  })
+
+  it('marks only the newest change of each target as revertable', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const entry = await createTestEntry(db, work.id, { name: '이서윤' })
+    const otherEntry = await createTestEntry(db, work.id, { name: '박도윤' })
+    const [oldest, middle, newest] = await insertChanges(
+      work.id,
+      entry.id,
+      owner.id,
+      (i) => sql`(timestamptz '2026-10-16 05:00:00+00' + ${i}::int * interval '1 second')`,
+      3,
+    )
+    const [only] = await insertChanges(work.id, otherEntry.id, owner.id, () => sql`now()`, 1)
+
+    const rows = await listChanges(db, { userId: owner.id }, work.id)
+    const revertable = (id: string) => rows.find((r) => r.id === id)?.revertable
+    expect(revertable(oldest)).toBe(false)
+    expect(revertable(middle)).toBe(false)
+    expect(revertable(newest)).toBe(true)
+    expect(revertable(only)).toBe(true)
   })
 })
 
@@ -289,5 +413,225 @@ describe('revertChange', () => {
       'NOT_FOUND',
     )
     expect((await currentEntry(entry.id)).archivedAt).toBeNull()
+  })
+})
+
+async function changeOf(workId: string, targetId: string, action: string, actor: Actor) {
+  const rows = await listChanges(db, actor, workId, { targetId })
+  const found = rows.find((c) => c.action === action)
+  if (!found) throw new Error(`no ${action} change for ${targetId}`)
+  return found
+}
+
+async function factRow(factId: string) {
+  const [row] = await db.select().from(facts).where(eq(facts.id, factId)).limit(1)
+  return row
+}
+
+describe('revertChange keeps derived wiki data in line', () => {
+  async function setupEntry() {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const actor = { userId: owner.id }
+    await createTestChapter(db, work.id, { position: 1, body: '서윤은 웃었다.' })
+    const entry = await createEntry(db, actor, { workId: work.id, kind: 'character', name: '서윤' })
+    return { actor, work, entry }
+  }
+
+  it('revert of archive restores the appearances that archiving removed', async () => {
+    const { actor, work, entry } = await setupEntry()
+    expect(await getEntryAppearances(db, entry.id)).toHaveLength(1)
+    await archiveEntry(db, actor, entry.id)
+    expect(await getEntryAppearances(db, entry.id)).toHaveLength(0)
+
+    await revertChange(db, actor, (await changeOf(work.id, entry.id, 'archive', actor)).id)
+
+    expect((await currentEntry(entry.id)).archivedAt).toBeNull()
+    expect(await getEntryAppearances(db, entry.id)).toHaveLength(1)
+  })
+
+  it('revert of a rename recomputes appearances for the old name', async () => {
+    const { actor, work, entry } = await setupEntry()
+    await updateEntry(db, actor, entry.id, { name: '민준' })
+    expect(await getEntryAppearances(db, entry.id)).toHaveLength(0)
+
+    await revertChange(db, actor, (await changeOf(work.id, entry.id, 'update', actor)).id)
+
+    expect((await currentEntry(entry.id)).name).toBe('서윤')
+    expect(await getEntryAppearances(db, entry.id)).toHaveLength(1)
+  })
+
+  it('revert of create removes the appearances of the archived card', async () => {
+    const { actor, work, entry } = await setupEntry()
+    expect(await getEntryAppearances(db, entry.id)).toHaveLength(1)
+
+    await revertChange(db, actor, (await changeOf(work.id, entry.id, 'create', actor)).id)
+
+    expect((await currentEntry(entry.id)).archivedAt).not.toBeNull()
+    expect(await getEntryAppearances(db, entry.id)).toHaveLength(0)
+  })
+
+  it('refuses to revert an archive when a same-named active card exists', async () => {
+    const { actor, work, entry } = await setupEntry()
+    await archiveEntry(db, actor, entry.id)
+    const archive = await changeOf(work.id, entry.id, 'archive', actor)
+    await createEntry(db, actor, { workId: work.id, kind: 'character', name: '서윤' })
+
+    await expectAppError(
+      revertChange(db, actor, archive.id),
+      'CONFLICT',
+      '같은 이름의 카드가 이미 있습니다.',
+    )
+    expect((await currentEntry(entry.id)).archivedAt).not.toBeNull()
+    const history = await listChanges(db, actor, work.id, { targetId: entry.id })
+    expect(history.some((c) => c.action === 'revert')).toBe(false)
+  })
+
+  it('refuses to revert a rename when the old name is taken by another active card', async () => {
+    const { actor, work, entry } = await setupEntry()
+    await updateEntry(db, actor, entry.id, { name: '이서윤' })
+    const rename = await changeOf(work.id, entry.id, 'update', actor)
+    await createEntry(db, actor, { workId: work.id, kind: 'character', name: '서윤' })
+
+    await expectAppError(
+      revertChange(db, actor, rename.id),
+      'CONFLICT',
+      '같은 이름의 카드가 이미 있습니다.',
+    )
+    expect((await currentEntry(entry.id)).name).toBe('이서윤')
+  })
+
+  it('revert of archive links unlinked facts whose subject matches the card', async () => {
+    const { actor, work, entry } = await setupEntry()
+    await archiveEntry(db, actor, entry.id)
+    const fact = await createTestFact(db, work.id, { content: '서윤은 키가 크다.' })
+    await db.update(facts).set({ subjectName: '서윤' }).where(eq(facts.id, fact.id))
+
+    await revertChange(db, actor, (await changeOf(work.id, entry.id, 'archive', actor)).id)
+
+    expect((await factRow(fact.id)).entryId).toBe(entry.id)
+  })
+})
+
+describe('revertChange keeps replaced-fact chains consistent', () => {
+  async function setupSupersede() {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const actor = { userId: owner.id }
+    const old = await createTestFact(db, work.id, {
+      content: '서윤의 나이는 17살이다.',
+      validFromPosition: 1,
+    })
+    const { newFact } = await supersedeFact(db, actor, {
+      factId: old.id,
+      fromPosition: 12,
+      content: '서윤의 나이는 18살이다.',
+      status: 'confirmed',
+    })
+    return { actor, work, old, newFact }
+  }
+
+  it('reverting the replacement reopens the earlier fact, and undoing that restores the supersede', async () => {
+    const { actor, work, old, newFact } = await setupSupersede()
+
+    await revertChange(db, actor, (await changeOf(work.id, newFact.id, 'create', actor)).id)
+    const reopened = await factRow(old.id)
+    expect(reopened.validToPosition).toBeNull()
+    expect(reopened.supersededByFactId).toBeNull()
+
+    const undo = (await listChanges(db, actor, work.id, { targetId: newFact.id }))[0]
+    await revertChange(db, actor, undo.id)
+    const restored = await factRow(old.id)
+    expect(restored.validToPosition).toBe(11)
+    expect(restored.supersededByFactId).toBe(newFact.id)
+    expect((await factRow(newFact.id)).archivedAt).toBeNull()
+  })
+
+  it('refuses to revert the earlier fact while its replacement is live', async () => {
+    const { actor, work, old, newFact } = await setupSupersede()
+    const earlier = await changeOf(work.id, old.id, 'update', actor)
+
+    await expectAppError(
+      revertChange(db, actor, earlier.id),
+      'CONFLICT',
+      '이 사실을 대체한 새 사실이 있어 먼저 새 사실의 추가를 되돌려야 합니다.',
+    )
+    expect((await factRow(old.id)).supersededByFactId).toBe(newFact.id)
+  })
+
+  it('reverting the archive of the replacement re-links the earlier fact', async () => {
+    const { actor, work, old, newFact } = await setupSupersede()
+    await archiveFact(db, actor, newFact.id)
+    expect((await factRow(old.id)).supersededByFactId).toBeNull()
+
+    await revertChange(db, actor, (await changeOf(work.id, newFact.id, 'archive', actor)).id)
+
+    const relinked = await factRow(old.id)
+    expect(relinked.supersededByFactId).toBe(newFact.id)
+    expect(relinked.validToPosition).toBe(11)
+    const valid = factsValidAt(await listFacts(db, actor, work.id, { includeSuperseded: true }), 12)
+    expect(valid.map((f) => f.id)).toEqual([newFact.id])
+  })
+})
+
+describe('revertChange on thread links', () => {
+  it('undoing a revert restores the related cards of the thread', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const actor = { userId: owner.id }
+    const a = await createTestEntry(db, work.id, { name: '서윤' })
+    const b = await createTestEntry(db, work.id, { name: '민준' })
+    const thread = await createThread(db, actor, {
+      workId: work.id,
+      title: '반지',
+      status: 'planned',
+      relatedEntryIds: [a.id, b.id],
+    })
+    await updateThread(db, actor, thread.id, { relatedEntryIds: [a.id] })
+    const links = async () =>
+      (await db.select().from(threadEntries).where(eq(threadEntries.threadId, thread.id)))
+        .map((l) => l.entryId)
+        .sort()
+
+    await revertChange(
+      db,
+      actor,
+      (await listChanges(db, actor, work.id, { targetId: thread.id }))[0].id,
+    )
+    expect(await links()).toEqual([a.id, b.id].sort())
+
+    await revertChange(
+      db,
+      actor,
+      (await listChanges(db, actor, work.id, { targetId: thread.id }))[0].id,
+    )
+    expect(await links()).toEqual([a.id])
+  })
+
+  it('reverting a timeline event re-derives the thread status, and undoing it resolves again', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const actor = { userId: owner.id }
+    const ch1 = await createTestChapter(db, work.id, { position: 1 })
+    const ch3 = await createTestChapter(db, work.id, { position: 3 })
+    const thread = await createThread(db, actor, {
+      workId: work.id,
+      title: '반지',
+      status: 'planted',
+      plantedChapterId: ch1.id,
+    })
+    await addThreadEvent(db, actor, { threadId: thread.id, kind: 'resolved', chapterId: ch3.id })
+
+    // Newest thread_events change is the resolving event's create row.
+    const eventCreate = (await listChanges(db, actor, work.id, { targetTable: 'thread_events' }))[0]
+    expect(eventCreate.action).toBe('create')
+    await revertChange(db, actor, eventCreate.id)
+    let row = await db.select().from(threads).where(eq(threads.id, thread.id)).limit(1)
+    expect(row[0].status).toBe('planted')
+    expect(row[0].resolvedChapterId).toBeNull()
+    await addThreadEvent(db, actor, { threadId: thread.id, kind: 'resolved', chapterId: ch3.id })
+
+    row = await db.select().from(threads).where(eq(threads.id, thread.id)).limit(1)
+    expect(row[0].status).toBe('resolved')
   })
 })

@@ -10,6 +10,7 @@ import {
   cancelImportJob,
   createImportJob,
   pauseImportJob,
+  skipImportChapter,
   startImportJob,
 } from '@/server/imports'
 
@@ -25,6 +26,11 @@ const CreateSchema = z.object({
 const AppendSchema = z.object({
   jobId: z.uuid(),
   chapters: z.array(z.object({ title: z.string().max(200), body: z.string() })),
+  publishedOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
 })
 
 const JobIdSchema = z.object({ jobId: z.uuid() })
@@ -75,6 +81,16 @@ export async function cancelImportJobAction(input: unknown): Promise<ActionResul
     const { jobId } = JobIdSchema.parse(input)
     const workId = await requireRowWork(db, 'import_jobs', jobId)
     const job = await cancelImportJob(db, actor, jobId)
+    revalidateWork(workId)
+    return job
+  })
+}
+
+export async function skipImportChapterAction(input: unknown): Promise<ActionResult<ImportJobRow>> {
+  return withAction(async (db, actor) => {
+    const { jobId } = JobIdSchema.parse(input)
+    const workId = await requireRowWork(db, 'import_jobs', jobId)
+    const job = await skipImportChapter(db, actor, jobId)
     revalidateWork(workId)
     return job
   })

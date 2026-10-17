@@ -1,6 +1,7 @@
 import { ExtractionSchema, type Extraction } from '@/ai/extraction'
+import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
-import type { EntryKind } from '@/db/types'
+import type { EntryKind, ThreadStatus } from '@/db/types'
 import { findMentions } from '@/lib/korean/mentions'
 import { splitSentences } from '@/lib/korean/sentences'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
@@ -13,7 +14,7 @@ export type ChapterExtractInput = {
   chapterPosition: number
   chapterTitle: string
   known: { name: string; kind: EntryKind; aliases: string[] }[]
-  openThreads: { ref: string; title: string; description: string }[]
+  openThreads: { ref: string; title: string; description: string; status?: ThreadStatus }[]
   knownFacts: { ref: string; subjectName: string; content: string }[]
   model?: string
 }
@@ -27,8 +28,10 @@ export const CHAPTER_EXTRACT_SYSTEM = `당신은 장기 연재 웹소설의 설�
 - facts에는 나중에 설정 충돌을 찾는 데 쓸 구체적인 정보(외모, 능력, 나이, 관계, 소속, 과거사, 세계의 규칙, 약속)를 우선한다. 사소한 행동 묘사는 넣지 않는다.
 - 이 회차에서 상태가 바뀐 사실(<known_facts>의 F ref와 다른 새 상태)은 supersedesFactRef에 그 ref를 넣는다.
 - threads는 독자에게 의문이나 기대를 남기고 아직 풀리지 않은 요소다. <open_threads>의 떡밥이 이 회차에서 진전되거나 풀리면 kind를 "developed" 또는 "resolved"로 하고 existingThreadRef에 그 T ref를 넣는다. 새로 심어진 떡밥은 kind "planted", existingThreadRef null.
+- <open_threads>에서 "(계획됨)"으로 표시된 떡밥이 이 회차에서 처음 심어지면 kind "planted"로 하고 existingThreadRef에 그 T ref를 넣는다. 이미 심어진 떡밥을 다시 "planted"로 내지 않는다.
 - relations는 인물·장소·조직 사이의 관계(가족, 연인, 적대, 동료, 소속, 스승 등)가 드러날 때만 넣는다.
 - summary는 이 회차의 핵심 사건을 3문장 이내로 요약한다.
+${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
 
 const SUMMARY_MAX_CHARS = 80
@@ -38,7 +41,8 @@ const MIN_FAKE_NAME_COUNT = 3
 /** Hangul word of 2 to 4 syllables directly followed by a subject particle. */
 const SUBJECT_WORD = /[가-힣]{2,4}(?=[은는이가])/g
 
-function buildPrompt(input: ChapterExtractInput): string {
+function buildPrompt(raw: ChapterExtractInput): string {
+  const input = neutralizeDeep(raw)
   const known =
     input.known.length === 0
       ? '(없음)'
@@ -56,7 +60,10 @@ function buildPrompt(input: ChapterExtractInput): string {
     input.openThreads.length === 0
       ? '(없음)'
       : input.openThreads
-          .map((t) => `[${t.ref}] ${t.title}${t.description ? `: ${t.description}` : ''}`)
+          .map((t) => {
+            const planned = t.status === 'planned' ? ' (계획됨)' : ''
+            return `[${t.ref}]${planned} ${t.title}${t.description ? `: ${t.description}` : ''}`
+          })
           .join('\n')
   return [
     '<known>',

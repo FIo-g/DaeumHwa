@@ -45,7 +45,11 @@ export async function createWork(db: Db, actor: Actor, input: CreateWorkInput): 
   })
 }
 
-/** Works the caller is a member of, most recently updated first. Archived works only with includeArchived. */
+/**
+ * Works the caller is a member of, ordered by the work's own updatedAt (metadata edits only;
+ * chapter saves do not bump it). Archived works only with includeArchived.
+ * Use listWorksWithStats for the activity-based order shown on the works list.
+ */
 export async function listMyWorks(
   db: Db,
   actor: Actor,

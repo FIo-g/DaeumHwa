@@ -10,10 +10,19 @@ import { runAiTask } from '@/ai/run'
 import type { AiClient, AiTaskDef } from '@/ai/types'
 import { type ChapterExtractInput, chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import type { Db } from '@/db/client'
-import { chapters, facts, importJobs, proposals, threads, wikiEntries } from '@/db/schema'
+import {
+  chapters,
+  facts,
+  importJobs,
+  proposals,
+  relations,
+  threads,
+  wikiEntries,
+} from '@/db/schema'
 import type { Actor, ImportJobRow, ImportJobStatus, ProposalRow } from '@/db/types'
 import { inngest, isInngestEnabled } from '@/inngest/client'
 import { isAppError, AppError } from '@/lib/errors'
+import { isPlausibleIsoDate } from '@/lib/dates'
 import { stripJosa } from '@/lib/korean'
 import {
   type NewProposal,
@@ -41,7 +50,9 @@ const OVER_TOTAL_MESSAGE = '올린 회차가 전체 회차 수를 넘습니다.'
 const UPLOADING_ONLY_MESSAGE = '업로드 중인 작업에만 회차를 올릴 수 있습니다.'
 const START_EARLY_MESSAGE = '모든 회차를 올린 뒤에 시작할 수 있습니다.'
 const START_STATE_MESSAGE = '이 상태에서는 시작할 수 없습니다.'
-const START_RACE_MESSAGE = '작업 상태가 바뀌었습니다. 다시 시도해 주세요.'
+const RACE_MESSAGE = '작업 상태가 바뀌었습니다. 다시 시도해 주세요.'
+const SKIP_STATE_MESSAGE = '오류로 멈춘 작업에서만 이 화를 건너뛸 수 있습니다.'
+const PUBLISHED_ON_MESSAGE = '연재일 형식이 올바르지 않습니다.'
 const PAUSE_MESSAGE = '진행 중인 작업만 일시정지할 수 있습니다.'
 const CANCEL_MESSAGE = '이미 끝났거나 취소된 작업입니다.'
 const LIMIT_PAUSE_MESSAGE = '오늘 AI 사용량 한도에 도달해 일시정지했습니다. 내일 이어서 진행하세요.'
@@ -50,6 +61,10 @@ const MISSING_CHAPTER_MESSAGE = '회차를 찾을 수 없습니다. 작업을 �
 
 type ImportState = ImportJobRow['state']
 type KnownEntity = ImportState['knownEntities'][number]
+/** A chapter an author skipped after it stopped the job. Kept in state.skipped. */
+type SkippedChapter = { chapterId: string; position: number; title: string; reason: string }
+// skipImportChapter writes `skipped` into the jsonb state. The column type in schema.ts does not list it yet.
+type ImportStateWithSkips = ImportState & { skipped?: SkippedChapter[] }
 type ThreadCreatePayload = ProposalPayloadMap['thread_create']
 type ThreadCreateItem = Extract<NewProposal, { type: 'thread_create' }>
 type EntryCreateItem = Extract<NewProposal, { type: 'entry_create' }>
@@ -101,16 +116,25 @@ export async function createImportJob(
 
 /**
  * Appends up to 50 chapters after the existing ones. Creates them as done chapters (version
- * source 'import') in the same transaction that records their ids on the job. Editor role.
+ * source 'import') in the same transaction that records their ids on the job. With `publishedOn`
+ * the new chapters are marked as already published that day, so they do not count as buffer.
+ * Editor role.
  */
 export async function appendImportChapters(
   db: Db,
   actor: Actor,
-  input: { jobId: string; chapters: { title: string; body: string }[] },
+  input: {
+    jobId: string
+    chapters: { title: string; body: string }[]
+    publishedOn?: string | null
+  },
 ): Promise<{ appended: number; received: number }> {
   const workId = await requireRowWork(db, 'import_jobs', input.jobId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   if (input.chapters.length > MAX_UPLOAD_BATCH) throw new AppError('VALIDATION', BATCH_MESSAGE)
+  if (input.publishedOn && !isPlausibleIsoDate(input.publishedOn)) {
+    throw new AppError('VALIDATION', PUBLISHED_ON_MESSAGE)
+  }
 
   return db.transaction(async (tx) => {
     const job = await lockJob(tx, input.jobId)
@@ -128,6 +152,17 @@ export async function appendImportChapters(
       status: 'done',
       versionSource: 'import',
     })
+    if (input.publishedOn && created.length > 0) {
+      await tx
+        .update(chapters)
+        .set({ publishedOn: input.publishedOn, updatedAt: new Date() })
+        .where(
+          inArray(
+            chapters.id,
+            created.map((chapter) => chapter.id),
+          ),
+        )
+    }
     const chapterIds = [...job.chapterIds, ...created.map((chapter) => chapter.id)]
     await tx
       .update(importJobs)
@@ -169,7 +204,7 @@ export async function startImportJob(db: Db, actor: Actor, jobId: string): Promi
     })
     .where(and(eq(importJobs.id, jobId), eq(importJobs.status, job.status)))
     .returning()
-  if (!started) throw new AppError('BAD_STATE', START_RACE_MESSAGE)
+  if (!started) throw new AppError('BAD_STATE', RACE_MESSAGE)
 
   if (!useInngest) return started
   try {
@@ -220,6 +255,9 @@ export async function advanceImportJob(
     ...pendingTitles.map((title, i) => ({ ref: `P${i + 1}`, title, description: '' })),
   ]
 
+  const allThreads = await loadAllThreads(db, job.workId)
+  const allRelations = await loadRelations(db, job.workId)
+
   const factRows = await loadKnownFacts(db, job.workId)
   const factRefs = new Map(factRows.map((f, i) => [`F${i + 1}`, { id: f.id }]))
   const knownFacts = factRows.map((f, i) => ({
@@ -250,7 +288,7 @@ export async function advanceImportJob(
       return toResult(await pauseJob(db, jobId, LIMIT_PAUSE_MESSAGE))
     }
     const message = isAppError(error) ? error.message : GENERIC_ERROR_MESSAGE
-    return toResult(await failJob(db, jobId, message))
+    return toResult(await failJob(db, jobId, stoppedAt(chapter.position, message)))
   }
 
   // Entries the job already knows about are dropped here; extractionToProposals only knows the
@@ -272,6 +310,14 @@ export async function advanceImportJob(
     threadRefs,
     factRefs,
     pendingThreadTitles: new Set([...job.state.threadTitles, ...plantedTitles]),
+    existingThreads: allThreads,
+    existingRelations: allRelations.map((r) => ({
+      sourceId: r.sourceId,
+      targetId: r.targetId,
+      kind: r.kind,
+      directed: r.directed,
+      endPosition: r.endPosition,
+    })),
   }
   const extraction: Extraction = {
     ...output,
@@ -279,7 +325,9 @@ export async function advanceImportJob(
   }
   const { proposals: items, pendingThreadEvents } = extractionToProposals(extraction, context)
 
+  // Spread keeps any `skipped` list the job already has.
   const nextState: ImportState = {
+    ...job.state,
     knownEntities: mergeEntities([
       ...job.state.knownEntities,
       ...items.filter(isEntryCreate).map((i) => ({
@@ -342,7 +390,7 @@ export async function advanceImportJob(
     // Proposal rows failed validation or could not be written. The cursor did not move, so the
     // job stops here and can be resumed once the cause is fixed.
     const message = isAppError(error) ? error.message : GENERIC_ERROR_MESSAGE
-    return toResult(await failJob(db, jobId, message))
+    return toResult(await failJob(db, jobId, stoppedAt(chapter.position, message)))
   }
   if (!saved) return toResult(await loadJob(db, jobId))
   return toResult(saved)
@@ -380,6 +428,64 @@ export async function cancelImportJob(db: Db, actor: Actor, jobId: string): Prom
     .returning()
   if (!row) throw new AppError('BAD_STATE', CANCEL_MESSAGE)
   return row
+}
+
+/**
+ * Skips the chapter that stopped a job with an error. The chapter keeps its text and gets no
+ * proposals. The cursor moves past it and the job is paused (or done, if it was the last one), so
+ * the author resumes it with startImportJob. The skipped chapter is listed in state.skipped.
+ * Editor role.
+ */
+export async function skipImportChapter(
+  db: Db,
+  actor: Actor,
+  jobId: string,
+): Promise<ImportJobRow> {
+  const workId = await requireRowWork(db, 'import_jobs', jobId)
+  await requireWorkRole(db, workId, actor.userId, 'editor')
+  return db.transaction(async (tx) => {
+    const job = await lockJob(tx, jobId)
+    if (job.status !== 'error') throw new AppError('BAD_STATE', SKIP_STATE_MESSAGE)
+    const chapterId = job.chapterIds[job.cursor]
+    const chapter = chapterId ? await loadChapter(tx, chapterId) : undefined
+    if (!chapter) throw new AppError('BAD_STATE', SKIP_STATE_MESSAGE)
+
+    const finished = job.cursor + 1 >= job.totalChapters
+    const now = new Date()
+    const state: ImportStateWithSkips = {
+      ...job.state,
+      skipped: [
+        ...skippedOf(job.state),
+        {
+          chapterId: chapter.id,
+          position: chapter.position,
+          title: chapter.title,
+          reason: job.error ?? '',
+        },
+      ],
+    }
+    const [row] = await tx
+      .update(importJobs)
+      .set({
+        cursor: job.cursor + 1,
+        processedChapters: sql`${importJobs.processedChapters} + 1`,
+        state,
+        error: null,
+        status: finished ? 'done' : 'paused',
+        finishedAt: finished ? now : null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(importJobs.id, jobId),
+          eq(importJobs.cursor, job.cursor),
+          eq(importJobs.status, 'error'),
+        ),
+      )
+      .returning()
+    if (!row) throw new AppError('BAD_STATE', RACE_MESSAGE)
+    return row
+  })
 }
 
 /** One import job of a work. Viewer role. */
@@ -473,6 +579,28 @@ async function loadOpenThreads(db: Db, workId: string) {
     .limit(MAX_OPEN_THREADS)
 }
 
+/** Every non-archived thread of the work, whatever its status. */
+async function loadAllThreads(db: Db, workId: string) {
+  return db
+    .select({ id: threads.id, title: threads.title, status: threads.status })
+    .from(threads)
+    .where(and(eq(threads.workId, workId), isNull(threads.archivedAt)))
+}
+
+/** Non-archived relations of the work. */
+async function loadRelations(db: Db, workId: string) {
+  return db
+    .select({
+      sourceId: relations.sourceEntryId,
+      targetId: relations.targetEntryId,
+      kind: relations.kind,
+      directed: relations.directed,
+      endPosition: relations.endPosition,
+    })
+    .from(relations)
+    .where(and(eq(relations.workId, workId), isNull(relations.archivedAt)))
+}
+
 /** Current facts that have not been superseded, most recent first. */
 async function loadKnownFacts(db: Db, workId: string) {
   return db
@@ -483,6 +611,15 @@ async function loadKnownFacts(db: Db, workId: string) {
     )
     .orderBy(desc(facts.createdAt))
     .limit(MAX_KNOWN_FACTS)
+}
+
+/** Error message for a job that stopped at a chapter, so the author sees where it stopped. */
+function stoppedAt(position: number, message: string): string {
+  return `${position}화에서 멈췄습니다: ${message}`
+}
+
+function skippedOf(state: ImportState): SkippedChapter[] {
+  return (state as ImportStateWithSkips).skipped ?? []
 }
 
 async function pauseJob(db: Db, jobId: string, message: string): Promise<ImportJobRow> {

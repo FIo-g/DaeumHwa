@@ -2,6 +2,7 @@ import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import type { EntryKind } from '@/db/types'
 import { stripJosa } from '@/lib/korean'
 import { type Extraction, ExtractionSchema } from '@/ai/extraction'
+import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 
 // interview-extract (F1): turns one interview answer into wiki candidates. The output is the shared
@@ -23,11 +24,13 @@ const SYSTEM = [
   '- evidence에는 답변 문장을 그대로 인용한다.',
   '- 앞으로 풀 비밀이나 복선은 threads에 kind "planted"로 넣는다. existingThreadRef와 targetChapterPosition은 답변에 회차가 나오지 않으면 null이다.',
   '- summary는 null, supersedesFactRef는 null로 둔다.',
+  TAG_DATA_RULE,
   '- 모든 출력은 한국어로 쓴다.',
 ].join('\n')
 
 /** Prompt with <question>, <answer> and <known> sections. */
-export function buildInterviewExtractPrompt(input: InterviewExtractInput): string {
+export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string {
+  const input = neutralizeDeep(raw)
   const known =
     input.known.length === 0
       ? '(없음)'

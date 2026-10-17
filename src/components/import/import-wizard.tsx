@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { ImportJobRow, ImportJobStatus } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
+import { seoulToday } from '@/lib/dates'
 import { getTextWorker } from '@/lib/client/worker-client'
 import type { SplitChapter, SplitMethod } from '@/lib/import/split'
 import {
@@ -51,6 +52,8 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
   const [splitting, setSplitting] = useState(false)
   const [uploaded, setUploaded] = useState(0)
   const [uploadTotal, setUploadTotal] = useState(0)
+  // Chapters the author already published count as published today, not as buffer.
+  const [alreadyPublished, setAlreadyPublished] = useState(false)
 
   async function handleParsed(file: { fileName: string; text: string }) {
     setSplitting(true)
@@ -69,6 +72,7 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
     setStep('uploading')
     setUploaded(0)
     setUploadTotal(drafts.length)
+    const publishedOn = alreadyPublished ? seoulToday() : null
     const job = await runAction(
       createImportJobAction({
         workId,
@@ -85,7 +89,9 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
       const batch = drafts
         .slice(offset, offset + UPLOAD_BATCH)
         .map((draft) => ({ title: draft.title, body: draft.body }))
-      const result = await runAction(appendImportChaptersAction({ jobId: job.id, chapters: batch }))
+      const result = await runAction(
+        appendImportChaptersAction({ jobId: job.id, chapters: batch, publishedOn }),
+      )
       if (!result) {
         // The job exists but is incomplete. Show it so the author can cancel it.
         finishUpload(toSnapshot(job))
@@ -121,7 +127,7 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
         <div className="grid gap-4">
           <p className="text-sm text-muted-foreground">
             원고 파일을 고르면 회차를 나눠 보여 드립니다. 나눈 회차는 기존 회차 뒤에 완료 상태로
-            추가되고, 회차마다 설정 카드 후보를 뽑습니다.
+            추가되고, 회차마다 설정 카드 후보를 뽑습니다. 이미 연재한 원고라면 아래 옵션을 켜세요.
           </p>
 
           {step === 'file' && (
@@ -136,15 +142,26 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
           )}
 
           {step === 'preview' && preview && (
-            <SplitPreview
-              method={preview.method}
-              initial={preview.chapters}
-              onBack={() => {
-                setPreview(null)
-                setStep('file')
-              }}
-              onConfirm={(drafts) => void startUpload(preview, drafts)}
-            />
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={alreadyPublished}
+                  onChange={(event) => setAlreadyPublished(event.target.checked)}
+                />
+                이미 연재한 원고입니다 (비축분으로 세지 않음)
+              </label>
+              <SplitPreview
+                method={preview.method}
+                initial={preview.chapters}
+                onBack={() => {
+                  setPreview(null)
+                  setStep('file')
+                }}
+                onConfirm={(drafts) => void startUpload(preview, drafts)}
+              />
+            </>
           )}
 
           {step === 'uploading' && (

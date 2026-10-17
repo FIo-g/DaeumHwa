@@ -4,7 +4,7 @@ import type { Extraction } from '@/ai/extraction'
 import { FakeAiClient } from '@/ai/fake'
 import type { GenerateObjectArgs } from '@/ai/types'
 import type { Db } from '@/db/client'
-import { chapters, proposals } from '@/db/schema'
+import { chapters, proposals, relations } from '@/db/schema'
 import type { Actor } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { createTestDb } from '@/test/db'
@@ -37,6 +37,7 @@ import {
   getImportJob,
   listImportJobs,
   pauseImportJob,
+  skipImportChapter,
   startImportJob,
 } from '@/server/imports'
 
@@ -247,6 +248,39 @@ describe('import jobs', () => {
     })
   })
 
+  describe('appendImportChapters publishedOn', () => {
+    it('marks the imported chapters as published on the given day', async () => {
+      const job = await createImportJob(db, actor, { workId, fileName: 'a.txt', totalChapters: 3 })
+      await appendImportChapters(db, actor, {
+        jobId: job.id,
+        chapters: CHAPTERS,
+        publishedOn: '2026-10-16',
+      })
+      const rows = await db.select().from(chapters).where(eq(chapters.workId, workId))
+      expect(rows.map((c) => c.publishedOn)).toEqual(['2026-10-16', '2026-10-16', '2026-10-16'])
+      expect(rows.map((c) => c.status)).toEqual(['done', 'done', 'done'])
+    })
+
+    it('leaves publishedOn empty when the option is not given', async () => {
+      await uploadedJob()
+      const rows = await db.select().from(chapters).where(eq(chapters.workId, workId))
+      expect(rows.every((c) => c.publishedOn === null)).toBe(true)
+    })
+
+    it('rejects a publishedOn that is not a date', async () => {
+      const job = await createImportJob(db, actor, { workId, fileName: 'a.txt', totalChapters: 3 })
+      await expectAppError(
+        appendImportChapters(db, actor, {
+          jobId: job.id,
+          chapters: CHAPTERS,
+          publishedOn: '2026-13-40',
+        }),
+        'VALIDATION',
+        '연재일 형식이 올바르지 않습니다.',
+      )
+    })
+  })
+
   describe('startImportJob', () => {
     it('refuses to start before every chapter is uploaded', async () => {
       const job = await createImportJob(db, actor, {
@@ -389,7 +423,7 @@ describe('import jobs', () => {
       })
       const result = await advanceImportJob(db, jobId, { client: failing })
       expect(result.status).toBe('error')
-      expect(result.message).toBe('AI 호출에 실패했습니다: timeout')
+      expect(result.message).toBe('1화에서 멈췄습니다: AI 호출에 실패했습니다: timeout')
       const job = await getImportJob(db, actor, jobId)
       expect(job.status).toBe('error')
       expect(job.cursor).toBe(0)
@@ -472,6 +506,62 @@ describe('import jobs', () => {
       expect((events[0].payload as { threadId: string }).threadId).toBe(thread.id)
     })
 
+    it('does not create a planted thread that the work already has', async () => {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      const thread = await createTestThread(db, workId, { title: '검의 비밀', status: 'planned' })
+      const client = new ScriptedClient(() =>
+        emptyExtraction({
+          threads: [
+            {
+              title: '검의 비밀',
+              description: '',
+              kind: 'planted',
+              evidence: '서윤은 말이 없었다.',
+              existingThreadRef: null,
+              targetChapterPosition: null,
+            },
+          ],
+        }),
+      )
+      await advanceImportJob(db, jobId, { client })
+      const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+      expect(rows.filter((r) => r.type === 'thread_create')).toHaveLength(0)
+      const events = rows.filter((r) => r.type === 'thread_event')
+      expect(events).toHaveLength(1)
+      expect((events[0].payload as { threadId: string }).threadId).toBe(thread.id)
+    })
+
+    it('does not propose a relation that is still open in the work', async () => {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      const seoyun = await createTestEntry(db, workId, { name: '서윤', kind: 'character' })
+      const minjun = await createTestEntry(db, workId, { name: '민준', kind: 'character' })
+      await db.insert(relations).values({
+        workId,
+        sourceEntryId: seoyun.id,
+        targetEntryId: minjun.id,
+        kind: '동료',
+        directed: false,
+      })
+      const client = new ScriptedClient(() =>
+        emptyExtraction({
+          relations: [
+            {
+              sourceName: '민준',
+              targetName: '서윤',
+              kind: '동료',
+              description: '',
+              evidence: '서윤은 말이 없었다.',
+            },
+          ],
+        }),
+      )
+      await advanceImportJob(db, jobId, { client })
+      const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+      expect(rows.filter((r) => r.type === 'relation_create')).toHaveLength(0)
+    })
+
     it('does not propose an entry card that already exists in the work', async () => {
       const jobId = await uploadedJob()
       await startImportJob(db, actor, jobId)
@@ -480,6 +570,112 @@ describe('import jobs', () => {
       const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
       expect(rows.filter((r) => r.type === 'entry_create')).toHaveLength(0)
       expect(rows.filter((r) => r.type === 'fact_create')).toHaveLength(1)
+    })
+  })
+
+  describe('skipImportChapter', () => {
+    /** Advances chapter 1 fine and fails chapter 2 with the given message. */
+    async function stoppedAtSecond(
+      message: string,
+    ): Promise<{ jobId: string; client: ScriptedClient }> {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      const client = new ScriptedClient((prompt) => {
+        if (positionOf(prompt) === 2) throw new AppError('AI_ERROR', message)
+        return basicRespond(prompt)
+      })
+      await advanceImportJob(db, jobId, { client })
+      const failed = await advanceImportJob(db, jobId, { client })
+      expect(failed.status).toBe('error')
+      return { jobId, client }
+    }
+
+    it('moves past the chapter that stopped the job and pauses it for a resume', async () => {
+      const { jobId, client } = await stoppedAtSecond('AI 호출에 실패했습니다: refusal')
+      const skipped = await skipImportChapter(db, actor, jobId)
+      expect(skipped).toMatchObject({
+        status: 'paused',
+        cursor: 2,
+        processedChapters: 2,
+        error: null,
+      })
+      expect(skipped.finishedAt).toBeNull()
+
+      const state = skipped.state as { skipped?: { position: number; title: string }[] }
+      expect(state.skipped).toEqual([
+        {
+          chapterId: skipped.chapterIds[1],
+          position: 2,
+          title: '2화',
+          reason: '2화에서 멈췄습니다: AI 호출에 실패했습니다: refusal',
+        },
+      ])
+
+      const resumed = await startImportJob(db, actor, jobId)
+      expect(resumed.status).toBe('running')
+      const last = await advanceImportJob(db, jobId, { client })
+      expect(last).toMatchObject({ status: 'done', processed: 3, done: true })
+
+      // The skipped list survives later advances, and the skipped chapter got no proposals.
+      const job = await getImportJob(db, actor, jobId)
+      const after = job.state as { skipped?: { position: number }[] }
+      expect(after.skipped?.map((s) => s.position)).toEqual([2])
+      const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+      expect(rows.filter((r) => r.chapterId === skipped.chapterIds[1])).toHaveLength(0)
+    })
+
+    it('ends the job as done when the stopped chapter is the last one', async () => {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      const client = new ScriptedClient((prompt) => {
+        if (positionOf(prompt) === 3)
+          throw new AppError('AI_ERROR', 'AI 호출에 실패했습니다: max_tokens')
+        return basicRespond(prompt)
+      })
+      await advanceImportJob(db, jobId, { client })
+      await advanceImportJob(db, jobId, { client })
+      const failed = await advanceImportJob(db, jobId, { client })
+      expect(failed.status).toBe('error')
+
+      const done = await skipImportChapter(db, actor, jobId)
+      expect(done).toMatchObject({ status: 'done', processedChapters: 3, cursor: 3, error: null })
+      expect(done.finishedAt).not.toBeNull()
+    })
+
+    it('refuses a job that is not stopped by an error', async () => {
+      const jobId = await uploadedJob()
+      await startImportJob(db, actor, jobId)
+      await expectAppError(
+        skipImportChapter(db, actor, jobId),
+        'BAD_STATE',
+        '오류로 멈춘 작업에서만 이 화를 건너뛸 수 있습니다.',
+      )
+      await pauseImportJob(db, actor, jobId)
+      await expectAppError(skipImportChapter(db, actor, jobId), 'BAD_STATE')
+    })
+
+    it('forbids a viewer and hides the work from a non-member', async () => {
+      const { jobId } = await stoppedAtSecond('AI 호출에 실패했습니다: refusal')
+      const viewer = await createTestUser(db)
+      await addTestMember(db, workId, viewer.id, 'viewer')
+      await expectAppError(skipImportChapter(db, { userId: viewer.id }, jobId), 'FORBIDDEN')
+      const stranger = await createTestUser(db)
+      await expectAppError(skipImportChapter(db, { userId: stranger.id }, jobId), 'NOT_FOUND')
+    })
+
+    it('skips exactly one chapter when two skips run at the same time', async () => {
+      const { jobId } = await stoppedAtSecond('AI 호출에 실패했습니다: refusal')
+      const results = await Promise.allSettled([
+        skipImportChapter(db, actor, jobId),
+        skipImportChapter(db, actor, jobId),
+      ])
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+      const rejected = results.find((r) => r.status === 'rejected')
+      expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(AppError)
+
+      const job = await getImportJob(db, actor, jobId)
+      expect(job.cursor).toBe(2)
+      expect((job.state as { skipped?: unknown[] }).skipped).toHaveLength(1)
     })
   })
 

@@ -10,6 +10,11 @@ import { requireWorkRole } from '@/server/access'
 
 const DEFAULT_DAILY_TOKEN_LIMIT = 3_000_000
 const LIMIT_MESSAGE = '오늘 AI 사용량 한도를 넘었습니다. 내일 다시 시도해 주세요.'
+/** At most this many AI runs may be `running` per user at once. */
+const MAX_RUNNING_RUNS = 3
+/** Running rows older than this are treated as abandoned and do not count toward the cap. */
+const RUNNING_STALE_MS = 10 * 60 * 1000
+const CONCURRENCY_MESSAGE = '진행 중인 AI 작업이 너무 많습니다. 끝난 뒤 다시 시도해 주세요.'
 
 export type AiRunMeta = { userId: string; workId: string | null; chapterId?: string | null }
 
@@ -35,9 +40,10 @@ export async function runAiTask<I, O>(
   input: I,
   client: AiClient = getAiClient(),
 ): Promise<{ output: O; runId: string }> {
-  await assertWithinLimit(db, meta.userId)
+  await assertCanStartRun(db, meta.userId)
   const taskModel = task.model?.()
   const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
+  let usage: AiUsage | undefined
   try {
     const result = await client.generateObject({
       system: task.system,
@@ -48,6 +54,7 @@ export async function runAiTask<I, O>(
       fake: () => task.fake(input),
       model: taskModel,
     })
+    usage = result.usage
     const output = task.postProcess ? task.postProcess(result.object, input) : result.object
     await finishRun(db, runId, {
       status: 'done',
@@ -58,7 +65,12 @@ export async function runAiTask<I, O>(
     return { output, runId }
   } catch (error) {
     const aiError = toRunError(error)
-    await finishRun(db, runId, { status: 'error', error: aiError.message })
+    // Tokens billed before the failure still count toward the daily limit.
+    await finishRun(db, runId, {
+      status: 'error',
+      error: aiError.message,
+      usage: usageFromError(error) ?? usage,
+    })
     throw aiError
   }
 }
@@ -73,7 +85,7 @@ export async function startAiStream(
   args: StreamRunArgs,
   client: AiClient = getAiClient(),
 ): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
-  await assertWithinLimit(db, meta.userId)
+  await assertCanStartRun(db, meta.userId)
   const runId = await insertRun(db, meta, args.task, args.model ?? client.defaultModel)
   let stream: ReturnType<AiClient['streamText']>
   try {
@@ -87,7 +99,11 @@ export async function startAiStream(
     })
   } catch (error) {
     const aiError = toRunError(error)
-    await finishRun(db, runId, { status: 'error', error: aiError.message })
+    await finishRun(db, runId, {
+      status: 'error',
+      error: aiError.message,
+      usage: usageFromError(error),
+    })
     throw aiError
   }
   const done = stream.final.then(
@@ -102,7 +118,11 @@ export async function startAiStream(
     },
     async (error: unknown) => {
       const aiError = toRunError(error)
-      await finishRun(db, runId, { status: 'error', error: aiError.message })
+      await finishRun(db, runId, {
+        status: 'error',
+        error: aiError.message,
+        usage: usageFromError(error),
+      })
       throw aiError
     },
   )
@@ -136,6 +156,31 @@ export async function assertWithinLimit(db: Db, userId: string): Promise<void> {
   if (used >= limit) throw new AppError('AI_LIMIT', LIMIT_MESSAGE)
 }
 
+/**
+ * Checks both the daily token limit and the per-user concurrency cap before a run starts.
+ * The concurrency error uses CONFLICT, not AI_LIMIT, so import jobs do not pause on it.
+ */
+async function assertCanStartRun(db: Db, userId: string): Promise<void> {
+  await assertWithinLimit(db, userId)
+  const running = await countRunningRuns(db, userId)
+  if (running >= MAX_RUNNING_RUNS) throw new AppError('CONFLICT', CONCURRENCY_MESSAGE)
+}
+
+/** Runs this user has in `running` state that started within the stale window. */
+async function countRunningRuns(db: Db, userId: string, now: Date = new Date()): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<string | number | null>`count(*)` })
+    .from(aiRuns)
+    .where(
+      and(
+        eq(aiRuns.userId, userId),
+        eq(aiRuns.status, 'running'),
+        gte(aiRuns.createdAt, new Date(now.getTime() - RUNNING_STALE_MS)),
+      ),
+    )
+  return Number(row?.total ?? 0)
+}
+
 /** Completed runs of one task in a work, newest first. Any work viewer can read them. */
 export async function listAiRuns(
   db: Db,
@@ -157,8 +202,14 @@ export async function listAiRuns(
 function dailyTokenLimit(): number {
   const raw = process.env.AI_DAILY_TOKEN_LIMIT
   if (raw === undefined || raw.trim() === '') return DEFAULT_DAILY_TOKEN_LIMIT
-  const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : DEFAULT_DAILY_TOKEN_LIMIT
+  // Operators often copy the documented format, e.g. 3,000,000 or 3_000_000.
+  const cleaned = raw.replace(/[,_]/g, '').trim()
+  const parsed = cleaned === '' ? Number.NaN : Number(cleaned)
+  if (Number.isFinite(parsed)) return parsed
+  console.warn(
+    `AI_DAILY_TOKEN_LIMIT 값(${raw})을 숫자로 읽을 수 없어 기본값 ${DEFAULT_DAILY_TOKEN_LIMIT}을 사용합니다.`,
+  )
+  return DEFAULT_DAILY_TOKEN_LIMIT
 }
 
 async function insertRun(
@@ -183,7 +234,7 @@ async function insertRun(
 
 type RunOutcome =
   | { status: 'done'; usage: AiUsage; model: string; output: unknown }
-  | { status: 'error'; error: string }
+  | { status: 'error'; error: string; usage?: AiUsage }
 
 async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<void> {
   if (outcome.status === 'done') {
@@ -202,12 +253,37 @@ async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<vo
   }
   await db
     .update(aiRuns)
-    .set({ status: 'error', error: outcome.error, finishedAt: new Date() })
+    .set({
+      status: 'error',
+      error: outcome.error,
+      inputTokens: outcome.usage?.inputTokens ?? 0,
+      outputTokens: outcome.usage?.outputTokens ?? 0,
+      finishedAt: new Date(),
+    })
     .where(eq(aiRuns.id, runId))
 }
 
+/** Token usage the AI client attached to an error after the API call was billed, if any. */
+function usageFromError(error: unknown): AiUsage | undefined {
+  if (!(error instanceof AppError)) return undefined
+  const details = error.details
+  if (typeof details !== 'object' || details === null) return undefined
+  const usage = (details as { usage?: Partial<AiUsage> }).usage
+  if (!usage || !isTokenCount(usage.inputTokens) || !isTokenCount(usage.outputTokens)) {
+    return undefined
+  }
+  return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+}
+
+function isTokenCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
 function toRunError(error: unknown): AppError {
-  if (error instanceof AppError) return error
+  // Usage details stay on the server; actions forward AppError.details to the browser.
+  if (error instanceof AppError) {
+    return error.details === undefined ? error : new AppError(error.code, error.message)
+  }
   const reason = error instanceof Error ? error.message : String(error)
   return new AppError('AI_ERROR', `AI 호출에 실패했습니다: ${reason.slice(0, 120)}`)
 }

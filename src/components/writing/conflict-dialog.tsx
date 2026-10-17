@@ -25,8 +25,8 @@ export function ConflictDialog({ open, pending, onLoadServer, onOverwrite }: Con
         <DialogHeader>
           <DialogTitle>다른 곳에서 먼저 수정된 원고가 있습니다.</DialogTitle>
           <DialogDescription>
-            서버 원고를 불러오면 이 기기의 변경은 사라집니다. 내 원고로 덮어쓰면 서버 원고가
-            바뀝니다.
+            서버 원고를 불러오면 이 기기의 변경은 사라집니다. 내 원고로 덮어쓰면 서버 원고가 바뀌고,
+            이전 서버 원고는 버전 이력에 남습니다.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

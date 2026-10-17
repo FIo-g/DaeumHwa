@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, ne, or } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { relations, threadEntries, threads, wikiEntries } from '@/db/schema'
 import type { Actor, EntryKind, EntryRow, Role, ThreadStatus } from '@/db/types'
@@ -6,13 +6,8 @@ import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import { AppError } from '@/lib/errors'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { getEntryAppearances, recomputeAppearancesForEntry } from '@/server/appearances'
-import {
-  type ChangeOpts,
-  type FactView,
-  listFacts,
-  logChange,
-  relinkFactsForEntry,
-} from '@/server/facts'
+import { assertEntryNameFree, relinkFactsForEntry } from '@/server/entry-integrity'
+import { type ChangeOpts, type FactView, listFacts, logChange } from '@/server/facts'
 
 export type { ChangeOpts } from '@/server/facts'
 export { findEntryByName } from '@/server/facts'
@@ -95,30 +90,6 @@ async function loadEntry(db: Db, entryId: string): Promise<EntryRow> {
   const [row] = await db.select().from(wikiEntries).where(eq(wikiEntries.id, entryId)).limit(1)
   if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
   return row
-}
-
-/** Active entries share one kind + name. `exceptId` skips the entry being edited. */
-async function assertNameFree(
-  db: Db,
-  workId: string,
-  kind: EntryKind,
-  name: string,
-  exceptId?: string,
-): Promise<void> {
-  const [dup] = await db
-    .select({ id: wikiEntries.id })
-    .from(wikiEntries)
-    .where(
-      and(
-        eq(wikiEntries.workId, workId),
-        eq(wikiEntries.kind, kind),
-        eq(wikiEntries.name, name),
-        isNull(wikiEntries.archivedAt),
-        exceptId ? ne(wikiEntries.id, exceptId) : undefined,
-      ),
-    )
-    .limit(1)
-  if (dup) throw new AppError('CONFLICT', '같은 이름의 카드가 이미 있습니다.')
 }
 
 // ---- Reads ----
@@ -229,7 +200,7 @@ export async function createEntry(
 ): Promise<EntryRow> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
   const values = normalizeEntry(input)
-  await assertNameFree(db, input.workId, values.kind, values.name)
+  await assertEntryNameFree(db, input.workId, values.kind, values.name)
 
   return db.transaction(async (tx) => {
     const [entry] = await tx
@@ -276,7 +247,7 @@ export async function updateEntry(
     fields: patch.fields ?? current.fields,
     customFields: patch.customFields ?? current.customFields,
   })
-  await assertNameFree(db, workId, values.kind, values.name, entryId)
+  await assertEntryNameFree(db, workId, values.kind, values.name, entryId)
   const namesChanged = values.name !== current.name || !sameList(values.aliases, current.aliases)
 
   return db.transaction(async (tx) => {
@@ -345,7 +316,7 @@ export async function restoreEntry(
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadEntry(db, entryId)
   if (!current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드가 아닙니다.')
-  await assertNameFree(db, workId, current.kind, current.name, entryId)
+  await assertEntryNameFree(db, workId, current.kind, current.name, entryId)
 
   return db.transaction(async (tx) => {
     const [row] = await tx

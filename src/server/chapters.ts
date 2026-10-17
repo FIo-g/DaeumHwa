@@ -11,6 +11,7 @@ import type {
   VersionSource,
 } from '@/db/types'
 import { countChars } from '@/lib/korean/chars'
+import { isPlausibleIsoDate } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
 import { chapterLabel } from '@/lib/labels'
 import { requireRowWork, requireWorkRole } from '@/server/access'
@@ -23,7 +24,6 @@ import { recordChange } from '@/server/changes'
 /** Saves by the same user within this window merge into the last save row (spec §4.2). */
 const COALESCE_WINDOW_MS = 10 * 60 * 1000
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export type ChapterListItem = Omit<ChapterRow, 'body'>
 export type ChapterVersionListItem = Omit<ChapterVersionRow, 'body'>
@@ -60,6 +60,8 @@ export type SaveChapterInput = {
   body?: string
   expectedVersion: number
   source?: 'save' | 'ai_draft' | 'restore'
+  /** Always write a new history row, so an overwrite never replaces another device's row. */
+  keepHistory?: boolean
 }
 
 export type BulkChapterInput = {
@@ -99,7 +101,7 @@ function assertNotArchived(chapter: ChapterRow): void {
 /**
  * Appends a history row for a save. A save by the same user as the last save row, within the
  * window, merges into that row. The creation snapshot (version 1) is never merged into, so the
- * first saved text always keeps its own history row.
+ * first saved text always keeps its own history row. `noMerge` always appends a row.
  */
 async function writeVersionRow(
   db: Db,
@@ -112,6 +114,7 @@ async function writeVersionRow(
     charCount: number
     version: number
     now: Date
+    noMerge: boolean
   },
 ): Promise<void> {
   const [latest] = await db
@@ -122,6 +125,7 @@ async function writeVersionRow(
     .limit(1)
 
   const canMerge =
+    !input.noMerge &&
     input.source === 'save' &&
     latest !== undefined &&
     latest.source === 'save' &&
@@ -310,7 +314,8 @@ export async function createChaptersBulk(
 /**
  * Saves title and/or body. `expectedVersion` must match the stored version, otherwise CONFLICT
  * (with `currentVersion` in details). Bumps the version, recounts characters, rewrites the
- * history (see writeVersionRow) and recomputes appearances. Editor role.
+ * history (see writeVersionRow) and recomputes appearances. `keepHistory` always adds a history
+ * row. Editor role.
  */
 export async function saveChapter(
   db: Db,
@@ -361,6 +366,7 @@ export async function saveChapter(
       charCount: withSpaces,
       version: updated.version,
       now,
+      noMerge: input.keepHistory === true,
     })
     await recomputeAppearances(tx, chapter.id)
     return updated
@@ -391,7 +397,7 @@ export async function setChapterPublishedOn(
   chapterId: string,
   publishedOn: string | null,
 ): Promise<ChapterRow> {
-  if (publishedOn !== null && !ISO_DATE_RE.test(publishedOn)) {
+  if (publishedOn !== null && !isPlausibleIsoDate(publishedOn)) {
     throw new AppError('VALIDATION', '연재일 형식이 올바르지 않습니다.')
   }
   const { chapter } = await loadChapter(db, actor, chapterId, 'editor')

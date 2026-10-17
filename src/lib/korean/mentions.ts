@@ -1,4 +1,4 @@
-import { canDecomposeJosa, hasJongseong } from '@/lib/korean/josa'
+import { canDecomposeJosa, hasJongseong, MENTION_TOKENS } from '@/lib/korean/josa'
 
 export type MentionTarget = { id: string; names: string[] }
 export type Mention = { entryId: string; count: number; firstIndex: number; positions: number[] }
@@ -59,7 +59,7 @@ export function findMentions(text: string, targets: MentionTarget[]): Mention[] 
 
 function isParticleRun(run: string, name: string): boolean {
   if (run === '') return true
-  return canDecomposeJosa(run, 3, hasJongseong(name.charAt(name.length - 1)))
+  return canDecomposeJosa(run, 3, hasJongseong(name.charAt(name.length - 1)), MENTION_TOKENS)
 }
 
 function compare(a: string, b: string): number {

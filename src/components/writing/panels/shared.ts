@@ -1,6 +1,7 @@
+import { toast } from 'sonner'
 import type { Role } from '@/db/types'
 import { locateQuote } from '@/lib/korean/sentences'
-import type { WritingData } from '../types'
+import type { WorkspaceApi, WritingData } from '../types'
 
 // Helpers shared by the side panels. Client-safe: no server or DB imports.
 
@@ -28,3 +29,23 @@ export function rangeOf(
 
 /** Shown under a disabled write control, so the reason is visible without hovering. */
 export const EDITOR_ONLY_NOTE = '편집자 이상만 실행할 수 있습니다.'
+
+/**
+ * Shows a toast with 되돌리기 after a panel edit. `before` is the whole text from before the edit.
+ * Undo restores it only while the text still matches what the edit left, so later typing is never lost.
+ */
+export function offerUndo(api: WorkspaceApi, before: string, message: string): void {
+  const after = api.getText()
+  toast(message, {
+    action: {
+      label: '되돌리기',
+      onClick: () => {
+        if (api.getText() !== after) {
+          toast.error('그 사이 원고가 바뀌어 되돌릴 수 없습니다.')
+          return
+        }
+        api.replaceRange(0, after.length, before)
+      },
+    },
+  })
+}

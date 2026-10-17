@@ -27,4 +27,9 @@ describe('extractDocxText', () => {
     const text = await extractDocxText(makeDocx(['첫 문단입니다.', '둘째 문단입니다.']))
     expect(text.split('\n').filter(Boolean)).toEqual(['첫 문단입니다.', '둘째 문단입니다.'])
   })
+
+  it('keeps one line break per paragraph, like TXT imports', async () => {
+    const text = await extractDocxText(makeDocx(['첫 문단입니다.', '둘째 문단입니다.', '셋째.']))
+    expect(text).toBe('첫 문단입니다.\n둘째 문단입니다.\n셋째.')
+  })
 })

@@ -291,3 +291,26 @@ describe('getEntry', () => {
     await expectAppError(getEntry(db, { userId: stranger.id }, entry.id), 'NOT_FOUND')
   })
 })
+
+describe('findEntryByName prefers exact text over particle-stripped text', () => {
+  it('finds 마리아 and 마리 by their own names, whatever the order they were made in', async () => {
+    const { work } = await setup()
+    const mari = await createTestEntry(db, work.id, { name: '마리' })
+    const maria = await createTestEntry(db, work.id, { name: '마리아' })
+    expect((await findEntryByName(db, work.id, '마리아'))?.id).toBe(maria.id)
+    expect((await findEntryByName(db, work.id, '마리'))?.id).toBe(mari.id)
+  })
+
+  it('an exact alias wins over a name that only matches after stripping the particle', async () => {
+    const { work } = await setup()
+    await createTestEntry(db, work.id, { name: '서윤' })
+    const withAlias = await createTestEntry(db, work.id, { name: '이서윤', aliases: ['서윤이'] })
+    expect((await findEntryByName(db, work.id, '서윤이'))?.id).toBe(withAlias.id)
+  })
+
+  it('still strips a trailing particle when nothing matches exactly', async () => {
+    const { work } = await setup()
+    const entry = await createTestEntry(db, work.id, { name: '서윤' })
+    expect((await findEntryByName(db, work.id, '서윤이가'))?.id).toBe(entry.id)
+  })
+})

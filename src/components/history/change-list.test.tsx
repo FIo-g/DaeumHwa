@@ -31,6 +31,7 @@ function row(overrides: Partial<ChangeView> & { id: string }): ChangeView {
     summary: '카드 수정',
     createdAt: new Date('2026-10-16T05:00:00Z'),
     actorName: '작가 A',
+    revertable: true,
     ...overrides,
   }
 }
@@ -76,6 +77,16 @@ describe('ChangeList', () => {
     expect(screen.queryByRole('button', { name: '되돌리기' })).not.toBeInTheDocument()
   })
 
+  it('disables revert on changes that a later change has overtaken', () => {
+    const overtaken = row({ id: 'c-old', summary: '이전 수정', revertable: false })
+    render(<ChangeList workId="work-1" initialRows={[authorRow, overtaken]} canEdit />)
+
+    const items = screen.getAllByRole('listitem')
+    expect(within(items[0]).getByRole('button', { name: '되돌리기' })).toBeEnabled()
+    expect(within(items[1]).getByRole('button', { name: '되돌리기' })).toBeDisabled()
+    expect(screen.getByText('이후 변경이 있어 되돌릴 수 없습니다.')).toBeInTheDocument()
+  })
+
   it('reverts after confirmation and reloads the first page', async () => {
     revert.mockResolvedValue({ ok: true, data: { ...authorRow, id: 'c-revert' } })
     list.mockResolvedValue({
@@ -115,7 +126,7 @@ describe('ChangeList', () => {
     expect(list).toHaveBeenCalledWith(
       expect.objectContaining({
         workId: 'work-1',
-        beforeCreatedAt: page[49].createdAt.toISOString(),
+        beforeId: 'c-49',
       }),
     )
     expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument()

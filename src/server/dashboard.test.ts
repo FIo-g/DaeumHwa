@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Db } from '@/db/client'
-import { proposals, scheduleItems, wikiEntries } from '@/db/schema'
+import { chapters, proposals, scheduleItems, wikiEntries, works } from '@/db/schema'
 import { addDays, seoulToday } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
 import { createTestDb } from '@/test/db'
@@ -97,6 +97,34 @@ describe('listWorksWithStats', () => {
 
     expect(active.map((c) => c.work.id)).toEqual([work.id])
     expect(all.map((c) => c.work.id).sort()).toEqual([work.id, archived.id].sort())
+  })
+
+  it('orders cards by latest activity, counting chapter saves as activity', async () => {
+    const { owner, work: older, actor } = await makeOwnerWork('오래된 작품')
+    const newer = await createTestWork(db, owner.id, { title: '최근 작품' })
+    const active = await createTestWork(db, owner.id, { title: '쓰고 있는 작품' })
+    await db
+      .update(works)
+      .set({ updatedAt: new Date('2026-01-01T00:00:00Z') })
+      .where(eq(works.id, older.id))
+    await db
+      .update(works)
+      .set({ updatedAt: new Date('2026-02-01T00:00:00Z') })
+      .where(eq(works.id, newer.id))
+    await db
+      .update(works)
+      .set({ updatedAt: new Date('2026-01-15T00:00:00Z') })
+      .where(eq(works.id, active.id))
+    // A chapter save in the oldest work is newer than every work metadata edit.
+    const chapter = await createTestChapter(db, active.id, { position: 1, status: 'draft' })
+    await db
+      .update(chapters)
+      .set({ updatedAt: new Date('2026-03-01T00:00:00Z') })
+      .where(eq(chapters.id, chapter.id))
+
+    const cards = await listWorksWithStats(db, actor)
+
+    expect(cards.map((c) => c.work.id)).toEqual([active.id, newer.id, older.id])
   })
 
   it('reports the caller role for a work joined as viewer, and skips works they do not belong to', async () => {

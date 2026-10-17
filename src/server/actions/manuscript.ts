@@ -14,6 +14,8 @@ const SaveChapterSchema = z.object({
   expectedVersion: z.number().int().min(1),
   // Restores go through restoreVersionAction so that the source cannot be chosen by a plain save.
   source: z.enum(['save', 'ai_draft']).optional(),
+  // Set by the conflict overwrite so the overwrite keeps the other device's history row.
+  keepHistory: z.boolean().optional(),
 })
 
 const RestoreVersionSchema = z.object({
@@ -68,7 +70,9 @@ export async function saveResumePointAction(input: unknown): Promise<ActionResul
   return withAction(async (db, actor) => {
     const data = ResumePointSchema.parse(input)
     await saveResumePoint(db, actor, data)
-    revalidateWork(data.workId)
+    // Only the open-chapter call (no cursor) changes the chapter shown on the work pages. Blur
+    // calls always send a cursor, and no page reads it, so they skip the re-render.
+    if (data.cursor === undefined) revalidateWork(data.workId)
   })
 }
 

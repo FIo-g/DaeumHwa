@@ -104,4 +104,41 @@ describe('ManuscriptEditor', () => {
     expect(bodyBox()).toHaveAttribute('readonly')
     expect(screen.getByLabelText('회차 제목')).toHaveAttribute('readonly')
   })
+
+  it('keeps the window scroll position when the textarea is re-measured', () => {
+    // Browser clamp: collapsing the textarea to height auto shortens the page for one layout
+    // pass, and reading scrollHeight at that moment resets window.scrollY to 0.
+    let scrollPos = 1234
+    const originalScrollY = Object.getOwnPropertyDescriptor(window, 'scrollY')
+    Object.defineProperty(window, 'scrollY', { configurable: true, get: () => scrollPos })
+    const scrollTo = vi
+      .spyOn(window, 'scrollTo')
+      .mockImplementation((options?: ScrollToOptions | number) => {
+        if (typeof options === 'object' && options.top !== undefined) scrollPos = options.top
+      })
+
+    try {
+      const { rerender, props } = renderEditor({ body: '가나다' })
+      scrollTo.mockClear()
+      scrollPos = 1234
+
+      const el = bodyBox()
+      Object.defineProperty(el, 'scrollHeight', {
+        configurable: true,
+        get() {
+          scrollPos = 0
+          return 400
+        },
+      })
+
+      rerender(<ManuscriptEditor {...props} body="가나다라마바사" />)
+
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 1234 }))
+      expect(scrollPos).toBe(1234)
+    } finally {
+      scrollTo.mockRestore()
+      if (originalScrollY) Object.defineProperty(window, 'scrollY', originalScrollY)
+      else delete (window as unknown as Record<string, unknown>).scrollY
+    }
+  })
 })

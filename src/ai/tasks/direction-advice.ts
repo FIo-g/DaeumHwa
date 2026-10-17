@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import type { ThreadStatus } from '@/db/types'
 import { THREAD_STATUS_LABEL } from '@/lib/labels'
@@ -13,6 +14,7 @@ export const ADVICE_SYSTEM = `당신은 장기 연재 웹소설의 편집자다.
 - warnings에는 회수 목표가 지난 떡밥, 오래 등장하지 않은 주요 인물처럼 작가가 놓치기 쉬운 점을 쓴다.
 - recommendedIndex에 가장 추천하는 선택지 번호(0~2)를, recommendationReason에 그 이유를 쓴다.
 - 결정은 작가가 한다. 단정하지 말고 제안하는 말투로 쓴다.
+${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
 
 const MAX_OPTIONS = 3
@@ -61,7 +63,8 @@ export const directionAdviceTask: AiTaskDef<AdviceInput, AdviceResult> = {
   postProcess: postProcessAdvice,
 }
 
-function buildAdvicePrompt(input: AdviceInput): string {
+function buildAdvicePrompt(raw: AdviceInput): string {
+  const input = neutralizeDeep(raw)
   const threads = input.threads.length > 0 ? input.threads.map(renderThread).join('\n') : '(없음)'
   const characters =
     input.characters.length > 0 ? input.characters.map(renderCharacter).join('\n') : '(없음)'

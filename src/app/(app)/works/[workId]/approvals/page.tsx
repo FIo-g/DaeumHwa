@@ -7,7 +7,7 @@ import { PROPOSAL_SOURCES, type ProposalSource } from '@/db/types'
 import { hasRole } from '@/server/access'
 import { listChapters } from '@/server/chapters'
 import { guardPage, pageContext } from '@/server/page-helpers'
-import { listProposals } from '@/server/proposals'
+import { countImportBatches, listProposals } from '@/server/proposals'
 import { getWork } from '@/server/works'
 import { ImportBatchBanner } from './import-batch-banner'
 import { ReadOnlyProposals } from './read-only-proposals'
@@ -54,15 +54,9 @@ export default async function ApprovalsPage({
   }))
 
   // Import batches: one banner per import job that still has pending proposals.
-  const importProposals = canEdit
-    ? await guardPage(() => listProposals(db, actor, workId, { source: 'import' }))
-    : []
-  const batches = new Map<string, number>()
-  for (const proposal of importProposals) {
-    if (!proposal.sourceRef) continue
-    batches.set(proposal.sourceRef, (batches.get(proposal.sourceRef) ?? 0) + 1)
-  }
   const showBanners = source === undefined || source === 'import'
+  const batches =
+    canEdit && showBanners ? await guardPage(() => countImportBatches(db, actor, workId)) : []
 
   const sourceOptions: FilterOption[] = [
     { label: '전체', href: approvalsHref(workId, undefined, grouping), active: !source },
@@ -97,11 +91,9 @@ export default async function ApprovalsPage({
         <FilterLinks label="묶음" options={groupOptions} />
       </div>
 
-      {canEdit &&
-        showBanners &&
-        [...batches.entries()].map(([sourceRef, count]) => (
-          <ImportBatchBanner key={sourceRef} workId={workId} sourceRef={sourceRef} count={count} />
-        ))}
+      {batches.map(({ sourceRef, count }) => (
+        <ImportBatchBanner key={sourceRef} workId={workId} sourceRef={sourceRef} count={count} />
+      ))}
 
       {canEdit ? (
         <ProposalList

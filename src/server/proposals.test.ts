@@ -14,7 +14,7 @@ import {
 } from '@/db/schema'
 import type { ProposalRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
-import type { NewProposal } from '@/lib/proposal-payloads'
+import { type NewProposal, parseProposalPayload } from '@/lib/proposal-payloads'
 import { insertProposals } from '@/server/proposal-store'
 import { createTestDb } from '@/test/db'
 import {
@@ -26,7 +26,13 @@ import {
   createTestUser,
   createTestWork,
 } from '@/test/factories'
-import { approveProposal, bulkApprove, listProposals, rejectProposal } from './proposals'
+import {
+  approveProposal,
+  bulkApprove,
+  countImportBatches,
+  listProposals,
+  rejectProposal,
+} from './proposals'
 
 let db: Db
 
@@ -759,5 +765,402 @@ describe('listProposals', () => {
     const { work } = await makeWork()
     const stranger = await createTestUser(db)
     await expectAppError(listProposals(db, { userId: stranger.id }, work.id), 'NOT_FOUND')
+  })
+})
+
+function factProposal(
+  workId: string,
+  chapterId: string,
+  over: { subjectName: string; entryId: string | null; content: string },
+): Promise<ProposalRow> {
+  return propose(workId, {
+    type: 'fact_create',
+    payload: {
+      subjectName: over.subjectName,
+      entryId: over.entryId,
+      content: over.content,
+      suggestedStatus: 'confirmed',
+      sourceChapterId: chapterId,
+      evidence: '',
+      supersedesFactId: null,
+    },
+    source: 'post_chapter',
+    sourceRef: null,
+    chapterId,
+  })
+}
+
+function relationProposal(
+  workId: string,
+  chapterId: string,
+  over: { sourceName: string; targetName: string; kind: string },
+): Promise<ProposalRow> {
+  return propose(workId, {
+    type: 'relation_create',
+    payload: {
+      sourceName: over.sourceName,
+      targetName: over.targetName,
+      kind: over.kind,
+      description: '',
+      directed: false,
+      startPosition: null,
+      evidence: '',
+    },
+    source: 'post_chapter',
+    sourceRef: null,
+    chapterId,
+  })
+}
+
+describe('approveProposal: edited fact subjects', () => {
+  it('re-links an edited subject to the card it now names', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    const seoyun = await createTestEntry(db, work.id, { name: '서윤' })
+    const junho = await createTestEntry(db, work.id, { name: '하준' })
+    const p = await factProposal(work.id, ch1.id, {
+      subjectName: '서윤',
+      entryId: seoyun.id,
+      content: '검을 쓴다',
+    })
+
+    const res = await approveProposal(db, actor, {
+      proposalId: p.id,
+      payloadOverride: { subjectName: '하준' },
+    })
+
+    const [fact] = await db.select().from(facts).where(eq(facts.id, res.targetId!))
+    expect(fact.entryId).toBe(junho.id)
+    expect(fact.subjectName).toBe('하준')
+  })
+
+  it('unlinks the fact when the new subject names no card', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    const seoyun = await createTestEntry(db, work.id, { name: '서윤' })
+    const p = await factProposal(work.id, ch1.id, {
+      subjectName: '서윤',
+      entryId: seoyun.id,
+      content: '검을 쓴다',
+    })
+
+    const res = await approveProposal(db, actor, {
+      proposalId: p.id,
+      payloadOverride: { subjectName: '지호' },
+    })
+
+    const [fact] = await db.select().from(facts).where(eq(facts.id, res.targetId!))
+    expect(fact.entryId).toBeNull()
+    expect(fact.subjectName).toBe('지호')
+  })
+
+  it('keeps the link when only the content is edited, including an alias match', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    const seoyun = await createTestEntry(db, work.id, { name: '서윤' })
+    const p = await factProposal(work.id, ch1.id, {
+      subjectName: '서윤이',
+      entryId: seoyun.id,
+      content: '검을 쓴다',
+    })
+
+    const res = await approveProposal(db, actor, {
+      proposalId: p.id,
+      payloadOverride: { content: '검을 능숙하게 쓴다' },
+    })
+
+    const [fact] = await db.select().from(facts).where(eq(facts.id, res.targetId!))
+    expect(fact.entryId).toBe(seoyun.id)
+  })
+
+  it('a blank subject keeps the link and falls back to the card name', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    const seoyun = await createTestEntry(db, work.id, { name: '서윤' })
+    const p = await factProposal(work.id, ch1.id, {
+      subjectName: '서윤',
+      entryId: seoyun.id,
+      content: '검을 쓴다',
+    })
+
+    const res = await approveProposal(db, actor, {
+      proposalId: p.id,
+      payloadOverride: { subjectName: '  ' },
+    })
+
+    const [fact] = await db.select().from(facts).where(eq(facts.id, res.targetId!))
+    expect(fact.entryId).toBe(seoyun.id)
+    expect(fact.subjectName).toBe('서윤')
+  })
+})
+
+describe('approval: duplicate facts, relations and threads', () => {
+  it('approving the same fact twice keeps one fact and marks the copy approved with a note', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    const seoyun = await createTestEntry(db, work.id, { name: '서윤' })
+    const first = await factProposal(work.id, ch1.id, {
+      subjectName: '서윤',
+      entryId: seoyun.id,
+      content: '검을 쓴다',
+    })
+    const second = await factProposal(work.id, ch1.id, {
+      subjectName: '서윤',
+      entryId: seoyun.id,
+      content: '검을  쓴다.',
+    })
+
+    const result = await bulkApprove(db, actor, {
+      workId: work.id,
+      proposalIds: [first.id, second.id],
+    })
+
+    expect(result).toEqual({ approved: 2, failed: [] })
+    const wikiFacts = await db.select().from(facts).where(eq(facts.workId, work.id))
+    expect(wikiFacts).toHaveLength(1)
+    const [copy] = await db.select().from(proposals).where(eq(proposals.id, second.id))
+    expect(copy.status).toBe('approved')
+    expect(copy.appliedTargetId).toBe(wikiFacts[0].id)
+    expect(copy.decisionNote).toContain('이미')
+    const logs = await db.select().from(changeLog).where(eq(changeLog.workId, work.id))
+    expect(logs.filter((l) => l.targetTable === 'facts' && l.action === 'create')).toHaveLength(1)
+  })
+
+  it('an old fact with the same content that is no longer current does not block a new one', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    const seoyun = await createTestEntry(db, work.id, { name: '서윤' })
+    await createTestFact(db, work.id, {
+      content: '검을 쓴다',
+      entryId: seoyun.id,
+      validToPosition: 1,
+    })
+    const p = await factProposal(work.id, ch1.id, {
+      subjectName: '서윤',
+      entryId: seoyun.id,
+      content: '검을 쓴다',
+    })
+
+    const res = await approveProposal(db, actor, { proposalId: p.id })
+
+    expect(res.proposal.decisionNote).not.toContain('이미')
+    const wikiFacts = await db.select().from(facts).where(eq(facts.workId, work.id))
+    expect(wikiFacts).toHaveLength(2)
+  })
+
+  it('the same relation approved twice, or with the pair reversed, leaves one relation', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    await createTestEntry(db, work.id, { name: '이서윤' })
+    await createTestEntry(db, work.id, { name: '민준' })
+    const a = await relationProposal(work.id, ch1.id, {
+      sourceName: '이서윤',
+      targetName: '민준',
+      kind: '연인',
+    })
+    const b = await relationProposal(work.id, ch1.id, {
+      sourceName: '이서윤',
+      targetName: '민준',
+      kind: '연인',
+    })
+    const c = await relationProposal(work.id, ch1.id, {
+      sourceName: '민준',
+      targetName: '이서윤',
+      kind: '연인',
+    })
+
+    const result = await bulkApprove(db, actor, {
+      workId: work.id,
+      proposalIds: [a.id, b.id, c.id],
+    })
+
+    expect(result).toEqual({ approved: 3, failed: [] })
+    const rels = await db.select().from(relations).where(eq(relations.workId, work.id))
+    expect(rels).toHaveLength(1)
+    const [copy] = await db.select().from(proposals).where(eq(proposals.id, b.id))
+    expect(copy.decisionNote).toContain('이미')
+  })
+
+  it('a relation of a different kind is kept as a second relation', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    await createTestEntry(db, work.id, { name: '이서윤' })
+    await createTestEntry(db, work.id, { name: '민준' })
+    const a = await relationProposal(work.id, ch1.id, {
+      sourceName: '이서윤',
+      targetName: '민준',
+      kind: '연인',
+    })
+    const b = await relationProposal(work.id, ch1.id, {
+      sourceName: '이서윤',
+      targetName: '민준',
+      kind: '적대',
+    })
+
+    await bulkApprove(db, actor, { workId: work.id, proposalIds: [a.id, b.id] })
+
+    const rels = await db.select().from(relations).where(eq(relations.workId, work.id))
+    expect(rels).toHaveLength(2)
+  })
+
+  it('a relation that ended before the new one starts does not block it, and a directed one does not match the reversed pair', async () => {
+    const { actor, work, ch1, ch2 } = await makeWork()
+    const seoyun = await createTestEntry(db, work.id, { name: '이서윤' })
+    const minjun = await createTestEntry(db, work.id, { name: '민준' })
+    await db.insert(relations).values([
+      {
+        workId: work.id,
+        sourceEntryId: seoyun.id,
+        targetEntryId: minjun.id,
+        kind: '연인',
+        directed: false,
+        startPosition: 1,
+        endPosition: 1,
+      },
+      {
+        workId: work.id,
+        sourceEntryId: seoyun.id,
+        targetEntryId: minjun.id,
+        kind: '스승',
+        directed: true,
+        startPosition: 1,
+        endPosition: null,
+      },
+    ])
+    const ended = await relationProposal(work.id, ch2.id, {
+      sourceName: '이서윤',
+      targetName: '민준',
+      kind: '연인',
+    })
+    const reversedDirected = await relationProposal(work.id, ch1.id, {
+      sourceName: '민준',
+      targetName: '이서윤',
+      kind: '스승',
+    })
+
+    await bulkApprove(db, actor, { workId: work.id, proposalIds: [ended.id, reversedDirected.id] })
+
+    const rels = await db.select().from(relations).where(eq(relations.workId, work.id))
+    expect(rels).toHaveLength(4)
+  })
+
+  it('a thread_create for the title of an open thread reuses it and still records its events', async () => {
+    const { actor, work, ch1, ch2 } = await makeWork()
+    const existing = await createTestThread(db, work.id, {
+      title: '낡은 열쇠',
+      status: 'planted',
+      plantedChapterId: ch1.id,
+    })
+    const p = await propose(work.id, {
+      type: 'thread_create',
+      payload: {
+        title: '낡은 열쇠 ',
+        description: '',
+        status: 'planted',
+        plantedChapterId: ch1.id,
+        targetChapterPosition: null,
+        importance: 'medium',
+        relatedNames: [],
+        evidence: '',
+        events: [{ kind: 'developed', chapterId: ch2.id, evidence: '열쇠가 다시 나온다' }],
+      },
+      source: 'post_chapter',
+      sourceRef: null,
+      chapterId: ch2.id,
+    })
+
+    const res = await approveProposal(db, actor, { proposalId: p.id })
+
+    expect(res.targetId).toBe(existing.id)
+    expect(res.proposal.decisionNote).toContain('이미')
+    const rows = await db.select().from(threads).where(eq(threads.workId, work.id))
+    expect(rows).toHaveLength(1)
+    const events = await db
+      .select()
+      .from(threadEvents)
+      .where(eq(threadEvents.threadId, existing.id))
+    expect(events.map((e) => e.kind)).toContain('developed')
+  })
+
+  it('a thread_create whose same-title thread is already resolved creates a new thread', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    const old = await createTestThread(db, work.id, {
+      title: '낡은 열쇠',
+      status: 'resolved',
+      plantedChapterId: ch1.id,
+    })
+    const p = await propose(work.id, {
+      type: 'thread_create',
+      payload: {
+        title: '낡은 열쇠',
+        description: '',
+        status: 'planted',
+        plantedChapterId: ch1.id,
+        targetChapterPosition: null,
+        importance: 'medium',
+        relatedNames: [],
+        evidence: '',
+        events: [],
+      },
+      source: 'post_chapter',
+      sourceRef: null,
+      chapterId: ch1.id,
+    })
+
+    const res = await approveProposal(db, actor, { proposalId: p.id })
+
+    expect(res.targetId).not.toBe(old.id)
+    const rows = await db.select().from(threads).where(eq(threads.workId, work.id))
+    expect(rows).toHaveLength(2)
+  })
+
+  it('a planted thread_event on a planned thread sets it planted at the chapter', async () => {
+    const { actor, work, ch1 } = await makeWork()
+    const thread = await createTestThread(db, work.id, { title: '검의 비밀', status: 'planned' })
+    const payload = {
+      threadId: thread.id,
+      threadTitle: '검의 비밀',
+      kind: 'planted' as const,
+      chapterId: ch1.id,
+      note: '',
+      evidence: '칼집 안에 글귀가 있었다.',
+    }
+    expect(() => parseProposalPayload('thread_event', payload)).not.toThrow()
+    const p = await propose(work.id, {
+      type: 'thread_event',
+      payload,
+      source: 'post_chapter',
+      sourceRef: null,
+      chapterId: ch1.id,
+    })
+
+    await approveProposal(db, actor, { proposalId: p.id })
+
+    const [updated] = await db.select().from(threads).where(eq(threads.id, thread.id))
+    expect(updated.status).toBe('planted')
+    expect(updated.plantedChapterId).toBe(ch1.id)
+  })
+})
+
+describe('countImportBatches', () => {
+  it('counts pending import proposals per job, and refuses non-members', async () => {
+    const { owner, actor, work, ch1 } = await makeWork()
+    const entry = (name: string, sourceRef: string | null, source: 'import' | 'post_chapter') =>
+      propose(work.id, {
+        type: 'entry_create',
+        payload: { kind: 'character', name, aliases: [], summary: '', fields: {} },
+        source,
+        sourceRef,
+        chapterId: ch1.id,
+      })
+    await entry('가', 'job-a', 'import')
+    await entry('나', 'job-a', 'import')
+    await entry('다', 'job-b', 'import')
+    const rejected = await entry('라', 'job-b', 'import')
+    await rejectProposal(db, actor, { proposalId: rejected.id })
+    await entry('마', 'job-c', 'post_chapter')
+    await entry('바', null, 'import')
+
+    const batches = await countImportBatches(db, actor, work.id)
+
+    expect(batches).toEqual([
+      { sourceRef: 'job-a', count: 2 },
+      { sourceRef: 'job-b', count: 1 },
+    ])
+    expect(owner.id).toBe(actor.userId)
+    const stranger = await createTestUser(db)
+    await expectAppError(countImportBatches(db, { userId: stranger.id }, work.id), 'NOT_FOUND')
   })
 })

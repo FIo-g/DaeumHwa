@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
-import { runReaderSimulationAction } from '@/server/actions/ai-features'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
 import { EDITOR_ONLY_NOTE, canEditChapter, rangeOf } from './shared'
@@ -82,8 +82,12 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
     if (selected.length === 0) return
     setRunning(true)
     await api.saveNow()
+    // A route handler, not a Server Action: several personas can take minutes, and Server Actions
+    // run one at a time, so autosave and navigation would wait behind it.
     const result = await runAction(
-      runReaderSimulationAction({ chapterId: data.chapter.id, personaIds: selected }),
+      postAction<Result>(`/api/works/${data.workId}/chapters/${data.chapter.id}/reader-sim`, {
+        personaIds: selected,
+      }),
     )
     setRunning(false)
     if (result) setOutput(result)

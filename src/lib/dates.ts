@@ -15,6 +15,21 @@ export function seoulDayStart(now: Date = new Date()): Date {
   return new Date(`${seoulToday(now)}T00:00:00+09:00`)
 }
 
+/**
+ * True for a `YYYY-MM-DD` string that names a real calendar day with a year in 2000-2100.
+ * Used to reject typed-in dates such as `0002-10-17` or `2026-02-31`.
+ */
+export function isPlausibleIsoDate(date: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  if (!match) return false
+  const y = Number(match[1])
+  const m = Number(match[2])
+  const d = Number(match[3])
+  if (y < 2000 || y > 2100) return false
+  const probe = new Date(Date.UTC(y, m - 1, d))
+  return probe.getUTCFullYear() === y && probe.getUTCMonth() === m - 1 && probe.getUTCDate() === d
+}
+
 /** Adds whole days to a `YYYY-MM-DD` date string. */
 export function addDays(date: string, n: number): string {
   return new Date(parseDateUtc(date) + n * DAY_MS).toISOString().slice(0, 10)

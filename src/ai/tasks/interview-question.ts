@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import type { EntryKind } from '@/db/types'
+import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 
 // interview-question (F1): picks the next interview question from the current wiki state and the
@@ -89,6 +90,7 @@ const SYSTEM = [
   '- 위키에서 비어 있는 부분(주인공, 주요 인물, 세계관 규칙, 장소, 갈등, 떡밥, 결말 방향, 문체)을 우선한다.',
   '- 질문은 구체적이고 답하기 쉽게 한두 문장으로 쓴다. 예시 답을 늘어놓지 않는다.',
   '- topic에는 주제 이름을, rationale에는 이 질문이 위키의 어느 부분을 채우는지 한 문장으로 쓴다.',
+  TAG_DATA_RULE,
   '- 모든 출력은 한국어로 쓴다.',
 ].join('\n')
 
@@ -97,7 +99,8 @@ function orNone(value: string): string {
 }
 
 /** Prompt with <work>, <wiki> and <history> sections. Skipped turns show "(건너뜀)". */
-export function buildInterviewQuestionPrompt(input: InterviewQuestionInput): string {
+export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): string {
+  const input = neutralizeDeep(raw)
   const counts = (Object.keys(ENTRY_KIND_LABEL) as EntryKind[])
     .map((kind) => `${ENTRY_KIND_LABEL[kind]} ${input.wiki.counts[kind] ?? 0}`)
     .join(', ')

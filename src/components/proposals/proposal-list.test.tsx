@@ -122,6 +122,63 @@ describe('ProposalList', () => {
     expect(run).toHaveBeenCalled()
   })
 
+  it('renders the first page of groups and loads the rest on demand', async () => {
+    const many = Array.from({ length: 45 }, (_, i) =>
+      view({
+        id: `bulk-${i}`,
+        groupKey: `name:인물${i}`,
+        groupLabel: `인물${i}`,
+        payload: { kind: 'character', name: `인물${i}`, aliases: [], summary: '', fields: {} },
+      }),
+    )
+    run.mockResolvedValue({ approved: 20, failed: [] } as never)
+    render(
+      <ProposalList
+        proposals={many}
+        workId="work-1"
+        chapters={chapters}
+        grouping="entity"
+        selectable
+      />,
+    )
+
+    expect(screen.getAllByRole('article')).toHaveLength(20)
+    expect(screen.getByText('전체 45건')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '더 보기 (남은 25묶음)' }))
+    expect(screen.getAllByRole('article')).toHaveLength(40)
+    fireEvent.click(screen.getByRole('button', { name: '더 보기 (남은 5묶음)' }))
+    expect(screen.getAllByRole('article')).toHaveLength(45)
+    expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull()
+  })
+
+  it('removes approved cards and keeps the load-more control consistent', async () => {
+    const many = Array.from({ length: 21 }, (_, i) =>
+      view({
+        id: `bulk-${i}`,
+        groupKey: `name:인물${i}`,
+        groupLabel: `인물${i}`,
+        payload: { kind: 'character', name: `인물${i}`, aliases: [], summary: '', fields: {} },
+      }),
+    )
+    run.mockResolvedValue({ approved: 20, failed: [] } as never)
+    render(
+      <ProposalList
+        proposals={many}
+        workId="work-1"
+        chapters={chapters}
+        grouping="entity"
+        selectable
+      />,
+    )
+
+    const group = screen.getByRole('region', { name: '인물0' })
+    fireEvent.click(within(group).getByRole('button', { name: '이 묶음 승인' }))
+    await waitFor(() => expect(screen.queryByRole('region', { name: '인물0' })).toBeNull())
+    expect(screen.getByText('전체 20건')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull()
+    expect(screen.getAllByRole('article')).toHaveLength(20)
+  })
+
   it('shows an empty state when nothing is waiting', () => {
     render(<ProposalList proposals={[]} workId="work-1" chapters={chapters} grouping="entity" />)
     expect(screen.getByText('승인 대기 중인 제안이 없습니다.')).toBeInTheDocument()

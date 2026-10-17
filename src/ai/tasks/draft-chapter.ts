@@ -1,6 +1,8 @@
 // Chapter draft (spec F13): streamed text, not a structured task. The service in
 // src/server/ai-features.ts builds the prompt and runs it through startAiStream.
 
+import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
+
 export const DRAFT_SYSTEM = `당신은 웹소설 작가의 초안 작성을 돕는 보조 작가다. 작가의 지시와 설정 위키, 문체 카드를 따라 회차 초안을 쓴다.
 규칙:
 - 작가의 지시(<instructions>)에 있는 사건만 쓴다. 위키에 없는 중요한 설정(새 능력, 새 관계, 죽음 등)을 지어내지 않는다.
@@ -9,6 +11,7 @@ export const DRAFT_SYSTEM = `당신은 웹소설 작가의 초안 작성을 돕�
 - 서술은 작품 문체 카드를 따른다.
 - 웹소설 문단 호흡(짧은 문단, 대사 중심)으로 쓴다.
 - 목표 분량에 가깝게 쓴다.
+${TAG_DATA_RULE}
 - 제목이나 설명 없이 본문만 출력한다.`
 
 export const DRAFT_MAX_TOKENS = 16000
@@ -30,7 +33,8 @@ export type DraftPromptInput = {
   chapterLabel: string
 }
 
-export function buildDraftPrompt(input: DraftPromptInput): string {
+export function buildDraftPrompt(raw: DraftPromptInput): string {
+  const input = neutralizeDeep(raw)
   const cards =
     input.styleCards.length > 0 ? input.styleCards.map(renderCard).join('\n\n') : '(없음)'
   return [

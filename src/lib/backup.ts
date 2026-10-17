@@ -21,13 +21,29 @@ const FALLBACK_NAME = '무제'
 export function buildBackupFiles(p: ExportPayload): BackupFile[] {
   const chapterPosition = new Map(p.chapters.map((c) => [c.id, c.position]))
   const files: BackupFile[] = []
+  const usedPaths = new Set<string>()
+  const add = (path: string, content: string, tag: string) => {
+    files.push({ path: claimPath(path, tag, usedPaths), content })
+  }
 
-  for (const chapter of [...p.chapters].sort((a, b) => a.position - b.position)) {
+  // Archived chapters can share a position with a live one, so the live chapter comes first
+  // and keeps the plain file name. Ties fall back to id so the output is deterministic.
+  const orderedChapters = [...p.chapters].sort(
+    (a, b) =>
+      a.position - b.position ||
+      Number(Boolean(a.archivedAt)) - Number(Boolean(b.archivedAt)) ||
+      a.id.localeCompare(b.id),
+  )
+  for (const chapter of orderedChapters) {
+    const archived = Boolean(chapter.archivedAt)
     const name = safeName(chapter.title || `${chapter.position}화`)
-    files.push({
-      path: `chapters/${pad3(chapter.position)}-${name}.md`,
-      content: `# ${chapterLabel(chapter.position, chapter.title)}\n\n${chapter.body}\n`,
-    })
+    const fileName = archived ? `${name} (보관됨)` : name
+    const note = archived ? '> 보관된 회차\n\n' : ''
+    add(
+      `chapters/${pad3(chapter.position)}-${fileName}.md`,
+      `# ${chapterLabel(chapter.position, chapter.title)}\n\n${note}${chapter.body}\n`,
+      chapter.id.slice(0, 8),
+    )
   }
 
   const factsByEntry = new Map<string, typeof p.facts>()
@@ -40,23 +56,24 @@ export function buildBackupFiles(p: ExportPayload): BackupFile[] {
   const characters = p.entries.filter((e) => e.kind === 'character')
   const world = p.entries.filter((e) => e.kind !== 'character')
 
-  files.push({
-    path: 'wiki/인물.md',
-    content: renderSections(
+  add(
+    'wiki/인물.md',
+    renderSections(
       '인물',
       characters.map((entry) => renderEntry(entry, factsByEntry.get(entry.id) ?? [])),
     ),
-  })
+    'file',
+  )
 
   const worldSections = world.map((entry) => renderEntry(entry, factsByEntry.get(entry.id) ?? []))
   if (unlinkedFacts.length > 0) {
     worldSections.push(['## 기타 사실', ...unlinkedFacts.map(renderFact)].join('\n'))
   }
-  files.push({ path: 'wiki/세계관.md', content: renderSections('세계관', worldSections) })
+  add('wiki/세계관.md', renderSections('세계관', worldSections), 'file')
 
-  files.push({
-    path: 'wiki/떡밥.md',
-    content: renderSections(
+  add(
+    'wiki/떡밥.md',
+    renderSections(
       '떡밥',
       p.threads.map((thread) => {
         const lines = [
@@ -80,11 +97,12 @@ export function buildBackupFiles(p: ExportPayload): BackupFile[] {
         return lines.join('\n')
       }),
     ),
-  })
+    'file',
+  )
 
-  files.push({
-    path: 'wiki/표기.md',
-    content: renderSections(
+  add(
+    'wiki/표기.md',
+    renderSections(
       '표기',
       p.namingRules.map((rule) => {
         const lines = [`## ${rule.canonical}`]
@@ -93,17 +111,15 @@ export function buildBackupFiles(p: ExportPayload): BackupFile[] {
         return lines.join('\n')
       }),
     ),
-  })
+    'file',
+  )
 
   const history = [...p.changes]
     .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
     .map((change) => `- ${formatKoreanDateTime(change.createdAt)} · ${change.summary}`)
-  files.push({
-    path: 'history.md',
-    content: renderSections('변경 이력', [history.join('\n')]),
-  })
+  add('history.md', renderSections('변경 이력', [history.join('\n')]), 'file')
 
-  files.push({ path: 'work.json', content: JSON.stringify(p, null, 2) })
+  add('work.json', JSON.stringify(p, null, 2), 'file')
 
   return files.map((file) => ({
     path: file.path.normalize('NFC'),
@@ -111,11 +127,37 @@ export function buildBackupFiles(p: ExportPayload): BackupFile[] {
   }))
 }
 
-/** Packs backup files into a zip with UTF-8 names. */
+/** Packs backup files into a zip with UTF-8 names. Refuses duplicate paths instead of dropping one. */
 export function zipBackup(files: BackupFile[]): Uint8Array {
   const entries: Zippable = {}
-  for (const file of files) entries[file.path] = strToU8(file.content)
+  for (const file of files) {
+    if (file.path in entries) {
+      throw new Error(`백업 파일 경로가 겹칩니다: ${file.path}`)
+    }
+    entries[file.path] = strToU8(file.content)
+  }
   return zipSync(entries)
+}
+
+/**
+ * Returns `path`, or a variant that no earlier file uses. Comparison ignores case and uses NFC so
+ * the result is also unique on case-insensitive file systems. Variants insert `tag` before the
+ * extension, then a counter if needed.
+ */
+function claimPath(path: string, tag: string, used: Set<string>): string {
+  const key = (value: string) => value.normalize('NFC').toLowerCase()
+  let candidate = path
+  if (used.has(key(candidate))) {
+    const dot = path.lastIndexOf('.')
+    const stem = path.slice(0, dot)
+    const ext = path.slice(dot)
+    for (let n = 1; used.has(key(candidate)); n++) {
+      const suffix = n === 1 ? tag : `${tag}-${n}`
+      candidate = `${stem}-${suffix}${ext}`
+    }
+  }
+  used.add(key(candidate))
+  return candidate
 }
 
 /** `다음화-백업-<작품명>-<YYYYMMDD>.zip` */

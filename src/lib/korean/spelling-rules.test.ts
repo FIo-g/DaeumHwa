@@ -43,7 +43,11 @@ const cases: [string, string][] = [
   ['일일히 셌다.', '일일이 셌다.'],
   ['설레임이 컸다.', '설렘이 컸다.'],
   ['그건 내 거에요.', '그건 내 거예요.'],
-  ['학생이였다.', '학생이었다.'],
+  ['않되면 어떡해.', '안 되면 어떡해.'],
+  ['그건 않되는데.', '그건 안 되는데.'],
+  ['그건 않되요.', '그건 안 돼요.'],
+  ['그러면 않되서 못 갔다.', '그러면 안 돼서 못 갔다.'],
+  ['그러면 않되야 한다.', '그러면 안 돼야 한다.'],
 ]
 
 describe('ruleBasedSpellcheck', () => {
@@ -60,7 +64,9 @@ describe('ruleBasedSpellcheck', () => {
 
   it('returns suggestions sorted by start and non-overlapping', () => {
     const suggestions = ruleBasedSpellcheck('되서 잘 됬다. 역활은 구지 했다.')
-    expect(suggestions.map((s) => s.start)).toEqual([...suggestions.map((s) => s.start)].sort((a, b) => a - b))
+    expect(suggestions.map((s) => s.start)).toEqual(
+      [...suggestions.map((s) => s.start)].sort((a, b) => a - b),
+    )
     for (let i = 1; i < suggestions.length; i++) {
       expect(suggestions[i].start).toBeGreaterThanOrEqual(suggestions[i - 1].end)
     }
@@ -71,4 +77,20 @@ describe('ruleBasedSpellcheck', () => {
     expect(ruleBasedSpellcheck('그는 껄껄 웃었다.')).toEqual([])
     expect(ruleBasedSpellcheck('서울께서 오셨다.')).toEqual([])
   })
+
+  // 이였 is a correct spelling after many vowel- or 이-ending nouns, so no rule flags it.
+  it.each(['그는 어린 아이였다.', '검은 고양이였다.', '둘은 사이였다.', '그는 멍청이였다.'])(
+    'does not flag the noun copula in %s',
+    (text) => {
+      expect(ruleBasedSpellcheck(text)).toEqual([])
+    },
+  )
+
+  // 구지 is a misspelling of 굳이 only as a standalone word, not inside a name.
+  it.each(['구지현이 왔다.', '구지훈이 말했다.', '김구지가 웃었다.'])(
+    'does not flag 구지 inside a name: %s',
+    (text) => {
+      expect(ruleBasedSpellcheck(text)).toEqual([])
+    },
+  )
 })

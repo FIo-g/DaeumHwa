@@ -5,6 +5,7 @@ import {
   dayOfWeek,
   formatKoreanDate,
   formatKoreanDateTime,
+  isPlausibleIsoDate,
   seoulDayStart,
   seoulToday,
   toIsoString,
@@ -56,5 +57,36 @@ describe('formatting', () => {
     expect(toIsoString(new Date(0))).toBe('1970-01-01T00:00:00.000Z')
     expect(toIsoString('2026-10-16T05:05:00Z')).toBe('2026-10-16T05:05:00.000Z')
     expect(toIsoString('not a date')).toBeNull()
+  })
+})
+
+describe('isPlausibleIsoDate', () => {
+  it('accepts a real calendar date in the 2000-2100 range', () => {
+    expect(isPlausibleIsoDate('2026-10-17')).toBe(true)
+    expect(isPlausibleIsoDate('2000-01-01')).toBe(true)
+    expect(isPlausibleIsoDate('2100-12-31')).toBe(true)
+  })
+
+  it('rejects years outside 2000-2100', () => {
+    expect(isPlausibleIsoDate('0002-10-17')).toBe(false)
+    expect(isPlausibleIsoDate('0020-10-17')).toBe(false)
+    expect(isPlausibleIsoDate('1999-12-31')).toBe(false)
+    expect(isPlausibleIsoDate('2101-01-01')).toBe(false)
+    expect(isPlausibleIsoDate('10000-01-01')).toBe(false)
+  })
+
+  it('rejects dates that do not exist on the calendar', () => {
+    expect(isPlausibleIsoDate('2026-02-31')).toBe(false)
+    expect(isPlausibleIsoDate('2026-13-01')).toBe(false)
+    expect(isPlausibleIsoDate('2026-00-10')).toBe(false)
+    expect(isPlausibleIsoDate('2026-10-00')).toBe(false)
+    expect(isPlausibleIsoDate('2024-02-29')).toBe(true)
+    expect(isPlausibleIsoDate('2026-02-29')).toBe(false)
+  })
+
+  it('rejects anything that is not YYYY-MM-DD', () => {
+    expect(isPlausibleIsoDate('10/20')).toBe(false)
+    expect(isPlausibleIsoDate('2026-10-17T00:00:00Z')).toBe(false)
+    expect(isPlausibleIsoDate('')).toBe(false)
   })
 })

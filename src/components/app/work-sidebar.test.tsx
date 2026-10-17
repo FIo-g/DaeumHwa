@@ -25,7 +25,10 @@ describe('WorkSidebar', () => {
     renderSidebar()
     const nav = screen.getByRole('navigation', { name: '작품 메뉴' })
     expect(within(nav).getByRole('link', { name: '홈' })).toHaveAttribute('href', '/works/w1')
-    expect(within(nav).getByRole('link', { name: '집필' })).toHaveAttribute('href', '/works/w1/write')
+    expect(within(nav).getByRole('link', { name: '집필' })).toHaveAttribute(
+      'href',
+      '/works/w1/write',
+    )
     expect(within(nav).getByRole('link', { name: '회차' })).toHaveAttribute(
       'href',
       '/works/w1/chapters',
@@ -55,9 +58,7 @@ describe('WorkSidebar', () => {
     renderSidebar()
     const nav = screen.getByRole('navigation', { name: '작품 메뉴' })
     expect(within(nav).getByRole('link', { name: '홈' })).toHaveAttribute('aria-current', 'page')
-    expect(within(nav).getByRole('link', { name: /승인 대기/ })).not.toHaveAttribute(
-      'aria-current',
-    )
+    expect(within(nav).getByRole('link', { name: /승인 대기/ })).not.toHaveAttribute('aria-current')
   })
 
   it('shows the pending count badge on the approvals link when there are pending items', () => {
@@ -66,11 +67,22 @@ describe('WorkSidebar', () => {
     expect(within(nav).getByRole('link', { name: /승인 대기/ })).toHaveTextContent('3')
   })
 
-  it('hides the settings link from members who are not owners', () => {
+  it('shows the settings link to every member, so non-owners can reach the team tab and leave', () => {
     render(<WorkSidebar workId="w1" workTitle="별빛 계약" role="editor" pendingCount={0} />)
     const nav = screen.getByRole('navigation', { name: '작품 메뉴' })
-    expect(within(nav).queryByRole('link', { name: '작품 설정' })).not.toBeInTheDocument()
-    expect(within(nav).getByRole('link', { name: '설정 보드' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: '작품 설정' })).toHaveAttribute(
+      'href',
+      '/works/w1/settings',
+    )
+  })
+
+  it('shows the settings link to viewers as well', () => {
+    render(<WorkSidebar workId="w1" workTitle="별빛 계약" role="viewer" pendingCount={0} />)
+    const nav = screen.getByRole('navigation', { name: '작품 메뉴' })
+    expect(within(nav).getByRole('link', { name: '작품 설정' })).toHaveAttribute(
+      'href',
+      '/works/w1/settings',
+    )
   })
 
   it('hides the pending count badge when nothing is pending', () => {

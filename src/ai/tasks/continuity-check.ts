@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { type ContextPack, renderContextPack, resolveRefs } from '@/ai/context'
+import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import { ISSUE_KINDS, type IssueKind, SEVERITIES, type Severity } from '@/db/types'
 import { locateQuote, splitSentences } from '@/lib/korean/sentences'
@@ -56,6 +57,7 @@ export const CONTINUITY_SYSTEM = `당신은 장기 연재 웹소설의 설정 �
 - 표기 규칙(<naming>) 위반, 심지 않은 떡밥을 회수하는 문제, 시간선 모순도 찾는다.
 - suggestion에는 원고를 고친 문장을 쓰거나, 위키를 고쳐야 할 수도 있다고 제안한다.
 - 확신이 없으면 지적하지 않는다. 지적할 것이 없으면 빈 배열을 돌려준다.
+${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
 
 /**
@@ -197,14 +199,16 @@ export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> =
   effort: 'high',
   maxTokens: 16000,
   system: CONTINUITY_SYSTEM,
-  buildPrompt: (input) =>
-    [
+  buildPrompt: (raw) => {
+    const input = neutralizeDeep(raw)
+    return [
       `<wiki>\n${renderContextPack(input.pack)}\n</wiki>`,
       '',
       `<manuscript position="${input.chapterPosition}" title="${input.chapterTitle.replace(/"/g, "'")}">`,
       input.chapterText,
       '</manuscript>',
-    ].join('\n'),
+    ].join('\n')
+  },
   schema: ContinuitySchema,
   fake: fakeContinuity,
   postProcess(output, input) {

@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import {
   changeLog,
@@ -13,9 +13,21 @@ import {
   user,
   wikiEntries,
 } from '@/db/schema'
-import type { Actor, ChangeAction, ChangeRow, ChangeTargetTable, ProposerType } from '@/db/types'
+import type {
+  Actor,
+  ChangeAction,
+  ChangeRow,
+  ChangeTargetTable,
+  FactRow,
+  ProposerType,
+  ThreadEventKind,
+  ThreadStatus,
+} from '@/db/types'
 import { AppError } from '@/lib/errors'
+import { THREAD_STATUS_LABEL } from '@/lib/labels'
 import { requireRowWork, requireWorkRole } from '@/server/access'
+import { recomputeAppearancesForEntry } from '@/server/appearances'
+import { assertEntryNameFree, relinkFactsForEntry } from '@/server/entry-integrity'
 
 export type RecordChangeInput = {
   workId: string
@@ -58,12 +70,31 @@ export async function recordChange(db: Db, input: RecordChangeInput): Promise<Ch
   return row
 }
 
+/** Short one-line text for change summaries. */
+export function preview(text: string, max = 40): string {
+  const oneLine = text.replace(/\s+/g, ' ').trim()
+  return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine
+}
+
+/** Who a derived change is attributed to. Reverts and archives default to the author. */
+export type HistoryOpts = { proposerType?: ProposerType; proposalId?: string | null }
+
 export type ChangeFilter = {
   targetTable?: ChangeTargetTable
   targetId?: string
   proposerType?: ProposerType
   limit?: number
-  beforeCreatedAt?: Date
+  /**
+   * Keyset cursor: the id of the last row of the previous page. Rows are compared on
+   * (created_at, id) inside the database, so microsecond timestamps and ties are exact.
+   */
+  beforeId?: string
+}
+
+export type ChangeView = ChangeRow & {
+  actorName: string | null
+  /** True when no later change exists for the same target, so revertChange accepts it. */
+  revertable: boolean
 }
 
 /** Change history of a work, newest first. Viewer role or higher. */
@@ -72,21 +103,35 @@ export async function listChanges(
   actor: Actor,
   workId: string,
   f: ChangeFilter = {},
-): Promise<(ChangeRow & { actorName: string | null })[]> {
+): Promise<ChangeView[]> {
   await requireWorkRole(db, workId, actor.userId, 'viewer')
   const conditions = [eq(changeLog.workId, workId)]
   if (f.targetTable) conditions.push(eq(changeLog.targetTable, f.targetTable))
   if (f.targetId) conditions.push(eq(changeLog.targetId, f.targetId))
   if (f.proposerType) conditions.push(eq(changeLog.proposerType, f.proposerType))
-  if (f.beforeCreatedAt) conditions.push(lt(changeLog.createdAt, f.beforeCreatedAt))
+  if (f.beforeId) {
+    // The subselect is scoped to this work, so a foreign id yields no cursor and an empty page.
+    conditions.push(
+      sql`(${changeLog.createdAt}, ${changeLog.id}) < (select created_at, id from change_log where id = ${f.beforeId} and work_id = ${workId})`,
+    )
+  }
+  const later = sql`exists (select 1 from change_log later where later.work_id = ${changeLog.workId} and later.target_table = ${changeLog.targetTable} and later.target_id = ${changeLog.targetId} and (later.created_at, later.id) > (${changeLog.createdAt}, ${changeLog.id}))`
   const rows = await db
-    .select({ change: changeLog, actorName: user.name })
+    .select({
+      change: changeLog,
+      actorName: user.name,
+      hasLater: sql<boolean>`${later}`.mapWith(Boolean),
+    })
     .from(changeLog)
     .leftJoin(user, eq(user.id, changeLog.actorId))
     .where(and(...conditions))
-    .orderBy(desc(changeLog.createdAt))
+    .orderBy(desc(changeLog.createdAt), desc(changeLog.id))
     .limit(f.limit ?? 50)
-  return rows.map((r) => ({ ...r.change, actorName: r.actorName ?? null }))
+  return rows.map((r) => ({
+    ...r.change,
+    actorName: r.actorName ?? null,
+    revertable: !r.hasLater,
+  }))
 }
 
 // ---- Revert ----
@@ -153,6 +198,25 @@ function pick<T extends object>(snap: Snapshot, keys: readonly (keyof T & string
   return out as Partial<T>
 }
 
+/** Entry ids linked to a thread (the thread's related cards). */
+async function linkedEntryIds(db: Db, threadId: string): Promise<string[]> {
+  const links = await db
+    .select({ entryId: threadEntries.entryId })
+    .from(threadEntries)
+    .where(eq(threadEntries.threadId, threadId))
+  return links.map((l) => l.entryId)
+}
+
+/**
+ * Thread row plus its entry links: the snapshot shape of every thread change, including the
+ * revert rows, so that reverting a revert restores the links too.
+ */
+export async function threadSnapshot(db: Db, threadId: string) {
+  const [row] = await db.select().from(threads).where(eq(threads.id, threadId)).limit(1)
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  return { ...row, relatedEntryIds: await linkedEntryIds(db, threadId) }
+}
+
 /** Current state of the row a change points at, or null when it no longer exists. */
 async function readRow(db: Db, table: ChangeTargetTable, id: string): Promise<Snapshot | null> {
   switch (table) {
@@ -160,8 +224,11 @@ async function readRow(db: Db, table: ChangeTargetTable, id: string): Promise<Sn
       return (await db.select().from(wikiEntries).where(eq(wikiEntries.id, id)).limit(1))[0] ?? null
     case 'facts':
       return (await db.select().from(facts).where(eq(facts.id, id)).limit(1))[0] ?? null
-    case 'threads':
-      return (await db.select().from(threads).where(eq(threads.id, id)).limit(1))[0] ?? null
+    case 'threads': {
+      const [row] = await db.select().from(threads).where(eq(threads.id, id)).limit(1)
+      if (!row) return null
+      return { ...row, relatedEntryIds: await linkedEntryIds(db, id) }
+    }
     case 'thread_events':
       return (
         (await db.select().from(threadEvents).where(eq(threadEvents.id, id)).limit(1))[0] ?? null
@@ -252,9 +319,257 @@ function isArchivable(table: ChangeTargetTable): boolean {
   return table !== 'chapters'
 }
 
+/** Thread status a timeline event sets. A note sets none. */
+const EVENT_STATUS: Record<ThreadEventKind, ThreadStatus | null> = {
+  planted: 'planted',
+  developed: 'developing',
+  resolved: 'resolved',
+  discarded: 'discarded',
+  note: null,
+}
+
+function last<T>(items: T[]): T | undefined {
+  return items[items.length - 1]
+}
+
+/**
+ * Re-derives a thread's status and planted/resolved chapters from its active timeline events,
+ * and logs an 'update' change when they differ. Call it after a timeline event is archived or
+ * restored, so a thread never shows 'resolved' without an active resolving event.
+ * Notes never change status, so archiving one writes nothing.
+ */
+export async function syncThreadFromEvents(
+  db: Db,
+  actor: Actor,
+  workId: string,
+  threadId: string,
+  o: HistoryOpts = {},
+): Promise<void> {
+  const before = await threadSnapshot(db, threadId)
+  if (before.archivedAt) return
+  const events = await db
+    .select()
+    .from(threadEvents)
+    .where(and(eq(threadEvents.threadId, threadId), isNull(threadEvents.archivedAt)))
+    .orderBy(asc(threadEvents.createdAt), asc(threadEvents.id))
+
+  const lastRecord = last(events.filter((e) => e.kind !== 'note'))
+  let status: ThreadStatus = (lastRecord && EVENT_STATUS[lastRecord.kind]) || 'planned'
+  const planted = last(events.filter((e) => e.kind === 'planted'))
+  // Developed and resolved threads always have a planted chapter, so without one they are only planned.
+  if (!planted && (status === 'developing' || status === 'resolved')) status = 'planned'
+  const plantedChapterId = planted?.chapterId ?? null
+  const resolved = last(events.filter((e) => e.kind === 'resolved'))
+  const resolvedChapterId = status === 'resolved' ? (resolved?.chapterId ?? null) : null
+
+  if (
+    before.status === status &&
+    before.plantedChapterId === plantedChapterId &&
+    before.resolvedChapterId === resolvedChapterId
+  ) {
+    return
+  }
+  await db
+    .update(threads)
+    .set({ status, plantedChapterId, resolvedChapterId, updatedAt: new Date() })
+    .where(eq(threads.id, threadId))
+  await recordChange(db, {
+    workId,
+    targetTable: 'threads',
+    targetId: threadId,
+    action: 'update',
+    before,
+    after: await threadSnapshot(db, threadId),
+    proposerType: o.proposerType ?? 'author',
+    actorId: actor.userId,
+    proposalId: o.proposalId ?? null,
+    summary: `떡밥 '${before.title}' 상태: ${THREAD_STATUS_LABEL[status]}`,
+  })
+}
+
+/** The earlier fact a replacing fact pushed out, as it was before (kept on the change's `before`). */
+export type PredecessorLink = {
+  id: string
+  validToPosition: number | null
+  supersededByFactId: string | null
+}
+
+/**
+ * Archiving a fact that replaced an earlier one would leave the earlier fact ended and pointing
+ * at an archived fact. This points that earlier fact at the fact's own successor, or reopens it
+ * when there is none, and records an 'update' on it. Returns its link as it was, or null when
+ * no earlier fact pointed at `fact`.
+ */
+export async function detachFromPredecessor(
+  db: Db,
+  workId: string,
+  actorId: string,
+  fact: Pick<FactRow, 'id' | 'supersededByFactId' | 'validToPosition'>,
+  o: HistoryOpts = {},
+): Promise<PredecessorLink | null> {
+  const [pred] = await db
+    .select()
+    .from(facts)
+    .where(and(eq(facts.supersededByFactId, fact.id), isNull(facts.archivedAt)))
+    .limit(1)
+  if (!pred) return null
+  const [updated] = await db
+    .update(facts)
+    .set({
+      supersededByFactId: fact.supersededByFactId,
+      validToPosition: fact.validToPosition,
+      updatedAt: new Date(),
+    })
+    .where(eq(facts.id, pred.id))
+    .returning()
+  await recordChange(db, {
+    workId,
+    targetTable: 'facts',
+    targetId: pred.id,
+    action: 'update',
+    before: pred,
+    after: updated,
+    proposerType: o.proposerType ?? 'author',
+    actorId,
+    proposalId: o.proposalId ?? null,
+    summary: `사실 바뀜 취소: ${preview(pred.content)}`,
+  })
+  return {
+    id: pred.id,
+    validToPosition: pred.validToPosition,
+    supersededByFactId: pred.supersededByFactId,
+  }
+}
+
+/**
+ * Undoes detachFromPredecessor when the replacing fact comes back. The earlier fact is re-linked
+ * unless something else has replaced it since.
+ */
+export async function reattachPredecessor(
+  db: Db,
+  workId: string,
+  actorId: string,
+  link: PredecessorLink | null,
+  o: HistoryOpts = {},
+): Promise<void> {
+  if (!link) return
+  const [pred] = await db.select().from(facts).where(eq(facts.id, link.id)).limit(1)
+  if (!pred || pred.archivedAt || pred.supersededByFactId) return
+  const [updated] = await db
+    .update(facts)
+    .set({
+      supersededByFactId: link.supersededByFactId,
+      validToPosition: link.validToPosition,
+      updatedAt: new Date(),
+    })
+    .where(eq(facts.id, pred.id))
+    .returning()
+  await recordChange(db, {
+    workId,
+    targetTable: 'facts',
+    targetId: pred.id,
+    action: 'update',
+    before: pred,
+    after: updated,
+    proposerType: o.proposerType ?? 'author',
+    actorId,
+    proposalId: o.proposalId ?? null,
+    summary: `사실 바뀜 복원: ${preview(pred.content)}`,
+  })
+}
+
+/** The predecessor link stored on an archive change's `before` (or a revert row's `before`). */
+function reopenedPredecessorOf(snap: Snapshot): PredecessorLink | null {
+  const link = snap.reopenedPredecessor as PredecessorLink | undefined
+  return link && typeof link.id === 'string' ? link : null
+}
+
+/**
+ * Reverting a supersede's 'before' would un-end a fact whose replacement is still live.
+ * Reverting the replacement itself (its archive) is the way out, so refuse here.
+ */
+async function assertCanUnsupersede(db: Db, target: Snapshot, current: Snapshot): Promise<void> {
+  const successorId = current.supersededByFactId
+  if (target.supersededByFactId || typeof successorId !== 'string') return
+  const [successor] = await db
+    .select({ archivedAt: facts.archivedAt })
+    .from(facts)
+    .where(eq(facts.id, successorId))
+    .limit(1)
+  if (successor && !successor.archivedAt) {
+    throw new AppError(
+      'CONFLICT',
+      '이 사실을 대체한 새 사실이 있어 먼저 새 사실의 추가를 되돌려야 합니다.',
+    )
+  }
+}
+
+/**
+ * Brings wiki data that depends on an entry's names and archived state back in line with the row:
+ * appearances always, fact links when active. An active result must not collide with another card.
+ */
+async function rebuildEntryDerived(
+  db: Db,
+  workId: string,
+  entryId: string,
+  before: { archived: boolean; name: string; kind: string },
+): Promise<void> {
+  const [entry] = await db.select().from(wikiEntries).where(eq(wikiEntries.id, entryId)).limit(1)
+  if (!entry.archivedAt) {
+    const renamed = before.name !== entry.name || before.kind !== entry.kind
+    if (before.archived || renamed) {
+      await assertEntryNameFree(db, workId, entry.kind, entry.name, entry.id)
+    }
+    await relinkFactsForEntry(db, entry)
+  }
+  await recomputeAppearancesForEntry(db, entryId)
+}
+
+/**
+ * Derived data that follows a reverted row, written in the same transaction. Returns the
+ * predecessor link that a fact archive detached, so the revert row can carry it for a later undo.
+ */
+async function applyDerivedChanges(
+  db: Db,
+  actor: Actor,
+  workId: string,
+  table: ChangeTargetTable,
+  id: string,
+  current: Snapshot,
+  target: Snapshot,
+): Promise<PredecessorLink | null> {
+  switch (table) {
+    case 'wiki_entries':
+      await rebuildEntryDerived(db, workId, id, {
+        archived: current.archivedAt != null,
+        name: String(current.name),
+        kind: String(current.kind),
+      })
+      return null
+    case 'thread_events':
+      await syncThreadFromEvents(db, actor, workId, String(current.threadId), {})
+      return null
+    case 'facts': {
+      const [fact] = await db.select().from(facts).where(eq(facts.id, id)).limit(1)
+      const wasArchived = current.archivedAt != null
+      if (!wasArchived && fact.archivedAt) {
+        return detachFromPredecessor(db, workId, actor.userId, fact)
+      }
+      if (wasArchived && !fact.archivedAt) {
+        await reattachPredecessor(db, workId, actor.userId, reopenedPredecessorOf(target))
+      }
+      return null
+    }
+    default:
+      return null
+  }
+}
+
 /**
  * Reverts the most recent change of one row (spec F5). Create -> archive the row,
  * update -> restore `before`, archive/restore -> the opposite. Writes a new 'revert' change.
+ * Derived data follows in the same transaction: entry appearances and fact links for wiki
+ * entries, the replaced-fact chain for facts, and the thread status for timeline events.
  */
 export async function revertChange(db: Db, actor: Actor, changeId: string): Promise<ChangeRow> {
   const workId = await requireRowWork(db, 'change_log', changeId)
@@ -290,8 +605,21 @@ export async function revertChange(db: Db, actor: Actor, changeId: string): Prom
     }
     // A create has no `before`: reverting it archives the row instead.
     const target = hasBefore ? (original.before as Snapshot) : { archivedAt: now }
+    if (hasBefore && original.targetTable === 'facts') {
+      await assertCanUnsupersede(tx, target, current)
+    }
     await writeRow(tx, original.targetTable, original.targetId, target, now)
     const next = await readRow(tx, original.targetTable, original.targetId)
+
+    const predecessor = await applyDerivedChanges(
+      tx,
+      actor,
+      workId,
+      original.targetTable,
+      original.targetId,
+      current,
+      target,
+    )
 
     const [change] = await tx
       .insert(changeLog)
@@ -300,7 +628,7 @@ export async function revertChange(db: Db, actor: Actor, changeId: string): Prom
         targetTable: original.targetTable,
         targetId: original.targetId,
         action: 'revert',
-        before: current,
+        before: predecessor ? { ...current, reopenedPredecessor: predecessor } : current,
         after: next,
         proposerType: 'author',
         actorId: actor.userId,

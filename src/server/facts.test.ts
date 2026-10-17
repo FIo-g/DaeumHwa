@@ -329,3 +329,101 @@ describe('chapter reference', () => {
     expect(created.sourceChapterId).toBe(chapter.id)
   })
 })
+
+describe('name matching for facts', () => {
+  it('createFact links 마리아 to the 마리아 card, not to 마리', async () => {
+    const { work, actor } = await setup()
+    await createTestEntry(db, work.id, { name: '마리' })
+    const maria = await createTestEntry(db, work.id, { name: '마리아' })
+    const created = await createFact(db, actor, {
+      workId: work.id,
+      subjectName: '마리아',
+      content: '마리아는 노래한다.',
+      status: 'confirmed',
+      sourceType: 'author',
+    })
+    expect(created.entryId).toBe(maria.id)
+  })
+
+  it('relinkFactsForEntry leaves a 마리아 fact alone when adding the 마리 card', async () => {
+    const { work } = await setup()
+    const orphan = await createTestFact(db, work.id, { content: '마리아는 노래한다.' })
+    await db.update(facts).set({ subjectName: '마리아' }).where(eq(facts.id, orphan.id))
+    await createTestEntry(db, work.id, { name: '마리아' })
+    const mari = await createTestEntry(db, work.id, { name: '마리' })
+
+    expect(await relinkFactsForEntry(db, mari)).toBe(0)
+    const [row] = await db.select().from(facts).where(eq(facts.id, orphan.id))
+    expect(row.entryId).toBeNull()
+  })
+})
+
+describe('archiveFact keeps the replaced-fact chain consistent', () => {
+  it('archiving the replacement reopens the earlier fact', async () => {
+    const { work, actor } = await setup()
+    const old = await createTestFact(db, work.id, { content: '옛 사실', validFromPosition: 1 })
+    const { newFact } = await supersedeFact(db, actor, {
+      factId: old.id,
+      fromPosition: 12,
+      content: '새 사실',
+      status: 'confirmed',
+    })
+
+    await archiveFact(db, actor, newFact.id)
+
+    const [reopened] = await db.select().from(facts).where(eq(facts.id, old.id))
+    expect(reopened.validToPosition).toBeNull()
+    expect(reopened.supersededByFactId).toBeNull()
+    expect((await listFacts(db, actor, work.id)).map((f) => f.content)).toEqual(['옛 사실'])
+    const changes = await db.select().from(changeLog).where(eq(changeLog.targetId, old.id))
+    expect(changes.map((c) => c.summary)).toContain('사실 바뀜 취소: 옛 사실')
+  })
+
+  it('archiving a middle fact points its predecessor at the next fact', async () => {
+    const { work, actor } = await setup()
+    const a = await createTestFact(db, work.id, { content: 'A', validFromPosition: 1 })
+    const { newFact: b } = await supersedeFact(db, actor, {
+      factId: a.id,
+      fromPosition: 5,
+      content: 'B',
+      status: 'confirmed',
+    })
+    const { newFact: c } = await supersedeFact(db, actor, {
+      factId: b.id,
+      fromPosition: 9,
+      content: 'C',
+      status: 'confirmed',
+    })
+
+    await archiveFact(db, actor, b.id)
+
+    const [rowA] = await db.select().from(facts).where(eq(facts.id, a.id))
+    expect(rowA.supersededByFactId).toBe(c.id)
+    expect(rowA.validToPosition).toBe(8)
+  })
+
+  it('an archived replacement that was never re-linked no longer hides the earlier fact', async () => {
+    const { work, actor } = await setup()
+    const old = await createTestFact(db, work.id, { content: '옛 사실', validFromPosition: 1 })
+    const { newFact } = await supersedeFact(db, actor, {
+      factId: old.id,
+      fromPosition: 12,
+      content: '새 사실',
+      status: 'confirmed',
+    })
+    // Simulates rows archived before the chain was kept consistent.
+    await db.update(facts).set({ archivedAt: new Date() }).where(eq(facts.id, newFact.id))
+
+    const visible = await listFacts(db, actor, work.id)
+    expect(visible.map((f) => f.content)).toEqual(['옛 사실'])
+    expect(visible[0].supersededBy).toBeNull()
+    await expect(
+      supersedeFact(db, actor, {
+        factId: old.id,
+        fromPosition: 20,
+        content: '다시 바뀐 사실',
+        status: 'confirmed',
+      }),
+    ).resolves.toMatchObject({ newFact: { content: '다시 바뀐 사실' } })
+  })
+})

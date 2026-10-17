@@ -26,7 +26,7 @@ import {
   saveResumePointAction,
 } from './manuscript'
 import { createChapterAction, openNextChapterAction, setChapterSummaryAction } from './chapters'
-import { createChapter, listVersions } from '@/server/chapters'
+import { createChapter, getVersion, listVersions } from '@/server/chapters'
 
 let db: Db
 
@@ -122,6 +122,29 @@ describe('manuscript actions', () => {
     })
   })
 
+  it('keepHistory on a save adds its own history row', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const chapter = await createTestChapter(db, work.id, { position: 1 })
+    mocks.userId = owner.id
+    await saveChapterAction({ chapterId: chapter.id, body: '노트북', expectedVersion: 1 })
+    await saveChapterAction({ chapterId: chapter.id, body: '노트북 2', expectedVersion: 2 })
+    const overwrite = await saveChapterAction({
+      chapterId: chapter.id,
+      body: '폰',
+      expectedVersion: 3,
+      keepHistory: true,
+    })
+    expect(overwrite).toMatchObject({ ok: true, data: { version: 4 } })
+    // The two plain saves share one row; the keepHistory save gets its own row.
+    const versions = await listVersions(db, { userId: owner.id }, chapter.id)
+    expect(versions).toHaveLength(2)
+    const newest = await getVersion(db, { userId: owner.id }, versions[0].id)
+    const older = await getVersion(db, { userId: owner.id }, versions[1].id)
+    expect(newest.body).toBe('폰')
+    expect(older.body).toBe('노트북 2')
+  })
+
   it('rejects source restore on a plain save', async () => {
     const owner = await createTestUser(db)
     const work = await createTestWork(db, owner.id)
@@ -159,6 +182,46 @@ describe('manuscript actions', () => {
     mocks.userId = viewer.id
     const result = await restoreVersionAction({ versionId: versions[0].id, expectedVersion: 1 })
     expect(result).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  })
+
+  it('revalidates the work when the open-chapter resume point is saved', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const chapter = await createTestChapter(db, work.id, { position: 1 })
+    mocks.userId = owner.id
+    mocks.revalidatePath.mockClear()
+    const result = await saveResumePointAction({
+      workId: work.id,
+      chapterId: chapter.id,
+      path: `/works/${work.id}/chapters/${chapter.id}`,
+    })
+    expect(result.ok).toBe(true)
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/works/${work.id}`, 'layout')
+  })
+
+  it('does not revalidate on blur resume-point saves that carry a cursor', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const chapter = await createTestChapter(db, work.id, { position: 1 })
+    mocks.userId = owner.id
+    const path = `/works/${work.id}/chapters/${chapter.id}`
+    mocks.revalidatePath.mockClear()
+    await saveResumePointAction({ workId: work.id, chapterId: chapter.id, cursor: 12, path })
+    await saveResumePointAction({ workId: work.id, chapterId: chapter.id, cursor: null, path })
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    const { getResumePoint } = await import('@/server/user-state')
+    const point = await getResumePoint(db, { userId: owner.id }, work.id)
+    expect(point).toMatchObject({ chapterId: chapter.id, cursor: null })
+  })
+
+  it('keeps revalidating the work when a chapter is saved', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const chapter = await createTestChapter(db, work.id, { position: 1 })
+    mocks.userId = owner.id
+    mocks.revalidatePath.mockClear()
+    await saveChapterAction({ chapterId: chapter.id, body: '본문', expectedVersion: 1 })
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/works/${work.id}`, 'layout')
   })
 
   it('saves a resume point for a path that starts with a slash', async () => {

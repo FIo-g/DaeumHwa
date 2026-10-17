@@ -420,3 +420,228 @@ describe('extraction: extractionToProposals', () => {
     }
   })
 })
+
+describe('extraction: planted threads, name matching and existing relations', () => {
+  const plantedThread = (overrides: Partial<Extraction['threads'][number]> = {}) => ({
+    title: '검의 비밀',
+    description: '칼집 안의 글귀',
+    kind: 'planted' as const,
+    evidence: '칼집 안에 글귀가 있었다.',
+    existingThreadRef: null,
+    targetChapterPosition: null,
+    ...overrides,
+  })
+  const plannedCtx = (over: Partial<ExtractionContext> = {}) =>
+    makeCtx({
+      threadRefs: new Map([['T1', { id: 't-1', title: '검의 비밀', status: 'planned' }]]),
+      existingThreads: [{ id: 't-1', title: '검의 비밀', status: 'planned' }],
+      ...over,
+    })
+
+  it('a chapter that plants an interview-planned thread by ref gives one planted event, no thread_create', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      threads: [plantedThread({ existingThreadRef: 'T1' })],
+    }
+    const { proposals } = extractionToProposals(x, plannedCtx())
+    expect(byType(proposals, 'thread_create')).toHaveLength(0)
+    const events = byType(proposals, 'thread_event')
+    expect(events).toHaveLength(1)
+    expect(events[0].payload).toMatchObject({
+      threadId: 't-1',
+      threadTitle: '검의 비밀',
+      kind: 'planted',
+      chapterId: 'ch-5',
+    })
+  })
+
+  it('a developed mention of an interview-planned thread is recorded as the planting', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      threads: [plantedThread({ kind: 'developed', existingThreadRef: 'T1' })],
+    }
+    const { proposals } = extractionToProposals(x, plannedCtx())
+    const events = byType(proposals, 'thread_event')
+    expect(events).toHaveLength(1)
+    expect(events[0].payload.kind).toBe('planted')
+  })
+
+  it('a planted thread with no ref but the title of a planned thread matches it', () => {
+    const x: Extraction = { ...emptyExtraction, threads: [plantedThread()] }
+    const { proposals } = extractionToProposals(x, plannedCtx())
+    expect(byType(proposals, 'thread_create')).toHaveLength(0)
+    expect(byType(proposals, 'thread_event')).toHaveLength(1)
+    expect(byType(proposals, 'thread_event')[0].payload).toMatchObject({
+      threadId: 't-1',
+      kind: 'planted',
+    })
+  })
+
+  it('a planted thread whose title matches an already planted thread produces nothing', () => {
+    const x: Extraction = { ...emptyExtraction, threads: [plantedThread()] }
+    const ctx = makeCtx({
+      threadRefs: new Map(),
+      existingThreads: [{ id: 't-2', title: '검의 비밀', status: 'developing' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(proposals).toHaveLength(0)
+  })
+
+  it('an interview that repeats an existing thread title creates no thread_create', () => {
+    const x: Extraction = { ...emptyExtraction, threads: [plantedThread()] }
+    const ctx = makeCtx({
+      source: 'interview',
+      sourceRef: 'turn-2',
+      chapterId: null,
+      chapterPosition: null,
+      threadRefs: new Map(),
+      existingThreads: [{ id: 't-3', title: '검의 비밀', status: 'planted' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'thread_create')).toHaveLength(0)
+  })
+
+  it('a new entry that differs from an existing name only by its last syllable is a new entry', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [{ name: '김서은', kind: 'character', aliases: [], summary: '', fields: [] }],
+      facts: [
+        {
+          subjectName: '김서은',
+          content: '왼손잡이다.',
+          evidence: '',
+          suggestedStatus: 'confirmed',
+          supersedesFactRef: null,
+        },
+      ],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'e-seoa', name: '김서아', aliases: [], kind: 'character' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    const entries = byType(proposals, 'entry_create')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].payload.name).toBe('김서은')
+    const facts = byType(proposals, 'fact_create')
+    expect(facts).toHaveLength(1)
+    expect(facts[0].payload.entryId).toBeNull()
+  })
+
+  it('a particle on an incoming name still matches the existing card it names', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      facts: [
+        {
+          subjectName: '김서아가',
+          content: '왼손잡이다.',
+          evidence: '',
+          suggestedStatus: 'confirmed',
+          supersedesFactRef: null,
+        },
+      ],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'e-seoa', name: '김서아', aliases: [], kind: 'character' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'fact_create')[0].payload.entryId).toBe('e-seoa')
+  })
+
+  it('two new entries that share a stem keep both entries and both facts', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [
+        { name: '김서아', kind: 'character', aliases: [], summary: '', fields: [] },
+        { name: '김서은', kind: 'character', aliases: [], summary: '', fields: [] },
+      ],
+      facts: [
+        {
+          subjectName: '김서아',
+          content: '왼손잡이다.',
+          evidence: '',
+          suggestedStatus: 'confirmed',
+          supersedesFactRef: null,
+        },
+        {
+          subjectName: '김서은',
+          content: '왼손잡이다.',
+          evidence: '',
+          suggestedStatus: 'confirmed',
+          supersedesFactRef: null,
+        },
+      ],
+    }
+    const { proposals } = extractionToProposals(x, makeCtx({ existingEntries: [] }))
+    expect(byType(proposals, 'entry_create')).toHaveLength(2)
+    expect(byType(proposals, 'fact_create')).toHaveLength(2)
+  })
+
+  it('an alias-form entry after its name in the same extraction is still skipped', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [
+        { name: '하윤', kind: 'character', aliases: [], summary: '', fields: [] },
+        { name: '하윤이', kind: 'character', aliases: [], summary: '', fields: [] },
+      ],
+    }
+    const { proposals } = extractionToProposals(x, makeCtx({ existingEntries: [] }))
+    expect(byType(proposals, 'entry_create')).toHaveLength(1)
+  })
+
+  const relationOf = (sourceName: string, targetName: string) => ({
+    sourceName,
+    targetName,
+    kind: '동료',
+    description: '',
+    evidence: '',
+  })
+  const wiki = [
+    { id: 'e-seoa', name: '김서아', aliases: [], kind: 'character' as const },
+    { id: 'e-minjun', name: '민준', aliases: [], kind: 'character' as const },
+  ]
+
+  it('two different new relations of the same kind are both proposed', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      relations: [relationOf('김서아', '민준'), relationOf('김서은', '민준')],
+    }
+    const { proposals } = extractionToProposals(x, makeCtx({ existingEntries: wiki }))
+    expect(byType(proposals, 'relation_create')).toHaveLength(2)
+  })
+
+  it('a relation the wiki already has, open and in either direction, is not proposed again', () => {
+    const x: Extraction = { ...emptyExtraction, relations: [relationOf('민준', '김서아')] }
+    const ctx = makeCtx({
+      existingEntries: wiki,
+      existingRelations: [
+        {
+          sourceId: 'e-seoa',
+          targetId: 'e-minjun',
+          kind: '동료',
+          directed: false,
+          endPosition: null,
+        },
+      ],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'relation_create')).toHaveLength(0)
+  })
+
+  it('a relation that ended before this chapter does not block a new one', () => {
+    const x: Extraction = { ...emptyExtraction, relations: [relationOf('김서아', '민준')] }
+    const ctx = makeCtx({
+      existingEntries: wiki,
+      existingRelations: [
+        {
+          sourceId: 'e-seoa',
+          targetId: 'e-minjun',
+          kind: '동료',
+          directed: false,
+          endPosition: 2,
+        },
+      ],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'relation_create')).toHaveLength(1)
+  })
+})

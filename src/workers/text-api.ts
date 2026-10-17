@@ -16,6 +16,9 @@ export function createTextApi(): TextWorkerApi {
   let search: SearchIndex = buildSearchIndex([])
 
   const api: TextWorkerApi = {
+    async ping() {
+      return 'pong' as const
+    },
     async parseFile(name, bytes) {
       return parseManuscriptFile(name, bytes)
     },

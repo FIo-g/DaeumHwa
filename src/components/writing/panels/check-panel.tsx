@@ -7,14 +7,23 @@ import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { IssueRow } from '@/db/types'
+import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
 import { ISSUE_KIND_LABEL, SEVERITY_LABEL } from '@/lib/labels'
-import { runChapterCheckAction } from '@/server/actions/checks'
 import { resolveIssueAction } from '@/server/actions/issues'
+import type { ChapterCheckResult } from '@/server/chapter-check'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
 import { ApprovalDialog } from './approval-dialog'
-import { EDITOR_ONLY_NOTE, canEditChapter, rangeOf } from './shared'
+import { EDITOR_ONLY_NOTE, canEditChapter, offerUndo, rangeOf } from './shared'
 import { WikiFixDialog } from './wiki-fix-dialog'
+
+/**
+ * Only a sentence swap can be applied from here. Thread and timeline issues need a wiki or plot
+ * change, so their suggestion is advice, not a replacement.
+ */
+function canApplySuggestion(issue: IssueRow): boolean {
+  return Boolean(issue.suggestion) && issue.kind !== 'thread' && issue.kind !== 'timeline'
+}
 
 type CheckPanelProps = {
   data: WritingData
@@ -68,9 +77,15 @@ export function CheckPanel({ data, api, text }: CheckPanelProps) {
   async function runCheck() {
     setRunning(true)
     await api.saveNow()
-    const result = await runAction(runChapterCheckAction({ chapterId: data.chapter.id }), {
-      success: '점검을 마쳤습니다.',
-    })
+    // A route handler, not a Server Action: the check can run for minutes, and Server Actions
+    // run one at a time, so autosave and navigation would wait behind it.
+    const result = await runAction(
+      postAction<ChapterCheckResult>(
+        `/api/works/${data.workId}/chapters/${data.chapter.id}/check`,
+        {},
+      ),
+      { success: '점검을 마쳤습니다.' },
+    )
     setRunning(false)
     if (!result) return
     setIssues(result.issues)
@@ -94,12 +109,14 @@ export function CheckPanel({ data, api, text }: CheckPanelProps) {
   }
 
   function applyFix(issue: IssueRow) {
-    if (!issue.suggestion) return
+    if (!canApplySuggestion(issue)) return
+    const before = api.getText()
     const replaced = api.replaceQuote(issue.quote, issue.suggestion, issue.quoteStart ?? undefined)
     if (!replaced) {
       toast.error('원고가 바뀌어 문장을 찾지 못했습니다. 다시 점검해 주세요.')
       return
     }
+    offerUndo(api, before, '문장을 바꿨습니다.')
     void resolve(issue, 'accepted')
   }
 
@@ -175,7 +192,7 @@ export function CheckPanel({ data, api, text }: CheckPanelProps) {
 
               {editable && (
                 <div className="flex flex-wrap gap-2">
-                  {issue.suggestion && (
+                  {canApplySuggestion(issue) && (
                     <Button size="sm" disabled={busy} onClick={() => applyFix(issue)}>
                       제안대로 고치기
                     </Button>

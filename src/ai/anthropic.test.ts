@@ -181,6 +181,24 @@ describe('AnthropicAiClient.generateObject', () => {
     })
   })
 
+  it('attaches the billed usage to refusal, max_tokens and missing-output errors', async () => {
+    const cases = [
+      { ...okResponse(), parsed_output: null, stop_reason: 'refusal' },
+      { ...okResponse(), parsed_output: null, stop_reason: 'max_tokens' },
+      { ...okResponse(), parsed_output: null, stop_reason: 'end_turn' },
+    ]
+    for (const parseResult of cases) {
+      const { sdk } = stubSdk({ parseResult })
+      const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+      const error = await client.generateObject(baseArgs).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(AppError)
+      expect(error).toMatchObject({
+        code: 'AI_ERROR',
+        details: { usage: { inputTokens: 11, outputTokens: 22 } },
+      })
+    }
+  })
+
   it('maps a rate limit error to AI_ERROR with the reason', async () => {
     const { sdk } = stubSdk({
       parseError: new Anthropic.RateLimitError(429, undefined, 'Too many requests', new Headers()),
@@ -257,6 +275,25 @@ describe('AnthropicAiClient.streamText', () => {
     await expect(final).rejects.toMatchObject({
       code: 'AI_ERROR',
       message: 'AI가 이 요청을 처리하지 않았습니다.',
+    })
+  })
+
+  it('rejects final with AI_ERROR carrying the billed usage when the stream stops at max_tokens', async () => {
+    const { sdk } = stubSdk({ streamStop: 'max_tokens' })
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    const { final } = client.streamText({
+      system: 's',
+      prompt: 'p',
+      effort: 'low',
+      maxTokens: 100,
+      fake: () => '',
+    })
+    const error = await final.catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AppError)
+    expect(error).toMatchObject({
+      code: 'AI_ERROR',
+      message: 'AI 응답이 너무 길어 중간에 끊겼습니다.',
+      details: { usage: { inputTokens: 5, outputTokens: 6 } },
     })
   })
 

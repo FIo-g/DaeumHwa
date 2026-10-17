@@ -97,9 +97,15 @@ async function countEntries(db: Db, workId: string): Promise<number> {
   return row?.value ?? 0
 }
 
+/** Latest activity of a card: the newer of the work's own edit time and its latest chapter save. */
+function activityTime(card: WorkCard): number {
+  return Math.max(card.work.updatedAt.getTime(), card.lastEditedAt?.getTime() ?? 0)
+}
+
 /**
  * Cards for the works list: the caller's works (archived ones only with includeArchived),
- * most recently updated first. Membership is the only check, so no other works are listed.
+ * most recently active first. Chapter saves count as activity, so the order is re-sorted here
+ * after the stats are loaded. Membership is the only check, so no other works are listed.
  */
 export async function listWorksWithStats(
   db: Db,
@@ -108,7 +114,7 @@ export async function listWorksWithStats(
 ): Promise<WorkCard[]> {
   const memberships = await listMyWorks(db, actor, o)
   const today = seoulToday()
-  return Promise.all(
+  const cards = await Promise.all(
     memberships.map(async ({ role, ...work }) => {
       const [chapterStats, pendingCount, openThreadCount, alerts] = await Promise.all([
         chapterSummary(db, work.id),
@@ -128,6 +134,7 @@ export async function listWorksWithStats(
       }
     }),
   )
+  return cards.sort((a, b) => activityTime(b) - activityTime(a))
 }
 
 /** Data for the work home page. Viewer role or higher; others get NOT_FOUND. */

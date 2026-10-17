@@ -24,15 +24,17 @@ interface TextStream {
   finalMessage(): Promise<{
     content: { type: string; text?: string }[]
     stop_reason: string | null
-    usage: { input_tokens: number; output_tokens: number }
+    usage: ResponseUsage
     model: string
   }>
 }
 
+type ResponseUsage = { input_tokens: number; output_tokens: number }
+
 type ObjectResponse<T> = {
   parsed_output: T | null
   stop_reason: string | null
-  usage: { input_tokens: number; output_tokens: number }
+  usage: ResponseUsage
   model: string
 }
 
@@ -109,7 +111,7 @@ export class AnthropicAiClient implements AiClient {
         : this.sdk.messages.stream(params)
       stream.on('text', (delta: string) => channel.push(delta))
       const message = await stream.finalMessage()
-      assertStopReason(message.stop_reason)
+      assertStopReason(message.stop_reason, message.usage)
       channel.close()
       return {
         text: message.content
@@ -139,8 +141,10 @@ function objectResult<T>(response: ObjectResponse<T>): {
   usage: AiUsage
   model: string
 } {
-  assertStopReason(response.stop_reason)
-  if (response.parsed_output === null) throw new AppError('AI_ERROR', FORMAT_MESSAGE)
+  assertStopReason(response.stop_reason, response.usage)
+  if (response.parsed_output === null) {
+    throw aiErrorWithUsage(FORMAT_MESSAGE, response.usage)
+  }
   return {
     object: response.parsed_output,
     usage: usageOf(response.usage),
@@ -148,12 +152,20 @@ function objectResult<T>(response: ObjectResponse<T>): {
   }
 }
 
-function assertStopReason(stopReason: string | null): void {
-  if (stopReason === 'refusal') throw new AppError('AI_ERROR', REFUSAL_MESSAGE)
-  if (stopReason === 'max_tokens') throw new AppError('AI_ERROR', MAX_TOKENS_MESSAGE)
+function assertStopReason(stopReason: string | null, usage: ResponseUsage): void {
+  if (stopReason === 'refusal') throw aiErrorWithUsage(REFUSAL_MESSAGE, usage)
+  if (stopReason === 'max_tokens') throw aiErrorWithUsage(MAX_TOKENS_MESSAGE, usage)
 }
 
-function usageOf(usage: { input_tokens: number; output_tokens: number }): AiUsage {
+/**
+ * AI_ERROR for a call the API already billed. `details.usage` lets run.ts count those tokens;
+ * run.ts strips it before the error reaches the browser.
+ */
+function aiErrorWithUsage(message: string, usage: ResponseUsage): AppError {
+  return new AppError('AI_ERROR', message, { usage: usageOf(usage) })
+}
+
+function usageOf(usage: ResponseUsage): AiUsage {
   return { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens }
 }
 

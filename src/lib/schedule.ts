@@ -46,12 +46,19 @@ export function computeSchedule(
     }
   }
 
+  // Chapters already published today took today's slots, so the buffer starts after them.
+  let todaySlotsTaken = input.chapters.filter((c) => c.publishedOn === today).length
+
   const queue = [...buffer]
   const slots: ScheduleSlot[] = []
   for (let offset = 0; offset < horizonDays; offset++) {
     const date = addDays(today, offset)
     if (!settings.publishDays.includes(dayOfWeek(date)) || hiatusDates.has(date)) continue
     for (let k = 0; k < settings.chaptersPerPublishDay; k++) {
+      if (offset === 0 && todaySlotsTaken > 0) {
+        todaySlotsTaken -= 1
+        continue
+      }
       const next = queue.shift()
       slots.push(
         next
