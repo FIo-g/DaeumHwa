@@ -129,6 +129,7 @@ export function ThreadEventForm({ thread, chapters, onDone }: ThreadEventFormPro
             onChange={setChapterId}
             allowNone={chapterIsOptional(kind)}
             placeholder="회차 선택"
+            ariaLabel="회차"
           />
         </div>
       </div>

@@ -1,0 +1,354 @@
+{
+  "title": "잿빛 종루의 열쇠",
+  "note": "직접 지어낸 예제 작품. 실제 작품과 무관하다. 10화 중 3~10화에 정답표(answers.json)의 오기가 들어 있다.",
+  "chapters": [
+    {
+      "position": 1,
+      "title": "잿빛 종루",
+      "summary": "세린은 실종된 어머니 한서연이 남긴 편지를 도윤서에게 받는다. 편지는 봉인된 채 품에 남는다."
+    },
+    {
+      "position": 2,
+      "title": "안개 항구",
+      "summary": "세린과 도윤서는 저녁을 먹으며 종루 지하 통로 소문을 듣는다."
+    },
+    {
+      "position": 3,
+      "title": "감시관의 눈",
+      "summary": "세린은 종루 문 앞에서 감시관에게 출입을 거절당한다."
+    },
+    {
+      "position": 4,
+      "title": "보름달",
+      "summary": "보름달 밤, 세린은 고아원에서 어머니의 궤짝을 열고 짧은 쪽지를 찾는다. 백지원이 던진 은화 빚 이야기가 남는다."
+    },
+    {
+      "position": 5,
+      "title": "열한 층",
+      "summary": "세린은 고아원을 떠나 종루 숙소로 옮겨 지내기 시작한다."
+    },
+    {
+      "position": 6,
+      "title": "은화 상자",
+      "summary": "도윤서와 세린이 창고의 은화 상자를 열고 빛바랜 편지를 찾는다."
+    },
+    {
+      "position": 7,
+      "title": "늦가을",
+      "summary": "세린은 종루 계단에 앉아 지난 일을 떠올린다. 도윤서는 백지원의 밤 순찰을 경고한다."
+    },
+    {
+      "position": 8,
+      "title": "세 번의 종소리",
+      "summary": "세린은 종탑에 올라 어머니의 편지 봉인을 뜯고, 종을 울려 봉인을 한 번 푼다."
+    },
+    {
+      "position": 9,
+      "title": "그믐밤",
+      "summary": "그믐밤, 세린과 도윤서가 종루 지하 입구 앞에 서고 석문이 조금 열린다."
+    },
+    { "position": 10, "title": "새벽의 감시관", "summary": "" }
+  ],
+  "entries": [
+    {
+      "key": "serin",
+      "name": "한세린",
+      "kind": "character",
+      "aliases": ["세린"],
+      "summary": "청해항 고아원에서 자란 소녀. 어머니 한서연이 실종된 뒤 종루의 비밀을 쫓는다."
+    },
+    {
+      "key": "doyunseo",
+      "name": "도윤서",
+      "kind": "character",
+      "aliases": ["윤서"],
+      "summary": "청해항 출신의 검사. 말수가 적고 세린을 돕는다."
+    },
+    {
+      "key": "baekjiwon",
+      "name": "백지원",
+      "kind": "character",
+      "aliases": [],
+      "summary": "종루 감시관. 세린에게 은화 빚이 있다."
+    },
+    {
+      "key": "jongru",
+      "name": "잿빛 종루",
+      "kind": "place",
+      "aliases": ["종루"],
+      "summary": "청해항 언덕 위의 석조 종탑. 지하에 통로가 있다는 소문이 있다."
+    },
+    {
+      "key": "cheonghae",
+      "name": "청해항",
+      "kind": "place",
+      "aliases": [],
+      "summary": "안개가 짙은 항구 도시."
+    },
+    {
+      "key": "key",
+      "name": "은색 열쇠",
+      "kind": "item",
+      "aliases": ["열쇠"],
+      "summary": "한서연이 세린에게 남긴 열쇠. 목에 걸고 다닌다."
+    },
+    {
+      "key": "bellrule",
+      "name": "종의 규칙",
+      "kind": "rule",
+      "aliases": ["봉인 규칙"],
+      "summary": "종을 울리면 봉인이 한 번 풀린다. 종은 하루에 한 번만 울릴 수 있다."
+    },
+    {
+      "key": "silverbox",
+      "name": "은화 상자",
+      "kind": "item",
+      "aliases": [],
+      "summary": "백지원이 보관하던 상자."
+    }
+  ],
+  "facts": [
+    {
+      "entry": "serin",
+      "content": "한세린은 왼손잡이다.",
+      "status": "confirmed",
+      "sourceChapter": 1,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "serin",
+      "content": "한세린의 나이는 16살이다.",
+      "status": "confirmed",
+      "sourceChapter": 1,
+      "validFromPosition": null,
+      "validToPosition": 6
+    },
+    {
+      "entry": "serin",
+      "content": "한세린의 나이는 17살이다.",
+      "status": "confirmed",
+      "sourceChapter": 7,
+      "validFromPosition": 7,
+      "validToPosition": null
+    },
+    {
+      "entry": "serin",
+      "content": "한서연은 종루 지하로 들어간 뒤 실종되었다.",
+      "status": "confirmed",
+      "sourceChapter": 1,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "serin",
+      "content": "세린은 은색 열쇠를 목에 걸고 다닌다.",
+      "status": "confirmed",
+      "sourceChapter": 1,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "serin",
+      "content": "세린은 청해항 고아원에서 지낸다.",
+      "status": "confirmed",
+      "sourceChapter": null,
+      "validFromPosition": null,
+      "validToPosition": 4
+    },
+    {
+      "entry": "serin",
+      "content": "세린은 종루 숙소에서 지낸다.",
+      "status": "confirmed",
+      "sourceChapter": 5,
+      "validFromPosition": 5,
+      "validToPosition": null
+    },
+    {
+      "entry": "doyunseo",
+      "content": "도윤서의 나이는 27살이다.",
+      "status": "confirmed",
+      "sourceChapter": null,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "doyunseo",
+      "content": "도윤서는 단검을 오른손에 쥔다.",
+      "status": "confirmed",
+      "sourceChapter": null,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "doyunseo",
+      "content": "도윤서는 청해항 출신이다.",
+      "status": "confirmed",
+      "sourceChapter": 2,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "doyunseo",
+      "content": "도윤서는 가까운 사람에게도 말을 아낀다.",
+      "status": "assumed",
+      "sourceChapter": null,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "baekjiwon",
+      "content": "백지원은 종루 감시관이다.",
+      "status": "confirmed",
+      "sourceChapter": 1,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "baekjiwon",
+      "content": "백지원은 세린에게 은화 빚을 지고 있다.",
+      "status": "undecided",
+      "sourceChapter": 4,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "jongru",
+      "content": "잿빛 종루는 9층 높이의 석조 건물이다.",
+      "status": "confirmed",
+      "sourceChapter": 1,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "jongru",
+      "content": "세린이 종루에 처음 오른 날은 입춘이었다.",
+      "status": "confirmed",
+      "sourceChapter": 1,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "jongru",
+      "content": "종루 지하에는 봉인된 통로가 있다는 소문이 있다.",
+      "status": "assumed",
+      "sourceChapter": 2,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "cheonghae",
+      "content": "청해항은 밤마다 안개가 짙게 낀다.",
+      "status": "confirmed",
+      "sourceChapter": 2,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "cheonghae",
+      "content": "청해항 시장은 낮에만 문을 연다.",
+      "status": "confirmed",
+      "sourceChapter": null,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "key",
+      "content": "은색 열쇠는 달이 찬 밤에만 자물쇠에 꽂을 수 있다.",
+      "status": "confirmed",
+      "sourceChapter": 3,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "key",
+      "content": "은색 열쇠는 한서연이 세린에게 남긴 물건이다.",
+      "status": "confirmed",
+      "sourceChapter": 1,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "key",
+      "content": "은색 열쇠에는 가느다란 흠집이 하나 있다.",
+      "status": "assumed",
+      "sourceChapter": null,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "bellrule",
+      "content": "종을 울리면 봉인이 한 번 풀리며, 종은 하루에 한 번만 울릴 수 있다.",
+      "status": "confirmed",
+      "sourceChapter": 7,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "bellrule",
+      "content": "봉인 규칙은 청해항 문서고에 기록되어 있다.",
+      "status": "undecided",
+      "sourceChapter": null,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "silverbox",
+      "content": "은화 상자는 백지원이 보관하고 있다.",
+      "status": "confirmed",
+      "sourceChapter": 6,
+      "validFromPosition": null,
+      "validToPosition": null
+    },
+    {
+      "entry": "silverbox",
+      "content": "은화 상자의 자물쇠는 오래 잠겨 있었다.",
+      "status": "assumed",
+      "sourceChapter": null,
+      "validFromPosition": null,
+      "validToPosition": null
+    }
+  ],
+  "threads": [
+    {
+      "title": "어머니의 편지 봉인",
+      "description": "한서연이 남긴 편지의 봉인. 세린이 뜯기 전까지 내용은 드러나지 않는다.",
+      "status": "planted",
+      "plantedChapter": 1,
+      "targetChapter": 8,
+      "importance": "high"
+    },
+    {
+      "title": "종루 지하 통로",
+      "description": "종루 지하에 통로가 있다는 소문. 입구를 찾는 것이 목표다.",
+      "status": "planted",
+      "plantedChapter": 2,
+      "targetChapter": 9,
+      "importance": "high"
+    },
+    {
+      "title": "백지원의 은화 빚",
+      "description": "백지원이 세린에게 진 은화 빚. 언제 갚는지가 남았다.",
+      "status": "planted",
+      "plantedChapter": 4,
+      "targetChapter": 10,
+      "importance": "medium"
+    },
+    {
+      "title": "청해항 밀수선",
+      "description": "항구에 드나드는 밀수선. 아직 본문에 나오지 않았다.",
+      "status": "planned",
+      "plantedChapter": null,
+      "targetChapter": 10,
+      "importance": "low"
+    }
+  ],
+  "namingRules": [
+    {
+      "canonical": "백지원",
+      "variants": ["백지연"],
+      "note": "종루 감시관. 이름 한 글자 오기에 주의한다."
+    },
+    { "canonical": "한세린", "variants": ["한새린"], "note": "주인공 이름." }
+  ]
+}

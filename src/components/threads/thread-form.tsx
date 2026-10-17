@@ -177,6 +177,7 @@ export function ThreadForm({
                 value={plantedChapterId}
                 onChange={setPlantedChapterId}
                 placeholder="심은 회차 선택"
+                ariaLabel="심은 회차"
               />
             </div>
           )}

@@ -1,7 +1,9 @@
+import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeAiClient } from '@/ai/fake'
 import { setAiClientForTests } from '@/ai'
 import type { Db } from '@/db/client'
+import { aiRuns } from '@/db/schema'
 import { createTestDb } from '@/test/db'
 import { createTestUser, createTestWork } from '@/test/factories'
 
@@ -83,5 +85,30 @@ describe('POST /api/works/[workId]/draft', () => {
     expect(res.headers.get('x-run-id')).toMatch(/^[0-9a-f-]{36}$/)
     const text = await res.text()
     expect(text.startsWith('(데모 초안) ')).toBe(true)
+  })
+
+  it('marks the run done before the body closes', async () => {
+    // The final result settles after the text has streamed, like a real provider's usage report.
+    class SlowFinalClient extends FakeAiClient {
+      override streamText(args: Parameters<FakeAiClient['streamText']>[0]) {
+        const stream = super.streamText(args)
+        const final = stream.final.then(
+          (result) => new Promise<typeof result>((resolve) => setTimeout(() => resolve(result), 50)),
+        )
+        return { textStream: stream.textStream, final }
+      }
+    }
+    setAiClientForTests(new SlowFinalClient())
+    const res = await POST(
+      request({ instructions: '서윤이 편지를 발견한다.', entryIds: [] }),
+      context(workId),
+    )
+    const runId = res.headers.get('x-run-id') ?? ''
+    await res.text()
+    const [run] = await (state.db as Db)
+      .select({ status: aiRuns.status })
+      .from(aiRuns)
+      .where(eq(aiRuns.id, runId))
+    expect(run?.status).toBe('done')
   })
 })

@@ -1,0 +1,38 @@
+{
+  "expected": [
+    { "chapter": 3, "quoteIncludes": "백지연 감시관은", "kind": "naming" },
+    { "chapter": 4, "quoteIncludes": "세린은 오른손으로 열쇠를 돌렸다", "kind": "contradiction" },
+    { "chapter": 5, "quoteIncludes": "종루는 열한 층으로 솟아 있었다", "kind": "contradiction" },
+    {
+      "chapter": 6,
+      "quoteIncludes": "청해항 밀수선의 출항 기록이 적혀 있었다",
+      "kind": "thread"
+    },
+    {
+      "chapter": 7,
+      "quoteIncludes": "세린이 종루에 처음 오른 것은 늦가을이었다",
+      "kind": "timeline"
+    },
+    { "chapter": 8, "quoteIncludes": "세린은 종을 세 번 연달아 울렸다", "kind": "contradiction" },
+    { "chapter": 9, "quoteIncludes": "한새린은 문을 밀고", "kind": "naming" },
+    {
+      "chapter": 9,
+      "quoteIncludes": "세린은 은색 열쇠를 자물쇠에 꽂았다",
+      "kind": "contradiction"
+    },
+    { "chapter": 9, "quoteIncludes": "도윤서는 왼손에 단검을 쥐고", "kind": "contradiction" },
+    { "chapter": 10, "quoteIncludes": "25살의 도윤서는", "kind": "contradiction" },
+    {
+      "chapter": 10,
+      "quoteIncludes": "백지원은 종루 감시관이 아니라 상인이었다",
+      "kind": "contradiction"
+    }
+  ],
+  "notDefects": [
+    {
+      "chapter": 7,
+      "quoteIncludes": "세린은 17살이 된 뒤로",
+      "reason": "나이 변화가 위키의 유효 범위(16살 1~6화, 17살 7화부터)로 설명되는 정상 전개다. 지적하면 오탐이다."
+    }
+  ]
+}

@@ -41,7 +41,7 @@ export async function POST(
   }
 
   try {
-    const { runId, textStream } = await startDraft(
+    const { runId, textStream, done } = await startDraft(
       getDb(),
       { userId: user.id },
       { workId, ...parsed.data },
@@ -51,6 +51,9 @@ export async function POST(
       async start(controller) {
         try {
           for await (const chunk of textStream) controller.enqueue(encoder.encode(chunk))
+          // The ai_runs row is marked done only when `done` settles. Waiting here means that
+          // once the client has read the whole body, createChapterFromDraft sees a finished run.
+          await done
           controller.close()
         } catch (error) {
           controller.error(error)

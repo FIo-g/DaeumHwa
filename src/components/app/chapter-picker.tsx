@@ -16,6 +16,10 @@ type ChapterPickerProps = {
   /** Adds a "없음" item that maps to null. */
   allowNone?: boolean
   placeholder?: string
+  /** Forwarded to the trigger so the picker has a DOM id (for <label htmlFor>). */
+  id?: string
+  /** Accessible name for the trigger when no visible label is associated with it. */
+  ariaLabel?: string
 }
 
 const NONE = '__none__'
@@ -27,6 +31,8 @@ export function ChapterPicker({
   onChange,
   allowNone = false,
   placeholder = '회차 선택',
+  id,
+  ariaLabel,
 }: ChapterPickerProps) {
   const labels = new Map(chapters.map((c) => [c.id, chapterLabel(c.position, c.title)]))
   return (
@@ -37,7 +43,7 @@ export function ChapterPicker({
         else onChange(next)
       }}
     >
-      <SelectTrigger className="min-w-40">
+      <SelectTrigger id={id} aria-label={ariaLabel} className="min-w-40">
         <SelectValue>
           {(selected: string | null) => {
             if (selected === NONE) return '없음'
