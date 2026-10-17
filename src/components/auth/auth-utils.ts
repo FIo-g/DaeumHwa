@@ -1,9 +1,15 @@
 export type AuthMode = 'login' | 'signup'
 
 const GENERIC_ERROR = '잠시 후 다시 시도해 주세요.'
+const RATE_LIMIT_ERROR = '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'
 
-/** Maps a Better Auth error code to a short Korean message for the auth form. */
-export function authErrorMessage(mode: AuthMode, code: string | null | undefined): string {
+/** The error part of a Better Auth client result. A rate-limited request has no code. */
+export type AuthError = { code?: string | null; status?: number | null }
+
+/** Maps a Better Auth error to a short Korean message for the auth form. */
+export function authErrorMessage(mode: AuthMode, error: AuthError | null | undefined): string {
+  if (error?.status === 429) return RATE_LIMIT_ERROR
+  const code = error?.code
   if (mode === 'login' && code === 'INVALID_EMAIL_OR_PASSWORD') {
     return '이메일 또는 비밀번호가 맞지 않습니다.'
   }

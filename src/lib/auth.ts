@@ -19,6 +19,10 @@ function createAuth() {
       minPasswordLength: 8,
       autoSignIn: true,
     },
+    // Better Auth limits sign-in and sign-up to 3 requests per IP every 10 seconds in production.
+    // The e2e server sets AUTH_RATE_LIMIT=off because every test shares one IP. Leave it unset
+    // anywhere else.
+    rateLimit: process.env.AUTH_RATE_LIMIT === 'off' ? { enabled: false } : undefined,
     plugins: [nextCookies()],
   })
 }

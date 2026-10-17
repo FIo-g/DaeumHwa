@@ -34,7 +34,7 @@ export function AuthForm({ mode, next }: AuthFormProps) {
         ? await authClient.signUp.email({ name: String(form.get('name') ?? ''), email, password })
         : await authClient.signIn.email({ email, password })
       if (result.error) {
-        setError(authErrorMessage(mode, result.error.code))
+        setError(authErrorMessage(mode, result.error))
         return
       }
       router.replace(next ?? '/works')

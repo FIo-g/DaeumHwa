@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "e2e:server": "rm -rf .data/e2e && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=fake BETTER_AUTH_URL=http://localhost:3100 pnpm db:migrate && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=fake BETTER_AUTH_URL=http://localhost:3100 next build && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=fake BETTER_AUTH_URL=http://localhost:3100 next start -p 3100",
+    "e2e:server": "rm -rf .data/e2e && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=fake AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 pnpm db:migrate && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=fake AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 next build && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=fake AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 next start -p 3100",
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate-cli.ts",

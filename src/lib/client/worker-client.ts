@@ -5,7 +5,7 @@ import type { SplitChapter, SplitMethod } from '@/lib/import/split'
 import type { Mention, MentionTarget } from '@/lib/korean/mentions'
 import type { ScheduleResult } from '@/lib/schedule'
 import type { SearchItem } from '@/lib/search'
-import { createTextApi } from '@/workers/text.worker'
+import { createTextApi } from '@/workers/text-api'
 
 export interface TextWorkerApi {
   parseFile(

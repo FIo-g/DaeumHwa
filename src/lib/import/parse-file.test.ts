@@ -26,6 +26,12 @@ describe('parseManuscriptFile', () => {
     )
   })
 
+  it('rejects a DOCX file that cannot be read with a Korean message', async () => {
+    await expect(parseManuscriptFile('원고.docx', buf('not a zip file'))).rejects.toThrow(
+      'DOCX 파일을 읽지 못했습니다. 파일이 손상되지 않았는지 확인해 주세요.',
+    )
+  })
+
   it('rejects unknown extensions', async () => {
     await expect(parseManuscriptFile('image.png', buf(''))).rejects.toThrow(
       '지원하지 않는 파일 형식입니다. TXT, MD, DOCX 파일을 올려 주세요.',

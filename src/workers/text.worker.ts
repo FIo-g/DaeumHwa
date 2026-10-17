@@ -1,50 +1,8 @@
 import * as Comlink from 'comlink'
-import type { TextWorkerApi } from '@/lib/client/worker-client'
-import { buildBackupFiles, zipBackup } from '@/lib/backup'
-import { diffTexts } from '@/lib/diff'
-import { parseManuscriptFile } from '@/lib/import/parse-file'
-import { splitChapters } from '@/lib/import/split'
-import { findMentions } from '@/lib/korean/mentions'
-import { computeSchedule } from '@/lib/schedule'
-import { buildSearchIndex, searchIndex, type SearchIndex } from '@/lib/search'
+import { createTextApi } from '@/workers/text-api'
 
-/**
- * CPU-heavy client work: file parsing, chapter splitting, diff, backup zip, schedule, search.
- * The same implementation runs in-thread when Web Workers are unavailable.
- */
-export function createTextApi(): TextWorkerApi {
-  let search: SearchIndex = buildSearchIndex([])
-
-  const api: TextWorkerApi = {
-    async parseFile(name, bytes) {
-      return parseManuscriptFile(name, bytes)
-    },
-    async splitChapters(text, options) {
-      return splitChapters(text, options)
-    },
-    async diffTexts(a, b, mode) {
-      return diffTexts(a, b, mode)
-    },
-    async buildBackupZip(payload) {
-      return zipBackup(buildBackupFiles(payload))
-    },
-    async findMentions(text, targets) {
-      return findMentions(text, targets)
-    },
-    async computeSchedule(input, today) {
-      return computeSchedule(input, today)
-    },
-    async setSearchItems(items) {
-      search = buildSearchIndex(items)
-    },
-    async search(query, limit) {
-      return searchIndex(search, query, limit)
-    },
-  }
-  return api
-}
-
-// Expose the API only inside a dedicated worker (self exists, window does not).
-if (typeof window === 'undefined' && typeof self !== 'undefined') {
-  Comlink.expose(createTextApi())
-}
+// Entry point of the dedicated text worker, loaded by `src/lib/client/worker-client.ts`.
+// It only runs inside the worker, so it exposes the API unconditionally. Do not guard this
+// with `typeof window`: Next.js replaces that expression with "object" in client bundles,
+// so such a guard is always false and the worker never answers.
+Comlink.expose(createTextApi())

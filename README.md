@@ -41,6 +41,7 @@ pnpm dev                     # http://localhost:3000
 | --- | --- |
 | `BETTER_AUTH_SECRET` | 로그인 세션 암호화 키. 32자 이상 무작위 문자열 |
 | `BETTER_AUTH_URL` | 앱 공개 주소. 로컬은 `http://localhost:3000` |
+| `AUTH_RATE_LIMIT` | `off` 면 로그인·가입 요청 제한을 끕니다. 제한은 운영 빌드에서 IP당 10초에 3회로 걸립니다. e2e 테스트 전용이며 비워 둡니다 |
 | `DATABASE_URL` | Postgres 연결 주소. 없으면 PGlite 파일 DB를 씁니다 |
 | `PGLITE_DATA_DIR` | PGlite 데이터 폴더. 기본값은 `.data/pglite` |
 | `ANTHROPIC_API_KEY` | Anthropic API 키. 서버에서만 읽습니다 |

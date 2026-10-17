@@ -35,7 +35,7 @@ export function WritingSidePanel({ data, api, text, position }: WritingSidePanel
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-3">
         <TabsList
           aria-label="작업 패널 탭"
-          className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0"
+          className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0 group-data-horizontal/tabs:h-auto"
         >
           {TABS.map((item) => (
             <TabsTrigger

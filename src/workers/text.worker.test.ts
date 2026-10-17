@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTextApi } from '@/workers/text.worker'
+import { createTextApi } from '@/workers/text-api'
 
 describe('createTextApi', () => {
   it('splits, searches and computes schedules through one API', async () => {
