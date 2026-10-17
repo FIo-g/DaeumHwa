@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { headers } from 'next/headers'
 import { DemoBanner } from '@/components/app/demo-banner'
+import { ModelNotice } from '@/components/app/model-notice'
 import { TopBar } from '@/components/app/top-bar'
 import { requirePageUser } from '@/server/session'
 
@@ -12,6 +13,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex flex-1 flex-col">
       <TopBar user={user} />
       <DemoBanner />
+      <ModelNotice />
       <main className="flex flex-1 flex-col">{children}</main>
     </div>
   )

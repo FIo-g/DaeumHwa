@@ -18,3 +18,11 @@ export function providerImportModel(provider: AiProvider): string {
   const name = provider === 'opencode' ? 'OPENCODE_MODEL_IMPORT' : 'ANTHROPIC_MODEL_IMPORT'
   return envModel(name) ?? providerDefaultModel(provider)
 }
+
+/**
+ * True for OpenCode Go "Contributor" models. Their provider may use prompts and completions for
+ * model training (not zero data retention), so the app warns before sending manuscript text.
+ */
+export function isTrainingDataModel(model: string): boolean {
+  return model.toLowerCase().includes('contributor')
+}

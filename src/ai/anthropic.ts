@@ -15,9 +15,9 @@ const FALLBACK_MODELS = new Set([
   'claude-sonnet-5-5',
 ])
 
-const REFUSAL_MESSAGE = 'AI가 이 요청을 처리하지 않았습니다.'
-const MAX_TOKENS_MESSAGE = 'AI 응답이 너무 길어 중간에 끊겼습니다.'
-const FORMAT_MESSAGE = 'AI 응답 형식이 올바르지 않습니다.'
+export const REFUSAL_MESSAGE = 'AI가 이 요청을 처리하지 않았습니다.'
+export const MAX_TOKENS_MESSAGE = 'AI 응답이 너무 길어 중간에 끊겼습니다.'
+export const FORMAT_MESSAGE = 'AI 응답 형식이 올바르지 않습니다.'
 const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
 
 export interface AnthropicClientOptions {
@@ -270,7 +270,7 @@ export class AnthropicAiClient implements AiClient {
   }
 }
 
-function systemBlocks(text: string) {
+export function systemBlocks(text: string) {
   return [{ type: 'text' as const, text, cache_control: { type: 'ephemeral' as const } }]
 }
 
@@ -286,7 +286,7 @@ function isStructuredOutputRejection(error: unknown): boolean {
 }
 
 /** Instruction appended to the prompt in JSON mode; the schema is derived from the zod schema. */
-function jsonInstruction(schema: z.ZodType): string {
+export function jsonInstruction(schema: z.ZodType): string {
   return [
     'Respond with only one JSON object that matches this JSON Schema.',
     'Do not add explanations or code fences.',
@@ -299,7 +299,7 @@ function textOf(content: { type: string; text?: string }[]): string {
 }
 
 /** Parses the first JSON object in `text` and checks it against the schema. */
-function safeParseAnswer<T>(
+export function safeParseAnswer<T>(
   schema: z.ZodType<T>,
   text: string,
 ): { success: true; data: T } | { success: false } {
@@ -407,7 +407,7 @@ function toAiError(error: unknown, billed: AiUsage = NO_USAGE): AppError {
  * Single-consumer buffer that turns push-style text deltas into an async iterable. Text pushed
  * before anyone reads is kept, so a caller may await `final` first and read the text afterwards.
  */
-class TextChannel {
+export class TextChannel {
   private readonly queue: string[] = []
   private waiter: (() => void) | null = null
   private closed = false

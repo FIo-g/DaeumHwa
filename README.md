@@ -48,9 +48,11 @@ pnpm dev                     # http://localhost:3000
 | `ANTHROPIC_MODEL`                          | Anthropic 기본 AI 모델. 기본값은 `claude-haiku-5-5`                                                                                                                        |
 | `ANTHROPIC_MODEL_IMPORT`                   | Anthropic 원고 가져오기 전용 모델. 없으면 `ANTHROPIC_MODEL`                                                                                                                |
 | `OPENCODE_API_KEY`                         | OpenCode Go API 키. 서버에서만 읽습니다. `Authorization: Bearer` 로 보냅니다                                                                                               |
-| `OPENCODE_MODEL`                           | OpenCode Go 기본 AI 모델. 기본값은 `claude-haiku-5-5`. Anthropic 형식 모델만 씁니다 (예: `claude-haiku-5-5`, `qwen3.8-flash`, `qwen3.8-max`)                               |
+| `OPENCODE_MODEL`                           | OpenCode Go 기본 AI 모델. 기본값은 `claude-haiku-5-5`. Anthropic 형식과 OpenAI(Responses) 형식 모델을 모두 씁니다. 형식은 모델 이름으로 자동 정합니다                      |
 | `OPENCODE_MODEL_IMPORT`                    | OpenCode Go 원고 가져오기 전용 모델. 없으면 `OPENCODE_MODEL`                                                                                                               |
-| `OPENCODE_BASE_URL`                        | OpenCode Go 주소 재정의. 기본값은 `https://opencode.ai/inference/go/anthropic`                                                                                             |
+| `OPENCODE_BASE_URL`                        | OpenCode Go Anthropic 형식 주소 재정의. 기본값은 `https://opencode.ai/inference/go/anthropic`                                                                              |
+| `OPENCODE_OPENAI_BASE_URL`                 | OpenCode Go OpenAI(Responses) 형식 주소 재정의. 기본값은 `https://opencode.ai/inference/go/openai/v1`                                                                      |
+| `OPENCODE_API_FORMAT`                      | `anthropic` 또는 `responses` 로 모든 OpenCode 모델의 API 형식을 강제합니다. 비우면 모델 이름으로 정합니다. 다른 값은 무시합니다                                            |
 | `AI_PROVIDER`                              | `anthropic`, `opencode`, `fake` 중 하나를 강제합니다. `fake` 면 키가 있어도 데모 응답을 씁니다. 비워 두면 `ANTHROPIC_API_KEY`, 다음으로 `OPENCODE_API_KEY` 유무로 정합니다 |
 | `AI_DAILY_TOKEN_LIMIT`                     | 사용자당 하루 AI 토큰 한도. 기본값은 3,000,000                                                                                                                             |
 | `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` | 원고 가져오기 백그라운드 작업용 (선택). `INNGEST_DEV` 를 쓰지 않으면 서명 키도 필요합니다                                                                                  |
@@ -61,7 +63,12 @@ pnpm dev                     # http://localhost:3000
 - `ANTHROPIC_API_KEY` 와 `OPENCODE_API_KEY` 가 모두 없거나 `AI_PROVIDER=fake` 이면 **데모 모드**로 동작합니다. 모든 화면과 흐름은 쓸 수 있고, AI 응답은 미리 정해진 예시입니다. 화면 위에 데모 안내 배너가 뜹니다.
 - 실제 AI를 쓰려면 `ANTHROPIC_API_KEY` 또는 `OPENCODE_API_KEY` 중 하나를 설정합니다. 둘 다 있으면 Anthropic을 씁니다. OpenCode를 우선하려면 `AI_PROVIDER=opencode` 를 설정합니다.
 - 기본 모델은 두 공급자 모두 `claude-haiku-5-5` 입니다. 원고 가져오기만 다른 모델을 쓰게 하려면 `ANTHROPIC_MODEL_IMPORT` 또는 `OPENCODE_MODEL_IMPORT` 를 설정합니다.
-- OpenCode Go 는 Anthropic 호환 엔드포인트만 씁니다. 그 형식을 쓰는 모델(`claude-haiku-5-5`, `qwen3.8-flash`, `qwen3.8-max`, `minimax-m3`, `qwen3.7-plus`)만 `OPENCODE_MODEL` 로 지정할 수 있습니다. OpenAI·Gemini 형식 모델은 지원하지 않습니다. 게이트웨이가 구조화 출력(`output_config`)을 거부하거나 JSON이 아닌 답을 주면 한 번 JSON 텍스트 모드로 다시 요청합니다. `qwen3.7-plus` 는 처음부터 JSON 텍스트 모드로 요청합니다.
+- OpenCode Go 는 두 가지 API 형식을 씁니다. Anthropic 호환(`/v1/messages`)과 OpenAI Responses(`/responses`)입니다. 호출마다 모델 이름으로 형식을 고르므로, `OPENCODE_MODEL` 과 `OPENCODE_MODEL_IMPORT` 가 서로 다른 형식이어도 됩니다. `OPENCODE_API_FORMAT` 으로 모든 모델의 형식을 강제할 수 있습니다.
+- Anthropic 형식 모델: `claude-haiku-5-5`, `qwen3.8-flash`, `qwen3.8-max`, `minimax-m3`, `qwen3.7-plus`. 게이트웨이가 구조화 출력(`output_config`)을 거부하거나 JSON이 아닌 답을 주면 한 번 JSON 텍스트 모드로 다시 요청합니다. `qwen3.7-plus` 는 처음부터 JSON 텍스트 모드로 요청합니다.
+- OpenAI Responses 형식 모델: `gpt-6-luna`, `gpt-5.6-luna`, `grok-4.7`, `muse-spark-1.3-contributor`, `muse-spark-1.2-contributor`. 이름이 `gpt-`, `grok-`, `muse-` 로 시작하면 이 형식으로 보냅니다. 구조화 출력이 거부되면 JSON 텍스트 모드로, 추론 설정(`reasoning`)이 거부되면 추론 설정 없이 한 번 다시 요청합니다.
+- **모델 학습 주의**: `*-contributor` 모델(`muse-spark-1.3-contributor`, `muse-spark-1.2-contributor`)은 보낸 프롬프트와 응답이 모델 학습에 쓰일 수 있습니다(ZDR 아님). 공개 전 원고나 설정을 보낸다면 다른 모델을 쓰세요. 기본 모델 또는 가져오기 모델이 이런 모델이면 화면 상단에 경고가 뜹니다. `claude-haiku-5-5`, `gpt-6-luna`, `gpt-5.6-luna`, `grok-4.7` 은 학습에 쓰지 않고 30일 보관합니다.
+- Muse Spark 모델은 지역 제한이 있습니다. 한국에서의 제공 여부는 확인되지 않았습니다. 호출이 실패하면 다른 모델을 쓰세요.
+- `gemini-4-argon-contributor` 같은 Gemini Contributor 모델도 학습 경고 대상이지만, 이 앱의 형식 자동 선택 목록에는 없습니다.
 - 원고 가져오기는 Inngest 키가 없으면 브라우저가 50화 단위로 나눠 단계별로 진행합니다. 키가 있으면 백그라운드에서 진행합니다.
 
 ## 명령어
@@ -103,7 +110,7 @@ src/
   app/          Next.js 라우트 (페이지, 라우트 핸들러)
   server/       도메인 서비스 (fn(db, actor, input)) 와 server actions
   db/           Drizzle 스키마, DB 연결, 타입
-  ai/           AI 클라이언트 (Anthropic / Fake), 작업 정의, 실행기
+  ai/           AI 클라이언트 (Anthropic / OpenAI Responses / Fake), 작업 정의, 실행기
   lib/          순수 유틸리티 (한글 처리, 가져오기 파싱, 날짜, 백업 등)
   workers/      원고 나누기 등 무거운 작업용 Web Worker
   components/   화면 컴포넌트 (ui/ 는 shadcn 기반)
