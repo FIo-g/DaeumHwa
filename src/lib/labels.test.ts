@@ -52,4 +52,17 @@ describe('labels', () => {
     expect(chapterLabel(3, '재회')).toBe('3화 재회')
     expect(chapterLabel(2, '')).toBe('2화')
   })
+
+  it('strips only the chapter own number when a position is given', () => {
+    expect(stripEpisodePrefix('3화 이후의 이야기', 3)).toBe('이후의 이야기')
+    expect(stripEpisodePrefix('제3화: 재회', 3)).toBe('재회')
+    expect(stripEpisodePrefix('2화 이후의 이야기', 3)).toBe('2화 이후의 이야기')
+    expect(stripEpisodePrefix('5화 끝', 3)).toBe('5화 끝')
+  })
+
+  it('chapterLabel keeps a title whose leading number is another chapter number', () => {
+    expect(chapterLabel(12, '1화 회상')).toBe('12화 1화 회상')
+    expect(chapterLabel(12, '12화 기념 특집')).toBe('12화 기념 특집')
+    expect(chapterLabel(3, '2화 이후의 이야기')).toBe('3화 2화 이후의 이야기')
+  })
 })

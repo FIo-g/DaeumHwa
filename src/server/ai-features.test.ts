@@ -285,7 +285,7 @@ describe('draft', () => {
     const chapter = await createChapterFromDraft(db, actor, {
       workId,
       runId,
-      title: '3화 초안',
+      title: '1화 초안',
     })
     expect(chapter.body).toBe(text)
     expect(chapter.title).toBe('초안')

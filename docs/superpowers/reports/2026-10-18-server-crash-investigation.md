@@ -105,3 +105,12 @@ RSS 단위는 MB다. 관측한 프로세스는 `next start`의 서버 프로세�
 - 한 계정, 한 브라우저 컨텍스트로 실행했다. 여러 사용자가 동시에 쓰는 경우는 확인하지 않았다.
 - `next dev`는 `.next/dev` 잠금 때문에 저장소에서 바로 띄울 수 없었다. 사용자의 기존 `next dev`(포트 3000)가 같은 디렉터리의 잠금을 쥐고 있었기 때문이다. 같은 소스(HEAD)를 임시 복사본에 옮겨 띄웠다. 그래서 `next dev` 로그는 저장소의 `.data/stress/server.log`가 아니라 세션 작업 폴더(`/private/tmp/claude-501/-Users-taehyeong-Documents-GitHub-DaeumHwa/b25caf32-cb39-4cfa-b0f0-1cf294a16c8e/scratchpad/dev-server-2.log`)에 있다. 복사본 자체는 삭제했다.
 - 원시 결과 JSON은 세션 작업 폴더(`/private/tmp/claude-501/-Users-taehyeong-Documents-GitHub-DaeumHwa/b25caf32-cb39-4cfa-b0f0-1cf294a16c8e/scratchpad/result-start-4.json`, `.../result-dev-2.json`)에 있다.
+
+## 7. 관계 그래프 캔버스 (정상 구조, 층 3장)
+
+원래 문제 제기: 관계 그래프 화면에 캔버스가 겹쳐 보인다는 의심. 결론: 정상 구조(층 3장)다.
+
+- `src/components/graph/relation-graph.tsx`는 데이터가 바뀔 때마다 cytoscape를 한 번 만든다(`useEffect([nodes, edges])`). 정리 함수가 이전 인스턴스를 `destroy()` 하므로 화면에 cytoscape 인스턴스는 하나만 남는다.
+- 같은 크기의 캔버스 3장은 cytoscape 3.34.4의 기본 2d 렌더러 층이다. `data-id`는 `layer0-selectbox`(선택 상자), `layer1-drag`(드래그), `layer2-node`(노드)다. WebGL 층(`layer3-webgl`)은 옵션을 켤 때만 생기고 이 화면은 켜지 않는다.
+- `e2e/graph-and-export.spec.ts`가 두 가지를 확인한다. 그래프 화면에서 `canvas[data-id="layer2-node"]`가 정확히 1개이고, 설정 보드 탭을 떠났다가 다시 돌아와도 1개다. 노드 층이 두 개면 인스턴스가 두 번 만들어진 것이므로 이 검사가 그 경우를 잡는다.
+- 이 보고서의 다른 절(서버 다운)과 별개로, 그래프 쪽은 재현 실험을 하지 않았고 위 구조 확인과 e2e 검사로 판단했다.

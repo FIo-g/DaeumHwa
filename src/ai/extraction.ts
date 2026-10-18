@@ -146,10 +146,14 @@ function isRoleName(name: string): boolean {
  * Names and aliases of cards, looked up by a name from the model. Exact and particle-stripped
  * forms match any card. The last word of a spaced name matches character cards only, and only
  * when the incoming kind is character or unknown ("북쪽 시계탑" never joins a place "시계탑").
+ * The last word of a spaced character card name also works the other way: a bare "노은하" finds
+ * "전직 시계탑 수리공 노은하", whichever of the two came first.
  */
 class NameIndex<T> {
   private readonly all = new Map<string, T>()
   private readonly characters = new Map<string, T>()
+  /** Last word of a spaced character card name, looked up by a single-word name. Never written out. */
+  private readonly lastWords = new Map<string, T>()
 
   /** The first item registered under a name wins. `kind` is the kind of the item's card. */
   add(names: string[], item: T, kind: EntryKind | undefined): void {
@@ -161,15 +165,40 @@ class NameIndex<T> {
     }
   }
 
-  find(name: string, kind: EntryKind | undefined): T | undefined {
+  /** Registers a card's own name, which also makes its last word a lookup key. Aliases use `add`. */
+  addCard(name: string, item: T, kind: EntryKind | undefined): void {
+    this.add([name], item, kind)
+    const key = name.trim()
+    const words = key.split(/\s+/)
+    if (kind === 'character' && words.length >= 2 && !this.lastWords.has(words[words.length - 1])) {
+      this.lastWords.set(words[words.length - 1], item)
+    }
+  }
+
+  /**
+   * `lastWord: false` limits the lookup to exact and particle-stripped forms. Aliases use it, so
+   * a long alias does not merge a different person through its last word.
+   */
+  find(
+    name: string,
+    kind: EntryKind | undefined,
+    options: { lastWord?: boolean } = {},
+  ): T | undefined {
     for (const form of nameCandidates(name)) {
       const hit = this.all.get(form)
       if (hit) return hit
     }
+    if (options.lastWord === false || (kind !== undefined && kind !== 'character')) return undefined
     const words = name.trim().split(/\s+/)
-    if (words.length < 2 || (kind !== undefined && kind !== 'character')) return undefined
-    for (const form of nameCandidates(words[words.length - 1])) {
-      const hit = this.characters.get(form)
+    if (words.length >= 2) {
+      for (const form of nameCandidates(words[words.length - 1])) {
+        const hit = this.characters.get(form)
+        if (hit) return hit
+      }
+      return undefined
+    }
+    for (const form of nameCandidates(name)) {
+      const hit = this.lastWords.get(form)
       if (hit) return hit
     }
     return undefined
@@ -226,19 +255,29 @@ export function extractionToProposals(
   // Cards a name can refer to, searched in this order: wiki cards, pending entry_create
   // proposals, then names created earlier in this extraction.
   const wiki = new NameIndex<ExistingEntry>()
-  for (const e of ctx.existingEntries) wiki.add([e.name, ...e.aliases], e, e.kind)
+  for (const e of ctx.existingEntries) {
+    wiki.addCard(e.name, e, e.kind)
+    wiki.add(e.aliases, e, e.kind)
+  }
   const pending = new NameIndex<string>()
-  for (const p of ctx.pendingEntries ?? []) pending.add([p.name, ...p.aliases], p.name, p.kind)
+  for (const p of ctx.pendingEntries ?? []) {
+    pending.addCard(p.name, p.name, p.kind)
+    pending.add(p.aliases, p.name, p.kind)
+  }
   const created = new NameIndex<string>()
 
   type Hit =
     { source: 'wiki'; entry: ExistingEntry } | { source: 'pending' | 'created'; name: string }
-  const locate = (name: string, kind: EntryKind | undefined): Hit | undefined => {
-    const entry = wiki.find(name, kind)
+  const locate = (
+    name: string,
+    kind: EntryKind | undefined,
+    options: { lastWord?: boolean } = {},
+  ): Hit | undefined => {
+    const entry = wiki.find(name, kind, options)
     if (entry) return { source: 'wiki', entry }
-    const pendingName = pending.find(name, kind)
+    const pendingName = pending.find(name, kind, options)
     if (pendingName !== undefined) return { source: 'pending', name: pendingName }
-    const createdName = created.find(name, kind)
+    const createdName = created.find(name, kind, options)
     if (createdName !== undefined) return { source: 'created', name: createdName }
     return undefined
   }
@@ -246,6 +285,11 @@ export function extractionToProposals(
   const identityOf = (name: string, hit: Hit | undefined): string => {
     if (!hit) return `name:${name}`
     return hit.source === 'wiki' ? `wiki:${hit.entry.id}` : `${hit.source}:${hit.name}`
+  }
+  // The name written into a proposal: the card's own name when the name matched one, else as given.
+  const canonicalName = (name: string, hit: Hit | undefined): string => {
+    if (!hit) return name
+    return hit.source === 'wiki' ? hit.entry.name : hit.name
   }
   // Kind of an extracted entry with this name, when the extraction has one.
   const kindOfEntry = (name: string): EntryKind | undefined => {
@@ -265,12 +309,17 @@ export function extractionToProposals(
     const aliases: string[] = []
     for (const raw of e.aliases) {
       const alias = raw.trim()
-      if (alias && alias !== name && !aliases.includes(alias)) aliases.push(alias)
+      if (alias && alias !== name && !isRoleName(alias) && !aliases.includes(alias)) {
+        aliases.push(alias)
+      }
     }
 
     if (locate(name, e.kind)) continue
 
-    const aliasHit = aliases.map((alias) => locate(alias, e.kind)).find((hit) => hit !== undefined)
+    // Aliases match exactly or after a particle only (see NameIndex.find).
+    const aliasHit = aliases
+      .map((alias) => locate(alias, e.kind, { lastWord: false }))
+      .find((hit) => hit !== undefined)
     if (aliasHit) {
       if (aliasHit.source === 'wiki') {
         const { entry } = aliasHit
@@ -287,11 +336,15 @@ export function extractionToProposals(
           )
           wiki.add(added, entry, entry.kind)
         }
+      } else {
+        // The alias names a pending or new card. Later references to this name resolve to that card.
+        created.add([name, ...aliases], aliasHit.name, e.kind)
       }
       continue
     }
 
-    created.add([name, ...aliases], name, e.kind)
+    created.addCard(name, name, e.kind)
+    created.add(aliases, name, e.kind)
     const fieldMap = new Map<string, string>()
     for (const f of e.fields) {
       const k = f.key.trim()
@@ -323,7 +376,7 @@ export function extractionToProposals(
 
     proposals.push(
       makeProposal(ctx, 'fact_create', {
-        subjectName,
+        subjectName: canonicalName(subjectName, hit),
         entryId: hit?.source === 'wiki' ? hit.entry.id : null,
         content,
         suggestedStatus: f.suggestedStatus,
@@ -444,6 +497,7 @@ export function extractionToProposals(
     const targetKind = kindOfEntry(targetName)
     const sourceHit = locate(sourceName, sourceKind)
     const targetHit = locate(targetName, targetKind)
+    // Relation ends are written as the card's own name, so they resolve at approval.
     if (
       sourceHit?.source === 'wiki' &&
       targetHit?.source === 'wiki' &&
@@ -458,8 +512,8 @@ export function extractionToProposals(
     seenRelations.add(key)
     proposals.push(
       makeProposal(ctx, 'relation_create', {
-        sourceName,
-        targetName,
+        sourceName: canonicalName(sourceName, sourceHit),
+        targetName: canonicalName(targetName, targetHit),
         kind: r.kind.trim(),
         description: r.description.trim(),
         directed: false,

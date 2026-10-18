@@ -20,7 +20,7 @@ import {
   type ProposalRow,
 } from '@/db/types'
 import { AppError } from '@/lib/errors'
-import { runAiTask } from '@/ai/run'
+import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { extractionToProposals, type ExtractionContext } from '@/ai/extraction'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
@@ -128,6 +128,9 @@ export async function askNextQuestion(
     ))
   }
 
+  throwIfCancelled(signal)
+  // The partial unique index allows one open question per session. A concurrent ask that lost
+  // the race gets the question the other request stored.
   const [turn] = await db
     .insert(interviewTurns)
     .values({
@@ -137,8 +140,12 @@ export async function askNextQuestion(
       question: output.question,
       rationale: output.rationale,
     })
+    .onConflictDoNothing()
     .returning()
-  return turn
+  if (turn) return turn
+  const stored = await findOpenTurnInSession(db, sessionId)
+  if (!stored) throw new AppError('CONFLICT', '다시 시도해 주세요.')
+  return stored
 }
 
 /**
@@ -208,6 +215,7 @@ export async function answerTurn(
   }
   const { proposals: items } = extractionToProposals(output, context)
 
+  throwIfCancelled(signal)
   return db.transaction(async (tx) => {
     const [updated] = await tx
       .update(interviewTurns)
@@ -411,8 +419,12 @@ async function buildQuestionInput(
     .orderBy(desc(chapters.position))
     .limit(SUMMARY_LIMIT)
 
-  const readerRows = await db
-    .select({ output: aiRuns.output, position: chapters.position })
+  // The newest reader simulation of each chapter, then the latest chapters by position.
+  const readerRuns = await db
+    .selectDistinctOn([aiRuns.chapterId], {
+      output: aiRuns.output,
+      position: chapters.position,
+    })
     .from(aiRuns)
     .innerJoin(chapters, eq(aiRuns.chapterId, chapters.id))
     .where(
@@ -423,14 +435,19 @@ async function buildQuestionInput(
         isNull(chapters.archivedAt),
       ),
     )
-    .orderBy(desc(aiRuns.createdAt))
-    .limit(READER_LIMIT)
+    .orderBy(aiRuns.chapterId, desc(aiRuns.createdAt))
+  const readerRows = readerRuns
+    .sort((a, b) => b.position - a.position)
+    .slice(0, READER_LIMIT)
+    .reverse()
 
   const [openIssues] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(issues)
     .where(and(eq(issues.workId, workId), eq(issues.status, 'open')))
 
+  // Every question of the work counts as covered, including one left open when its interview
+  // ended. An open one has no answer and is not skipped.
   const coveredRows = await db
     .select({
       topic: interviewTurns.topic,
@@ -441,14 +458,14 @@ async function buildQuestionInput(
     })
     .from(interviewTurns)
     .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
-    .where(and(eq(interviewSessions.workId, workId), answeredOrSkipped()))
+    .where(eq(interviewSessions.workId, workId))
     .orderBy(desc(interviewTurns.createdAt))
     .limit(COVERED_LIMIT)
   const [coveredTotal] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(interviewTurns)
     .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
-    .where(and(eq(interviewSessions.workId, workId), answeredOrSkipped()))
+    .where(eq(interviewSessions.workId, workId))
 
   const recentRows = await db
     .select({

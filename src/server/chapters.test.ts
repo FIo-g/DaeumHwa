@@ -71,10 +71,16 @@ describe('createChapter', () => {
 
   it('strips a repeated episode number from the given title', async () => {
     const { actor, work } = await setup()
-    const chapter = await createChapter(db, actor, { workId: work.id, title: '2화 재회' })
+    const chapter = await createChapter(db, actor, { workId: work.id, title: '1화 재회' })
     expect(chapter.title).toBe('재회')
     const [version] = await listVersions(db, actor, chapter.id)
     expect(version.title).toBe('재회')
+  })
+
+  it('keeps a leading number that is not this chapter own number', async () => {
+    const { actor, work } = await setup()
+    const chapter = await createChapter(db, actor, { workId: work.id, title: '2화 재회' })
+    expect(chapter.title).toBe('2화 재회')
   })
 
   it('writes the first version row with the given source', async () => {
@@ -141,10 +147,21 @@ describe('saveChapter', () => {
     const chapter = await createChapter(db, actor, { workId: work.id })
     const saved = await saveChapter(db, actor, {
       chapterId: chapter.id,
-      title: '5화 끝',
+      title: '1화 끝',
       expectedVersion: 1,
     })
     expect(saved.title).toBe('끝')
+  })
+
+  it('keeps a saved title whose number is not this chapter position', async () => {
+    const { actor, work } = await setup()
+    const chapter = await createChapter(db, actor, { workId: work.id })
+    const saved = await saveChapter(db, actor, {
+      chapterId: chapter.id,
+      title: '5화 끝',
+      expectedVersion: 1,
+    })
+    expect(saved.title).toBe('5화 끝')
   })
 
   it('with a stale expectedVersion throws CONFLICT carrying the current version', async () => {

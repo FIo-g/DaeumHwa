@@ -139,15 +139,24 @@ export const PLACE_FIELD_LABELS = {
 } as const
 
 // A leading `1화` / `제1화` followed by a boundary (end, space or a separator), plus the separators after it.
-const EPISODE_PREFIX_RE = /^(?:제\s*)?\d+\s*화(?=$|[\s.:·\-–—)\]])[\s.:·\-–—)\]]*/
+// The number is captured so it can be compared with the chapter's own position.
+const EPISODE_PREFIX_RE = /^(?:제\s*)?(\d+)\s*화(?=$|[\s.:·\-–—)\]])[\s.:·\-–—)\]]*/
 
-/** Removes a leading episode number from a chapter title, so the number is not printed twice. */
-export function stripEpisodePrefix(title: string): string {
-  return title.trim().replace(EPISODE_PREFIX_RE, '').trim()
+/**
+ * Removes a leading episode number from a chapter title, so the number is not printed twice.
+ * With `position`, only that chapter's own number is removed: "2화 이후의 이야기" on chapter 3 keeps
+ * its text. Without `position`, any leading episode number is removed (the import heading path).
+ */
+export function stripEpisodePrefix(title: string, position?: number): string {
+  const trimmed = title.trim()
+  const match = EPISODE_PREFIX_RE.exec(trimmed)
+  if (!match) return trimmed
+  if (position !== undefined && Number(match[1]) !== position) return trimmed
+  return trimmed.slice(match[0].length).trim()
 }
 
 /** `3화` or `3화 재회` when a title is given. */
 export function chapterLabel(position: number, title?: string | null): string {
-  const t = stripEpisodePrefix(title ?? '')
+  const t = stripEpisodePrefix(title ?? '', position)
   return t ? `${position}화 ${t}` : `${position}화`
 }

@@ -8,7 +8,7 @@ const CANCELLED_MESSAGE = '취소했습니다.'
 /**
  * Tracks one AI call from a panel: whether it runs, how many seconds it has taken, and a cancel
  * that aborts the signal given to `run`. `run` resolves null when cancelled, even if the
- * wrapped call never settles.
+ * wrapped call never settles. Unmounting aborts the call too, silently.
  */
 export function useAiRun(): {
   running: boolean
@@ -26,7 +26,16 @@ export function useAiRun(): {
     timerRef.current = null
   }, [])
 
-  useEffect(() => stopTimer, [stopTimer])
+  // Leaving the panel or page aborts a call still in flight. No toast: the author did not cancel.
+  useEffect(
+    () => () => {
+      stopTimer()
+      const controller = controllerRef.current
+      controllerRef.current = null
+      controller?.abort()
+    },
+    [stopTimer],
+  )
 
   const run = useCallback(
     async <T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T | null> => {

@@ -110,7 +110,8 @@ export class AnthropicAiClient implements AiClient {
     try {
       return await this.generateObjectStructured(args, model)
     } catch (error) {
-      if (!this.jsonFallback || !isStructuredOutputRejection(error)) throw toAiError(error)
+      if (!this.jsonFallback || !isStructuredOutputRejection(error))
+        throw toAiError(error, NO_USAGE, args)
       const billed = error instanceof UnstructuredAnswer ? error.usage : NO_USAGE
       const result = await this.generateObjectAsJson(args, model, billed)
       this.jsonModels.add(model)
@@ -210,7 +211,7 @@ export class AnthropicAiClient implements AiClient {
       if (!checked.success) throw aiErrorWithUsage(FORMAT_MESSAGE, usage)
       return { object: checked.data, usage, model: response.model }
     } catch (error) {
-      throw toAiError(error, billed)
+      throw toAiError(error, billed, args)
     }
   }
 
@@ -245,10 +246,10 @@ export class AnthropicAiClient implements AiClient {
           this.streamPlainModels.add(model)
           return result
         } catch (retryError) {
-          return this.failStream(channel, retryError)
+          return this.failStream(channel, retryError, args)
         }
       }
-      return this.failStream(channel, error)
+      return this.failStream(channel, error, args)
     }
   }
 
@@ -288,8 +289,8 @@ export class AnthropicAiClient implements AiClient {
     }
   }
 
-  private failStream(channel: TextChannel, error: unknown): never {
-    const aiError = toAiError(error)
+  private failStream(channel: TextChannel, error: unknown, args: StreamTextArgs): never {
+    const aiError = toAiError(error, NO_USAGE, args)
     channel.fail(aiError)
     throw aiError
   }
@@ -304,10 +305,20 @@ export function createAnthropicSdk(): Anthropic {
   return new Anthropic({ maxRetries: 1 })
 }
 
-/** Per-request options for the SDK. Unset values are left out so the SDK defaults apply. */
+/**
+ * Per-request options for the SDK. The SDK's own `timeout` clears once response headers arrive,
+ * so it does not bound a streamed or slow body. The signal therefore joins the caller's cancel
+ * with a time limit that covers the whole request, body included. Unset values are left out.
+ */
 function requestOptions(args: { signal?: AbortSignal; timeoutMs?: number }) {
+  const timeoutSignal =
+    args.timeoutMs !== undefined ? AbortSignal.timeout(args.timeoutMs) : undefined
+  const signal =
+    args.signal && timeoutSignal
+      ? AbortSignal.any([args.signal, timeoutSignal])
+      : (args.signal ?? timeoutSignal)
   return {
-    ...(args.signal ? { signal: args.signal } : {}),
+    ...(signal ? { signal } : {}),
     ...(args.timeoutMs !== undefined ? { timeout: args.timeoutMs } : {}),
   }
 }
@@ -421,12 +432,22 @@ function addUsage(a: AiUsage, b: AiUsage): AiUsage {
 
 /**
  * Converts any SDK or unexpected error into the Korean AI_ERROR the app shows. `billed` is usage
- * from earlier attempts of the same call; it is attached so run.ts still counts it.
+ * from earlier attempts of the same call; it is attached so run.ts still counts it. `call` is the
+ * caller's signal and time limit: an abort the caller did not send, on a call that has a time
+ * limit, can only come from that limit, so it maps to the timeout message.
  */
-function toAiError(error: unknown, billed: AiUsage = NO_USAGE): AppError {
+function toAiError(
+  error: unknown,
+  billed: AiUsage = NO_USAGE,
+  call?: { signal?: AbortSignal; timeoutMs?: number },
+): AppError {
   if (error instanceof AppError) return error
   const billedAny = billed.inputTokens > 0 || billed.outputTokens > 0
-  if (error instanceof APIUserAbortError) {
+  if (error instanceof APIUserAbortError || isAbortError(error)) {
+    const timedOut = call?.timeoutMs !== undefined && !call.signal?.aborted
+    if (timedOut) {
+      return new AppError('AI_ERROR', AI_TIMEOUT_MESSAGE, billedAny ? { usage: billed } : undefined)
+    }
     return new AppError(
       'CANCELLED',
       AI_CANCELLED_MESSAGE,
@@ -453,6 +474,10 @@ function toAiError(error: unknown, billed: AiUsage = NO_USAGE): AppError {
     `AI 호출에 실패했습니다: ${reason.slice(0, 120)}`,
     billedAny ? { usage: billed } : undefined,
   )
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
 }
 
 /**

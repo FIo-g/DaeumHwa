@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import { buildContextPack, renderContextPack } from '@/ai/context'
 import { READER_PERSONAS, type Persona } from '@/ai/personas'
-import { listAiRuns, runAiTask, startAiStream } from '@/ai/run'
+import { listAiRuns, runAiTask, startAiStream, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import {
   DRAFT_EFFORT,
@@ -210,6 +210,7 @@ export async function suggestStyleCard(
     { entryName: entry.name, samples },
     client,
   )
+  throwIfCancelled(signal)
   const [row] = await insertProposals(db, workId, [
     {
       type: 'style_card',

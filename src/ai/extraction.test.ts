@@ -682,10 +682,10 @@ describe('extraction: dedup and naming rules', () => {
   it('an incoming alias that equals an existing card adds the new name as an alias', () => {
     const x: Extraction = {
       ...emptyExtraction,
-      entries: [entry('한시우', { aliases: ['주인공'] })],
+      entries: [entry('한시우', { aliases: ['백도윤'] })],
     }
     const ctx = makeCtx({
-      existingEntries: [{ id: 'e1', name: '주인공', aliases: [], kind: 'character' }],
+      existingEntries: [{ id: 'e1', name: '백도윤', aliases: [], kind: 'character' }],
     })
     const { proposals } = extractionToProposals(x, ctx)
     expect(byType(proposals, 'entry_create')).toHaveLength(0)
@@ -693,7 +693,7 @@ describe('extraction: dedup and naming rules', () => {
     expect(updates).toHaveLength(1)
     expect(updates[0].payload).toEqual({
       entryId: 'e1',
-      entryName: '주인공',
+      entryName: '백도윤',
       patch: { aliases: ['한시우'] },
     })
   })
@@ -807,5 +807,122 @@ describe('extraction: dedup and naming rules', () => {
       existingThreads: [{ id: 't-9', title: '멈춘 종의 비밀', status: 'planned' }],
     })
     expect(byType(extractionToProposals(x, existingCtx).proposals, 'thread_create')).toHaveLength(0)
+  })
+
+  it('a long name listed before the bare name in one answer yields exactly one card', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('전직 시계탑 수리공 노은하'), entry('노은하')],
+    }
+    const creates = byType(
+      extractionToProposals(x, makeCtx({ existingEntries: [] })).proposals,
+      'entry_create',
+    )
+    expect(creates).toHaveLength(1)
+    expect(creates[0].payload.name).toBe('전직 시계탑 수리공 노은하')
+  })
+
+  it('a bare name merges into a pending long name', () => {
+    const x: Extraction = { ...emptyExtraction, entries: [entry('노은하')] }
+    const ctx = makeCtx({
+      existingEntries: [],
+      pendingEntries: [{ name: '전직 시계탑 수리공 노은하', aliases: [], kind: 'character' }],
+    })
+    expect(byType(extractionToProposals(x, ctx).proposals, 'entry_create')).toHaveLength(0)
+  })
+
+  it('a bare name merges into a wiki long name, and the fact uses the card name', () => {
+    const x: Extraction = { ...emptyExtraction, facts: [factOf('노은하')] }
+    const ctx = makeCtx({
+      existingEntries: [
+        { id: 'e-eunha', name: '전직 시계탑 수리공 노은하', aliases: [], kind: 'character' },
+      ],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'entry_create')).toHaveLength(0)
+    const facts = byType(proposals, 'fact_create')
+    expect(facts[0].payload.entryId).toBe('e-eunha')
+    expect(facts[0].payload.subjectName).toBe('전직 시계탑 수리공 노은하')
+  })
+
+  it('a bare last word does not merge into a place whose name ends with it', () => {
+    const x: Extraction = { ...emptyExtraction, entries: [entry('시계탑', { kind: 'place' })] }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'p1', name: '북쪽 시계탑', aliases: [], kind: 'place' }],
+    })
+    const creates = byType(extractionToProposals(x, ctx).proposals, 'entry_create')
+    expect(creates).toHaveLength(1)
+    expect(creates[0].payload.name).toBe('시계탑')
+  })
+
+  it('a relation names the card, not the long form it was written with', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      relations: [relationOf('전직 시계탑 수리공 노은하', '한시우')],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'e-eunha', name: '노은하', aliases: [], kind: 'character' }],
+    })
+    const relations = byType(extractionToProposals(x, ctx).proposals, 'relation_create')
+    expect(relations).toHaveLength(1)
+    expect(relations[0].payload.sourceName).toBe('노은하')
+    expect(relations[0].payload.targetName).toBe('한시우')
+  })
+
+  it('a relation with a particle-marked name on a pending card names the pending card', () => {
+    const x: Extraction = { ...emptyExtraction, relations: [relationOf('노은하에게는', '한시우')] }
+    const ctx = makeCtx({
+      existingEntries: [],
+      pendingEntries: [{ name: '전직 시계탑 수리공 노은하', aliases: [], kind: 'character' }],
+    })
+    const relations = byType(extractionToProposals(x, ctx).proposals, 'relation_create')
+    expect(relations[0].payload.sourceName).toBe('전직 시계탑 수리공 노은하')
+  })
+
+  it('a fact about an alias that matched a pending card binds to that card name', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('시우', { aliases: ['한시우'] })],
+      facts: [factOf('시우')],
+    }
+    const ctx = makeCtx({
+      existingEntries: [],
+      pendingEntries: [{ name: '한시우', aliases: [], kind: 'character' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'entry_create')).toHaveLength(0)
+    const facts = byType(proposals, 'fact_create')
+    expect(facts[0].payload.subjectName).toBe('한시우')
+    expect(facts[0].payload.entryId).toBeNull()
+  })
+
+  it('an alias that is a long name matched only by its last word does not merge the entry', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('한시우', { aliases: ['시계탑 수리공 노은하'] })],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'e2', name: '노은하', aliases: [], kind: 'character' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'entry_update')).toHaveLength(0)
+    const creates = byType(proposals, 'entry_create')
+    expect(creates).toHaveLength(1)
+    expect(creates[0].payload.name).toBe('한시우')
+  })
+
+  it('a role word alias does not merge the entry into a card that carries the same alias', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('한시우', { aliases: ['주인공'] })],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'e1', name: '백도윤', aliases: ['주인공'], kind: 'character' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'entry_update')).toHaveLength(0)
+    const creates = byType(proposals, 'entry_create')
+    expect(creates).toHaveLength(1)
+    expect(creates[0].payload.aliases).toEqual([])
   })
 })

@@ -26,8 +26,8 @@ const FORMAT_NAME = 'daeumhwa_answer'
 const FORMAT_REJECTED = /text\.format|json_schema|response_format/i
 /** A 400 that names reasoning. Triggers one retry without reasoning. */
 const REASONING_REJECTED = /reasoning|effort/i
-/** Retries for transient failures (408, 409, 429, 5xx, network), same count as the Anthropic SDK. */
-const MAX_RETRIES = 2
+/** Retries for transient failures (408, 409, 429, 5xx, network). One, so a stalled gateway cannot hold a call for minutes. */
+const MAX_RETRIES = 1
 const DEFAULT_TIMEOUT_MS = 240_000
 const DEFAULT_RETRY_BASE_MS = 500
 const MAX_RETRY_DELAY_MS = 20_000
@@ -218,7 +218,7 @@ export class ResponsesAiClient implements AiClient {
         })
       } catch (error) {
         if (retriesLeft && error instanceof TypeError) {
-          await sleep(retryDelayMs(undefined, attempt, this.retryBaseDelayMs))
+          await sleep(retryDelayMs(undefined, attempt, this.retryBaseDelayMs), call.signal)
           continue
         }
         throw error
@@ -226,7 +226,7 @@ export class ResponsesAiClient implements AiClient {
       if (response.ok) return response
       if (retriesLeft && isRetryableStatus(response.status)) {
         await response.body?.cancel().catch(() => undefined)
-        await sleep(retryDelayMs(response, attempt, this.retryBaseDelayMs))
+        await sleep(retryDelayMs(response, attempt, this.retryBaseDelayMs), call.signal)
         continue
       }
       throw await httpRejection(response)
@@ -455,8 +455,21 @@ export function retryDelayMs(
   return Math.min(baseMs * 2 ** attempt, MAX_RETRY_DELAY_MS)
 }
 
-function sleep(ms: number): Promise<void> {
-  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve()
+/** Waits before a retry. Rejects with the abort reason when the caller cancels during the wait. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason)
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(signal?.reason)
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 /**

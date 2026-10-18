@@ -56,10 +56,13 @@ describe('getAiProvider', () => {
   })
 
   it.each([
-    ['anthropic', {}, 'anthropic'],
-    ['anthropic', { OPENCODE_API_KEY: 'b' }, 'anthropic'],
-    ['opencode', {}, 'opencode'],
-    ['opencode', { ANTHROPIC_API_KEY: 'a' }, 'opencode'],
+    ['anthropic', { ANTHROPIC_API_KEY: 'a' }, 'anthropic'],
+    ['anthropic', { ANTHROPIC_API_KEY: 'a', OPENCODE_API_KEY: 'b' }, 'anthropic'],
+    ['anthropic', { OPENCODE_API_KEY: 'b' }, 'opencode'],
+    ['anthropic', {}, null],
+    ['opencode', { OPENCODE_API_KEY: 'b' }, 'opencode'],
+    ['opencode', { ANTHROPIC_API_KEY: 'a' }, 'anthropic'],
+    ['opencode', {}, null],
     ['fake', {}, null],
     ['fake', { OPENCODE_API_KEY: 'b' }, 'opencode'],
   ])('AI_PROVIDER=%s with env %j resolves to %s', async (provider, env, expected) => {

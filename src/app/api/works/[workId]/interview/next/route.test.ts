@@ -1,8 +1,10 @@
+import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeAiClient } from '@/test/fake-ai'
 import { setAiClientForTests } from '@/ai'
 import { AppError } from '@/lib/errors'
 import type { Db } from '@/db/client'
+import { interviewTurns } from '@/db/schema'
 import { createTestDb } from '@/test/db'
 import { addTestMember, createTestUser, createTestWork } from '@/test/factories'
 import { askNextQuestion, startInterview } from '@/server/interview'
@@ -97,7 +99,25 @@ describe('POST /api/works/[workId]/interview/next', () => {
 
   it('returns VALIDATION when the session id is not a uuid', async () => {
     const res = await POST(request({ sessionId: 'nope' }), context({ workId }))
-    expect(await res.json()).toMatchObject({ ok: false })
+    expect(await res.json()).toMatchObject({ ok: false, error: { code: 'VALIDATION' } })
+  })
+
+  it('returns CANCELLED and inserts no turn when the request signal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const req = new Request('http://localhost/api/works/x/interview/next', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+      signal: controller.signal,
+    })
+    const res = await POST(req, context({ workId }))
+    expect(await res.json()).toMatchObject({ ok: false, error: { code: 'CANCELLED' } })
+    const turns = await (state.db as Db)
+      .select()
+      .from(interviewTurns)
+      .where(eq(interviewTurns.sessionId, sessionId))
+    expect(turns).toHaveLength(0)
   })
 
   it('returns the open turn instead of asking again', async () => {

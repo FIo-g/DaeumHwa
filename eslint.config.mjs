@@ -12,7 +12,22 @@ const eslintConfig = defineConfig([
     rules: {
       'no-restricted-imports': [
         'error',
-        { patterns: [{ group: ['@/test/*'], message: '테스트 전용 코드입니다.' }] },
+        {
+          patterns: [
+            { group: ['@/test/*'], message: '테스트 전용 코드입니다.' },
+            // Relative imports that reach the test helpers, e.g. '../test/factories'.
+            {
+              group: [
+                '**/test/fake-ai',
+                '**/test/ai-fakes/**',
+                '**/test/factories',
+                '**/test/db',
+                '**/test/setup',
+              ],
+              message: '테스트 전용 코드입니다.',
+            },
+          ],
+        },
       ],
     },
   },

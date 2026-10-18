@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ENTRY_KIND_LABEL } from '@/lib/labels'
+import { chapterLabel, ENTRY_KIND_LABEL } from '@/lib/labels'
 import { type EntryKind, INTERVIEW_FOCUSES, type InterviewFocus } from '@/db/types'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
@@ -66,8 +66,8 @@ const SYSTEM = [
   '당신은 웹소설 작가의 기획을 돕는 인터뷰어다. 작가의 설정 위키를 채우고 연재를 이어 가기 위해 질문을 한 번에 하나만 한다.',
   '규칙:',
   `- 핵심 설정은 ${INTERVIEW_TOPICS.join(', ')}이다. <wiki>와 <covered>를 보고 비었거나 얕은 것이 있으면 focus를 "setting"으로 하고 그 주제를 묻는다.`,
-  '- 핵심 설정이 충분하면 focus를 "story"로 하고 다음 화를 어떻게 할지, 스토리라인을 어떻게 끌고 갈지 묻는다. <story>에 최신 회차가 (없음)이면 "story"를 고르지 않는다.',
-  '- story 질문은 회차 번호, 떡밥 이름, 독자 반응 같은 구체적인 재료를 짚는다.',
+  '- 핵심 설정이 충분하면 focus를 "story"로 하고 다음 화를 어떻게 할지, 스토리라인을 어떻게 끌고 갈지 묻는다. <story>의 최신 회차가 (없음)이면 아직 연재 전이므로 1화를 어떻게 열지(첫 장면, 첫 사건, 독자에게 먼저 보일 것)와 초반 전체 전개·큰 줄기를 묻는다.',
+  '- 최신 회차가 있으면 story 질문은 회차 번호, 떡밥 이름, 독자 반응 같은 <story>·<wiki>의 구체적인 재료를 짚는다. 없으면 시놉시스, 인물, 떡밥을 재료로 삼는다.',
   '- <covered>에 있는 질문은 되풀이하지 않는다. 같은 주제를 다시 물을 때는 이전 답을 바탕으로 한 걸음 더 나아간 질문만 한다.',
   '- <rejected>에 적힌 질문과 같은 질문은 하지 않는다.',
   '- 질문은 구체적이고 답하기 쉽게 한두 문장으로 쓴다. 예시 답을 늘어놓지 않는다.',
@@ -89,16 +89,24 @@ function oneLine(text: string, max: number): string {
 
 function covered(input: InterviewQuestionInput): string {
   const lines = input.covered.map((turn) => {
-    const answer = turn.skipped ? '(건너뜀)' : oneLine(turn.answer ?? '(건너뜀)', 80)
+    const answer = turnAnswer(turn, 80)
     return `- [${turn.focus}] ${turn.topic} | 질문: ${oneLine(turn.question, 120)} | 답: ${answer}`
   })
   if (input.coveredDropped > 0) lines.unshift(`생략한 이전 질문: ${input.coveredDropped}개`)
   return lines.length > 0 ? lines.join('\n') : '(없음)'
 }
 
+/** The answer as shown in the prompt: "(건너뜀)" when skipped, "(답 없음)" when left open. */
+function turnAnswer(turn: { answer: string | null; skipped: boolean }, max: number): string {
+  if (turn.skipped) return '(건너뜀)'
+  if (turn.answer === null) return '(답 없음)'
+  return oneLine(turn.answer, max)
+}
+
 /**
  * Prompt with <work>, <wiki>, <story>, <covered>, <recent> and, after a repeat, <rejected>
- * sections. Skipped turns show "(건너뜀)".
+ * sections. Skipped turns show "(건너뜀)"; a question left open when its interview ended shows
+ * "(답 없음)".
  */
 export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): string {
   const input = neutralizeDeep(raw)
@@ -129,7 +137,7 @@ export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): strin
   const summaries =
     input.story.recentSummaries.length > 0
       ? input.story.recentSummaries
-          .map((s) => `- ${s.position}화 ${s.title}: ${oneLine(s.summary, 300)}`)
+          .map((s) => `- ${chapterLabel(s.position, s.title)}: ${oneLine(s.summary, 300)}`)
           .join('\n')
       : '(없음)'
   const reactions =
@@ -141,7 +149,7 @@ export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): strin
     input.recent.length > 0
       ? input.recent
           .map((turn) => {
-            const answer = turn.skipped ? '(건너뜀)' : oneLine(turn.answer ?? '(건너뜀)', 600)
+            const answer = turnAnswer(turn, 600)
             return `- ${turn.topic} | 질문: ${oneLine(turn.question, 200)} | 답: ${answer}`
           })
           .join('\n')

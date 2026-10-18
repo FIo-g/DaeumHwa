@@ -343,7 +343,7 @@ describe('AnthropicAiClient.streamText', () => {
     await expect(final).rejects.toMatchObject({ code: 'AI_ERROR' })
   })
 
-  it('passes the signal and timeout to the stream request', async () => {
+  it('passes the time limit and a signal that follows the caller cancel to the stream request', async () => {
     const { sdk, calls } = stubSdk()
     const controller = new AbortController()
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
@@ -357,7 +357,70 @@ describe('AnthropicAiClient.streamText', () => {
       timeoutMs: 5000,
     })
     await final
-    expect(calls[0].options).toMatchObject({ signal: controller.signal, timeout: 5000 })
+    const options = calls[0].options as { signal: AbortSignal; timeout: number }
+    expect(options.timeout).toBe(5000)
+    expect(options.signal.aborted).toBe(false)
+    controller.abort()
+    expect(options.signal.aborted).toBe(true)
+  })
+
+  it('maps a stream that sends headers and then stalls to the timeout message', async () => {
+    // The SDK aborts the body read when the request signal fires; the stub mirrors that.
+    const sdk = {
+      messages: {
+        stream: (_params: unknown, options: { signal: AbortSignal }) => ({
+          on() {
+            return this
+          },
+          finalMessage: () =>
+            new Promise((_resolve, reject) => {
+              options.signal.addEventListener('abort', () => reject(new APIUserAbortError()))
+            }),
+        }),
+      },
+    } as unknown as Anthropic
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    const { final } = client.streamText({
+      system: 's',
+      prompt: 'p',
+      effort: 'low',
+      maxTokens: 100,
+      task: { name: 'proofread' as const, input: {} },
+      timeoutMs: 20,
+    })
+    await expect(final).rejects.toMatchObject({
+      code: 'AI_ERROR',
+      message: AI_TIMEOUT_MESSAGE,
+    })
+  })
+
+  it('maps a stream cancelled by the caller while it stalls to CANCELLED', async () => {
+    const sdk = {
+      messages: {
+        stream: (_params: unknown, options: { signal: AbortSignal }) => ({
+          on() {
+            return this
+          },
+          finalMessage: () =>
+            new Promise((_resolve, reject) => {
+              options.signal.addEventListener('abort', () => reject(new APIUserAbortError()))
+            }),
+        }),
+      },
+    } as unknown as Anthropic
+    const controller = new AbortController()
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    const { final } = client.streamText({
+      system: 's',
+      prompt: 'p',
+      effort: 'low',
+      maxTokens: 100,
+      task: { name: 'proofread' as const, input: {} },
+      signal: controller.signal,
+      timeoutMs: 60_000,
+    })
+    setTimeout(() => controller.abort(), 10)
+    await expect(final).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
   })
 
   it('rejects final with CANCELLED when the stream request is aborted', async () => {
@@ -375,12 +438,31 @@ describe('AnthropicAiClient.streamText', () => {
 })
 
 describe('AnthropicAiClient cancel and timeout', () => {
-  it('passes the signal and timeout to the structured request', async () => {
+  it('passes the time limit to the structured request with a signal that follows the caller', async () => {
     const { sdk, calls } = stubSdk()
     const controller = new AbortController()
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await client.generateObject({ ...baseArgs, signal: controller.signal, timeoutMs: 7000 })
-    expect(calls[0].options).toMatchObject({ signal: controller.signal, timeout: 7000 })
+    const options = calls[0].options as { signal: AbortSignal; timeout: number }
+    expect(options.timeout).toBe(7000)
+    controller.abort()
+    expect(options.signal.aborted).toBe(true)
+  })
+
+  it('maps a structured call whose body stalls past the time limit to the timeout message', async () => {
+    const sdk = {
+      messages: {
+        parse: (_params: unknown, options: { signal: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            options.signal.addEventListener('abort', () => reject(new APIUserAbortError()))
+          }),
+      },
+    } as unknown as Anthropic
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    await expect(client.generateObject({ ...baseArgs, timeoutMs: 20 })).rejects.toMatchObject({
+      code: 'AI_ERROR',
+      message: AI_TIMEOUT_MESSAGE,
+    })
   })
 
   it('omits the timeout option when no timeout is given, so the SDK default applies', async () => {

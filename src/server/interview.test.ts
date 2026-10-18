@@ -670,3 +670,107 @@ describe('continuous questions', () => {
     expect(await db.select().from(interviewTurns)).toHaveLength(0)
   })
 })
+
+describe('interview reliability', () => {
+  async function insertReaderRun(chapterId: string, overall: string, createdAt: Date) {
+    await db.insert(aiRuns).values({
+      workId,
+      userId: owner.userId,
+      task: 'reader-sim',
+      chapterId,
+      status: 'done',
+      createdAt,
+      output: {
+        personas: [{ personaId: 'p1', rating: 2, dropOffRisk: 'high', overall, moments: [] }],
+        summary: '요약',
+      },
+    })
+  }
+
+  it('a question left open when its interview ended is covered, with no answer', async () => {
+    const first = await startInterview(db, owner, workId)
+    const open = await askNextQuestion(db, owner, first.id, new FakeAiClient())
+    await completeInterview(db, owner, first.id)
+
+    const second = await startInterview(db, owner, workId)
+    const { client, inputs } = recordQuestions()
+    await askNextQuestion(db, owner, second.id, client)
+    expect(inputs[0].covered).toContainEqual(
+      expect.objectContaining({ question: open.question, answer: null, skipped: false }),
+    )
+  })
+
+  it('two asks at the same time leave one open question in the session', async () => {
+    const session = await startInterview(db, owner, workId)
+    const client = new FakeAiClient()
+    const [a, b] = await Promise.all([
+      askNextQuestion(db, owner, session.id, client),
+      askNextQuestion(db, owner, session.id, client),
+    ])
+    expect(a.id).toBe(b.id)
+    expect(await db.select().from(interviewTurns)).toHaveLength(1)
+  })
+
+  it('a cancel that lands while the question is in flight stores no question', async () => {
+    const session = await startInterview(db, owner, workId)
+    const controller = new AbortController()
+    const client = new FakeAiClient({
+      overrides: {
+        'interview-question': (input) => {
+          controller.abort()
+          return fakeInterviewQuestion(input as InterviewQuestionInput)
+        },
+      },
+    })
+    await expectAppError(
+      askNextQuestion(db, owner, session.id, client, controller.signal),
+      'CANCELLED',
+    )
+    expect(await db.select().from(interviewTurns)).toHaveLength(0)
+  })
+
+  it('a cancel that lands while the answer is extracted leaves the question open', async () => {
+    const session = await startInterview(db, owner, workId)
+    const turn = await askNextQuestion(db, owner, session.id, new FakeAiClient())
+    const controller = new AbortController()
+    const client = new FakeAiClient({
+      overrides: {
+        'interview-extract': (input) => {
+          controller.abort()
+          return fakeInterviewExtraction(input as InterviewExtractInput)
+        },
+      },
+    })
+    await expectAppError(
+      answerTurn(db, editor, { turnId: turn.id, answer: '답' }, client, controller.signal),
+      'CANCELLED',
+    )
+    const [stored] = await db.select().from(interviewTurns).where(eq(interviewTurns.id, turn.id))
+    expect(stored.answer).toBeNull()
+    expect(await db.select().from(proposals)).toHaveLength(0)
+  })
+
+  it('takes the newest reader simulation of each chapter and the three latest chapters, oldest first', async () => {
+    const positions = [1, 2, 3, 4]
+    const chaptersById = new Map<number, string>()
+    for (const position of positions) {
+      const chapter = await createTestChapter(db, workId, { position, title: `${position}화` })
+      chaptersById.set(position, chapter.id)
+    }
+    await insertReaderRun(chaptersById.get(1)!, 'OLD1', new Date('2026-10-01T00:00:00Z'))
+    await insertReaderRun(chaptersById.get(2)!, 'CH2', new Date('2026-10-02T00:00:00Z'))
+    await insertReaderRun(chaptersById.get(3)!, 'CH3', new Date('2026-10-03T00:00:00Z'))
+    await insertReaderRun(chaptersById.get(4)!, 'OLD4', new Date('2026-10-04T00:00:00Z'))
+    await insertReaderRun(chaptersById.get(4)!, 'NEW4', new Date('2026-10-05T00:00:00Z'))
+
+    const session = await startInterview(db, owner, workId)
+    const { client, inputs } = recordQuestions()
+    await askNextQuestion(db, owner, session.id, client)
+    const reactions = inputs[0].story.readerReactions
+    expect(reactions.map((r) => r.position)).toEqual([2, 3, 4])
+    expect(reactions[0].digest).toContain('CH2')
+    expect(reactions[1].digest).toContain('CH3')
+    expect(reactions[2].digest).toContain('NEW4')
+    expect(reactions[2].digest).not.toContain('OLD4')
+  })
+})

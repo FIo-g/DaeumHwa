@@ -1,11 +1,14 @@
 import { z } from 'zod'
 import { getDb } from '@/db/client'
+import { draftErrorRecord, DRAFT_FAILED_MESSAGE } from '@/lib/draft-stream'
 import { type ErrorCode, isAppError } from '@/lib/errors'
 import { startDraft } from '@/server/ai-features'
 import { getSessionUser } from '@/server/session'
 
 // Streams a chapter draft as plain text. The run id comes back in the X-Run-Id header so the
 // editor can turn the finished draft into a chapter later (createChapterFromDraftAction).
+// The status is already 200 when the text starts, so a failure midway cannot change it. Instead the
+// stream ends with an error record (see src/lib/draft-stream.ts). A client abort just closes it.
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -25,6 +28,21 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   CONFLICT: 409,
   BAD_STATE: 409,
   AI_LIMIT: 429,
+}
+
+/** Closes the body. A reader that already left has nothing to receive, so a closed stream is fine. */
+function finish(controller: ReadableStreamDefaultController<Uint8Array>, record?: string): void {
+  try {
+    if (record !== undefined) controller.enqueue(new TextEncoder().encode(record))
+    controller.close()
+  } catch {
+    // The stream was cancelled by the client; nothing more to send.
+  }
+}
+
+/** Only AppError messages are written for the author. Anything else gets the generic message. */
+function failureMessage(error: unknown): string {
+  return isAppError(error) ? error.message : DRAFT_FAILED_MESSAGE
 }
 
 export async function POST(
@@ -62,9 +80,10 @@ export async function POST(
           // The ai_runs row is marked done only when `done` settles. Waiting here means that
           // once the client has read the whole body, createChapterFromDraft sees a finished run.
           await done
-          controller.close()
+          finish(controller)
         } catch (error) {
-          controller.error(error)
+          const record = abort.signal.aborted ? undefined : draftErrorRecord(failureMessage(error))
+          finish(controller, record)
         }
       },
       cancel() {

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "interview_turns_one_open_idx" ON "interview_turns" USING btree ("session_id") WHERE "interview_turns"."answer" is null and "interview_turns"."skipped" = false;

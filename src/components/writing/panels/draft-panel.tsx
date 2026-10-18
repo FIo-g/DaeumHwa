@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { runAction } from '@/lib/client/run-action'
 import { useAiRun } from '@/lib/client/use-ai-run'
+import { parseDraftStream } from '@/lib/draft-stream'
 import { createChapterFromDraftAction } from '@/server/actions/ai-features'
 import type { WorkspaceApi, WritingData } from '../types'
 import { EDITOR_ONLY_NOTE, canEditChapter } from './shared'
@@ -39,7 +40,10 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   const ai = useAiRun()
   const [draft, setDraft] = useState<string | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
-  const [cancelled, setCancelled] = useState(false)
+  // `complete` is set only when the whole draft arrived. `stopped` covers a cancel and a stream that
+  // broke midway; those keep the partial text, but it cannot become a new chapter.
+  const [complete, setComplete] = useState(false)
+  const [stopped, setStopped] = useState(false)
   const [appended, setAppended] = useState(false)
   const [creating, setCreating] = useState(false)
   const streaming = ai.running
@@ -48,7 +52,10 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     setEntryIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
   }
 
-  /** Reads the streamed draft into state as it arrives. Resolves false when it failed or was aborted. */
+  /**
+   * Reads the streamed draft into state as it arrives. Resolves false when it failed or was aborted;
+   * a failure midway keeps the text that arrived and shows the server's message.
+   */
   async function streamDraft(
     signal: AbortSignal,
     body: { instructions: string; targetChars: number },
@@ -69,16 +76,22 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       setRunId(response.headers.get('X-Run-Id'))
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let text = ''
+      let raw = ''
       for (;;) {
         const { done, value } = await reader.read()
         if (done || signal.aborted) break
-        text += decoder.decode(value, { stream: true })
-        setDraft(text)
+        raw += decoder.decode(value, { stream: true })
+        setDraft(parseDraftStream(raw).text)
       }
-      text += decoder.decode()
+      raw += decoder.decode()
       if (signal.aborted) return false
-      setDraft(text)
+      // The route ends a draft that failed midway with an error record. It is not part of the text.
+      const parsed = parseDraftStream(raw)
+      setDraft(parsed.text)
+      if (parsed.error !== null) {
+        toast.error(parsed.error)
+        return false
+      }
       return true
     } catch {
       if (!signal.aborted) toast.error('초안 작성이 중간에 끊겼습니다. 다시 시도해 주세요.')
@@ -102,13 +115,20 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
 
     setDraft('')
     setRunId(null)
-    setCancelled(false)
+    setComplete(false)
+    setStopped(false)
     setAppended(false)
-    // Resolves null when the author cancels. The partial text stays on screen, marked as stopped.
+    // Resolves null when the author cancels, false when the stream failed (a toast says why), and
+    // true only when the whole draft arrived. Anything but true keeps the partial text as stopped.
     const completed = await ai.run((signal) =>
       streamDraft(signal, { instructions: trimmed, targetChars: target }),
     )
-    if (completed === null) setCancelled(true)
+    if (completed !== true) {
+      setStopped(true)
+      // Nothing came through: drop the "waiting" placeholder instead of leaving it up forever.
+      setDraft((prev) => (prev === '' ? null : prev))
+    }
+    setComplete(completed === true)
   }
 
   function appendToChapter() {
@@ -208,13 +228,13 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           <p className="text-xs text-muted-foreground">
             AI 초안은 작가가 고치고 저장해야 원고가 됩니다.
           </p>
-          {cancelled && <p className="text-sm text-muted-foreground">중간에 멈춘 초안입니다.</p>}
+          {stopped && <p className="text-sm text-muted-foreground">중간에 멈춘 초안입니다.</p>}
           {finished && (
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={appendToChapter} disabled={appended}>
                 {appended ? '원고 끝에 붙였습니다' : '현재 원고 끝에 붙이기'}
               </Button>
-              {runId && !cancelled && (
+              {complete && runId && (
                 <Button variant="outline" onClick={() => void createChapter()} disabled={creating}>
                   새 회차로 만들기
                 </Button>

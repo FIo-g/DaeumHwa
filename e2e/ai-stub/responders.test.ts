@@ -226,7 +226,7 @@ describe('respond: scenarios', () => {
     expect(['setting', 'story']).toContain(parsed.focus)
   })
 
-  it('reader sim: a slow prompt marker gives a 30 second delay, otherwise none', () => {
+  it('interview question prompt: a slow prompt marker gives a 30 second delay, otherwise none', () => {
     const body = (text: string) => ({
       system: [{ type: 'text' as const, text: interviewQuestionTask.system }],
       messages: [{ role: 'user', content: text }],

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Persona } from '@/ai/personas'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
+import { chapterLabel } from '@/lib/labels'
 import { locateQuote } from '@/lib/korean'
 
 // Reader simulation (spec F11): several reader personas react to one chapter.
@@ -81,7 +82,7 @@ function buildReaderSimPrompt(raw: ReaderSimInput): string {
     personas,
     '</personas>',
     '',
-    `읽을 회차: ${input.chapterPosition}화 ${input.chapterTitle}`.trimEnd(),
+    `읽을 회차: ${chapterLabel(input.chapterPosition, input.chapterTitle)}`,
     '<manuscript>',
     input.chapterText,
     '</manuscript>',

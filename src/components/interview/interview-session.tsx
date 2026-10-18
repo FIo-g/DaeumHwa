@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
@@ -30,6 +32,9 @@ type InterviewSessionProps = {
 
 type Answered = { turnId: string; proposals: ProposalView[] }
 
+// Question failures that a retry cannot fix: the daily limit and a missing or foreign session.
+const NO_RETRY_CODES = ['AI_LIMIT', 'NOT_FOUND']
+
 /** The interview screen (F1). One question at a time; answers become pending proposals. */
 export function InterviewSession({
   workId,
@@ -44,14 +49,26 @@ export function InterviewSession({
   const [answered, setAnswered] = useState<Answered | null>(null)
   const [finished, setFinished] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [askFailed, setAskFailed] = useState(false)
+  const [askError, setAskError] = useState<{ code: string; message: string } | null>(null)
+  const askFailed = askError !== null
   const asking = useAiRun()
   const answering = useAiRun()
+  const router = useRouter()
+
+  // After router.refresh() the page passes fresh turn state. Local state follows it, so a turn
+  // that the server stored while the screen showed a cancel can be reconciled. Adjusting state
+  // during render (not in an effect) keeps this to one extra render.
+  const [seenProps, setSeenProps] = useState({ turns: initialTurns, current: initialCurrent })
+  if (seenProps.turns !== initialTurns || seenProps.current !== initialCurrent) {
+    setSeenProps({ turns: initialTurns, current: initialCurrent })
+    setTurns(initialTurns)
+    setCurrent(initialCurrent)
+  }
 
   // Route handlers, not Server Actions: the AI calls can run for minutes, and Server Actions run
   // one at a time. Cancel aborts the request; a failed question keeps the "다시 시도" control.
   async function ask(id: string) {
-    setAskFailed(false)
+    setAskError(null)
     const result = await asking.run((signal) =>
       postAction<InterviewTurnRow>(
         `/api/works/${workId}/interview/next`,
@@ -59,13 +76,21 @@ export function InterviewSession({
         { signal },
       ),
     )
-    if (!result) return
+    if (!result || (!result.ok && result.error.code === 'CANCELLED')) {
+      // Cancelled. The server may already have stored the question, so reload the turn state.
+      router.refresh()
+      return
+    }
     if (!result.ok) {
-      if (result.error.code !== 'CANCELLED') setAskFailed(true)
+      setAskError({ code: result.error.code, message: result.error.message })
       return
     }
     setCurrent(result.data)
     setTurns((prev) => upsertTurn(prev, result.data))
+    // start and skip run a Server Action first, and its page refresh can arrive after this question
+    // and overwrite it with the older snapshot. Refresh once more so the server state, which now
+    // includes the question, is the last one applied.
+    router.refresh()
   }
 
   async function start() {
@@ -99,20 +124,30 @@ export function InterviewSession({
     setBusy(true)
     try {
       const result = await answering.run((signal) =>
-        runAction(
-          postAction<{ turn: InterviewTurnRow; proposals: ProposalRow[] }>(
-            `/api/works/${workId}/interview/answer`,
-            { turnId: current.id, answer: text },
-            { signal },
-          ),
+        postAction<{ turn: InterviewTurnRow; proposals: ProposalRow[] }>(
+          `/api/works/${workId}/interview/answer`,
+          { turnId: current.id, answer: text },
+          { signal },
         ),
       )
-      if (!result) return
-      setTurns((prev) => upsertTurn(prev, result.turn))
+      if (!result || (!result.ok && result.error.code === 'CANCELLED')) {
+        // Cancelled after the server may already have saved the answer. Reload the turn state;
+        // the typed text stays.
+        router.refresh()
+        return
+      }
+      if (!result.ok) {
+        toast.error(result.error.message)
+        // CONFLICT: the question was answered elsewhere. Reload so the screen shows it as answered.
+        if (result.error.code === 'CONFLICT') router.refresh()
+        return
+      }
+      const { turn, proposals } = result.data
+      setTurns((prev) => upsertTurn(prev, turn))
       setCurrent(null)
       setAnswered({
-        turnId: result.turn.id,
-        proposals: result.proposals.map(toProposalView),
+        turnId: turn.id,
+        proposals: proposals.map(toProposalView),
       })
     } finally {
       setBusy(false)
@@ -220,10 +255,11 @@ export function InterviewSession({
             <AnswerProposals key={answered.turnId} workId={workId} proposals={answered.proposals} />
           )}
 
-          {!current && askFailed && (
+          {!current && askError && (
             <section className="grid gap-3 rounded-xl border p-5">
               <p className="font-medium">질문을 만들지 못했습니다.</p>
-              {canEdit && (
+              <p className="text-sm text-muted-foreground">{askError.message}</p>
+              {canEdit && !NO_RETRY_CODES.includes(askError.code) && (
                 <div>
                   <Button onClick={nextQuestion} disabled={busy}>
                     다시 시도

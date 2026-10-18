@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { buildContextPack, resolveRefs } from '@/ai/context'
 import { extractionToProposals } from '@/ai/extraction'
-import { runAiTask } from '@/ai/run'
+import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
@@ -132,7 +132,14 @@ export async function runChapterCheck(
 ): Promise<ChapterCheckResult> {
   const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId)
   const text = chapter.body
-  const meta = { userId: actor.userId, workId, chapterId: chapter.id, signal }
+  // Stops the sibling call when the other one fails. The caller's cancel stops both.
+  const sibling = new AbortController()
+  const meta = {
+    userId: actor.userId,
+    workId,
+    chapterId: chapter.id,
+    signal: signal ? AbortSignal.any([signal, sibling.signal]) : sibling.signal,
+  }
 
   const pack = await buildContextPack(db, workId, { text, position: chapter.position })
   const known = await loadKnownEntries(db, workId, { excludePostChapterOf: chapter.id })
@@ -152,14 +159,18 @@ export async function runChapterCheck(
     status: t.status,
   }))
 
-  const [continuity, extract] = await Promise.all([
+  // Both calls settle before anything is thrown, so each ai_runs row is finalized.
+  const [continuityResult, extractResult] = await Promise.allSettled([
     runAiTask(
       db,
       meta,
       continuityCheckTask,
       { chapterText: text, chapterPosition: chapter.position, chapterTitle: chapter.title, pack },
       client,
-    ),
+    ).catch((error: unknown) => {
+      sibling.abort()
+      throw error
+    }),
     runAiTask(
       db,
       meta,
@@ -186,8 +197,16 @@ export async function runChapterCheck(
         knownFacts,
       },
       client,
-    ),
+    ).catch((error: unknown) => {
+      sibling.abort()
+      throw error
+    }),
   ])
+  if (continuityResult.status === 'rejected' || extractResult.status === 'rejected') {
+    throw firstFailure([continuityResult, extractResult])
+  }
+  const continuity = continuityResult.value
+  const extract = extractResult.value
 
   const namingIssues = namingIssuesFor(text, rules)
   const aiIssues: NewIssue[] = resolveContinuityIssues(continuity.output, {
@@ -208,6 +227,7 @@ export async function runChapterCheck(
     suggestion: issue.suggestion,
   }))
 
+  throwIfCancelled(signal)
   const issueRows = await replaceOpenIssues(db, {
     workId,
     chapterId: chapter.id,
@@ -237,6 +257,7 @@ export async function runChapterCheck(
     })),
   })
 
+  throwIfCancelled(signal)
   const proposalRows = await db.transaction(async (tx) => {
     await deletePendingProposals(tx, { workId, source: 'post_chapter', chapterId: chapter.id })
     // Facts already on a card (current ones only) and facts still waiting in the queue. The
@@ -288,6 +309,18 @@ export async function runChapterCheck(
     runIds: [continuity.runId, extract.runId],
     namingIssueCount: namingIssues.length,
   }
+}
+
+/**
+ * The error to report when a parallel AI call failed: the first failure that is not a cancel,
+ * so the cancel caused by the sibling's failure does not hide the real one.
+ */
+function firstFailure(results: PromiseSettledResult<unknown>[]): unknown {
+  const reasons = results.flatMap((r) => (r.status === 'rejected' ? [r.reason] : []))
+  return (
+    reasons.find((reason) => !(reason instanceof AppError && reason.code === 'CANCELLED')) ??
+    reasons[0]
+  )
 }
 
 /** Naming hits as low-severity issues. The quote is the whole sentence, with a suggestion that swaps the variant. */

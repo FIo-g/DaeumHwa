@@ -110,10 +110,17 @@ describe('getAiClient', () => {
     expect(client.defaultModel).toBe('qwen3.8-flash')
   })
 
-  it('AI_PROVIDER=opencode picks the OpenCode Go client over the Anthropic key', () => {
+  it('AI_PROVIDER=opencode picks the OpenCode Go client over the Anthropic key when its own key is set', () => {
     process.env.AI_PROVIDER = 'opencode'
     process.env.ANTHROPIC_API_KEY = 'a'
+    process.env.OPENCODE_API_KEY = 'b'
     expect(getAiClient()).toBeInstanceOf(OpencodeAiClient)
+  })
+
+  it('AI_PROVIDER=opencode without OPENCODE_API_KEY falls back to the Anthropic key', () => {
+    process.env.AI_PROVIDER = 'opencode'
+    process.env.ANTHROPIC_API_KEY = 'a'
+    expect(getAiClient()).toBeInstanceOf(AnthropicAiClient)
   })
 
   it('an unknown AI_PROVIDER=fake falls back to the key-based provider', () => {

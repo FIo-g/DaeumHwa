@@ -28,6 +28,8 @@ type StubResponse = {
   hold?: { cancelled: boolean }
   /** Makes fetch reject, like a network failure. */
   throws?: unknown
+  /** Extra response headers, e.g. Retry-After. */
+  headers?: Record<string, string>
 }
 
 /** Fake fetch that serves queued responses and records every request. No network. */
@@ -62,7 +64,7 @@ function stubFetch(responses: StubResponse[]) {
     }
     return new Response(JSON.stringify(next.body ?? {}), {
       status: next.status ?? 200,
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...next.headers },
     })
   }
   return { fetchImpl: fetchImpl as unknown as typeof fetch, requests }
@@ -270,7 +272,7 @@ describe('ResponsesAiClient response parsing', () => {
   })
 
   it('maps HTTP and network failures to the same Korean messages as the Anthropic client', async () => {
-    // Retryable failures are queued three times: the first attempt plus two retries.
+    // Retryable failures are queued twice: the first attempt plus one retry.
     const cases: [StubResponse[], string][] = [
       [[{ status: 401, body: { error: { message: 'bad key' } } }], 'API 키가 올바르지 않습니다'],
       [[{ status: 403, body: { error: { message: 'no' } } }], 'API 키가 올바르지 않습니다'],
@@ -289,9 +291,9 @@ describe('ResponsesAiClient response parsing', () => {
   })
 })
 
-/** The same stub queued for the first attempt and the two retries. */
+/** The same stub queued for the first attempt and the one retry. */
 function retryable(stub: StubResponse): StubResponse[] {
-  return [stub, stub, stub]
+  return [stub, stub]
 }
 
 describe('ResponsesAiClient transient retries', () => {
@@ -305,27 +307,53 @@ describe('ResponsesAiClient transient retries', () => {
     expect(result.object).toEqual({ answer: '네', score: 2 })
   })
 
-  it('retries a 502 and a network failure, then succeeds', async () => {
+  it('retries a 502 once, then succeeds', async () => {
     const answer = '{"answer":"네","score":1}'
     const { fetchImpl, requests } = stubFetch([
-      { throws: new TypeError('fetch failed') },
       { status: 502, body: { error: { message: 'bad gateway' } } },
       { body: completed(answer) },
     ])
     const result = await makeClient(fetchImpl).generateObject(baseArgs)
     expect(result.object).toEqual({ answer: '네', score: 1 })
-    expect(requests).toHaveLength(3)
+    expect(requests).toHaveLength(2)
   })
 
-  it('gives up after two retries and keeps the first failure reason', async () => {
+  it('retries a network failure once, then succeeds', async () => {
+    const answer = '{"answer":"네","score":1}'
+    const { fetchImpl, requests } = stubFetch([
+      { throws: new TypeError('fetch failed') },
+      { body: completed(answer) },
+    ])
+    const result = await makeClient(fetchImpl).generateObject(baseArgs)
+    expect(result.object).toEqual({ answer: '네', score: 1 })
+    expect(requests).toHaveLength(2)
+  })
+
+  it('gives up after one retry and keeps the first failure reason', async () => {
     const { fetchImpl, requests } = stubFetch(
       retryable({ status: 503, body: { error: { message: 'down' } } }),
     )
     const error = await makeClient(fetchImpl)
       .generateObject(baseArgs)
       .catch((e: unknown) => e)
-    expect(requests).toHaveLength(3)
+    expect(requests).toHaveLength(2)
     expect((error as AppError).message).toBe('AI 호출에 실패했습니다: HTTP 503')
+  })
+
+  it('stops a Retry-After wait as soon as the caller cancels', async () => {
+    const { fetchImpl, requests } = stubFetch([
+      { status: 429, headers: { 'retry-after': '10' }, body: { error: { message: 'slow' } } },
+      { body: completed('{"answer":"네","score":1}') },
+    ])
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), 10)
+    const started = Date.now()
+    const error = await makeClient(fetchImpl)
+      .generateObject({ ...baseArgs, signal: controller.signal })
+      .catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+    expect(Date.now() - started).toBeLessThan(5000)
+    expect(requests).toHaveLength(1)
   })
 
   it('does not retry a 401', async () => {
@@ -355,6 +383,24 @@ describe('ResponsesAiClient transient retries', () => {
 })
 
 describe('ResponsesAiClient JSON-mode fallback', () => {
+  it('stops retrying when the caller deadline passes during the retry wait', async () => {
+    const { fetchImpl, requests } = stubFetch(
+      retryable({ status: 503, body: { error: { message: 'down' } } }),
+    )
+    const client = new ResponsesAiClient({
+      baseUrl: 'https://gateway.test/v1',
+      apiKey: 'oc-test-key',
+      fetch: fetchImpl,
+      defaultModel: MODEL,
+      retryBaseDelayMs: 500,
+    })
+    const error = await client
+      .generateObject({ ...baseArgs, signal: AbortSignal.timeout(30) })
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(Error)
+    expect(requests).toHaveLength(1)
+  })
+
   it('retries once in JSON mode when text.format is rejected, and remembers it for the model', async () => {
     const { fetchImpl, requests } = stubFetch([
       { status: 400, body: { error: { message: 'Unsupported parameter: text.format' } } },

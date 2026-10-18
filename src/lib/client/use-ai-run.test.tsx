@@ -50,6 +50,21 @@ describe('useAiRun', () => {
     expect(toast).toHaveBeenCalledWith('취소했습니다.')
   })
 
+  it('aborts the signal given to fn on unmount without a cancel toast', async () => {
+    const { result, unmount } = renderHook(() => useAiRun())
+    let seen: AbortSignal | undefined
+    act(() => {
+      void result.current.run((signal) => {
+        seen = signal
+        return new Promise(() => {})
+      })
+    })
+    expect(seen?.aborted).toBe(false)
+    unmount()
+    expect(seen?.aborted).toBe(true)
+    expect(toast).not.toHaveBeenCalled()
+  })
+
   it('resolves with the value and clears running when the call finishes', async () => {
     const { result } = renderHook(() => useAiRun())
     let pending!: Promise<number | null>

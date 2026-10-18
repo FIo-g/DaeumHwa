@@ -98,6 +98,6 @@ describe('POST /api/works/[workId]/interview/answer', () => {
 
   it('returns VALIDATION for an answer over 5000 characters', async () => {
     const res = await POST(request({ turnId, answer: '가'.repeat(5001) }), context({ workId }))
-    expect(await res.json()).toMatchObject({ ok: false })
+    expect(await res.json()).toMatchObject({ ok: false, error: { code: 'VALIDATION' } })
   })
 })

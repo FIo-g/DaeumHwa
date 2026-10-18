@@ -13,13 +13,21 @@ const STRIP_TITLE_MIGRATION = path.resolve(
 )
 
 describe('0001_strip_chapter_title_prefix', () => {
-  it('removes a repeated episode number from legacy titles and keeps other titles', async () => {
+  it('removes only the chapter own number from legacy titles and keeps other titles', async () => {
     const db: Db = await createTestDb()
     const owner = await createTestUser(db)
     const work = await createTestWork(db, owner.id)
-    const titles = ['1화', '2화 재회', '재회', '12화살의 비밀', '제3화: 끝']
-    for (const [index, title] of titles.entries()) {
-      await createTestChapter(db, work.id, { position: index + 1, title })
+    const legacy: [number, string][] = [
+      [1, '1화'],
+      [2, '2화 재회'],
+      [3, '재회'],
+      [4, '12화살의 비밀'],
+      [5, '제3화: 끝'],
+      [6, '제6화: 끝'],
+      [12, '1화 회상'],
+    ]
+    for (const [position, title] of legacy) {
+      await createTestChapter(db, work.id, { position, title })
     }
 
     await db.execute(sql.raw(readFileSync(STRIP_TITLE_MIGRATION, 'utf8')))
@@ -29,6 +37,15 @@ describe('0001_strip_chapter_title_prefix', () => {
       .from(chapters)
       .where(eq(chapters.workId, work.id))
       .orderBy(chapters.position)
-    expect(rows.map((row) => row.title)).toEqual(['', '재회', '재회', '12화살의 비밀', '끝'])
+    // 제3화 on chapter 5 and 1화 on chapter 12 are not this chapter's own number, so they stay.
+    expect(rows.map((row) => row.title)).toEqual([
+      '',
+      '재회',
+      '재회',
+      '12화살의 비밀',
+      '제3화: 끝',
+      '끝',
+      '1화 회상',
+    ])
   })
 })

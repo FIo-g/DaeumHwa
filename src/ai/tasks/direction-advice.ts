@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import type { ThreadStatus } from '@/db/types'
-import { THREAD_STATUS_LABEL } from '@/lib/labels'
+import { chapterLabel, THREAD_STATUS_LABEL } from '@/lib/labels'
 
 // Direction advice (spec F12): three next-arc options from open threads, characters and recent summaries.
 
@@ -70,9 +70,7 @@ function buildAdvicePrompt(raw: AdviceInput): string {
   const summaries =
     input.recentSummaries.length > 0
       ? input.recentSummaries
-          .map(
-            (s) => `- ${s.position}화${s.title.trim() ? ` ${s.title.trim()}` : ''}: ${s.summary}`,
-          )
+          .map((s) => `- ${chapterLabel(s.position, s.title)}: ${s.summary}`)
           .join('\n')
       : '(없음)'
   return [

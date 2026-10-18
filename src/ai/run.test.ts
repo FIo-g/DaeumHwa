@@ -491,7 +491,7 @@ describe('cancel and timeout', () => {
     expect(row.error).toBe(AI_TIMEOUT_MESSAGE)
   })
 
-  it('keeps the output as done when the signal aborts after the answer arrived', async () => {
+  it('records a cancel that lands after the answer arrived as cancelled, keeping the billed tokens', async () => {
     const { db, userId, workId } = await setup()
     const controller = new AbortController()
     const client: AiClient = {
@@ -501,16 +501,13 @@ describe('cancel and timeout', () => {
         return { object: { text: '답' } as never, usage, model: 'claude-haiku-5-5' }
       },
     }
-    const { output, runId } = await runAiTask(
-      db,
-      { userId, workId, signal: controller.signal },
-      task,
-      { q: '안녕' },
-      client,
-    )
-    expect(output).toEqual({ text: '답' })
-    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
-    expect(row.status).toBe('done')
+    await expect(
+      runAiTask(db, { userId, workId, signal: controller.signal }, task, { q: '안녕' }, client),
+    ).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.workId, workId))
+    expect(row.status).toBe('error')
+    expect(row.inputTokens).toBe(usage.inputTokens)
+    expect(row.outputTokens).toBe(usage.outputTokens)
   })
 
   it('maps an abort raised by the client to CANCELLED when the signal is aborted', async () => {
@@ -589,6 +586,123 @@ describe('cancel and timeout', () => {
     ).rejects.toMatchObject({ code: 'CANCELLED' })
     const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
     expect(row.status).toBe('error')
+  })
+})
+
+/**
+ * Client that never answers. It rejects once its signal aborts, the way a fetch or SDK call
+ * does. `onCall` runs when the call starts.
+ */
+function neverSettlingClient(onCall?: () => void): AiClient {
+  const rejectOnAbort = (signal: AbortSignal | undefined) =>
+    new Promise<never>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new Error('This operation was aborted')))
+    })
+  return {
+    ...failingClient,
+    generateObject(args) {
+      onCall?.()
+      return rejectOnAbort(args.signal)
+    },
+    streamText(args) {
+      onCall?.()
+      return {
+        textStream: (async function* () {
+          await rejectOnAbort(args.signal)
+        })(),
+        final: rejectOnAbort(args.signal),
+      }
+    },
+  }
+}
+
+describe('overall deadline', () => {
+  const streamArgs = {
+    task: 'draft-chapter' as const,
+    effort: 'high' as const,
+    maxTokens: 500,
+    system: 's',
+    prompt: 'p',
+    input: { instructions: '' },
+  }
+
+  it('ends a structured call at the deadline with the timeout message and an error run', async () => {
+    const { db, userId, workId } = await setup()
+    await expect(
+      runAiTask(db, { userId, workId, timeoutMs: 30 }, task, { q: '안녕' }, neverSettlingClient()),
+    ).rejects.toMatchObject({ code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.status).toBe('error')
+    expect(row.error).toBe(AI_TIMEOUT_MESSAGE)
+  })
+
+  it('ends a stream at the deadline: done rejects with the timeout message and the run is error', async () => {
+    const { db, userId, workId } = await setup()
+    const { runId, done } = await startAiStream(
+      db,
+      { userId, workId, timeoutMs: 30 },
+      streamArgs,
+      neverSettlingClient(),
+    )
+    await expect(done).rejects.toMatchObject({ code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
+    expect(row.status).toBe('error')
+    expect(row.error).toBe(AI_TIMEOUT_MESSAGE)
+  })
+
+  it('gives the client a signal that aborts at the deadline', async () => {
+    const { db, userId, workId } = await setup()
+    let seen: AbortSignal | undefined
+    const client: AiClient = {
+      ...failingClient,
+      generateObject(args) {
+        seen = args.signal
+        return new Promise<never>(() => {})
+      },
+    }
+    void runAiTask(db, { userId, workId, timeoutMs: 30 }, task, { q: '안녕' }, client).catch(
+      () => undefined,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    expect(seen?.aborted).toBe(true)
+  })
+
+  it('keeps a user cancel as CANCELLED when it lands before the deadline', async () => {
+    const { db, userId, workId } = await setup()
+    const controller = new AbortController()
+    let onCall!: () => void
+    const called = new Promise<void>((resolve) => (onCall = resolve))
+    const pending = runAiTask(
+      db,
+      { userId, workId, signal: controller.signal, timeoutMs: 60_000 },
+      task,
+      { q: '안녕' },
+      neverSettlingClient(onCall),
+    )
+    await called
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({
+      code: 'CANCELLED',
+      message: AI_CANCELLED_MESSAGE,
+    })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.error).toBe(AI_CANCELLED_MESSAGE)
+  })
+
+  it('keeps a user cancel as CANCELLED on a stream that also has a deadline', async () => {
+    const { db, userId, workId } = await setup()
+    const controller = new AbortController()
+    let onCall!: () => void
+    const called = new Promise<void>((resolve) => (onCall = resolve))
+    const { done } = await startAiStream(
+      db,
+      { userId, workId, signal: controller.signal, timeoutMs: 60_000 },
+      streamArgs,
+      neverSettlingClient(onCall),
+    )
+    await called
+    controller.abort()
+    await expect(done).rejects.toMatchObject({ code: 'CANCELLED', message: AI_CANCELLED_MESSAGE })
   })
 })
 

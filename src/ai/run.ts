@@ -52,6 +52,19 @@ export interface StreamRunArgs {
 }
 
 /**
+ * One overall deadline for a call: `signal` is the caller's cancel plus the deadline, so every retry
+ * and the whole stream stay inside `timeoutMs`. `deadline` alone tells a timeout from a cancel.
+ */
+function callSignals(
+  meta: AiRunMeta,
+  timeoutMs: number,
+): { signal: AbortSignal; deadline: AbortSignal } {
+  const deadline = AbortSignal.timeout(timeoutMs)
+  const signal = meta.signal ? AbortSignal.any([meta.signal, deadline]) : deadline
+  return { signal, deadline }
+}
+
+/**
  * Runs one structured AI task and records it in `ai_runs`. Checks the daily token limit first.
  * Post-processing runs before the output is stored. Failures are recorded as `error` runs and
  * rethrown as AppError('AI_ERROR').
@@ -67,6 +80,8 @@ export async function runAiTask<I, O>(
   const taskModel = task.model?.()
   const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
   let usage: AiUsage | undefined
+  const timeoutMs = meta.timeoutMs ?? task.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS
+  const { signal, deadline } = callSignals(meta, timeoutMs)
   try {
     if (meta.signal?.aborted) throw cancelledError()
     const result = await client.generateObject({
@@ -77,11 +92,13 @@ export async function runAiTask<I, O>(
       effort: task.effort,
       maxTokens: task.maxTokens,
       model: taskModel,
-      signal: meta.signal,
-      timeoutMs: meta.timeoutMs ?? task.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS,
+      signal,
+      timeoutMs,
     })
     usage = result.usage
     const output = task.postProcess ? task.postProcess(result.object, input) : result.object
+    // A cancel that landed while the answer was in flight wins: the run is stored as cancelled.
+    if (meta.signal?.aborted) throw cancelledError()
     await finishRun(db, runId, {
       status: 'done',
       usage: result.usage,
@@ -90,7 +107,7 @@ export async function runAiTask<I, O>(
     })
     return { output, runId }
   } catch (error) {
-    const aiError = toRunError(error, meta.signal)
+    const aiError = toRunError(error, meta.signal, deadline)
     // Tokens billed before the failure still count toward the daily limit.
     await finishRun(db, runId, {
       status: 'error',
@@ -113,6 +130,8 @@ export async function startAiStream(
 ): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
   await assertCanStartRun(db, meta.userId)
   const runId = await insertRun(db, meta, args.task, args.model ?? client.defaultModel)
+  const timeoutMs = meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS
+  const { signal, deadline } = callSignals(meta, timeoutMs)
   let stream: ReturnType<AiClient['streamText']>
   try {
     if (meta.signal?.aborted) throw cancelledError()
@@ -123,11 +142,11 @@ export async function startAiStream(
       effort: args.effort,
       maxTokens: args.maxTokens,
       model: args.model,
-      signal: meta.signal,
-      timeoutMs: meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS,
+      signal,
+      timeoutMs,
     })
   } catch (error) {
-    const aiError = toRunError(error, meta.signal)
+    const aiError = toRunError(error, meta.signal, deadline)
     await finishRun(db, runId, {
       status: 'error',
       error: aiError.message,
@@ -146,7 +165,7 @@ export async function startAiStream(
       return result.text
     },
     async (error: unknown) => {
-      const aiError = toRunError(error, meta.signal)
+      const aiError = toRunError(error, meta.signal, deadline)
       await finishRun(db, runId, {
         status: 'error',
         error: aiError.message,
@@ -308,13 +327,20 @@ function isTokenCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
+/** Throws CANCELLED when the caller's signal has fired. Services call it before each write. */
+export function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw cancelledError()
+}
+
 function cancelledError(): AppError {
   return new AppError('CANCELLED', AI_CANCELLED_MESSAGE)
 }
 
-function toRunError(error: unknown, signal?: AbortSignal): AppError {
+function toRunError(error: unknown, signal?: AbortSignal, deadline?: AbortSignal): AppError {
   // A cancel wins over whatever error the client raised while aborting.
   if (signal?.aborted) return cancelledError()
+  // The overall deadline ended the call. Clients may report it as a cancel, so it is checked here.
+  if (deadline?.aborted) return new AppError('AI_ERROR', AI_TIMEOUT_MESSAGE)
   // Usage details stay on the server; actions forward AppError.details to the browser.
   if (error instanceof AppError) {
     return error.details === undefined ? error : new AppError(error.code, error.message)

@@ -10,6 +10,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
 import { user } from './auth-schema'
@@ -442,21 +443,30 @@ export const interviewSessions = pgTable('interview_sessions', {
   updatedAt: updatedAtColumn(),
 })
 
-export const interviewTurns = pgTable('interview_turns', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  sessionId: uuid('session_id')
-    .notNull()
-    .references(() => interviewSessions.id, { onDelete: 'cascade' }),
-  topic: text('topic').notNull().default(''),
-  question: text('question').notNull(),
-  rationale: text('rationale').notNull().default(''),
-  focus: text('focus').$type<InterviewFocus>().notNull().default('setting'),
-  answer: text('answer'),
-  skipped: boolean('skipped').notNull().default(false),
-  proposalCount: integer('proposal_count').notNull().default(0),
-  createdAt: createdAtColumn(),
-  answeredAt: timestamp('answered_at', { withTimezone: true }),
-})
+export const interviewTurns = pgTable(
+  'interview_turns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => interviewSessions.id, { onDelete: 'cascade' }),
+    topic: text('topic').notNull().default(''),
+    question: text('question').notNull(),
+    rationale: text('rationale').notNull().default(''),
+    focus: text('focus').$type<InterviewFocus>().notNull().default('setting'),
+    answer: text('answer'),
+    skipped: boolean('skipped').notNull().default(false),
+    proposalCount: integer('proposal_count').notNull().default(0),
+    createdAt: createdAtColumn(),
+    answeredAt: timestamp('answered_at', { withTimezone: true }),
+  },
+  // A session has at most one open question. Concurrent asks insert at most one of them.
+  (t) => [
+    uniqueIndex('interview_turns_one_open_idx')
+      .on(t.sessionId)
+      .where(sql`${t.answer} is null and ${t.skipped} = false`),
+  ],
+)
 
 export const importJobs = pgTable(
   'import_jobs',

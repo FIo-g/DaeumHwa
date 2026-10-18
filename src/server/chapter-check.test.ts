@@ -2,9 +2,17 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import { FAKE_OUTPUTS } from '@/test/ai-fakes'
-import type { AiClient } from '@/ai/types'
+import { AI_CANCELLED_MESSAGE, type AiClient } from '@/ai/types'
 import type { Db } from '@/db/client'
-import { issues, namingRules, proposals, relations, threadEvents, threads } from '@/db/schema'
+import {
+  aiRuns,
+  issues,
+  namingRules,
+  proposals,
+  relations,
+  threadEvents,
+  threads,
+} from '@/db/schema'
 import type { Actor, IssueRow, ProposalRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { CHAPTER_EXTRACT_SYSTEM } from '@/ai/tasks/chapter-extract'
@@ -70,6 +78,43 @@ function scriptedClient(pick: (system: string) => unknown): AiClient {
 }
 
 describe('runChapterCheck', () => {
+  it('a failed call stops its sibling and both runs end with a stored status', async () => {
+    const chapter = await createTestChapter(db, workId, {
+      position: 1,
+      body: '서윤은 검을 쥐었다.',
+    })
+    const client: AiClient = {
+      provider: 'fake',
+      defaultModel: 'fake',
+      async generateObject(args) {
+        if (args.task.name === 'continuity-check') {
+          throw new AppError('AI_ERROR', 'AI 응답 형식이 올바르지 않습니다.')
+        }
+        // The sibling call waits until the chapter check aborts it, as a real client would.
+        return new Promise((_resolve, reject) => {
+          args.signal?.addEventListener('abort', () =>
+            reject(new AppError('CANCELLED', AI_CANCELLED_MESSAGE)),
+          )
+        })
+      },
+      streamText() {
+        throw new Error('not used')
+      },
+    }
+
+    const error = await runChapterCheck(
+      db,
+      actor(owner.id),
+      { chapterId: chapter.id },
+      client,
+    ).catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'AI_ERROR', message: 'AI 응답 형식이 올바르지 않습니다.' })
+
+    const runs = await db.select().from(aiRuns).where(eq(aiRuns.chapterId, chapter.id))
+    expect(runs).toHaveLength(2)
+    expect(runs.map((run) => run.status)).toEqual(['error', 'error'])
+  })
+
   it('flags a contradiction against a wiki fact with the fact id and the manuscript sentence', async () => {
     const chapter = await createTestChapter(db, workId, {
       position: 1,

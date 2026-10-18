@@ -223,7 +223,7 @@ export async function createChapter(
         )
     }
 
-    const title = stripEpisodePrefix(input.title ?? '')
+    const title = stripEpisodePrefix(input.title ?? '', position)
     const { withSpaces, withoutSpaces } = countChars(body)
     const now = new Date()
     const [chapter] = await tx
@@ -275,6 +275,7 @@ export async function createChaptersBulk(
     const created: ChapterRow[] = []
     for (const [index, item] of input.chapters.entries()) {
       const position = start + index
+      // The heading's own number is the author's numbering, so every leading number is removed here.
       const title = stripEpisodePrefix(item.title)
       const { withSpaces, withoutSpaces } = countChars(item.body)
       const now = new Date()
@@ -328,7 +329,8 @@ export async function saveChapter(
     assertNotArchived(chapter)
 
     const source = input.source ?? 'save'
-    const title = input.title !== undefined ? stripEpisodePrefix(input.title) : chapter.title
+    const title =
+      input.title !== undefined ? stripEpisodePrefix(input.title, chapter.position) : chapter.title
     const body = input.body ?? chapter.body
     const { withSpaces, withoutSpaces } = countChars(body)
     const now = new Date()

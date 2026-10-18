@@ -174,8 +174,44 @@ describe('interview-question task', () => {
     expect(interviewQuestionTask.system).toContain('"story"')
     expect(interviewQuestionTask.system).toContain('<covered>에 있는 질문은 되풀이하지 않는다.')
     expect(interviewQuestionTask.system).toContain(
-      'story 질문은 회차 번호, 떡밥 이름, 독자 반응 같은 구체적인 재료를 짚는다.',
+      'story 질문은 회차 번호, 떡밥 이름, 독자 반응 같은 <story>·<wiki>의 구체적인 재료를 짚는다.',
     )
+  })
+
+  it('system prompt allows story questions before the first chapter and asks how 1화 opens', () => {
+    const system = interviewQuestionTask.system
+    expect(system).not.toContain('"story"를 고르지 않는다')
+    expect(system).toContain('아직 연재 전이므로 1화를 어떻게 열지')
+    expect(system).toContain('초반 전체 전개')
+    expect(system).toContain('없으면 시놉시스, 인물, 떡밥을 재료로 삼는다.')
+  })
+
+  it('marks a question left open when its interview ended as (답 없음), not as skipped', () => {
+    const prompt = buildInterviewQuestionPrompt({
+      ...emptyQuestionInput,
+      covered: [coveredTurn('주인공', '주인공은 누구인가요?', null)],
+    })
+    expect(prompt).toContain('답: (답 없음)')
+    expect(prompt).not.toContain('(건너뜀)')
+  })
+
+  it('prints chapter summaries with chapterLabel, so an empty or prefixed title does not repeat the number', () => {
+    const prompt = buildInterviewQuestionPrompt({
+      ...emptyQuestionInput,
+      story: {
+        latestPosition: 4,
+        recentSummaries: [
+          { position: 3, title: '', summary: '재회한 두 사람' },
+          { position: 4, title: '4화 귀환', summary: '돌아온 검객' },
+        ],
+        readerReactions: [],
+        openIssueCount: 0,
+      },
+    })
+    expect(prompt).toContain('- 3화: 재회한 두 사람')
+    expect(prompt).toContain('- 4화 귀환: 돌아온 검객')
+    expect(prompt).not.toContain('3화 :')
+    expect(prompt).not.toContain('4화 4화')
   })
 })
 
@@ -258,6 +294,13 @@ describe('interview-extract task', () => {
   it('prompt carries the focus of the question', () => {
     const prompt = buildInterviewExtractPrompt(extractInput({ focus: 'story' }))
     expect(prompt).toContain('초점: story')
+  })
+
+  it('system prompt says existing threads are not re-added and existingThreadRef is always null', () => {
+    const system = interviewExtractTask.system
+    expect(system).toContain('existingThreadRef는 항상 null로 둔다.')
+    expect(system).toContain('<threads>에 이미 있는 떡밥은 threads에 다시 넣지 않는다.')
+    expect(system).not.toContain('떡밥이 <threads>에 있는 제목과 같은 떡밥이면')
   })
 
   it('system prompt keeps story answers as planned threads and undecided facts', () => {
