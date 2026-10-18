@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { FORMAT_MESSAGE, MAX_TOKENS_MESSAGE, jsonInstruction } from '@/ai/anthropic'
 import { AI_CANCELLED_MESSAGE, AI_TIMEOUT_MESSAGE } from '@/ai/types'
-import { type OllamaCallStats, OllamaAiClient, OllamaHttpError, stripThink } from '@/ai/ollama'
+import {
+  type OllamaCallStats,
+  OllamaAiClient,
+  OllamaHttpError,
+  ollamaTransport,
+  stripThink,
+} from '@/ai/ollama'
 import { AppError } from '@/lib/errors'
 
 type Call = { url: string; body: Record<string, unknown>; signal: AbortSignal | null | undefined }
@@ -204,6 +212,65 @@ describe('OllamaAiClient.generateObject', () => {
     expect(error).toMatchObject({
       code: 'AI_ERROR',
       message: expect.stringContaining('중간에 끊겼습니다'),
+    })
+  })
+
+  it('wraps a body read failure with its cause code and keeps it retryable as external', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const line = { model: MODEL, message: { role: 'assistant', content: '{"a":' }, done: false }
+        controller.enqueue(new TextEncoder().encode(`${JSON.stringify(line)}\n`))
+        controller.error(new TypeError('terminated', { cause: { code: 'UND_ERR_SOCKET' } }))
+      },
+    })
+    const { fetch } = fakeFetch([
+      new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }),
+    ])
+
+    const error = await catchError(
+      client(fetch).generateObject({
+        task,
+        system: 'SYSTEM',
+        prompt: 'PROMPT',
+        schema,
+        effort: 'low',
+        maxTokens: 4000,
+      }),
+    )
+
+    expect(error).toMatchObject({ code: 'AI_ERROR' })
+    expect((error as Error).message).toContain('UND_ERR_SOCKET')
+  })
+
+  it('cancels the body and tags the failure when an error line ends the read', async () => {
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ error: 'crash' })}\n`))
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const { fetch } = fakeFetch([
+      new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }),
+    ])
+
+    const error = await catchError(
+      client(fetch).generateObject({
+        task,
+        system: 'SYSTEM',
+        prompt: 'PROMPT',
+        schema,
+        effort: 'low',
+        maxTokens: 4000,
+      }),
+    )
+
+    expect(cancelled).toBe(true)
+    expect(error).toMatchObject({
+      code: 'AI_ERROR',
+      details: { failure: 'OLLAMA_STREAM' },
     })
   })
 
@@ -639,5 +706,168 @@ describe('stripThink', () => {
   it('leaves text without a think block unchanged', () => {
     expect(stripThink('본문 <think>x</think>')).toBe('본문 <think>x</think>')
     expect(stripThink('평범한 문장')).toBe('평범한 문장')
+  })
+})
+
+describe('ollamaTransport', () => {
+  let server: Server
+  let base: string
+
+  beforeEach(async () => {
+    server = createServer()
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  })
+
+  afterEach(async () => {
+    server.closeAllConnections()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  })
+
+  function handle(fn: (req: IncomingMessage, res: ServerResponse) => void) {
+    server.on('request', fn)
+  }
+
+  it('sends the method, headers and body and returns the status', async () => {
+    let received: { method?: string; type?: string | string[]; body: string } = { body: '' }
+    handle((req, res) => {
+      let body = ''
+      req.setEncoding('utf8')
+      req.on('data', (chunk: string) => (body += chunk))
+      req.on('end', () => {
+        received = { method: req.method, type: req.headers['content-type'], body }
+        res.writeHead(201, { 'content-type': 'text/plain' })
+        res.end('done')
+      })
+    })
+
+    const res = await ollamaTransport(`${base}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{"a":"한글"}',
+    })
+
+    expect(res.status).toBe(201)
+    expect(res.headers.get('content-type')).toBe('text/plain')
+    expect(await res.text()).toBe('done')
+    expect(received).toEqual({
+      method: 'POST',
+      type: 'application/json',
+      body: '{"a":"한글"}',
+    })
+  })
+
+  it('streams a chunked body as it arrives', async () => {
+    handle((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/x-ndjson' })
+      res.write('{"a":1}\n')
+      setTimeout(() => res.end('{"done":true}\n'), 50)
+    })
+
+    const res = await ollamaTransport(`${base}/api/chat`, { method: 'POST', body: '{}' })
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    const chunks: string[] = []
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(decoder.decode(value, { stream: true }))
+    }
+
+    expect(chunks.join('')).toBe('{"a":1}\n{"done":true}\n')
+    expect(chunks.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('waits for headers longer than fetch headersTimeout allows in tests', async () => {
+    handle((_req, res) => {
+      setTimeout(() => {
+        res.writeHead(200, { 'content-type': 'text/plain' })
+        res.end('late')
+      }, 1500)
+    })
+
+    const res = await ollamaTransport(`${base}/slow`, { method: 'POST', body: '{}' })
+
+    expect(res.ok).toBe(true)
+    expect(await res.text()).toBe('late')
+  })
+
+  it('returns a non-2xx status without throwing', async () => {
+    handle((_req, res) => {
+      res.writeHead(500)
+      res.end('out of memory')
+    })
+
+    const res = await ollamaTransport(`${base}/api/chat`, { method: 'POST', body: '{}' })
+
+    expect(res.status).toBe(500)
+    expect(res.ok).toBe(false)
+  })
+
+  it('rejects with the signal reason and closes the socket when aborted before headers', async () => {
+    let socketClosed!: () => void
+    const closed = new Promise<void>((resolve) => (socketClosed = resolve))
+    handle((req) => {
+      req.socket.once('close', socketClosed)
+    })
+    const controller = new AbortController()
+    const reason = new Error('caller stopped')
+    const pending = ollamaTransport(`${base}/api/chat`, {
+      method: 'POST',
+      body: '{}',
+      signal: controller.signal,
+    })
+    setTimeout(() => controller.abort(reason), 100)
+
+    await expect(pending).rejects.toBe(reason)
+    await closed
+  })
+
+  it('rejects with a DOMException AbortError when the signal has no reason', async () => {
+    handle(() => {})
+    const controller = new AbortController()
+    const pending = ollamaTransport(`${base}/api/chat`, {
+      method: 'POST',
+      body: '{}',
+      signal: controller.signal,
+    })
+    controller.abort()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('makes a body read reject with the timeout reason when aborted mid-body', async () => {
+    handle((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/x-ndjson' })
+      res.write('{"a":1}\n')
+    })
+    const controller = new AbortController()
+    const res = await ollamaTransport(`${base}/api/chat`, {
+      method: 'POST',
+      body: '{}',
+      signal: controller.signal,
+    })
+    const reader = res.body!.getReader()
+    await reader.read()
+
+    controller.abort(new DOMException('limit', 'TimeoutError'))
+
+    await expect(reader.read()).rejects.toMatchObject({ name: 'TimeoutError' })
+  })
+
+  it('rejects with fetch failed and the socket code when nothing listens', async () => {
+    const closed = await new Promise<number>((resolve) => {
+      const port = (server.address() as AddressInfo).port
+      server.close(() => resolve(port))
+    })
+    const pending = ollamaTransport(`http://127.0.0.1:${closed}/api/chat`, {
+      method: 'POST',
+      body: '{}',
+    })
+
+    const error = await catchError(pending)
+    expect(error).toBeInstanceOf(TypeError)
+    expect((error as Error).message).toBe('fetch failed')
+    expect((error as Error & { cause: { code: string } }).cause.code).toBe('ECONNREFUSED')
   })
 })

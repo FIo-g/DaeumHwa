@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ollamaTransport } from '@/ai/ollama'
 import { seoulToday } from '@/lib/dates'
 import { readPending } from './author-io'
 import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
@@ -290,8 +291,8 @@ export type ProbeAttempt = {
 
 /**
  * One streamed generate that produces a single token, so it times loading and prompt evaluation
- * only. Headers arrive at once, so a slow load cannot hit fetch's headers timeout. Returns the
- * final NDJSON chunk.
+ * only. Runs on ollamaTransport, which has no headers timeout: Ollama sends headers only after the
+ * prompt is evaluated, so a long prompt would otherwise fail. Returns the final NDJSON chunk.
  */
 async function ollamaGenerate(
   fetchFn: FetchFn,
@@ -347,7 +348,7 @@ export async function probeContext(o: ProbeOptions): Promise<{
 }> {
   const profile = MODEL_PROFILES[o.model]
   if (profile.provider !== 'ollama') throw new Error(`${o.model} does not run on Ollama`)
-  const fetchFn = o.fetch ?? fetch
+  const fetchFn = o.fetch ?? ollamaTransport
   const base = (o.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434').replace(
     /\/$/,
     '',

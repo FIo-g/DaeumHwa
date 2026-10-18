@@ -10,8 +10,8 @@ import { readerSimTask } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
 import { DEFAULT_AI_TIMEOUT_MS, STREAM_AI_TIMEOUT_MS } from '@/ai/run'
 import type { AiClient, AiEffort, AiUsage, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
+import { OLLAMA_STREAM_FAILURE, type OllamaCallStats } from '@/ai/ollama'
 import type { AiTaskName } from '@/db/types'
-import type { OllamaCallStats } from '@/ai/ollama'
 import { AppError } from '@/lib/errors'
 import type { ModelProfile } from './models'
 import { EN_SYSTEMS } from './localize/en-systems'
@@ -130,6 +130,12 @@ function statusOf(error: unknown): number | undefined {
   return match ? Number(match[1]) : undefined
 }
 
+/** The failure tag an inner client put on its AppError details, if any. */
+function failureTag(error: unknown): unknown {
+  if (!(error instanceof AppError)) return undefined
+  return (error.details as { failure?: unknown } | undefined)?.failure
+}
+
 /** A network error code on the error or on its cause chain (checked a few levels deep). */
 function hasNetworkCode(error: unknown, depth = 0): boolean {
   if (depth > 3) return false
@@ -147,6 +153,8 @@ export function classifyError(error: unknown): FailureKind {
   const message = errorMessage(error)
   const status = statusOf(error)
   if (error instanceof AppError && error.code === 'AI_LIMIT') return 'external-limit'
+  // A server failure mid-answer (runner crash, dropped connection) is not the model's output.
+  if (failureTag(error) === OLLAMA_STREAM_FAILURE) return 'external-network'
   if (status === 429 || LIMIT_PATTERN.test(message)) return 'external-limit'
   if (status !== undefined && status >= 500) return 'external-network'
   if (hasNetworkCode(error) || NETWORK_PATTERN.test(message)) return 'external-network'

@@ -1,5 +1,10 @@
 import { FakeAiClient } from '@/test/fake-ai'
-import { OllamaAiClient, type OllamaCallStats, type OllamaOptions } from '@/ai/ollama'
+import {
+  OllamaAiClient,
+  type OllamaCallStats,
+  type OllamaOptions,
+  ollamaTransport,
+} from '@/ai/ollama'
 import { OpencodeAiClient } from '@/ai/opencode'
 import type { AiClient, AiEffort } from '@/ai/types'
 
@@ -108,7 +113,7 @@ export function createModelClient(
       return new OllamaAiClient({
         ...profile.ollama,
         model: profile.model,
-        fetch: o.fetch,
+        fetch: o.fetch ?? ollamaTransport,
         onStats: o.onStats,
       })
     case 'opencode':

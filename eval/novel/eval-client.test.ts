@@ -274,6 +274,17 @@ describe('EvalClient failures', () => {
     expect(classifyError(new AppError('AI_ERROR', FORMAT_MESSAGE))).toBe('model')
     expect(classifyError(new AppError('AI_ERROR', AI_TIMEOUT_MESSAGE))).toBe('model')
   })
+
+  it('classifies a mid-stream server failure as external, and an untagged AI_ERROR as model', () => {
+    const tagged = { failure: 'OLLAMA_STREAM' }
+    expect(classifyError(new AppError('AI_ERROR', 'AI 호출에 실패했습니다: crash', tagged))).toBe(
+      'external-network',
+    )
+    expect(classifyError(new AppError('AI_ERROR', 'AI 응답이 중간에 끊겼습니다.', tagged))).toBe(
+      'external-network',
+    )
+    expect(classifyError(new AppError('AI_ERROR', 'AI 호출에 실패했습니다: crash'))).toBe('model')
+  })
 })
 
 describe('classifyError on errors from the real inner clients', () => {
@@ -369,6 +380,35 @@ describe('classifyError on errors from the real inner clients', () => {
       fetch: async () => {
         throw new TypeError('fetch failed')
       },
+    })
+    const error = await thrownBy(client.generateObject(baseArgs))
+    expect(classifyError(error)).toBe('external-network')
+  })
+
+  it('Ollama: an error line mid-stream is an external network failure', async () => {
+    const client = new OllamaAiClient({
+      model: 'qwen-test',
+      numCtx: 1000,
+      baseUrl: 'http://ollama.test',
+      fetch: async () =>
+        new Response(`${JSON.stringify({ error: 'runner stopped' })}\n`, {
+          headers: { 'content-type': 'application/x-ndjson' },
+        }),
+    })
+    const error = await thrownBy(client.generateObject(baseArgs))
+    expect(classifyError(error)).toBe('external-network')
+  })
+
+  it('Ollama: a stream that ends without done is an external network failure', async () => {
+    const client = new OllamaAiClient({
+      model: 'qwen-test',
+      numCtx: 1000,
+      baseUrl: 'http://ollama.test',
+      fetch: async () =>
+        new Response(
+          `${JSON.stringify({ model: 'qwen-test', message: { role: 'assistant', content: '{' }, done: false })}\n`,
+          { headers: { 'content-type': 'application/x-ndjson' } },
+        ),
     })
     const error = await thrownBy(client.generateObject(baseArgs))
     expect(classifyError(error)).toBe('external-network')

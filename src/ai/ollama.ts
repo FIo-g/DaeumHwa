@@ -1,3 +1,6 @@
+import { request as httpRequest, type IncomingMessage } from 'node:http'
+import { request as httpsRequest } from 'node:https'
+import { Readable } from 'node:stream'
 import { z } from 'zod'
 import {
   FORMAT_MESSAGE,
@@ -18,6 +21,9 @@ import type { AiTaskName } from '@/db/types'
 import { AppError } from '@/lib/errors'
 
 export type OllamaThink = boolean | 'low' | 'medium' | 'high'
+
+/** Failure tag on the AppError of a mid-stream server failure (runner crash, dropped connection). */
+export const OLLAMA_STREAM_FAILURE = 'OLLAMA_STREAM'
 
 /** Ollama's own timings for one successful HTTP attempt. Durations are already converted to ms. */
 export type OllamaCallStats = {
@@ -42,7 +48,7 @@ export interface OllamaOptions {
   think?: OllamaThink
   /** How long Ollama keeps the model loaded after a call. Defaults to '30m'. */
   keepAlive?: string
-  /** Injected in tests; defaults to the global fetch. */
+  /** Injected in tests; defaults to ollamaTransport. */
   fetch?: typeof fetch
   /** Called once per successful HTTP attempt with Ollama's timings. The app does not set it. */
   onStats?: (s: OllamaCallStats) => void
@@ -96,6 +102,71 @@ export function stripThink(text: string): string {
   return text.replace(LEADING_THINK, '')
 }
 
+const NO_BODY_STATUSES = new Set([101, 103, 204, 205, 304])
+
+/**
+ * Default transport for Ollama calls, built on node:http / node:https with no timeouts. Global fetch
+ * (undici) rejects when headers take longer than 300 s, and Ollama sends headers only after the
+ * prompt is evaluated, so a long prompt on a local model would fail. Honours the abort signal and
+ * rejects with its reason; socket errors become `TypeError('fetch failed')` with the socket error
+ * as cause, like fetch. Request bodies must be strings (what Ollama calls send).
+ */
+export const ollamaTransport: typeof fetch = (input, init) =>
+  new Promise<Response>((resolve, reject) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    const signal = init?.signal ?? undefined
+    const abortReason = () =>
+      signal?.reason ?? new DOMException('This operation was aborted', 'AbortError')
+    if (signal?.aborted) {
+      reject(abortReason())
+      return
+    }
+
+    const body = init?.body === undefined || init.body === null ? undefined : String(init.body)
+    const headers: Record<string, string> = {}
+    new Headers(init?.headers).forEach((value, key) => {
+      headers[key] = value
+    })
+    if (body !== undefined) headers['content-length'] = String(Buffer.byteLength(body))
+
+    const send = url.protocol === 'https:' ? httpsRequest : httpRequest
+    // agent: false opens a fresh socket per call, so no idle socket is reused after a long wait.
+    const req = send(url, { method: init?.method ?? 'GET', headers, agent: false })
+    let incoming: IncomingMessage | undefined
+
+    const onAbort = () => {
+      const reason = abortReason()
+      reject(reason)
+      req.destroy()
+      incoming?.destroy(reason as Error)
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    req.once('close', () => signal?.removeEventListener('abort', onAbort))
+    // Errors before the response reach the caller as fetch's error; later ones surface on the body.
+    req.on('error', (error) => reject(new TypeError('fetch failed', { cause: error })))
+    req.on('response', (res) => {
+      incoming = res
+      const responseHeaders = new Headers()
+      for (const [key, value] of Object.entries(res.headers)) {
+        if (value === undefined) continue
+        for (const item of Array.isArray(value) ? value : [value]) {
+          responseHeaders.append(key, item)
+        }
+      }
+      const status = res.statusCode ?? 500
+      if (NO_BODY_STATUSES.has(status)) {
+        res.resume()
+      }
+      resolve(
+        new Response(
+          NO_BODY_STATUSES.has(status) ? null : (Readable.toWeb(res) as ReadableStream),
+          { status, statusText: res.statusMessage ?? '', headers: responseHeaders },
+        ),
+      )
+    })
+    req.end(body)
+  })
+
 /**
  * Local Ollama client (/api/chat). Structured calls use one schema-constrained attempt, then one
  * plain JSON retry with jsonInstruction, the same policy as AnthropicAiClient's jsonFallback path.
@@ -111,7 +182,7 @@ export class OllamaAiClient implements AiClient {
     this.settings = options
     this.defaultModel = options.model
     this.baseUrl = options.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434'
-    this.fetchImpl = options.fetch ?? fetch
+    this.fetchImpl = options.fetch ?? ollamaTransport
   }
 
   async generateObject<T>(args: GenerateObjectArgs<T>): Promise<ObjectResult<T>> {
@@ -237,7 +308,7 @@ export class OllamaAiClient implements AiClient {
       if (!line.trim()) return
       const chunk = JSON.parse(line) as ChatResponse
       if (chunk.error !== undefined) {
-        throw aiErrorWithUsage(`AI 호출에 실패했습니다: ${chunk.error.slice(0, 120)}`, args.billed)
+        throw streamFailure(`AI 호출에 실패했습니다: ${chunk.error.slice(0, 120)}`, args.billed)
       }
       if (chunk.model) resultModel = chunk.model
       raw += chunk.message?.content ?? ''
@@ -253,22 +324,28 @@ export class OllamaAiClient implements AiClient {
     const decoder = new TextDecoder()
     const reader = args.response.body.getReader()
     let buffered = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffered += decoder.decode(value, { stream: true })
-      let newline = buffered.indexOf('\n')
-      while (newline !== -1) {
-        handleLine(buffered.slice(0, newline))
-        buffered = buffered.slice(newline + 1)
-        newline = buffered.indexOf('\n')
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffered += decoder.decode(value, { stream: true })
+        let newline = buffered.indexOf('\n')
+        while (newline !== -1) {
+          handleLine(buffered.slice(0, newline))
+          buffered = buffered.slice(newline + 1)
+          newline = buffered.indexOf('\n')
+        }
       }
+      buffered += decoder.decode()
+      handleLine(buffered)
+    } catch (error) {
+      // Stop the body so Ollama does not keep generating into a reader nobody reads.
+      await reader.cancel().catch(() => undefined)
+      throw withCauseCode(error)
     }
-    buffered += decoder.decode()
-    handleLine(buffered)
 
     // Without a done chunk the answer was cut short; it must not be scored as complete.
-    if (!sawDone) throw aiErrorWithUsage(STREAM_INCOMPLETE_MESSAGE, args.billed)
+    if (!sawDone) throw streamFailure(STREAM_INCOMPLETE_MESSAGE, args.billed)
     return { content: raw, usage, model: resultModel, doneReason }
   }
 
@@ -369,12 +446,14 @@ function requestSignal(call: CallLimits): AbortSignal | undefined {
 
 /**
  * fetch rejects with a bare "fetch failed" TypeError; the real reason (e.g. UND_ERR_HEADERS_TIMEOUT)
- * is on its cause. Put that code in the message so logs and classifyError can see it. Abort errors
- * are returned unchanged, since their name decides CANCELLED vs timeout.
+ * is on its cause. Body reads can fail with a socket error that carries the code on itself. Put the
+ * code in the message so logs and classifyError can see it. Abort errors and app errors are returned
+ * unchanged, since their name or code decides the outcome.
  */
 function withCauseCode(error: unknown): unknown {
-  if (isAbortError(error) || !(error instanceof Error)) return error
-  const code = (error.cause as { code?: unknown } | undefined)?.code
+  if (isAbortError(error) || !(error instanceof Error) || error instanceof AppError) return error
+  const code =
+    (error.cause as { code?: unknown } | undefined)?.code ?? (error as { code?: unknown }).code
   if (typeof code !== 'string') return error
   return new Error(`${error.message} (${code})`, { cause: error })
 }
@@ -387,6 +466,11 @@ function assertComplete(doneReason: string | undefined, usage: AiUsage): void {
 /** AI_ERROR for a call the server already answered. `details.usage` lets run.ts count those tokens. */
 function aiErrorWithUsage(message: string, usage: AiUsage): AppError {
   return new AppError('AI_ERROR', message, { usage })
+}
+
+/** AI_ERROR for a server failure mid-answer. The failure tag lets classifyError treat it as external. */
+function streamFailure(message: string, usage: AiUsage): AppError {
+  return new AppError('AI_ERROR', message, { usage, failure: OLLAMA_STREAM_FAILURE })
 }
 
 function usageOf(data: ChatResponse): AiUsage {
