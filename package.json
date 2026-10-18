@@ -18,7 +18,8 @@
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate-cli.ts",
-    "eval:continuity": "tsx eval/run-continuity.ts"
+    "eval:continuity": "tsx eval/run-continuity.ts",
+    "eval:novel": "tsx eval/novel/cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",
