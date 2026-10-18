@@ -8,10 +8,13 @@ import type { AiTaskDef } from '@/ai/types'
 import {
   AI_CANCELLED_MESSAGE,
   AI_TIMEOUT_MESSAGE,
+  DEFAULT_AI_TIMEOUT_MS,
+  STREAM_AI_TIMEOUT_MS,
   assertWithinLimit,
   getTodayUsage,
   listAiRuns,
   runAiTask,
+  setAiTimeoutOverride,
   startAiStream,
 } from '@/ai/run'
 import type { Db } from '@/db/client'
@@ -740,5 +743,112 @@ describe('listAiRuns', () => {
     await expect(
       listAiRuns(db, { userId: stranger.id }, workId, { task: 'proofread' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+})
+
+describe('setAiTimeoutOverride (eval seam)', () => {
+  afterEach(() => {
+    setAiTimeoutOverride(null)
+  })
+
+  it('caps runAiTask at the override and reports AI_TIMEOUT when it fires', async () => {
+    const { db, userId, workId } = await setup()
+    const client: AiClient = {
+      provider: 'test',
+      defaultModel: 'fake',
+      generateObject({ signal }) {
+        return new Promise((_, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        })
+      },
+      streamText() {
+        throw new Error('not used')
+      },
+    }
+    setAiTimeoutOverride(30)
+    const started = Date.now()
+    await expect(runAiTask(db, { userId, workId }, task, { q: 'x' }, client)).rejects.toMatchObject(
+      { code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE },
+    )
+    expect(Date.now() - started).toBeLessThan(200)
+  })
+
+  it('passes DEFAULT_AI_TIMEOUT_MS to runAiTask again after the override is cleared', async () => {
+    const { db, userId, workId } = await setup()
+    const seen: number[] = []
+    const client: AiClient = {
+      provider: 'test',
+      defaultModel: 'fake',
+      async generateObject(args) {
+        seen.push(args.timeoutMs ?? -1)
+        const object = args.schema.parse({ text: 'ok' })
+        return { object, usage: { inputTokens: 0, outputTokens: 0 }, model: 'fake' }
+      },
+      streamText() {
+        throw new Error('not used')
+      },
+    }
+    setAiTimeoutOverride(30)
+    setAiTimeoutOverride(null)
+    await runAiTask(db, { userId, workId }, task, { q: 'x' }, client)
+    expect(seen).toEqual([DEFAULT_AI_TIMEOUT_MS])
+  })
+
+  it('caps startAiStream at the override and reports AI_TIMEOUT when it fires', async () => {
+    const { db, userId, workId } = await setup()
+    const client: AiClient = {
+      provider: 'test',
+      defaultModel: 'fake',
+      async generateObject() {
+        throw new Error('not used')
+      },
+      streamText({ signal }) {
+        const final = new Promise<never>((_, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        })
+        return { textStream: (async function* () {})(), final }
+      },
+    }
+    setAiTimeoutOverride(30)
+    const started = Date.now()
+    const { done } = await startAiStream(
+      db,
+      { userId, workId },
+      { task: 'proofread', input: {}, effort: 'low', maxTokens: 10, system: '', prompt: '' },
+      client,
+    )
+    await expect(done).rejects.toMatchObject({ code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE })
+    expect(Date.now() - started).toBeLessThan(200)
+  })
+
+  it('passes STREAM_AI_TIMEOUT_MS to startAiStream again after the override is cleared', async () => {
+    const { db, userId, workId } = await setup()
+    const seen: number[] = []
+    const client: AiClient = {
+      provider: 'test',
+      defaultModel: 'fake',
+      async generateObject() {
+        throw new Error('not used')
+      },
+      streamText(args) {
+        seen.push(args.timeoutMs ?? -1)
+        const final = Promise.resolve({
+          text: 'ok',
+          usage: { inputTokens: 0, outputTokens: 0 },
+          model: 'fake',
+        })
+        return { textStream: (async function* () {})(), final }
+      },
+    }
+    setAiTimeoutOverride(30)
+    setAiTimeoutOverride(null)
+    const { done } = await startAiStream(
+      db,
+      { userId, workId },
+      { task: 'proofread', input: {}, effort: 'low', maxTokens: 10, system: '', prompt: '' },
+      client,
+    )
+    await done
+    expect(seen).toEqual([STREAM_AI_TIMEOUT_MS])
   })
 })

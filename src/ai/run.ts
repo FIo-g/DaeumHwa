@@ -30,6 +30,16 @@ export const DEFAULT_AI_TIMEOUT_MS = 120_000
 export const STREAM_AI_TIMEOUT_MS = 280_000
 
 /**
+ * Eval harness only: overrides every call's time limit while set. Null (the default) restores the
+ * normal limits. Product code never calls it.
+ */
+let timeoutOverrideMs: number | null = null
+
+export function setAiTimeoutOverride(ms: number | null): void {
+  timeoutOverrideMs = ms
+}
+
+/**
  * `signal` cancels the call (the run is recorded as `error` with 취소했습니다.). `timeoutMs`
  * overrides the task's own limit.
  */
@@ -80,7 +90,7 @@ export async function runAiTask<I, O>(
   const taskModel = task.model?.()
   const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
   let usage: AiUsage | undefined
-  const timeoutMs = meta.timeoutMs ?? task.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS
+  const timeoutMs = timeoutOverrideMs ?? meta.timeoutMs ?? task.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS
   const { signal, deadline } = callSignals(meta, timeoutMs)
   try {
     if (meta.signal?.aborted) throw cancelledError()
@@ -130,7 +140,7 @@ export async function startAiStream(
 ): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
   await assertCanStartRun(db, meta.userId)
   const runId = await insertRun(db, meta, args.task, args.model ?? client.defaultModel)
-  const timeoutMs = meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS
+  const timeoutMs = timeoutOverrideMs ?? meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS
   const { signal, deadline } = callSignals(meta, timeoutMs)
   let stream: ReturnType<AiClient['streamText']>
   try {
