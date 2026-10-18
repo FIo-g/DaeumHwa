@@ -34,8 +34,11 @@ const MODEL_QUEUES = {
 const QUEUE_NAMES = ['local', 'cloud']
 const MAX_LOOP_ITERATIONS = 400
 // The same pending item coming back this many times in a row means the author's answers do not
-// clear it. The run stops with status error rather than spending agents on it.
-const MAX_SAME_PENDING = 5
+// clear it. The run stops with status error rather than spending agents on it. The interview is
+// one plan step with up to 12 interview_answer pendings, so a healthy run can repeat the step for
+// many turns without a proposal. 30 is above the 12 questions and still bounds a stuck author
+// to about 60 agents.
+const MAX_SAME_PENDING = 30
 
 const RUNNER_SCHEMA = {
   type: 'object',
