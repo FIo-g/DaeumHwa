@@ -26,6 +26,15 @@ Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`.
    - **Judge-bias caveat**: state that the scores come from Sonnet judging against the criteria (criteria section 4), that LLM judges agree only weakly with people on single works and better on model rankings, and that the Haiku and Luna runs are the target line, not a human baseline.
 5. Reply with one line: `wrote docs/eval/novel/<date>/summary.md`.
 
+## Runs with different chapter counts
+
+- Runs may have different chapter counts. Read `chapters` from each run's `config.json`.
+- By user decision (2026-10-18), qwen3.8-27b runs only 2 chapters, because one chapter took 152 minutes of model time. The other models run 5 chapters.
+- The opening paragraph of `summary.md` must state which runs are 2-chapter runs and why.
+- Compare like with like. Every per-chapter comparison table (Q1–Q9 means, verdicts, threshold failures, extraction and continuity results) is built from chapters 1–2, the chapters every run shares. Label each such table "1~2화 기준".
+- Full-run figures for 5-chapter runs (all chapters, cumulative setting contradictions, TTCW pass rate) may also be shown. Each must carry the run's chapter count. Do not put them next to a 2-chapter run as if they were comparable.
+- Speed and time per chapter are per-chapter figures, so they are comparable across runs whatever the chapter count.
+
 ## Rules
 
 - Write only `docs/eval/novel/<date>/summary.md`. Do not edit any other file.
