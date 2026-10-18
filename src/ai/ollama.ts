@@ -55,6 +55,8 @@ type ChatResponse = {
   done_reason?: string
   prompt_eval_count?: number
   eval_count?: number
+  /** Set on an NDJSON line when the server failed mid-stream. */
+  error?: string
 }
 
 type ObjectResult<T> = { object: T; usage: AiUsage; model: string }
@@ -66,6 +68,7 @@ type ChatResult = { content: string; usage: AiUsage; model: string; doneReason?:
 
 const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
 const THINK_OPEN = '<think>'
+const STREAM_INCOMPLETE_MESSAGE = 'AI 응답이 중간에 끊겼습니다. 다시 시도해 주세요.'
 const LEADING_THINK = /^\s*<think>[\s\S]*?<\/think>\s*/
 
 /** Removes a think block at the start of a model answer. Text without one is returned unchanged. */
@@ -165,6 +168,7 @@ export class OllamaAiClient implements AiClient {
       let emitted = ''
       let usage = NO_USAGE
       let doneReason: string | undefined
+      let sawDone = false
       let resultModel = model
       // Pushes the part of the visible text that has not been sent yet.
       const pushVisible = (visible: string | undefined) => {
@@ -175,9 +179,13 @@ export class OllamaAiClient implements AiClient {
       const handleLine = (line: string) => {
         if (!line.trim()) return
         const chunk = JSON.parse(line) as ChatResponse
+        if (chunk.error !== undefined) {
+          throw aiErrorWithUsage(`AI 호출에 실패했습니다: ${chunk.error.slice(0, 120)}`, usage)
+        }
         if (chunk.model) resultModel = chunk.model
         raw += chunk.message?.content ?? ''
         if (chunk.done) {
+          sawDone = true
           usage = usageOf(chunk)
           doneReason = chunk.done_reason
         }
@@ -201,6 +209,8 @@ export class OllamaAiClient implements AiClient {
       buffered += decoder.decode()
       handleLine(buffered)
 
+      // Without a done chunk the answer was cut short; it must not be scored as complete.
+      if (!sawDone) throw aiErrorWithUsage(STREAM_INCOMPLETE_MESSAGE, usage)
       assertComplete(doneReason, usage)
       const text = stripThink(raw)
       pushVisible(text)
@@ -339,8 +349,10 @@ function toAiError(error: unknown, billed: AiUsage, call: CallLimits): AppError 
   const billedAny = billed.inputTokens > 0 || billed.outputTokens > 0
   const details = billedAny ? { usage: billed } : undefined
   if (isAbortError(error)) {
-    // An abort the caller did not send, on a call with a time limit, came from that limit.
-    const timedOut = call.timeoutMs !== undefined && !call.signal?.aborted
+    // fetch rejects with TimeoutError when AbortSignal.timeout fires. An abort the caller did not
+    // send, on a call with a time limit, also came from that limit.
+    const timedOut =
+      isTimeoutError(error) || (call.timeoutMs !== undefined && !call.signal?.aborted)
     return timedOut
       ? new AppError('AI_ERROR', AI_TIMEOUT_MESSAGE, details)
       : new AppError('CANCELLED', AI_CANCELLED_MESSAGE, details)
@@ -350,5 +362,10 @@ function toAiError(error: unknown, billed: AiUsage, call: CallLimits): AppError 
 }
 
 function isAbortError(error: unknown): boolean {
-  return (error as { name?: unknown } | null)?.name === 'AbortError'
+  const name = (error as { name?: unknown } | null)?.name
+  return name === 'AbortError' || name === 'TimeoutError'
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return (error as { name?: unknown } | null)?.name === 'TimeoutError'
 }

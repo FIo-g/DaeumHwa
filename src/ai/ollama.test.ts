@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { FORMAT_MESSAGE, MAX_TOKENS_MESSAGE, jsonInstruction } from '@/ai/anthropic'
-import { AI_CANCELLED_MESSAGE } from '@/ai/types'
+import { AI_CANCELLED_MESSAGE, AI_TIMEOUT_MESSAGE } from '@/ai/types'
 import { OllamaAiClient, OllamaHttpError, stripThink } from '@/ai/ollama'
 import { AppError } from '@/lib/errors'
 
@@ -220,6 +220,49 @@ describe('OllamaAiClient.generateObject', () => {
     expect(calls[0].signal).toBe(controller.signal)
     expect(error).toMatchObject({ code: 'CANCELLED', message: AI_CANCELLED_MESSAGE })
   })
+
+  it('maps a fetch TimeoutError (real time limit) to AI_TIMEOUT_MESSAGE', async () => {
+    const timeoutFetch = (async () => {
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+    }) as typeof fetch
+
+    const error = await catchError(
+      client(timeoutFetch).generateObject({
+        task,
+        system: 'SYSTEM',
+        prompt: 'PROMPT',
+        schema,
+        effort: 'low',
+        maxTokens: 4000,
+        timeoutMs: 1000,
+      }),
+    )
+
+    expect(error).toMatchObject({ code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE })
+  })
+
+  it('maps a caller abort on a call with a time limit to CANCELLED', async () => {
+    const controller = new AbortController()
+    const abortingFetch = (async () => {
+      controller.abort()
+      throw new DOMException('aborted', 'AbortError')
+    }) as typeof fetch
+
+    const error = await catchError(
+      client(abortingFetch).generateObject({
+        task,
+        system: 'SYSTEM',
+        prompt: 'PROMPT',
+        schema,
+        effort: 'low',
+        maxTokens: 4000,
+        timeoutMs: 1000,
+        signal: controller.signal,
+      }),
+    )
+
+    expect(error).toMatchObject({ code: 'CANCELLED', message: AI_CANCELLED_MESSAGE })
+  })
 })
 
 describe('OllamaAiClient.streamText', () => {
@@ -298,6 +341,41 @@ describe('OllamaAiClient.streamText', () => {
     expect(pieces.join('')).toBe('가')
     expect(pieces.join('')).not.toContain('plan')
     expect((await final).text).toBe('가')
+  })
+
+  it('rejects with AI_ERROR when the stream carries an error line mid-answer', async () => {
+    const { fetch } = fakeFetch([
+      ndjsonReply([
+        { model: MODEL, message: { role: 'assistant', content: '가' }, done: false },
+        { error: 'model runner stopped' },
+      ]),
+    ])
+    const { final } = client(fetch).streamText({
+      task,
+      system: 'SYSTEM',
+      prompt: 'PROMPT',
+      effort: 'low',
+      maxTokens: 4000,
+    })
+
+    await expect(final).rejects.toMatchObject({ code: 'AI_ERROR' })
+    await expect(final).rejects.toThrow('model runner stopped')
+  })
+
+  it('rejects with AI_ERROR when the stream ends without a done chunk', async () => {
+    const { fetch } = fakeFetch([
+      ndjsonReply([{ model: MODEL, message: { role: 'assistant', content: '가' }, done: false }]),
+    ])
+    const { final } = client(fetch).streamText({
+      task,
+      system: 'SYSTEM',
+      prompt: 'PROMPT',
+      effort: 'low',
+      maxTokens: 4000,
+    })
+
+    await expect(final).rejects.toMatchObject({ code: 'AI_ERROR' })
+    await expect(final).rejects.toThrow('중간에 끊겼습니다')
   })
 })
 
