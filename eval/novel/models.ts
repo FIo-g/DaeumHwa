@@ -76,7 +76,8 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     queue: 'cloud',
     provider: 'opencode',
     model: 'claude-haiku-5-5',
-    effort: 'max',
+    // User decision 2026-10-18 after the pilot: at 'max' Haiku spent the whole output budget on thinking and drafts were cut off.
+    effort: 'high',
     maxTokensFloor: 32000,
     timeoutMs: CLOUD_TIMEOUT_MS,
     variant: 'api',
@@ -86,7 +87,8 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     queue: 'cloud',
     provider: 'opencode',
     model: 'gpt-6-luna',
-    effort: 'max',
+    // User decision 2026-10-18 after the pilot: at 'max' Haiku spent the whole output budget on thinking and drafts were cut off.
+    effort: 'high',
     maxTokensFloor: 32000,
     timeoutMs: CLOUD_TIMEOUT_MS,
     variant: 'api',
