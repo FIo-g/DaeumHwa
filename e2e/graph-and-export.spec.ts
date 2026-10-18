@@ -27,6 +27,23 @@ test('relation graph renders and the backup downloads', async ({ page }) => {
   const graph = page.getByRole('img', { name: '관계 그래프', exact: true })
   await expect(graph).toBeVisible()
   await expect(graph.locator('canvas').first()).toBeVisible({ timeout: 15_000 })
+  // One cytoscape instance only: a second mount would add a second node layer.
+  const nodeLayer = page.locator('canvas[data-id="layer2-node"]')
+  await expect(nodeLayer).toHaveCount(1)
+
+  // Leave for the wiki with the sidebar, come back through the tab bar, and check again.
+  await page
+    .getByRole('navigation', { name: '작품 메뉴' })
+    .getByRole('link', { name: '설정 보드', exact: true })
+    .click()
+  await expect(page).toHaveURL(new RegExp(`/works/${workId}/wiki`))
+  await page
+    .getByRole('navigation', { name: '설정 보드 탭' })
+    .getByRole('link', { name: '관계 그래프', exact: true })
+    .click()
+  await expect(page).toHaveURL(new RegExp(`/works/${workId}/wiki/graph`))
+  await expect(page.getByRole('img', { name: '관계 그래프', exact: true })).toBeVisible()
+  await expect(nodeLayer).toHaveCount(1)
 
   await page.goto(`/works/${workId}/history`)
   const downloadPromise = page.waitForEvent('download')

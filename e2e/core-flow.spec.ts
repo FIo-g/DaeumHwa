@@ -14,6 +14,9 @@ test('write, check against the wiki, approve, and read history', async ({ page }
   await page.goto(`/works/${workId}/write`)
   await page.waitForURL(/\/works\/[^/]+\/chapters\/[^/]+$/)
   const chapterPath = new URL(page.url()).pathname
+  // The first chapter title must not repeat its number.
+  await expect(page.getByRole('textbox', { name: '원고 본문' })).toBeVisible()
+  await expect(page.locator('body')).not.toContainText('1화 1화')
 
   await page.getByRole('textbox', { name: '원고 본문' }).fill(SENTENCE)
   await expect(page.getByText('저장됨', { exact: true })).toBeVisible({ timeout: 15_000 })
@@ -21,6 +24,7 @@ test('write, check against the wiki, approve, and read history', async ({ page }
   // Reload to prove the sentence reached the server, not just the browser.
   await page.reload()
   await expect(page.getByRole('textbox', { name: '원고 본문' })).toHaveValue(SENTENCE)
+  await expect(page.locator('body')).not.toContainText('1화 1화')
 
   // Settings board: create the character 서윤 and a confirmed fact about her.
   await page
