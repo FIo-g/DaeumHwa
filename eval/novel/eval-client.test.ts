@@ -526,6 +526,73 @@ describe('EvalClient speed', () => {
     })
   })
 
+  it('times a stream whose text the caller never reads', async () => {
+    const clock = { t: 0 }
+    let resolveFinal!: (result: { text: string; usage: AiUsage; model: string }) => void
+    const final = new Promise<{ text: string; usage: AiUsage; model: string }>((resolve) => {
+      resolveFinal = resolve
+    })
+    const inner: AiClient = {
+      provider: 'spy',
+      defaultModel: 'spy-model',
+      generateObject(): never {
+        throw new Error('generateObject is not used by this client')
+      },
+      streamText() {
+        const textStream = (async function* () {
+          clock.t = 1000
+          yield 'Hello'
+          clock.t = 5000
+          resolveFinal({
+            text: 'Hello',
+            usage: { inputTokens: 10, outputTokens: 400 },
+            model: 'spy-model',
+          })
+        })()
+        return { textStream, final }
+      },
+    }
+    const client = new EvalClient({
+      inner,
+      profile: CLOUD,
+      lang: 'ko',
+      callsDir,
+      now: () => clock.t,
+    })
+    const stream = client.streamText({
+      task: { name: 'draft-chapter', input: {} },
+      system: DRAFT_SYSTEM,
+      prompt: 'draft',
+      effort: 'high',
+      maxTokens: 16000,
+    })
+    await stream.final
+
+    const record = readRecord('001-draft-chapter.json')
+    expect(record).toMatchObject({ firstTokenMs: 1000, durationMs: 5000 })
+    expect(record.speed).toEqual({
+      outputTokensPerSec: 100,
+      promptTokensPerSec: null,
+      source: 'wall',
+    })
+  })
+
+  it('still yields every chunk once when the caller reads after final settles', async () => {
+    const spy = spyClient({ chunks: ['a', 'b', 'c'] })
+    const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'ko', callsDir })
+    const stream = client.streamText({
+      task: { name: 'draft-chapter', input: {} },
+      system: DRAFT_SYSTEM,
+      prompt: 'draft',
+      effort: 'high',
+      maxTokens: 16000,
+    })
+    await stream.final
+    const chunks: string[] = []
+    for await (const chunk of stream.textStream) chunks.push(chunk)
+    expect(chunks).toEqual(['a', 'b', 'c'])
+  })
+
   it('leaves speed null for failed calls', async () => {
     const spy = spyClient({ error: new Error('boom') })
     const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'ko', callsDir })

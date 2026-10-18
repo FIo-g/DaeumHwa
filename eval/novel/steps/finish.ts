@@ -14,7 +14,7 @@ import { readCallRecords, requireWorkId, writeRunFile } from './util'
 const NO_SPEED: CallSpeed = { outputTokensPerSec: null, promptTokensPerSec: null, source: 'wall' }
 
 /** Records written before speed was recorded have no speed block. */
-function speedOf(call: CallRecord): CallSpeed {
+function recordSpeed(call: CallRecord): CallSpeed {
   return call.speed ?? NO_SPEED
 }
 
@@ -28,10 +28,10 @@ function median(values: (number | null | undefined)[]): number | null {
 }
 
 /** Speed medians per task and for the whole run, and the total call time of each chapter. */
-function speedSummary(calls: CallRecord[]) {
+export function speedSummary(calls: CallRecord[]) {
   const medians = (rows: CallRecord[]) => ({
-    medianOutputTokensPerSec: median(rows.map((c) => speedOf(c).outputTokensPerSec)),
-    medianPromptTokensPerSec: median(rows.map((c) => speedOf(c).promptTokensPerSec)),
+    medianOutputTokensPerSec: median(rows.map((c) => recordSpeed(c).outputTokensPerSec)),
+    medianPromptTokensPerSec: median(rows.map((c) => recordSpeed(c).promptTokensPerSec)),
   })
 
   const byTask: Record<
@@ -59,7 +59,7 @@ function speedSummary(calls: CallRecord[]) {
     byTask,
     overall: {
       ...medians(calls),
-      source: calls.some((c) => speedOf(c).source === 'ollama') ? 'ollama' : 'wall',
+      source: calls.some((c) => recordSpeed(c).source === 'ollama') ? 'ollama' : 'wall',
     },
     perChapterMs,
   }

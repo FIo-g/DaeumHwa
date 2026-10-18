@@ -153,6 +153,54 @@ export function classifyError(error: unknown): FailureKind {
   return 'model'
 }
 
+/**
+ * Holds the chunks a pump reads until the caller iterates. The caller gets every chunk once, in
+ * order, and a failure surfaces after the chunks that came before it.
+ */
+class ChunkRelay {
+  private readonly queue: string[] = []
+  private ended = false
+  private failure: { error: unknown } | null = null
+  private wake: (() => void) | null = null
+
+  push(piece: string): void {
+    this.queue.push(piece)
+    this.notify()
+  }
+
+  end(): void {
+    this.ended = true
+    this.notify()
+  }
+
+  fail(error: unknown): void {
+    this.failure = { error }
+    this.notify()
+  }
+
+  async *iterate(): AsyncGenerator<string> {
+    for (;;) {
+      const next = this.queue.shift()
+      if (next !== undefined) {
+        yield next
+        continue
+      }
+      if (this.failure) throw this.failure.error
+      if (this.ended) return
+      // No await between the checks above and this registration, so no wake-up is lost.
+      await new Promise<void>((resolve) => {
+        this.wake = resolve
+      })
+    }
+  }
+
+  private notify(): void {
+    const wake = this.wake
+    this.wake = null
+    wake?.()
+  }
+}
+
 /** Speed of one call from its Ollama timings, or from wall-clock time when there are none. */
 function speedOf(args: {
   ok: boolean
@@ -309,16 +357,24 @@ export class EvalClient implements AiClient {
     let firstTokenMs: number | null = null
     const now = this.now
     const startedMs = call.startedMs
-    const source = inner.textStream
-    // Passes the chunks through and times the first non-empty one.
-    const textStream = (async function* () {
-      for await (const piece of source) {
-        if (firstTokenMs === null && piece.length > 0) firstTokenMs = now() - startedMs
-        yield piece
+    const relay = new ChunkRelay()
+    // Reads the inner stream from the start, whether or not the caller reads it, so the first token
+    // is timed. Each chunk goes to the caller's iterable once.
+    const pump = (async () => {
+      try {
+        for await (const piece of inner.textStream) {
+          if (firstTokenMs === null && piece.length > 0) firstTokenMs = now() - startedMs
+          relay.push(piece)
+        }
+        relay.end()
+      } catch (error) {
+        relay.fail(error)
       }
     })()
+    // Settles after the pump has read the whole stream, so the first-token time is final.
     const final = inner.final.then(
-      (result) => {
+      async (result) => {
+        await pump
         this.settle(
           call,
           { ok: true, output: { text: result.text }, usage: result.usage },
@@ -326,12 +382,13 @@ export class EvalClient implements AiClient {
         )
         return result
       },
-      (error: unknown) => {
+      async (error: unknown) => {
+        await pump
         this.settle(call, { ok: false, error }, firstTokenMs)
         throw error
       },
     )
-    return { textStream, final }
+    return { textStream: relay.iterate(), final }
   }
 
   private prepare(
