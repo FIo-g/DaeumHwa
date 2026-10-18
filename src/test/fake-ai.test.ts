@@ -16,10 +16,14 @@ const emptyQuestionInput: InterviewQuestionInput = {
       term: 0,
       other: 0,
     },
-    entryNames: [],
-    openThreadTitles: [],
+    entries: [],
+    openThreads: [],
   },
-  history: [],
+  story: { latestPosition: null, recentSummaries: [], readerReactions: [], openIssueCount: 0 },
+  covered: [],
+  coveredDropped: 0,
+  recent: [],
+  rejected: null,
 }
 
 const questionTask = { name: 'interview-question' as const, input: emptyQuestionInput }

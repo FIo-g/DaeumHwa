@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { AiRunStatus } from '@/components/app/ai-run-status'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
 import { AnswerProposals } from '@/components/interview/answer-proposals'
@@ -9,10 +10,10 @@ import { QuestionCard } from '@/components/interview/question-card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { InterviewTurnRow, ProposalRow } from '@/db/types'
+import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
+import { useAiRun } from '@/lib/client/use-ai-run'
 import {
-  answerTurnAction,
-  askNextQuestionAction,
   completeInterviewAction,
   skipTurnAction,
   startInterviewAction,
@@ -43,13 +44,28 @@ export function InterviewSession({
   const [answered, setAnswered] = useState<Answered | null>(null)
   const [finished, setFinished] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [askFailed, setAskFailed] = useState(false)
+  const asking = useAiRun()
+  const answering = useAiRun()
 
+  // Route handlers, not Server Actions: the AI calls can run for minutes, and Server Actions run
+  // one at a time. Cancel aborts the request; a failed question keeps the "다시 시도" control.
   async function ask(id: string) {
-    const turn = await runAction(askNextQuestionAction({ sessionId: id }))
-    if (turn) {
-      setCurrent(turn)
-      setTurns((prev) => upsertTurn(prev, turn))
+    setAskFailed(false)
+    const result = await asking.run((signal) =>
+      postAction<InterviewTurnRow>(
+        `/api/works/${workId}/interview/next`,
+        { sessionId: id },
+        { signal },
+      ),
+    )
+    if (!result) return
+    if (!result.ok) {
+      if (result.error.code !== 'CANCELLED') setAskFailed(true)
+      return
     }
+    setCurrent(result.data)
+    setTurns((prev) => upsertTurn(prev, result.data))
   }
 
   async function start() {
@@ -82,7 +98,15 @@ export function InterviewSession({
     if (!current) return
     setBusy(true)
     try {
-      const result = await runAction(answerTurnAction({ turnId: current.id, answer: text }))
+      const result = await answering.run((signal) =>
+        runAction(
+          postAction<{ turn: InterviewTurnRow; proposals: ProposalRow[] }>(
+            `/api/works/${workId}/interview/answer`,
+            { turnId: current.id, answer: text },
+            { signal },
+          ),
+        ),
+      )
       if (!result) return
       setTurns((prev) => upsertTurn(prev, result.turn))
       setCurrent(null)
@@ -131,7 +155,7 @@ export function InterviewSession({
     return (
       <EmptyState
         title="진행 중인 인터뷰가 없습니다."
-        description="질문에 답하면 설정 카드 후보가 만들어집니다."
+        description="질문에 답하면 설정 카드 후보가 만들어집니다. 설정이 충분하면 다음 화와 스토리 방향을 함께 정합니다."
         action={
           canEdit ? (
             <Button onClick={start} disabled={busy}>
@@ -153,12 +177,11 @@ export function InterviewSession({
         <section className="grid gap-4 rounded-xl border p-5">
           <p className="font-medium">인터뷰를 끝냈습니다.</p>
           <p className="text-sm text-muted-foreground">
-            답에서 나온 카드 후보는 승인 대기에서 확인하세요. 승인하기 전까지 위키에 들어가지
-            않습니다.
+            처리하지 않은 후보는 승인 대기에 남아 있습니다.
           </p>
           <div className="flex flex-wrap gap-2">
             <Link className={buttonVariants()} href={`/works/${workId}/approvals`}>
-              승인 대기에서 확인하기
+              승인 대기 보기
             </Link>
             <Link className={buttonVariants({ variant: 'outline' })} href={`/works/${workId}/wiki`}>
               설정 보드 보기
@@ -180,8 +203,14 @@ export function InterviewSession({
               topic={current.topic}
               question={current.question}
               rationale={current.rationale}
+              focus={current.focus}
               canEdit={canEdit}
               busy={busy}
+              answering={
+                answering.running
+                  ? { elapsedSec: answering.elapsedSec, onCancel: answering.cancel }
+                  : null
+              }
               onAnswer={answer}
               onSkip={skip}
             />
@@ -191,20 +220,41 @@ export function InterviewSession({
             <AnswerProposals key={answered.turnId} workId={workId} proposals={answered.proposals} />
           )}
 
+          {!current && askFailed && (
+            <section className="grid gap-3 rounded-xl border p-5">
+              <p className="font-medium">질문을 만들지 못했습니다.</p>
+              {canEdit && (
+                <div>
+                  <Button onClick={nextQuestion} disabled={busy}>
+                    다시 시도
+                  </Button>
+                </div>
+              )}
+            </section>
+          )}
+
           {!current && !canEdit && (
             <p className="text-sm text-muted-foreground">진행 중인 질문이 없습니다.</p>
           )}
 
           {canEdit && (
             <div className="flex flex-wrap gap-2">
-              {!current && (
-                <Button onClick={nextQuestion} disabled={busy}>
-                  다음 질문
-                </Button>
-              )}
+              {!current &&
+                !askFailed &&
+                (asking.running ? (
+                  <AiRunStatus
+                    label="질문 만드는 중"
+                    elapsedSec={asking.elapsedSec}
+                    onCancel={asking.cancel}
+                  />
+                ) : (
+                  <Button onClick={nextQuestion} disabled={busy}>
+                    다음 질문
+                  </Button>
+                ))}
               <ConfirmButton
                 title="인터뷰를 끝낼까요?"
-                description="지금까지 답한 내용은 남습니다. 답에서 나온 제안은 승인 대기에서 확인할 수 있습니다."
+                description="지금까지 답한 내용은 남습니다. 처리하지 않은 후보는 승인 대기에 남습니다."
                 confirmLabel="끝내기"
                 onConfirm={finish}
                 disabled={busy}

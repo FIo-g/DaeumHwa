@@ -209,11 +209,18 @@ function interviewExtractAnswer(prompt: string) {
 
 const QUESTION_TOPICS = ['주인공', '주요 인물', '떡밥', '세계관'] as const
 
-/** Each prompt lists the answered turns as "[n] 주제:" lines, so the question number is that count plus one. */
+/**
+ * Each prompt lists the covered questions as "- [focus] topic | ..." lines inside <covered>, so the
+ * question number is that count plus one. Focus alternates so both kinds show up in the E2E run.
+ */
 function questionAnswer(prompt: string) {
-  const covered = prompt.split('\n').filter((line) => /^\[\d+\] 주제:/.test(line)).length
+  const covered = section(prompt, 'covered')
+    .split('\n')
+    .filter((line) => line.startsWith('- ')).length
   const topic = QUESTION_TOPICS[covered % QUESTION_TOPICS.length] ?? QUESTION_TOPICS[0]
+  const focus = covered % 2 === 0 ? 'setting' : 'story'
   return {
+    focus,
     topic,
     question: `질문 (${covered + 1}): ${topic} 설정을 한 가지 더 알려 주세요.`,
     rationale: '(스텁) 아직 묻지 않은 설정을 묻습니다.',

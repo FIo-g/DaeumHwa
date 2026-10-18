@@ -1,5 +1,5 @@
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
-import type { EntryKind } from '@/db/types'
+import type { EntryKind, InterviewFocus } from '@/db/types'
 import { type Extraction, ExtractionSchema } from '@/ai/extraction'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { ENTITY_NAME_RULES } from '@/ai/extraction-rules'
@@ -10,6 +10,8 @@ import type { AiTaskDef } from '@/ai/types'
 
 export type InterviewExtractInput = {
   topic: string
+  /** The focus the question was asked with ("setting" or "story"). */
+  focus: InterviewFocus
   question: string
   answer: string
   /** Wiki cards, plus pending entry cards (pending: true) that are still waiting for approval. */
@@ -27,6 +29,9 @@ const SYSTEM = [
   '- evidence에는 답변 문장을 그대로 인용한다.',
   '- 앞으로 풀 비밀이나 복선은 threads에 kind "planted"로 넣는다. existingThreadRef와 targetChapterPosition은 답변에 회차가 나오지 않으면 null이다.',
   '- 떡밥이 <threads>에 있는 제목과 같은 떡밥이면 그 제목을 그대로 쓴다.',
+  '- focus가 "story"인 답에서는 작가가 정한 앞으로의 전개를 threads에 kind "planted"로 넣는다. 답에 회차가 나오면 targetChapterPosition에 그 회차 번호를 쓴다.',
+  '- focus가 "story"인 답에서 작가가 망설이며 말한 아이디어는 threads가 아니라 facts에 suggestedStatus "undecided"로 넣고, subjectName은 관련 인물 카드 이름으로 한다.',
+  '- 이미 있는 떡밥의 회수 목표 회차를 바꾸는 내용은 threads에 넣지 않고 facts로 남긴다.',
   '- summary는 null, supersedesFactRef는 null로 둔다.',
   ENTITY_NAME_RULES,
   TAG_DATA_RULE,
@@ -53,6 +58,7 @@ export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string 
   return [
     '<question>',
     `주제: ${input.topic}`,
+    `초점: ${input.focus}`,
     `질문: ${input.question}`,
     '</question>',
     '<answer>',

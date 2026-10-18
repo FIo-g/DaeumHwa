@@ -48,6 +48,10 @@ export type FactStatus = (typeof FACT_STATUSES)[number]
 export const FACT_SOURCE_TYPES = ['chapter', 'interview', 'author', 'import'] as const
 export type FactSourceType = (typeof FACT_SOURCE_TYPES)[number]
 
+/** What an interview question asks: fill a setting gap, or plan the next story beats. */
+export const INTERVIEW_FOCUSES = ['setting', 'story'] as const
+export type InterviewFocus = (typeof INTERVIEW_FOCUSES)[number]
+
 export const THREAD_STATUSES = [
   'planned',
   'planted',

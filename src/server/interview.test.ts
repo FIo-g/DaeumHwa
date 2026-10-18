@@ -6,6 +6,7 @@ import type { GenerateObjectArgs } from '@/ai/types'
 import type { Db } from '@/db/client'
 import {
   aiRuns,
+  chapters,
   interviewSessions,
   interviewTurns,
   proposals,
@@ -14,13 +15,24 @@ import {
 } from '@/db/schema'
 import type { Actor } from '@/db/types'
 import { isAppError } from '@/lib/errors'
+import type { InterviewExtractInput } from '@/ai/tasks/interview-extract'
+import type { InterviewQuestionInput } from '@/ai/tasks/interview-question'
+import { fakeInterviewExtraction } from '@/test/ai-fakes/interview-extract'
+import { fakeInterviewQuestion } from '@/test/ai-fakes/interview-question'
 import { createTestDb } from '@/test/db'
-import { addTestMember, createTestEntry, createTestUser, createTestWork } from '@/test/factories'
+import {
+  addTestMember,
+  createTestChapter,
+  createTestEntry,
+  createTestUser,
+  createTestWork,
+} from '@/test/factories'
 import {
   answerTurn,
   askNextQuestion,
   completeInterview,
   getInterviewState,
+  normalizeQuestion,
   skipTurn,
   startInterview,
 } from '@/server/interview'
@@ -158,7 +170,8 @@ describe('askNextQuestion', () => {
     const prompt = client.prompts[0]
     expect(prompt).toContain('새벽의 검')
     expect(prompt).toContain('서윤')
-    expect(prompt).toContain('<history>')
+    expect(prompt).toContain('<covered>')
+    expect(prompt).toContain('<story>')
   })
 
   it('refuses to ask in a completed interview', async () => {
@@ -449,5 +462,211 @@ describe('answerTurn naming and thread dedup across answers', () => {
     const extractPrompts = client.prompts.filter((p) => p.includes('<known>'))
     const last = extractPrompts[extractPrompts.length - 1]
     expect(last).toContain('- 노은하 (인물, 승인 대기)')
+  })
+})
+
+/** Fake questions with the input of each call recorded. */
+function recordQuestions(outputs?: (input: InterviewQuestionInput, call: number) => unknown) {
+  const inputs: InterviewQuestionInput[] = []
+  const client = new FakeAiClient({
+    overrides: {
+      'interview-question': (input) => {
+        const typed = input as InterviewQuestionInput
+        inputs.push(typed)
+        return outputs ? outputs(typed, inputs.length) : fakeInterviewQuestion(typed)
+      },
+    },
+  })
+  return { client, inputs }
+}
+
+async function answerQuestions(sessionId: string, count: number, client: FakeAiClient) {
+  for (let i = 0; i < count; i++) {
+    const turn = await askNextQuestion(db, owner, sessionId, client)
+    await answerTurn(db, editor, { turnId: turn.id, answer: `답 ${i}` }, client)
+  }
+}
+
+describe('continuous questions', () => {
+  it('covers every earlier session, oldest first, and keeps this session recent history', async () => {
+    const first = await startInterview(db, owner, workId)
+    await answerQuestions(first.id, 8, new FakeAiClient())
+    await completeInterview(db, owner, first.id)
+
+    const second = await startInterview(db, owner, workId)
+    await answerQuestions(second.id, 4, new FakeAiClient())
+    const { client, inputs } = recordQuestions()
+    await askNextQuestion(db, owner, second.id, client)
+
+    const input = inputs[0]
+    expect(input.covered).toHaveLength(12)
+    expect(input.covered[0].topic).toBe('주인공')
+    expect(input.coveredDropped).toBe(0)
+    expect(input.recent).toHaveLength(4)
+  })
+
+  it('caps the covered list at 120 newest turns and states how many were dropped', async () => {
+    const session = await startInterview(db, owner, workId)
+    await db.insert(interviewTurns).values(
+      Array.from({ length: 150 }, (_, i) => ({
+        sessionId: session.id,
+        topic: '주인공',
+        question: `질문 ${i}`,
+        answer: `답 ${i}`,
+      })),
+    )
+    const { client, inputs } = recordQuestions()
+    await askNextQuestion(db, owner, session.id, client)
+    expect(inputs[0].covered).toHaveLength(120)
+    expect(inputs[0].coveredDropped).toBe(30)
+    expect(inputs[0].recent).toHaveLength(6)
+  })
+
+  it('a work without chapters has no latest position and no summaries', async () => {
+    const session = await startInterview(db, owner, workId)
+    const { client, inputs } = recordQuestions()
+    await askNextQuestion(db, owner, session.id, client)
+    expect(inputs[0].story.latestPosition).toBeNull()
+    expect(inputs[0].story.recentSummaries).toEqual([])
+    expect(inputs[0].story.readerReactions).toEqual([])
+  })
+
+  it('takes the newest five chapter summaries, oldest first', async () => {
+    for (let position = 1; position <= 6; position++) {
+      const chapter = await createTestChapter(db, workId, { position, title: `${position}화` })
+      await db
+        .update(chapters)
+        .set({ summary: `요약 ${position}` })
+        .where(eq(chapters.id, chapter.id))
+    }
+    const session = await startInterview(db, owner, workId)
+    const { client, inputs } = recordQuestions()
+    await askNextQuestion(db, owner, session.id, client)
+    expect(inputs[0].story.latestPosition).toBe(6)
+    expect(inputs[0].story.recentSummaries.map((s) => s.position)).toEqual([2, 3, 4, 5, 6])
+  })
+
+  it('passes the newest reader simulation of a chapter as a reaction digest', async () => {
+    const chapter = await createTestChapter(db, workId, { position: 3, title: '3화' })
+    await db.insert(aiRuns).values({
+      workId,
+      userId: owner.userId,
+      task: 'reader-sim',
+      chapterId: chapter.id,
+      status: 'done',
+      output: {
+        personas: [
+          {
+            personaId: 'p1',
+            rating: 2,
+            dropOffRisk: 'high',
+            overall: '초반이 느리다',
+            moments: [],
+          },
+        ],
+        summary: '요약',
+      },
+    })
+    const session = await startInterview(db, owner, workId)
+    const { client, inputs } = recordQuestions()
+    await askNextQuestion(db, owner, session.id, client)
+    const reaction = inputs[0].story.readerReactions[0]
+    expect(reaction.position).toBe(3)
+    expect(reaction.digest).toContain('초반이 느리다')
+    expect(reaction.digest).toContain('이탈 위험 높음 1명')
+  })
+
+  it('normalizes questions by dropping whitespace and punctuation', () => {
+    expect(normalizeQuestion('주인공은,  누구인가요?')).toBe(
+      normalizeQuestion('주인공은 누구인가요'),
+    )
+    expect(normalizeQuestion('주인공은 누구인가요')).not.toBe(
+      normalizeQuestion('주요 인물은 누구인가요'),
+    )
+  })
+
+  it('retries once with the repeated question in rejected when the answer repeats an earlier one', async () => {
+    const session = await startInterview(db, owner, workId)
+    const first = await askNextQuestion(db, owner, session.id, new FakeAiClient())
+    await answerTurn(db, editor, { turnId: first.id, answer: '답' }, new FakeAiClient())
+
+    const repeated = '주인공은,  누구이고 이야기가 시작될 때 무엇을 가장 원하나요?'
+    const fresh = '주인공이 가장 두려워하는 것은 무엇인가요?'
+    const { client, inputs } = recordQuestions((_input, call) => ({
+      focus: 'setting',
+      topic: '중심 갈등',
+      question: call === 1 ? repeated : fresh,
+      rationale: '근거',
+    }))
+    const turn = await askNextQuestion(db, owner, session.id, client)
+
+    expect(inputs).toHaveLength(2)
+    expect(inputs[0].rejected).toBeNull()
+    expect(inputs[1].rejected).toBe(repeated)
+    expect(turn.question).toBe(fresh)
+  })
+
+  it('stores the second question even when it still repeats', async () => {
+    const session = await startInterview(db, owner, workId)
+    const first = await askNextQuestion(db, owner, session.id, new FakeAiClient())
+    await answerTurn(db, editor, { turnId: first.id, answer: '답' }, new FakeAiClient())
+
+    const repeated = '주인공은,  누구이고 이야기가 시작될 때 무엇을 가장 원하나요?'
+    const again = '주인공은 누구이고 이야기가 시작될 때 무엇을 가장 원하나요!'
+    const { client, inputs } = recordQuestions((_input, call) => ({
+      focus: 'setting',
+      topic: '중심 갈등',
+      question: call === 1 ? repeated : again,
+      rationale: '근거',
+    }))
+    const turn = await askNextQuestion(db, owner, session.id, client)
+    expect(inputs).toHaveLength(2)
+    expect(turn.question).toBe(again)
+  })
+
+  it('stores the focus the AI chose and sends it to the answer extraction', async () => {
+    const session = await startInterview(db, owner, workId)
+    const questionClient = new FakeAiClient({
+      overrides: {
+        'interview-question': () => ({
+          focus: 'story',
+          topic: '다음 전개',
+          question: '3화에서 드러난 낡은 열쇠는 다음에 어떻게 쓰이나요?',
+          rationale: '떡밥을 잇습니다.',
+        }),
+      },
+    })
+    const turn = await askNextQuestion(db, owner, session.id, questionClient)
+    expect(turn.focus).toBe('story')
+
+    const extractInputs: InterviewExtractInput[] = []
+    const client = new FakeAiClient({
+      overrides: {
+        'interview-extract': (input) => {
+          extractInputs.push(input as InterviewExtractInput)
+          return fakeInterviewExtraction(input as InterviewExtractInput)
+        },
+      },
+    })
+    await answerTurn(
+      db,
+      editor,
+      { turnId: turn.id, answer: '다음 화에서 열쇠가 문을 연다.' },
+      client,
+    )
+    expect(extractInputs[0].focus).toBe('story')
+  })
+
+  it('a cancelled signal stops the question call before the AI runs', async () => {
+    const session = await startInterview(db, owner, workId)
+    const controller = new AbortController()
+    controller.abort()
+    const { client, inputs } = recordQuestions()
+    await expectAppError(
+      askNextQuestion(db, owner, session.id, client, controller.signal),
+      'CANCELLED',
+    )
+    expect(inputs).toHaveLength(0)
+    expect(await db.select().from(interviewTurns)).toHaveLength(0)
   })
 })

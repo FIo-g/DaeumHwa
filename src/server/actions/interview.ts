@@ -1,25 +1,17 @@
 'use server'
 
 import { z } from 'zod'
-import type { InterviewSessionRow, InterviewTurnRow, ProposalRow } from '@/db/types'
+import type { InterviewSessionRow, InterviewTurnRow } from '@/db/types'
 import type { ActionResult } from '@/lib/result'
 import { requireRowWork } from '@/server/access'
 import { revalidateWork, withAction } from '@/server/action-helpers'
-import {
-  answerTurn,
-  askNextQuestion,
-  completeInterview,
-  skipTurn,
-  startInterview,
-} from '@/server/interview'
+import { completeInterview, skipTurn, startInterview } from '@/server/interview'
+
+// Question and answer calls run through route handlers (see app/api/works/[workId]/interview).
 
 const WorkIdSchema = z.object({ workId: z.uuid() })
 const SessionIdSchema = z.object({ sessionId: z.uuid() })
 const TurnIdSchema = z.object({ turnId: z.uuid() })
-const AnswerSchema = z.object({
-  turnId: z.uuid(),
-  answer: z.string().max(5000),
-})
 
 export async function startInterviewAction(
   input: unknown,
@@ -29,30 +21,6 @@ export async function startInterviewAction(
     const session = await startInterview(db, actor, workId)
     revalidateWork(workId)
     return session
-  })
-}
-
-export async function askNextQuestionAction(
-  input: unknown,
-): Promise<ActionResult<InterviewTurnRow>> {
-  return withAction(async (db, actor) => {
-    const { sessionId } = SessionIdSchema.parse(input)
-    const workId = await requireRowWork(db, 'interview_sessions', sessionId)
-    const turn = await askNextQuestion(db, actor, sessionId)
-    revalidateWork(workId)
-    return turn
-  })
-}
-
-export async function answerTurnAction(
-  input: unknown,
-): Promise<ActionResult<{ turn: InterviewTurnRow; proposals: ProposalRow[] }>> {
-  return withAction(async (db, actor) => {
-    const data = AnswerSchema.parse(input)
-    const workId = await requireRowWork(db, 'interview_turns', data.turnId)
-    const result = await answerTurn(db, actor, data)
-    revalidateWork(workId)
-    return result
   })
 }
 

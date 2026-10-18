@@ -110,6 +110,7 @@ describe('respond: every structured task answers with schema-valid JSON', () => 
       interviewExtractTask,
       {
         topic: '주인공',
+        focus: 'setting',
         question: '주인공은 누구인가요?',
         answer: '서윤은 시계탑 수리공이다.',
         known: [],
@@ -121,8 +122,17 @@ describe('respond: every structured task answers with schema-valid JSON', () => 
       interviewQuestionTask,
       {
         work: { title: '테스트', genre: '', logline: '', synopsis: '' },
-        wiki: { counts: ZERO_COUNTS, entryNames: [], openThreadTitles: [] },
-        history: [],
+        wiki: { counts: ZERO_COUNTS, entries: [], openThreads: [] },
+        story: {
+          latestPosition: null,
+          recentSummaries: [],
+          readerReactions: [],
+          openIssueCount: 0,
+        },
+        covered: [],
+        coveredDropped: 0,
+        recent: [],
+        rejected: null,
       } satisfies InterviewQuestionInput,
     ],
     ['proofread', proofreadTask, { text: SAMPLE_TEXT }],
@@ -192,19 +202,28 @@ describe('respond: scenarios', () => {
     [2, 3],
     [5, 6],
   ])('interview question with %i covered items asks question (%i)', (covered, expected) => {
-    const history = Array.from({ length: covered }, (_, i) => ({
+    const coveredTurns = Array.from({ length: covered }, (_, i) => ({
       topic: `주제${i}`,
       question: `질문${i}`,
       answer: `답${i}`,
       skipped: false,
+      focus: 'setting' as const,
     }))
     const prompt = interviewQuestionTask.buildPrompt({
       work: { title: '테스트', genre: '', logline: '', synopsis: '' },
-      wiki: { counts: ZERO_COUNTS, entryNames: [], openThreadTitles: [] },
-      history,
+      wiki: { counts: ZERO_COUNTS, entries: [], openThreads: [] },
+      story: { latestPosition: null, recentSummaries: [], readerReactions: [], openIssueCount: 0 },
+      covered: coveredTurns,
+      coveredDropped: 0,
+      recent: [],
+      rejected: null,
     })
-    const parsed = answer(interviewQuestionTask.system, prompt) as { question: string }
+    const parsed = answer(interviewQuestionTask.system, prompt) as {
+      focus: string
+      question: string
+    }
     expect(parsed.question).toContain(`(${expected})`)
+    expect(['setting', 'story']).toContain(parsed.focus)
   })
 
   it('reader sim: a slow prompt marker gives a 30 second delay, otherwise none', () => {

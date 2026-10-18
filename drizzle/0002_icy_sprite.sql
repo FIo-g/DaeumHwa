@@ -1,0 +1,1 @@
+ALTER TABLE "interview_turns" ADD COLUMN "focus" text DEFAULT 'setting' NOT NULL;

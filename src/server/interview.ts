@@ -1,6 +1,16 @@
-import { and, asc, desc, eq, isNull, notInArray } from 'drizzle-orm'
+import { and, asc, desc, eq, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { interviewSessions, interviewTurns, threads, wikiEntries, works } from '@/db/schema'
+import {
+  aiRuns,
+  chapters,
+  facts,
+  interviewSessions,
+  interviewTurns,
+  issues,
+  threads,
+  wikiEntries,
+  works,
+} from '@/db/schema'
 import {
   type Actor,
   ENTRY_KINDS,
@@ -14,7 +24,8 @@ import { runAiTask } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { extractionToProposals, type ExtractionContext } from '@/ai/extraction'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
-import { interviewQuestionTask } from '@/ai/tasks/interview-question'
+import { type InterviewQuestionInput, interviewQuestionTask } from '@/ai/tasks/interview-question'
+import { ReaderSimSchema } from '@/ai/tasks/reader-sim'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { loadKnownEntries } from '@/server/known-entries'
 import { insertProposals } from '@/server/proposal-store'
@@ -23,9 +34,17 @@ import { insertProposals } from '@/server/proposal-store'
 // Answers go through the AI extraction task and become pending proposals (source 'interview').
 // Nothing here writes wiki tables; approval happens later through the proposal engine.
 
-const HISTORY_LIMIT = 10
-const ENTRY_NAME_LIMIT = 80
-const THREAD_TITLE_LIMIT = 30
+const COVERED_LIMIT = 120
+const COVERED_QUESTION_CHARS = 120
+const COVERED_ANSWER_CHARS = 80
+const RECENT_LIMIT = 6
+const RECENT_ANSWER_CHARS = 600
+const ENTRY_LIMIT = 80
+const ENTRY_SUMMARY_CHARS = 40
+const THREAD_LIMIT = 30
+const SUMMARY_LIMIT = 5
+const READER_LIMIT = 3
+const READER_DIGEST_CHARS = 200
 const ENDED_MESSAGE = '이미 끝난 인터뷰입니다.'
 
 export type InterviewState = {
@@ -33,8 +52,6 @@ export type InterviewState = {
   turns: InterviewTurnRow[]
   current: InterviewTurnRow | null
 }
-
-type ActiveEntry = { id: string; name: string; aliases: string[]; kind: EntryKind }
 
 /** The active interview of a work with its turns, and the turn waiting for an answer. Any viewer. */
 export async function getInterviewState(
@@ -71,13 +88,16 @@ export async function startInterview(
 
 /**
  * Asks the next question. If a question is still waiting for an answer, that one is returned
- * instead of calling the AI again. Editors and above.
+ * instead of calling the AI again. A question that repeats an earlier one of the work is asked
+ * once more with the repeated text in `rejected`; a repeat on the second try is stored anyway.
+ * Editors and above.
  */
 export async function askNextQuestion(
   db: Db,
   actor: Actor,
   sessionId: string,
   client?: AiClient,
+  signal?: AbortSignal,
 ): Promise<InterviewTurnRow> {
   const workId = await requireRowWork(db, 'interview_sessions', sessionId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
@@ -87,18 +107,32 @@ export async function askNextQuestion(
   const open = await findOpenTurnInSession(db, sessionId)
   if (open) return open
 
-  const input = await buildQuestionInput(db, workId, sessionId)
-  const { output } = await runAiTask(
+  const base = await buildQuestionInput(db, workId, sessionId)
+  const meta = { userId: actor.userId, workId, signal }
+  let { output } = await runAiTask(
     db,
-    { userId: actor.userId, workId },
+    meta,
     interviewQuestionTask,
-    input,
+    { ...base, rejected: null },
     client,
   )
+  const earlier = await loadQuestionKeys(db, workId)
+  if (earlier.has(normalizeQuestion(output.question))) {
+    const repeated = output.question
+    ;({ output } = await runAiTask(
+      db,
+      meta,
+      interviewQuestionTask,
+      { ...base, rejected: repeated },
+      client,
+    ))
+  }
+
   const [turn] = await db
     .insert(interviewTurns)
     .values({
       sessionId,
+      focus: output.focus,
       topic: output.topic,
       question: output.question,
       rationale: output.rationale,
@@ -116,6 +150,7 @@ export async function answerTurn(
   actor: Actor,
   input: { turnId: string; answer: string },
   client?: AiClient,
+  signal?: AbortSignal,
 ): Promise<{ turn: InterviewTurnRow; proposals: ProposalRow[] }> {
   const answer = input.answer.trim()
   if (!answer) throw new AppError('VALIDATION', '답을 입력하거나 건너뛰기를 누르세요.')
@@ -128,10 +163,11 @@ export async function answerTurn(
   const known = await loadKnownEntries(db, workId)
   const { output } = await runAiTask(
     db,
-    { userId: actor.userId, workId },
+    { userId: actor.userId, workId, signal },
     interviewExtractTask,
     {
       topic: turn.topic,
+      focus: turn.focus,
       question: turn.question,
       answer,
       known: [
@@ -231,6 +267,11 @@ export async function completeInterview(
   return updated
 }
 
+/** Comparison key for questions: whitespace and punctuation removed. */
+export function normalizeQuestion(text: string): string {
+  return text.replace(/[\s\p{P}\p{S}]+/gu, '')
+}
+
 // ---- helpers ----
 
 async function findActiveSession(db: Db, workId: string): Promise<InterviewSessionRow | null> {
@@ -292,27 +333,48 @@ async function findOpenTurnInSession(db: Db, sessionId: string): Promise<Intervi
   return row ?? null
 }
 
-/** Non-archived entry cards of a work (name, kind and aliases). */
-async function loadActiveEntries(db: Db, workId: string): Promise<ActiveEntry[]> {
+/** Normalized keys of every question the work has asked, across all its sessions. */
+async function loadQuestionKeys(db: Db, workId: string): Promise<Set<string>> {
   const rows = await db
+    .select({ question: interviewTurns.question })
+    .from(interviewTurns)
+    .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
+    .where(eq(interviewSessions.workId, workId))
+  return new Set(rows.map((row) => normalizeQuestion(row.question)))
+}
+
+/** The first `max` characters of a text, trimmed. */
+function cut(text: string, max: number): string {
+  return Array.from(text.trim()).slice(0, max).join('')
+}
+
+/** Input for the question task without `rejected`: work, wiki, story, covered and recent turns. */
+async function buildQuestionInput(
+  db: Db,
+  workId: string,
+  sessionId: string,
+): Promise<Omit<InterviewQuestionInput, 'rejected'>> {
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1)
+  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+
+  const entries = await db
     .select({
       id: wikiEntries.id,
       name: wikiEntries.name,
-      aliases: wikiEntries.aliases,
       kind: wikiEntries.kind,
+      summary: wikiEntries.summary,
     })
     .from(wikiEntries)
     .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
     .orderBy(asc(wikiEntries.createdAt))
-  return rows
-}
 
-/** Input for the question task: work pitch, wiki summary and the last few answered or skipped turns. */
-async function buildQuestionInput(db: Db, workId: string, sessionId: string) {
-  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1)
-  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  const factCounts = await db
+    .select({ entryId: facts.entryId, count: sql<number>`count(*)::int` })
+    .from(facts)
+    .where(and(eq(facts.workId, workId), isNull(facts.archivedAt), isNotNull(facts.entryId)))
+    .groupBy(facts.entryId)
+  const factCountByEntry = new Map(factCounts.map((row) => [row.entryId, row.count]))
 
-  const entries = await loadActiveEntries(db, workId)
   const counts = Object.fromEntries(ENTRY_KINDS.map((kind) => [kind, 0])) as Record<
     EntryKind,
     number
@@ -320,7 +382,10 @@ async function buildQuestionInput(db: Db, workId: string, sessionId: string) {
   for (const entry of entries) counts[entry.kind] += 1
 
   const openThreads = await db
-    .select({ title: threads.title })
+    .select({
+      title: threads.title,
+      targetChapterPosition: threads.targetChapterPosition,
+    })
     .from(threads)
     .where(
       and(
@@ -330,22 +395,75 @@ async function buildQuestionInput(db: Db, workId: string, sessionId: string) {
       ),
     )
     .orderBy(asc(threads.createdAt))
-    .limit(THREAD_TITLE_LIMIT)
+    .limit(THREAD_LIMIT)
 
-  const turns = await db
-    .select()
+  const [latest] = await db
+    .select({ max: sql<number | null>`max(${chapters.position})` })
+    .from(chapters)
+    .where(and(eq(chapters.workId, workId), isNull(chapters.archivedAt)))
+  const latestMax = latest?.max
+  const latestPosition = latestMax === null || latestMax === undefined ? null : Number(latestMax)
+
+  const summaryRows = await db
+    .select({ position: chapters.position, title: chapters.title, summary: chapters.summary })
+    .from(chapters)
+    .where(and(eq(chapters.workId, workId), isNull(chapters.archivedAt), ne(chapters.summary, '')))
+    .orderBy(desc(chapters.position))
+    .limit(SUMMARY_LIMIT)
+
+  const readerRows = await db
+    .select({ output: aiRuns.output, position: chapters.position })
+    .from(aiRuns)
+    .innerJoin(chapters, eq(aiRuns.chapterId, chapters.id))
+    .where(
+      and(
+        eq(aiRuns.workId, workId),
+        eq(aiRuns.task, 'reader-sim'),
+        eq(aiRuns.status, 'done'),
+        isNull(chapters.archivedAt),
+      ),
+    )
+    .orderBy(desc(aiRuns.createdAt))
+    .limit(READER_LIMIT)
+
+  const [openIssues] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(issues)
+    .where(and(eq(issues.workId, workId), eq(issues.status, 'open')))
+
+  const coveredRows = await db
+    .select({
+      topic: interviewTurns.topic,
+      question: interviewTurns.question,
+      answer: interviewTurns.answer,
+      skipped: interviewTurns.skipped,
+      focus: interviewTurns.focus,
+    })
     .from(interviewTurns)
-    .where(eq(interviewTurns.sessionId, sessionId))
-    .orderBy(asc(interviewTurns.createdAt))
-  const history = turns
-    .filter((turn) => turn.skipped || turn.answer !== null)
-    .slice(-HISTORY_LIMIT)
-    .map((turn) => ({
-      topic: turn.topic,
-      question: turn.question,
-      answer: turn.answer,
-      skipped: turn.skipped,
-    }))
+    .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
+    .where(and(eq(interviewSessions.workId, workId), answeredOrSkipped()))
+    .orderBy(desc(interviewTurns.createdAt))
+    .limit(COVERED_LIMIT)
+  const [coveredTotal] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(interviewTurns)
+    .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
+    .where(and(eq(interviewSessions.workId, workId), answeredOrSkipped()))
+
+  const recentRows = await db
+    .select({
+      topic: interviewTurns.topic,
+      question: interviewTurns.question,
+      answer: interviewTurns.answer,
+      skipped: interviewTurns.skipped,
+    })
+    .from(interviewTurns)
+    .where(and(eq(interviewTurns.sessionId, sessionId), answeredOrSkipped()))
+    .orderBy(desc(interviewTurns.createdAt))
+    .limit(RECENT_LIMIT)
+
+  const covered = coveredRows.reverse()
+  const total = coveredTotal?.count ?? 0
 
   return {
     work: {
@@ -356,9 +474,59 @@ async function buildQuestionInput(db: Db, workId: string, sessionId: string) {
     },
     wiki: {
       counts,
-      entryNames: entries.slice(0, ENTRY_NAME_LIMIT).map((e) => e.name),
-      openThreadTitles: openThreads.map((t) => t.title),
+      entries: entries.slice(0, ENTRY_LIMIT).map((e) => ({
+        name: e.name,
+        kind: e.kind,
+        factCount: factCountByEntry.get(e.id) ?? 0,
+        summary: cut(e.summary, ENTRY_SUMMARY_CHARS),
+      })),
+      openThreads: openThreads.map((t) => ({
+        title: t.title,
+        targetChapterPosition: t.targetChapterPosition,
+      })),
     },
-    history,
+    story: {
+      latestPosition,
+      recentSummaries: summaryRows.reverse(),
+      readerReactions: readerRows.flatMap((row) => {
+        const parsed = ReaderSimSchema.safeParse(row.output)
+        if (!parsed.success) return []
+        const personas = parsed.data.personas
+        const highRisk = personas.filter((p) => p.dropOffRisk === 'high').length
+        const overall = cut(
+          personas
+            .map((p) => p.overall.trim())
+            .filter((text) => text !== '')
+            .join(' / '),
+          READER_DIGEST_CHARS - 20,
+        )
+        return [
+          {
+            position: row.position,
+            digest: cut(`이탈 위험 높음 ${highRisk}명: ${overall}`, READER_DIGEST_CHARS),
+          },
+        ]
+      }),
+      openIssueCount: openIssues?.count ?? 0,
+    },
+    covered: covered.map((turn) => ({
+      topic: turn.topic,
+      question: cut(turn.question, COVERED_QUESTION_CHARS),
+      answer: turn.answer === null ? null : cut(turn.answer, COVERED_ANSWER_CHARS),
+      skipped: turn.skipped,
+      focus: turn.focus,
+    })),
+    coveredDropped: Math.max(0, total - covered.length),
+    recent: recentRows.reverse().map((turn) => ({
+      topic: turn.topic,
+      question: turn.question,
+      answer: turn.answer === null ? null : cut(turn.answer, RECENT_ANSWER_CHARS),
+      skipped: turn.skipped,
+    })),
   }
+}
+
+/** A turn that was answered or skipped, so it counts as covered. */
+function answeredOrSkipped() {
+  return or(isNotNull(interviewTurns.answer), eq(interviewTurns.skipped, true))
 }

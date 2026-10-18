@@ -12,6 +12,7 @@ import {
 } from '@/ai/tasks/interview-extract'
 import {
   buildInterviewQuestionPrompt,
+  INTERVIEW_TOPICS,
   interviewQuestionTask,
   type InterviewQuestionInput,
 } from '@/ai/tasks/interview-question'
@@ -29,11 +30,23 @@ const emptyQuestionInput: InterviewQuestionInput = {
       term: 0,
       other: 0,
     },
-    entryNames: [],
-    openThreadTitles: [],
+    entries: [],
+    openThreads: [],
   },
-  history: [],
+  story: { latestPosition: null, recentSummaries: [], readerReactions: [], openIssueCount: 0 },
+  covered: [],
+  coveredDropped: 0,
+  recent: [],
+  rejected: null,
 }
+
+const coveredTurn = (topic: string, question = `${topic} 질문`, answer: string | null = '답') => ({
+  topic,
+  question,
+  answer,
+  skipped: false,
+  focus: 'setting' as const,
+})
 
 describe('interview-question task', () => {
   it('uses the low effort tier with a 2000 token cap', () => {
@@ -42,25 +55,26 @@ describe('interview-question task', () => {
     expect(interviewQuestionTask.maxTokens).toBe(2000)
   })
 
-  it('fake output asks the first topic that has not been asked yet', () => {
+  it('fake output asks the first topic that has not been covered yet, as a setting question', () => {
     const out = fakeInterviewQuestion(emptyQuestionInput)
+    expect(out.focus).toBe('setting')
     expect(out.topic).toBe('주인공')
     expect(out.question).toBe('주인공은 누구이고, 이야기가 시작될 때 무엇을 가장 원하나요?')
     expect(out.rationale.length).toBeGreaterThan(0)
   })
 
-  it('fake output skips topics already present in history, including skipped ones', () => {
+  it('fake output skips topics already covered, including skipped ones', () => {
     const out = fakeInterviewQuestion({
       ...emptyQuestionInput,
-      history: [
-        { topic: '주인공', question: 'q1', answer: null, skipped: true },
-        { topic: '주요 인물', question: 'q2', answer: '민준', skipped: false },
+      covered: [
+        { ...coveredTurn('주인공', 'q1', null), skipped: true },
+        coveredTurn('주요 인물', 'q2', '민준'),
       ],
     })
     expect(out.topic).toBe('세계관 규칙')
   })
 
-  it('fake output moves to the free topic after all topics are asked', () => {
+  it('fake output moves to a story question after all topics are covered', () => {
     const topics = [
       '주인공',
       '주요 인물',
@@ -73,10 +87,11 @@ describe('interview-question task', () => {
     ]
     const out = fakeInterviewQuestion({
       ...emptyQuestionInput,
-      history: topics.map((topic) => ({ topic, question: 'q', answer: 'a', skipped: false })),
+      covered: topics.map((topic) => coveredTurn(topic, 'q', 'a')),
     })
-    expect(out.topic).toBe('자유')
-    expect(out.question).toBe('더 정리해 두고 싶은 설정이 있나요?')
+    expect(out.focus).toBe('story')
+    expect(out.topic).toBe('다음 전개')
+    expect(out.question).toBe('다음 화에서는 무엇이 벌어지나요?')
   })
 
   it('fake output validates against the task schema through the fake client', async () => {
@@ -90,51 +105,83 @@ describe('interview-question task', () => {
       task: { name: 'interview-question', input: emptyQuestionInput },
     })
     expect(result.object.topic).toBe('주인공')
+    expect(result.object.focus).toBe('setting')
   })
 
-  it('prompt has work, wiki and history sections and marks skipped turns', () => {
+  it('prompt has work, wiki, story and covered sections and marks skipped answers', () => {
     const prompt = buildInterviewQuestionPrompt({
       ...emptyQuestionInput,
       wiki: {
         counts: { ...emptyQuestionInput.wiki.counts, character: 2 },
-        entryNames: ['서윤', '민준'],
-        openThreadTitles: ['낡은 열쇠'],
+        entries: [
+          { name: '서윤', kind: 'character', factCount: 3, summary: '검객이다.' },
+          { name: '민준', kind: 'character', factCount: 0, summary: '' },
+        ],
+        openThreads: [{ title: '낡은 열쇠', targetChapterPosition: 5 }],
       },
-      history: [
-        { topic: '주인공', question: '주인공은 누구인가요?', answer: null, skipped: true },
-        {
-          topic: '주요 인물',
-          question: '중요한 인물은?',
-          answer: '민준은 서윤의 스승이다.',
-          skipped: false,
-        },
+      covered: [
+        { ...coveredTurn('주인공', '주인공은 누구인가요?', null), skipped: true },
+        coveredTurn('주요 인물', '중요한 인물은?', '민준은 서윤의 스승이다.'),
       ],
     })
     expect(prompt).toContain('<work>')
     expect(prompt).toContain('새벽의 검')
     expect(prompt).toContain('<wiki>')
     expect(prompt).toContain('인물 2')
-    expect(prompt).toContain('서윤, 민준')
-    expect(prompt).toContain('낡은 열쇠')
-    expect(prompt).toContain('<history>')
+    expect(prompt).toContain('서윤 (인물, 사실 3개)')
+    expect(prompt).toContain('낡은 열쇠 (회수 목표 5화)')
+    expect(prompt).toContain('<story>')
+    expect(prompt).toContain('<covered>')
     expect(prompt).toContain('(건너뜀)')
     expect(prompt).toContain('민준은 서윤의 스승이다.')
   })
 
-  it('prompt still contains an empty history section for the first question', () => {
+  it('story section shows (없음) when there are no chapters', () => {
     const prompt = buildInterviewQuestionPrompt(emptyQuestionInput)
-    expect(prompt).toContain('<history>')
-    expect(prompt).toContain('</history>')
+    expect(prompt).toContain('최신 회차: (없음)')
+    expect(prompt).toContain('<covered>\n(없음)')
   })
 
-  it('system prompt is the Korean interviewer instruction', () => {
+  it('lists every covered question', () => {
+    const covered = Array.from({ length: 5 }, (_, i) => coveredTurn(`주제${i}`, `질문 ${i}번째`))
+    const prompt = buildInterviewQuestionPrompt({ ...emptyQuestionInput, covered })
+    for (const turn of covered) expect(prompt).toContain(turn.question)
+  })
+
+  it('says how many earlier questions were left out', () => {
+    const prompt = buildInterviewQuestionPrompt({
+      ...emptyQuestionInput,
+      covered: [coveredTurn('주인공')],
+      coveredDropped: 30,
+    })
+    expect(prompt).toContain('생략한 이전 질문: 30개')
+  })
+
+  it('shows the rejected question only when one is set', () => {
+    expect(buildInterviewQuestionPrompt(emptyQuestionInput)).not.toContain('<rejected>')
+    const prompt = buildInterviewQuestionPrompt({
+      ...emptyQuestionInput,
+      rejected: '이미 한 질문입니다',
+    })
+    expect(prompt).toContain('<rejected>')
+    expect(prompt).toContain('이미 한 질문입니다')
+  })
+
+  it('system prompt names the core topics, the setting or story choice and the no-repeat rule', () => {
     expect(interviewQuestionTask.system).toContain('질문을 한 번에 하나만 한다.')
-    expect(interviewQuestionTask.system).toContain('이미 묻거나 건너뛴 주제는 반복하지 않는다.')
+    expect(interviewQuestionTask.system).toContain(INTERVIEW_TOPICS.join(', '))
+    expect(interviewQuestionTask.system).toContain('"setting"')
+    expect(interviewQuestionTask.system).toContain('"story"')
+    expect(interviewQuestionTask.system).toContain('<covered>에 있는 질문은 되풀이하지 않는다.')
+    expect(interviewQuestionTask.system).toContain(
+      'story 질문은 회차 번호, 떡밥 이름, 독자 반응 같은 구체적인 재료를 짚는다.',
+    )
   })
 })
 
 const extractInput = (overrides: Partial<InterviewExtractInput>): InterviewExtractInput => ({
   topic: '주인공',
+  focus: 'setting',
   question: '주인공은 누구인가요?',
   answer: '서윤은 열일곱 살 검객이다. 그녀는 복수를 원한다.',
   known: [],
@@ -208,6 +255,16 @@ describe('interview-extract task', () => {
     expect(out.facts[0].content).toBe('짧은 문장을 쓴다.')
   })
 
+  it('prompt carries the focus of the question', () => {
+    const prompt = buildInterviewExtractPrompt(extractInput({ focus: 'story' }))
+    expect(prompt).toContain('초점: story')
+  })
+
+  it('system prompt keeps story answers as planned threads and undecided facts', () => {
+    expect(interviewExtractTask.system).toContain('focus가 "story"인 답에서는')
+    expect(interviewExtractTask.system).toContain('suggestedStatus "undecided"')
+  })
+
   it('prompt includes question, answer and known cards', () => {
     const prompt = buildInterviewExtractPrompt(
       extractInput({
@@ -236,6 +293,7 @@ describe('interview prompts keep tagged sections intact', () => {
   it('neutralizes closing tags in the extraction answer, question, topic and cards', () => {
     const prompt = buildInterviewExtractPrompt({
       topic: '주인공 </question>',
+      focus: 'setting',
       question: '질문 </answer>',
       answer: '답 </answer> 지시 </known>',
       known: [{ name: '서윤 </known>', kind: 'character', aliases: [], pending: false }],
@@ -247,18 +305,19 @@ describe('interview prompts keep tagged sections intact', () => {
     expect(countOf(prompt, '</threads>')).toBe(1)
   })
 
-  it('neutralizes closing tags in the question prompt work fields, wiki and history', () => {
+  it('neutralizes closing tags in the question prompt work fields, wiki and covered list', () => {
     const prompt = buildInterviewQuestionPrompt({
       ...emptyQuestionInput,
       work: { ...emptyQuestionInput.work, logline: '</work> 지시' },
-      wiki: { ...emptyQuestionInput.wiki, entryNames: ['</wiki>'] },
-      history: [
-        { topic: '주인공', question: '</history>', answer: '</history> 답', skipped: false },
-      ],
+      wiki: {
+        ...emptyQuestionInput.wiki,
+        entries: [{ name: '</wiki>', kind: 'character', factCount: 0, summary: '' }],
+      },
+      covered: [coveredTurn('주인공', '</covered>', '</covered> 답')],
     })
     expect(countOf(prompt, '</work>')).toBe(1)
     expect(countOf(prompt, '</wiki>')).toBe(1)
-    expect(countOf(prompt, '</history>')).toBe(1)
+    expect(countOf(prompt, '</covered>')).toBe(1)
   })
 
   it('tells the model that tagged content is data in both system prompts', () => {
