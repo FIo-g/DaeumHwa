@@ -288,6 +288,11 @@ export type ProbeAttempt = {
   error: string | null
 }
 
+/**
+ * One streamed generate that produces a single token, so it times loading and prompt evaluation
+ * only. Headers arrive at once, so a slow load cannot hit fetch's headers timeout. Returns the
+ * final NDJSON chunk.
+ */
 async function ollamaGenerate(
   fetchFn: FetchFn,
   base: string,
@@ -298,10 +303,29 @@ async function ollamaGenerate(
   const res = await fetchFn(`${base}/api/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model, prompt, stream: false, options: { num_ctx: numCtx } }),
+    body: JSON.stringify({
+      model,
+      prompt,
+      stream: true,
+      think: false,
+      options: { num_ctx: numCtx, num_predict: 1 },
+    }),
   })
   if (!res.ok) throw new Error(`generate HTTP ${res.status}: ${await res.text()}`)
-  return (await res.json()) as { prompt_eval_count?: number }
+  const lines = (await res.text()).split('\n').filter((line) => line.trim().length > 0)
+  const chunks = lines.map((line) => JSON.parse(line) as { error?: string; done?: boolean })
+  const failed = chunks.find((chunk) => chunk.error !== undefined)
+  if (failed) throw new Error(`generate failed: ${failed.error}`)
+  const last = chunks.at(-1)
+  if (!last?.done) throw new Error('generate stream ended without a done chunk')
+  return last as { prompt_eval_count?: number }
+}
+
+/** The error message, with the network cause code appended when fetch has one. */
+function attemptError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code
+  return typeof code === 'string' ? `${message} (${code})` : message
 }
 
 async function loadedSize(fetchFn: FetchFn, base: string, model: string): Promise<number | null> {
@@ -366,7 +390,7 @@ export async function probeContext(o: ProbeOptions): Promise<{
       chosen = numCtx
       break
     } catch (error) {
-      attempt.error = error instanceof Error ? error.message : String(error)
+      attempt.error = attemptError(error)
     }
   }
 

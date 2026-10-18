@@ -127,6 +127,7 @@ export class OllamaAiClient implements AiClient {
         format: z.toJSONSchema(args.schema),
         maxTokens: args.maxTokens,
         call,
+        billed,
       })
       billed = first.usage
       assertComplete(first.doneReason, billed)
@@ -142,6 +143,7 @@ export class OllamaAiClient implements AiClient {
         ],
         maxTokens: args.maxTokens,
         call,
+        billed,
       })
       const usage = addUsage(billed, retry.usage)
       billed = usage
@@ -184,61 +186,25 @@ export class OllamaAiClient implements AiClient {
         }),
         call,
       )
-      if (!response.body) throw new Error('Ollama stream had no body')
-
-      let raw = ''
       let emitted = ''
-      let usage = NO_USAGE
-      let doneReason: string | undefined
-      let sawDone = false
-      let resultModel = model
       // Pushes the part of the visible text that has not been sent yet.
       const pushVisible = (visible: string | undefined) => {
         if (visible === undefined || visible.length <= emitted.length) return
         channel.push(visible.slice(emitted.length))
         emitted = visible
       }
-      const handleLine = (line: string) => {
-        if (!line.trim()) return
-        const chunk = JSON.parse(line) as ChatResponse
-        if (chunk.error !== undefined) {
-          throw aiErrorWithUsage(`AI 호출에 실패했습니다: ${chunk.error.slice(0, 120)}`, usage)
-        }
-        if (chunk.model) resultModel = chunk.model
-        raw += chunk.message?.content ?? ''
-        if (chunk.done) {
-          sawDone = true
-          usage = usageOf(chunk)
-          doneReason = chunk.done_reason
-          this.settings.onStats?.(statsOf(args.task.name, model, chunk))
-        }
-        pushVisible(visibleText(raw))
-      }
-
-      const decoder = new TextDecoder()
-      const reader = response.body.getReader()
-      let buffered = ''
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffered += decoder.decode(value, { stream: true })
-        let newline = buffered.indexOf('\n')
-        while (newline !== -1) {
-          handleLine(buffered.slice(0, newline))
-          buffered = buffered.slice(newline + 1)
-          newline = buffered.indexOf('\n')
-        }
-      }
-      buffered += decoder.decode()
-      handleLine(buffered)
-
-      // Without a done chunk the answer was cut short; it must not be scored as complete.
-      if (!sawDone) throw aiErrorWithUsage(STREAM_INCOMPLETE_MESSAGE, usage)
-      assertComplete(doneReason, usage)
-      const text = stripThink(raw)
+      const answer = await this.readStream({
+        task: args.task.name,
+        model,
+        response,
+        billed: NO_USAGE,
+        onContent: (raw) => pushVisible(visibleText(raw)),
+      })
+      assertComplete(answer.doneReason, answer.usage)
+      const text = stripThink(answer.content)
       pushVisible(text)
       channel.close()
-      return { text, usage, model: resultModel }
+      return { text, usage: answer.usage, model: answer.model }
     } catch (error) {
       if (error instanceof OllamaHttpError) {
         channel.fail(error)
@@ -250,7 +216,63 @@ export class OllamaAiClient implements AiClient {
     }
   }
 
-  /** One non-streaming /api/chat call. The answer text is returned as-is, think block included. */
+  /**
+   * Reads one streamed /api/chat answer (NDJSON). onContent gets the raw content text so far;
+   * thinking chunks are skipped. Stats are reported once, from the done chunk.
+   */
+  private async readStream(args: {
+    task: AiTaskName
+    model: string
+    response: Response
+    billed: AiUsage
+    onContent?: (raw: string) => void
+  }): Promise<ChatResult> {
+    if (!args.response.body) throw new Error('Ollama stream had no body')
+    let raw = ''
+    let usage = NO_USAGE
+    let doneReason: string | undefined
+    let sawDone = false
+    let resultModel = args.model
+    const handleLine = (line: string) => {
+      if (!line.trim()) return
+      const chunk = JSON.parse(line) as ChatResponse
+      if (chunk.error !== undefined) {
+        throw aiErrorWithUsage(`AI 호출에 실패했습니다: ${chunk.error.slice(0, 120)}`, args.billed)
+      }
+      if (chunk.model) resultModel = chunk.model
+      raw += chunk.message?.content ?? ''
+      if (chunk.done) {
+        sawDone = true
+        usage = usageOf(chunk)
+        doneReason = chunk.done_reason
+        this.settings.onStats?.(statsOf(args.task, args.model, chunk))
+      }
+      args.onContent?.(raw)
+    }
+
+    const decoder = new TextDecoder()
+    const reader = args.response.body.getReader()
+    let buffered = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffered += decoder.decode(value, { stream: true })
+      let newline = buffered.indexOf('\n')
+      while (newline !== -1) {
+        handleLine(buffered.slice(0, newline))
+        buffered = buffered.slice(newline + 1)
+        newline = buffered.indexOf('\n')
+      }
+    }
+    buffered += decoder.decode()
+    handleLine(buffered)
+
+    // Without a done chunk the answer was cut short; it must not be scored as complete.
+    if (!sawDone) throw aiErrorWithUsage(STREAM_INCOMPLETE_MESSAGE, args.billed)
+    return { content: raw, usage, model: resultModel, doneReason }
+  }
+
+  /** One streamed /api/chat call. The answer text is returned as-is, think block included. */
   private async chat(args: {
     task: AiTaskName
     model: string
@@ -258,25 +280,24 @@ export class OllamaAiClient implements AiClient {
     format?: unknown
     maxTokens: number
     call: CallLimits
+    billed: AiUsage
   }): Promise<ChatResult> {
     const response = await this.post(
       this.chatBody({
         model: args.model,
         messages: args.messages,
-        stream: false,
+        stream: true,
         format: args.format,
         maxTokens: args.maxTokens,
       }),
       args.call,
     )
-    const data = (await response.json()) as ChatResponse
-    this.settings.onStats?.(statsOf(args.task, args.model, data))
-    return {
-      content: data.message?.content ?? '',
-      usage: usageOf(data),
-      model: data.model ?? args.model,
-      doneReason: data.done_reason,
-    }
+    return this.readStream({
+      task: args.task,
+      model: args.model,
+      response,
+      billed: args.billed,
+    })
   }
 
   private chatBody(args: {
@@ -306,12 +327,17 @@ export class OllamaAiClient implements AiClient {
   }
 
   private async post(body: object, call: CallLimits): Promise<Response> {
-    const response = await this.fetchImpl(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: requestSignal(call),
-    })
+    let response: Response
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: requestSignal(call),
+      })
+    } catch (error) {
+      throw withCauseCode(error)
+    }
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined)
       throw new OllamaHttpError(response.status)
@@ -339,6 +365,18 @@ function requestSignal(call: CallLimits): AbortSignal | undefined {
     call.timeoutMs !== undefined ? AbortSignal.timeout(call.timeoutMs) : undefined
   if (call.signal && timeoutSignal) return AbortSignal.any([call.signal, timeoutSignal])
   return call.signal ?? timeoutSignal
+}
+
+/**
+ * fetch rejects with a bare "fetch failed" TypeError; the real reason (e.g. UND_ERR_HEADERS_TIMEOUT)
+ * is on its cause. Put that code in the message so logs and classifyError can see it. Abort errors
+ * are returned unchanged, since their name decides CANCELLED vs timeout.
+ */
+function withCauseCode(error: unknown): unknown {
+  if (isAbortError(error) || !(error instanceof Error)) return error
+  const code = (error.cause as { code?: unknown } | undefined)?.code
+  if (typeof code !== 'string') return error
+  return new Error(`${error.message} (${code})`, { cause: error })
 }
 
 /** Output stopped at the token limit: the answer is cut off and cannot be used. */

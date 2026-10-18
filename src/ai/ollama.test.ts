@@ -27,19 +27,20 @@ function fakeFetch(replies: Response[]) {
   return { calls, fetch: fetchStub as typeof fetch }
 }
 
+/** One streamed answer: a single content chunk followed by the done chunk. */
 function chatReply(content: string, extra: Record<string, unknown> = {}) {
-  return new Response(
-    JSON.stringify({
+  return ndjsonReply([
+    { model: MODEL, message: { role: 'assistant', content }, done: false },
+    {
       model: MODEL,
-      message: { role: 'assistant', content },
+      message: { role: 'assistant', content: '' },
       done: true,
       done_reason: 'stop',
       prompt_eval_count: 10,
       eval_count: 5,
       ...extra,
-    }),
-    { headers: { 'content-type': 'application/json' } },
-  )
+    },
+  ])
 }
 
 function ndjsonReply(lines: Record<string, unknown>[]) {
@@ -85,7 +86,7 @@ describe('OllamaAiClient.generateObject', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].url).toBe('http://ollama.test/api/chat')
     const body = calls[0].body
-    expect(body.stream).toBe(false)
+    expect(body.stream).toBe(true)
     expect(body.format).toEqual(z.toJSONSchema(schema))
     expect(body.options).toEqual({
       num_ctx: 65536,
@@ -105,6 +106,127 @@ describe('OllamaAiClient.generateObject', () => {
       usage: { inputTokens: 10, outputTokens: 5 },
       model: MODEL,
     })
+  })
+
+  it('reads content split across NDJSON lines and network reads, skipping thinking', async () => {
+    const lines = [
+      {
+        model: MODEL,
+        message: { role: 'assistant', content: '', thinking: '생각 1' },
+        done: false,
+      },
+      { model: MODEL, message: { role: 'assistant', content: '{"a":' }, done: false },
+      {
+        model: MODEL,
+        message: { role: 'assistant', content: '', thinking: '생각 2' },
+        done: false,
+      },
+      { model: MODEL, message: { role: 'assistant', content: '"x"}' }, done: false },
+      {
+        model: MODEL,
+        message: { role: 'assistant', content: '' },
+        done: true,
+        done_reason: 'stop',
+        prompt_eval_count: 10,
+        eval_count: 5,
+      },
+    ]
+    // Cut the bytes at odd positions so lines arrive split across reads.
+    const bytes = new TextEncoder().encode(lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
+    const pieces: Uint8Array[] = []
+    for (let i = 0; i < bytes.length; i += 7) pieces.push(bytes.slice(i, i + 7))
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const piece of pieces) controller.enqueue(piece)
+        controller.close()
+      },
+    })
+    const { calls, fetch } = fakeFetch([
+      new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }),
+    ])
+
+    const result = await client(fetch, true).generateObject({
+      task,
+      system: 'SYSTEM',
+      prompt: 'PROMPT',
+      schema,
+      effort: 'low',
+      maxTokens: 4000,
+    })
+
+    expect(calls[0].body.stream).toBe(true)
+    expect(result).toEqual({
+      object: { a: 'x' },
+      usage: { inputTokens: 10, outputTokens: 5 },
+      model: MODEL,
+    })
+  })
+
+  it('fails with AI_ERROR when the stream carries an error line', async () => {
+    const { fetch } = fakeFetch([
+      ndjsonReply([
+        { model: MODEL, message: { role: 'assistant', content: '{"a":' }, done: false },
+        { error: 'model runner stopped' },
+      ]),
+    ])
+    const error = await catchError(
+      client(fetch).generateObject({
+        task,
+        system: 'SYSTEM',
+        prompt: 'PROMPT',
+        schema,
+        effort: 'low',
+        maxTokens: 4000,
+      }),
+    )
+
+    expect(error).toMatchObject({ code: 'AI_ERROR' })
+    expect((error as Error).message).toContain('model runner stopped')
+  })
+
+  it('fails with AI_ERROR when the stream ends without a done chunk', async () => {
+    const { fetch } = fakeFetch([
+      ndjsonReply([
+        { model: MODEL, message: { role: 'assistant', content: '{"a":"x"}' }, done: false },
+      ]),
+    ])
+    const error = await catchError(
+      client(fetch).generateObject({
+        task,
+        system: 'SYSTEM',
+        prompt: 'PROMPT',
+        schema,
+        effort: 'low',
+        maxTokens: 4000,
+      }),
+    )
+
+    expect(error).toMatchObject({
+      code: 'AI_ERROR',
+      message: expect.stringContaining('중간에 끊겼습니다'),
+    })
+  })
+
+  it('keeps the fetch cause code in the message when headers never arrive', async () => {
+    const timeoutFetch = (async () => {
+      throw new TypeError('fetch failed', {
+        cause: { code: 'UND_ERR_HEADERS_TIMEOUT' },
+      })
+    }) as typeof fetch
+
+    const error = await catchError(
+      client(timeoutFetch).generateObject({
+        task,
+        system: 'SYSTEM',
+        prompt: 'PROMPT',
+        schema,
+        effort: 'low',
+        maxTokens: 4000,
+      }),
+    )
+
+    expect(error).toMatchObject({ code: 'AI_ERROR' })
+    expect((error as Error).message).toContain('UND_ERR_HEADERS_TIMEOUT')
   })
 
   it('retries once with a JSON instruction', async () => {
@@ -398,7 +520,7 @@ describe('OllamaAiClient speed stats', () => {
     total_duration: 13e9,
   }
 
-  it('reports the non-stream timings in ms once per attempt', async () => {
+  it('reports the timings in ms once per attempt', async () => {
     const stats: OllamaCallStats[] = []
     const { fetch } = fakeFetch([chatReply('{"a":"x"}', timings)])
     await statsClient(fetch, (s) => stats.push(s)).generateObject({

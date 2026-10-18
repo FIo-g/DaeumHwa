@@ -175,20 +175,33 @@ describe('advance', () => {
 describe('probeContext', () => {
   const GiB = 1024 ** 3
 
+  /** One streamed /api/generate answer: a single NDJSON line that is also the final chunk. */
+  function generateStream(promptEvalCount: number): Response {
+    const line = {
+      model: 'qwen3.8:27b-mlx',
+      response: '',
+      done: true,
+      prompt_eval_count: promptEvalCount,
+    }
+    return new Response(`${JSON.stringify(line)}\n`, {
+      headers: { 'content-type': 'application/x-ndjson' },
+    })
+  }
+
   function fakeOllama(opts: { failSize?: number; psBytes: number }) {
-    const calls: { url: string; numCtx?: number }[] = []
+    const calls: { url: string; numCtx?: number; body?: Record<string, unknown> }[] = []
     const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input)
-      calls.push({ url, numCtx: JSON.parse(String(init?.body ?? '{}')).options?.num_ctx })
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined
+      calls.push({ url, numCtx: body?.options?.num_ctx, body })
       if (url.endsWith('/api/ps')) {
         return Response.json({ models: [{ name: 'qwen3.8:27b-mlx', size: opts.psBytes }] })
       }
-      const body = JSON.parse(String(init?.body))
       if (body.options.num_ctx === opts.failSize) {
         return new Response('out of memory', { status: 500 })
       }
       const promptLength = String(body.prompt).length
-      return Response.json({ response: 'OK', prompt_eval_count: promptLength > 100 ? 30000 : 5 })
+      return generateStream(promptLength > 100 ? 30000 : 5)
     }) as typeof fetch
     return { fetchFn, calls }
   }
@@ -208,6 +221,52 @@ describe('probeContext', () => {
     expect(result.numCtx).toBe(65536)
     const written = JSON.parse(readFileSync(result.file, 'utf8'))
     expect(written.chosenNumCtx).toBe(65536)
+  })
+
+  it('probes with streamed, thinking-off, one-token generates', async () => {
+    const { fetchFn, calls } = fakeOllama({ psBytes: 20 * GiB })
+
+    await probeContext({
+      model: 'qwen3.8-27b',
+      sizes: [65536],
+      fetch: fetchFn,
+      baseUrl: 'http://probe.test',
+      outDir: tempDir(),
+    })
+
+    const generates = calls.filter((c) => c.url.endsWith('/api/generate'))
+    expect(generates).toHaveLength(2)
+    for (const call of generates) {
+      expect(call.body).toMatchObject({
+        stream: true,
+        think: false,
+        options: { num_ctx: 65536, num_predict: 1 },
+      })
+    }
+  })
+
+  it('records the fetch cause code of an attempt that cannot get headers', async () => {
+    const outDir = tempDir()
+    const base = fakeOllama({ psBytes: 20 * GiB }).fetchFn
+    const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined
+      if (body?.options?.num_ctx === 131072) {
+        throw new TypeError('fetch failed', { cause: { code: 'UND_ERR_HEADERS_TIMEOUT' } })
+      }
+      return base(input, init)
+    }) as typeof fetch
+
+    const result = await probeContext({
+      model: 'qwen3.8-27b',
+      sizes: [131072, 65536],
+      fetch: fetchFn,
+      baseUrl: 'http://probe.test',
+      outDir,
+    })
+
+    expect(result.numCtx).toBe(65536)
+    const written = JSON.parse(readFileSync(result.file, 'utf8'))
+    expect(written.attempts[0].error).toContain('UND_ERR_HEADERS_TIMEOUT')
   })
 
   it('skips sizes whose loaded model is over 40 GiB', async () => {
