@@ -17,8 +17,8 @@ import type { ModelProfile } from './models'
 import { EN_SYSTEMS } from './localize/en-systems'
 import { countHangul, translateScaffold } from './localize/scaffold'
 
-// Eval client: wraps the real AI client for one model profile. It forces the eval settings (max
-// effort, the profile's model and output floor), optionally swaps prompts to English, and writes one
+// Eval client: wraps the real AI client for one model profile. It forces the eval settings (the
+// profile's effort, model and output floor), optionally swaps prompts to English, and writes one
 // JSON record per call. Product code never uses it.
 
 export type FailureKind = 'external-limit' | 'external-network' | 'model'
@@ -330,7 +330,7 @@ export class EvalClient implements AiClient {
           ...args,
           system: call.system,
           prompt: call.prompt,
-          effort: 'max',
+          effort: this.profile.effort,
           maxTokens: call.maxTokens,
           model: this.profile.model,
         })
@@ -354,7 +354,7 @@ export class EvalClient implements AiClient {
         ...args,
         system: call.system,
         prompt: call.prompt,
-        effort: 'max',
+        effort: this.profile.effort,
         maxTokens: call.maxTokens,
         model: this.profile.model,
       })
@@ -457,7 +457,7 @@ export class EvalClient implements AiClient {
         ollama,
       }),
       model: this.profile.model,
-      effortRequested: 'max',
+      effortRequested: this.profile.effort,
       maxTokens: call.maxTokens,
       productTimeoutMs: call.productTimeoutMs,
       wouldTimeOut: durationMs > call.productTimeoutMs,

@@ -113,7 +113,7 @@ async function thrownBy(promise: Promise<unknown>): Promise<unknown> {
 }
 
 describe('EvalClient request shaping', () => {
-  it('forces max effort, the profile model and the output-token floor', async () => {
+  it('uses the profile effort, the profile model and the output-token floor', async () => {
     const spy = spyClient()
     const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'ko', callsDir })
     await client.generateObject(objectArgs({ maxTokens: 16000 }))
@@ -121,6 +121,25 @@ describe('EvalClient request shaping', () => {
     const [first, second] = spy.calls.map((c) => c.args as GenerateObjectArgs<unknown>)
     expect(first).toMatchObject({ effort: 'max', model: QWEN.model, maxTokens: 32000 })
     expect(second).toMatchObject({ effort: 'max', model: QWEN.model, maxTokens: 40000 })
+  })
+
+  it('sends the profile effort, not max, to generateObject and streamText and records it', async () => {
+    const spy = spyClient()
+    const profile: ModelProfile = { ...QWEN, effort: 'high' }
+    const client = new EvalClient({ inner: spy.client, profile, lang: 'ko', callsDir })
+    await client.generateObject(objectArgs())
+    expect(spy.calls[0].args).toMatchObject({ effort: 'high' })
+    expect(readRecord('001-proofread.json').effortRequested).toBe('high')
+    const { final } = client.streamText({
+      task: { name: 'draft-chapter', input: {} },
+      system: DRAFT_SYSTEM,
+      prompt: 'draft',
+      effort: 'high',
+      maxTokens: 16000,
+    })
+    await final
+    expect(spy.calls[1].args).toMatchObject({ effort: 'high' })
+    expect(readRecord('002-draft-chapter.json').effortRequested).toBe('high')
   })
 
   it('en mode swaps the system prompt and translates the prompt', async () => {
