@@ -2,8 +2,15 @@ import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { OllamaHttpError } from '@/ai/ollama'
-import { FORMAT_MESSAGE } from '@/ai/anthropic'
+import Anthropic, {
+  APIConnectionError,
+  InternalServerError,
+  RateLimitError,
+} from '@anthropic-ai/sdk'
+import { z } from 'zod'
+import { AnthropicAiClient, FORMAT_MESSAGE, MAX_TOKENS_MESSAGE } from '@/ai/anthropic'
+import { OllamaAiClient, OllamaHttpError } from '@/ai/ollama'
+import { ResponsesAiClient } from '@/ai/responses'
 import {
   AI_TIMEOUT_MESSAGE,
   type AiClient,
@@ -49,6 +56,23 @@ function spyClient(options: { usage?: AiUsage; error?: unknown; chunks?: string[
   return { client, calls }
 }
 
+// Inner client whose calls fail with the queued errors, one per call, in call order.
+function queueClient(errors: unknown[]): AiClient {
+  const queue = [...errors]
+  return {
+    provider: 'queue',
+    defaultModel: 'queue-model',
+    async generateObject(): Promise<never> {
+      // Yield once so parallel calls interleave the way the real clients do.
+      await Promise.resolve()
+      throw queue.shift()
+    },
+    streamText() {
+      throw new Error('streamText is not used by this client')
+    },
+  }
+}
+
 const QWEN = MODEL_PROFILES['qwen3.8-27b']
 const CLOUD = MODEL_PROFILES['haiku-5.5']
 
@@ -78,6 +102,16 @@ function readRecord(file: string): CallRecord {
   return JSON.parse(readFileSync(join(callsDir, file), 'utf8')) as CallRecord
 }
 
+/** Resolves to the error a promise rejects with. Fails the test if it resolves. */
+async function thrownBy(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    await promise
+  } catch (error) {
+    return error
+  }
+  throw new Error('expected the call to reject')
+}
+
 describe('EvalClient request shaping', () => {
   it('forces max effort, the profile model and the output-token floor', async () => {
     const spy = spyClient()
@@ -92,10 +126,12 @@ describe('EvalClient request shaping', () => {
   it('en mode swaps the system prompt and translates the prompt', async () => {
     const spy = spyClient()
     const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'en', callsDir })
-    await client.generateObject(objectArgs({ prompt: '<manuscript>\n주인공\n</manuscript>' }))
+    const prompt = '현재 회차: 3화\n열린 떡밥: (없음)'
+    await client.generateObject(objectArgs({ prompt }))
     const sent = spy.calls[0].args as GenerateObjectArgs<unknown>
     expect(sent.system).toBe(EN_SYSTEMS.proofread)
-    expect(sent.prompt).toBe(translateScaffold('<manuscript>\n주인공\n</manuscript>'))
+    expect(sent.prompt).toBe('Current chapter: 3\nOpen threads: (none)')
+    expect(sent.prompt).toBe(translateScaffold(prompt))
   })
 
   it('ko mode passes prompts through unchanged', async () => {
@@ -193,6 +229,42 @@ describe('EvalClient failures', () => {
     expect(client.takeLastFailure()).toBeNull()
   })
 
+  it('keeps the most severe failure of parallel calls until it is taken', async () => {
+    // A rate limit, then a cancelled sibling: the sibling must not overwrite the limit.
+    const limit = { status: 429 }
+    const cancelled = new AppError('CANCELLED', '취소했습니다.')
+    const client = new EvalClient({
+      inner: queueClient([limit, cancelled]),
+      profile: QWEN,
+      lang: 'ko',
+      callsDir,
+    })
+    const results = await Promise.allSettled([
+      client.generateObject(objectArgs()),
+      client.generateObject(objectArgs()),
+    ])
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected'])
+    expect(client.takeLastFailure()).toMatchObject({ kind: 'external-limit', status: 429 })
+    expect(client.takeLastFailure()).toBeNull()
+  })
+
+  it('prefers an external failure over a later model failure', async () => {
+    const network = new AppError('AI_ERROR', 'AI 호출에 실패했습니다: HTTP 503')
+    const format = new AppError('AI_ERROR', FORMAT_MESSAGE)
+    const client = new EvalClient({
+      inner: queueClient([network, format]),
+      profile: QWEN,
+      lang: 'ko',
+      callsDir,
+    })
+    await Promise.allSettled([
+      client.generateObject(objectArgs()),
+      client.generateObject(objectArgs()),
+    ])
+    expect(client.takeLastFailure()).toMatchObject({ kind: 'external-network', status: 503 })
+    expect(client.takeLastFailure()).toBeNull()
+  })
+
   it('classifies errors', () => {
     expect(classifyError({ status: 429 })).toBe('external-limit')
     expect(classifyError(new Error('usage limit reached'))).toBe('external-limit')
@@ -201,6 +273,135 @@ describe('EvalClient failures', () => {
     expect(classifyError(new OllamaHttpError(503))).toBe('external-network')
     expect(classifyError(new AppError('AI_ERROR', FORMAT_MESSAGE))).toBe('model')
     expect(classifyError(new AppError('AI_ERROR', AI_TIMEOUT_MESSAGE))).toBe('model')
+  })
+})
+
+describe('classifyError on errors from the real inner clients', () => {
+  const schema = z.object({ answer: z.string() })
+  const baseArgs = {
+    system: '시스템 지시',
+    prompt: '질문',
+    schema,
+    effort: 'medium' as const,
+    maxTokens: 1000,
+    task: { name: 'proofread' as const, input: {} },
+  }
+
+  /** Anthropic stub whose parse and create calls either throw or return a fixed answer. */
+  function anthropicWith(options: { error?: unknown; response?: unknown }): Anthropic {
+    const answer = async () => {
+      if (options.error !== undefined) throw options.error
+      return options.response
+    }
+    return {
+      messages: { parse: answer, create: answer },
+      beta: { messages: { parse: answer, stream: () => ({}) } },
+    } as unknown as Anthropic
+  }
+
+  it('Anthropic: a 429 and a 503 from the SDK', async () => {
+    const rateLimited = new RateLimitError(429, undefined, 'rate limited', new Headers())
+    const unavailable = new InternalServerError(503, undefined, 'unavailable', new Headers())
+    const limitError = await thrownBy(
+      new AnthropicAiClient(
+        anthropicWith({ error: rateLimited }),
+        'claude-haiku-5-5',
+      ).generateObject(baseArgs),
+    )
+    const outageError = await thrownBy(
+      new AnthropicAiClient(
+        anthropicWith({ error: unavailable }),
+        'claude-haiku-5-5',
+      ).generateObject(baseArgs),
+    )
+    expect(limitError).toBeInstanceOf(AppError)
+    expect(classifyError(limitError)).toBe('external-limit')
+    expect(classifyError(outageError)).toBe('external-network')
+  })
+
+  it('Anthropic: a dropped connection is an external network failure', async () => {
+    const dropped = new APIConnectionError({ message: 'Connection error.' })
+    const error = await thrownBy(
+      new AnthropicAiClient(anthropicWith({ error: dropped }), 'claude-haiku-5-5').generateObject(
+        baseArgs,
+      ),
+    )
+    expect(classifyError(error)).toBe('external-network')
+  })
+
+  it('Anthropic: a max-tokens stop stays a model failure', async () => {
+    const response = {
+      parsed_output: null,
+      stop_reason: 'max_tokens',
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-haiku-5-5',
+      content: [],
+    }
+    const error = await thrownBy(
+      new AnthropicAiClient(anthropicWith({ response }), 'claude-haiku-5-5').generateObject(
+        baseArgs,
+      ),
+    )
+    expect(error).toMatchObject({ message: MAX_TOKENS_MESSAGE })
+    expect(classifyError(error)).toBe('model')
+  })
+
+  it('Responses gateway: a 429 and a 503 answer', async () => {
+    const respond = (status: number) =>
+      new ResponsesAiClient({
+        baseUrl: 'https://gateway.test/v1',
+        apiKey: null,
+        defaultModel: 'gateway-model',
+        retryBaseDelayMs: 0,
+        fetch: async () => new Response('{"error":{"message":"slow down"}}', { status }),
+      })
+    const limitError = await thrownBy(respond(429).generateObject(baseArgs))
+    const outageError = await thrownBy(respond(503).generateObject(baseArgs))
+    expect(classifyError(limitError)).toBe('external-limit')
+    expect(classifyError(outageError)).toBe('external-network')
+  })
+
+  it('Ollama: a refused or dropped connection is an external network failure', async () => {
+    const client = new OllamaAiClient({
+      model: 'qwen-test',
+      numCtx: 1000,
+      baseUrl: 'http://ollama.test',
+      fetch: async () => {
+        throw new TypeError('fetch failed')
+      },
+    })
+    const error = await thrownBy(client.generateObject(baseArgs))
+    expect(classifyError(error)).toBe('external-network')
+  })
+
+  it('Ollama: HTTP 429 is a limit and HTTP 503 a network failure', async () => {
+    const respond = (status: number) =>
+      new OllamaAiClient({
+        model: 'qwen-test',
+        numCtx: 1000,
+        baseUrl: 'http://ollama.test',
+        fetch: async () => new Response('busy', { status }),
+      })
+    const limitError = await thrownBy(respond(429).generateObject(baseArgs))
+    const outageError = await thrownBy(respond(503).generateObject(baseArgs))
+    expect(classifyError(limitError)).toBe('external-limit')
+    expect(classifyError(outageError)).toBe('external-network')
+  })
+
+  it('records the real client failures with their kind', async () => {
+    const client = new EvalClient({
+      inner: new AnthropicAiClient(
+        anthropicWith({ error: new RateLimitError(429, undefined, 'rate limited', new Headers()) }),
+        'claude-haiku-5-5',
+      ),
+      profile: CLOUD,
+      lang: 'ko',
+      callsDir,
+    })
+    await thrownBy(client.generateObject(objectArgs()))
+    const record = readRecord('001-proofread.json')
+    expect(record.error).toMatchObject({ kind: 'external-limit' })
+    expect(client.takeLastFailure()).toMatchObject({ kind: 'external-limit' })
   })
 })
 
@@ -222,5 +423,36 @@ describe('EvalClient streams', () => {
     expect(result.text).toBe('Hello world')
     const record = readRecord('001-draft-chapter.json')
     expect(record).toMatchObject({ kind: 'stream', output: { text: 'Hello world' }, error: null })
+  })
+
+  it('records and rethrows a synchronous throw from the inner streamText', () => {
+    const boom = { status: 503 }
+    const inner: AiClient = {
+      provider: 'sync-throw',
+      defaultModel: 'sync-model',
+      async generateObject(): Promise<never> {
+        throw new Error('unused')
+      },
+      streamText(): never {
+        throw boom
+      },
+    }
+    const client = new EvalClient({ inner, profile: QWEN, lang: 'ko', callsDir })
+    expect(() =>
+      client.streamText({
+        task: { name: 'draft-chapter', input: {} },
+        system: DRAFT_SYSTEM,
+        prompt: 'draft',
+        effort: 'high',
+        maxTokens: 16000,
+      }),
+    ).toThrow(boom)
+    const record = readRecord('001-draft-chapter.json')
+    expect(record).toMatchObject({
+      kind: 'stream',
+      error: { kind: 'external-network', status: 503 },
+    })
+    expect(client.nextSeq).toBe(2)
+    expect(client.takeLastFailure()).toMatchObject({ kind: 'external-network' })
   })
 })

@@ -4,7 +4,8 @@
 
 type Rule = readonly [pattern: string | RegExp, replacement: string]
 
-// Ordered: the first rule that matches wins, so longer and more specific fragments come first.
+// Ordered: every rule runs in sequence, so longer and more specific fragments come first. A bare
+// label rule can also rewrite Hangul inside leaked Korean text, so the Hangul count is a lower bound.
 const RULES: readonly Rule[] = [
   // Reader personas (src/ai/personas.ts), whole sentences first.
   [

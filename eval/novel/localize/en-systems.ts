@@ -9,7 +9,7 @@ export const EN_TAG_DATA_RULE =
 
 /** English form of ENTITY_NAME_RULES (src/ai/extraction-rules.ts). */
 const EN_ENTITY_NAME_RULES = [
-  '- A name (name) uses only the proper name. Do not put job titles, honorifics or descriptive modifiers in the name; put them in summary or fields. Example: "former clock tower repairman Noh Eunha" → name "Noh Eunha", summary "former clock tower repairman".',
+  '- A name (name) uses only the proper name. Do not put occupations, titles or descriptive modifiers in the name; put them in summary or fields. Example: "former clock tower repairman Noh Eunha" → name "Noh Eunha", summary "former clock tower repairman".',
   '- summary describes the card\'s own subject. When describing relationships with other characters, do not change the subject. Example: "Han Gijun was the manager of the generation before last, and Han Siwoo is his son" → Han Gijun summary "manager of the generation before last", Han Siwoo summary "son of Han Gijun".',
   '- Role words and pronouns such as "protagonist", "male lead", "female lead", "male protagonist", "female protagonist", "villain", "supporting character", "narrator", "I", "he", "she", "they" are not names. Do not write them in the name of entries, the subjectName of facts, or either end of relations. Write that character\'s name instead.',
   '- If the answer has no name, do not create a card.',
@@ -23,8 +23,9 @@ export const EN_INTERVIEW_TOPICS = [
   'world rules',
   'main places',
   'central conflict',
-  'foreshadowing',
+  'threads',
   'ending direction',
+  ,
   'style',
 ] as const
 
@@ -48,7 +49,7 @@ Rules:
 - If a fact's state changes in this chapter (a new state different from an F ref in <known_facts>), put that ref in supersedesFactRef.
 - threads are unresolved elements that leave readers with a question or an expectation. If a thread in <open_threads> advances or is resolved in this chapter, set kind to "developed" or "resolved" and put its T ref in existingThreadRef. A newly planted thread gets kind "planted" and existingThreadRef null.
 - If a thread marked "(planned)" in <open_threads> is planted for the first time in this chapter, set kind to "planted" and put its T ref in existingThreadRef. Do not mark an already planted thread as "planted" again.
-- relations are included only when a relationship among characters, places or organizations is shown (family, romance, rivalry, colleague, affiliation, mentor and so on).
+- relations are included only when a relationship among characters, places or organizations is shown (family, romance, hostility, colleague, affiliation, mentor and so on).
 ${EN_ENTITY_NAME_RULES}
 - summary summarizes the key events of this chapter in no more than 3 sentences.
 ${EN_TAG_DATA_RULE}

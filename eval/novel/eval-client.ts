@@ -51,6 +51,8 @@ export interface EvalClientOptions {
   now?: () => number
 }
 
+type CallError = NonNullable<CallRecord['error']>
+
 const NETWORK_ERROR_CODES = new Set([
   'ECONNREFUSED',
   'ECONNRESET',
@@ -60,6 +62,18 @@ const NETWORK_ERROR_CODES = new Set([
   'UND_ERR_CONNECT_TIMEOUT',
   'UND_ERR_SOCKET',
 ])
+
+/**
+ * Message wording of the real clients. Anthropic and Responses errors reach here as AppError
+ * messages (`AI 호출에 실패했습니다: <reason>`, see src/ai/anthropic.ts and src/ai/responses.ts), so
+ * the reason text is the only signal for them.
+ */
+const LIMIT_PATTERN = /usage limit|rate limit|quota|too many requests|요청이 너무 많습니다/i
+const NETWORK_PATTERN =
+  /fetch failed|connection error|socket hang up|\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|UND_ERR_[A-Z_]+)\b/i
+
+/** Higher wins when several failures are recorded before one is taken. */
+const SEVERITY: Record<FailureKind, number> = { model: 0, 'external-network': 1, 'external-limit': 2 }
 
 /** Task defs that set their own time limit. Tasks without one use the product default. */
 const TASK_DEFS: readonly { name: AiTaskName; timeoutMs?: number }[] = [
@@ -81,23 +95,41 @@ function errorMessage(error: unknown): string {
   return String(error)
 }
 
-function errorField<K extends 'status' | 'code'>(error: unknown, key: K): unknown {
+function errorField(error: unknown, key: 'status' | 'code' | 'cause'): unknown {
   if (typeof error === 'object' && error !== null && key in error) {
-    return (error as Record<K, unknown>)[key]
+    return (error as Record<typeof key, unknown>)[key]
   }
   return undefined
 }
 
-/** Sorts a failed call into external limit, external network, or the model's own failure. */
-export function classifyError(error: unknown): FailureKind {
-  if (error instanceof AppError) return error.code === 'AI_LIMIT' ? 'external-limit' : 'model'
+/** HTTP status from a structured field (SDK errors, OllamaHttpError), else from an `HTTP <n>` phrase. */
+function statusOf(error: unknown): number | undefined {
   const status = errorField(error, 'status')
+  if (typeof status === 'number') return status
+  const match = /HTTP (\d{3})\b/.exec(errorMessage(error))
+  return match ? Number(match[1]) : undefined
+}
+
+/** A network error code on the error or on its cause chain (checked a few levels deep). */
+function hasNetworkCode(error: unknown, depth = 0): boolean {
+  if (depth > 3) return false
   const code = errorField(error, 'code')
+  if (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) return true
+  const cause = errorField(error, 'cause')
+  return cause !== undefined && cause !== error && hasNetworkCode(cause, depth + 1)
+}
+
+/**
+ * Sorts a failed call into external limit, external network, or the model's own failure. Format,
+ * refusal, max-tokens and timeout failures are the model's own and stay `model`.
+ */
+export function classifyError(error: unknown): FailureKind {
   const message = errorMessage(error)
-  if (status === 429 || /usage limit|rate limit/i.test(message)) return 'external-limit'
-  if (typeof status === 'number' && status >= 500) return 'external-network'
-  if (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) return 'external-network'
-  if (error instanceof TypeError && /fetch failed/.test(message)) return 'external-network'
+  const status = statusOf(error)
+  if (error instanceof AppError && error.code === 'AI_LIMIT') return 'external-limit'
+  if (status === 429 || LIMIT_PATTERN.test(message)) return 'external-limit'
+  if (status !== undefined && status >= 500) return 'external-network'
+  if (hasNetworkCode(error) || NETWORK_PATTERN.test(message)) return 'external-network'
   return 'model'
 }
 
@@ -121,7 +153,8 @@ export class EvalClient implements AiClient {
   /** Records of this process only. */
   readonly records: CallRecord[] = []
   private seq: number
-  private lastFailure: CallRecord['error'] = null
+  /** Most severe failure recorded since the last take. */
+  private pendingFailure: CallError | null = null
   private readonly inner: AiClient
   private readonly profile: ModelProfile
   private readonly lang: 'ko' | 'en'
@@ -143,17 +176,20 @@ export class EvalClient implements AiClient {
     return this.seq
   }
 
-  /** Returns the error of the last failed call and clears it. */
-  takeLastFailure(): CallRecord['error'] {
-    const failure = this.lastFailure
-    this.lastFailure = null
+  /**
+   * Returns the most severe failure recorded since the previous take (external limit, then external
+   * network, then model), and clears it. Ties keep the earlier failure.
+   */
+  takeLastFailure(): CallError | null {
+    const failure = this.pendingFailure
+    this.pendingFailure = null
     return failure
   }
 
   async generateObject<T>(args: GenerateObjectArgs<T>) {
     const call = this.prepare(args.task.name, 'object', args.system, args.prompt, args.maxTokens)
-    try {
-      const result = await this.inner.generateObject<T>({
+    const result = await this.inner
+      .generateObject<T>({
         ...args,
         system: call.system,
         prompt: call.prompt,
@@ -161,24 +197,30 @@ export class EvalClient implements AiClient {
         maxTokens: call.maxTokens,
         model: this.profile.model,
       })
-      this.settle(call, { ok: true, output: result.object, usage: result.usage })
-      return result
-    } catch (error) {
-      this.settle(call, { ok: false, error })
-      throw error
-    }
+      .catch((error: unknown): never => {
+        this.settle(call, { ok: false, error })
+        throw error
+      })
+    this.settle(call, { ok: true, output: result.object, usage: result.usage })
+    return result
   }
 
   streamText(args: StreamTextArgs) {
     const call = this.prepare(args.task.name, 'stream', args.system, args.prompt, args.maxTokens)
-    const inner = this.inner.streamText({
-      ...args,
-      system: call.system,
-      prompt: call.prompt,
-      effort: 'max',
-      maxTokens: call.maxTokens,
-      model: this.profile.model,
-    })
+    let inner: ReturnType<AiClient['streamText']>
+    try {
+      inner = this.inner.streamText({
+        ...args,
+        system: call.system,
+        prompt: call.prompt,
+        effort: 'max',
+        maxTokens: call.maxTokens,
+        model: this.profile.model,
+      })
+    } catch (error) {
+      this.settle(call, { ok: false, error })
+      throw error
+    }
     const final = inner.final.then(
       (result) => {
         this.settle(call, { ok: true, output: { text: result.text }, usage: result.usage })
@@ -222,14 +264,13 @@ export class EvalClient implements AiClient {
     const durationMs = this.now() - call.startedMs
     const usage = outcome.ok ? outcome.usage : null
     const numCtx = this.profile.ollama?.numCtx
-    const error = outcome.ok
+    const status = outcome.ok ? undefined : statusOf(outcome.error)
+    const error: CallError | null = outcome.ok
       ? null
       : {
           kind: classifyError(outcome.error),
           message: errorMessage(outcome.error),
-          ...(typeof errorField(outcome.error, 'status') === 'number'
-            ? { status: errorField(outcome.error, 'status') as number }
-            : {}),
+          ...(status !== undefined ? { status } : {}),
         }
     const record: CallRecord = {
       seq: call.seq,
@@ -252,7 +293,9 @@ export class EvalClient implements AiClient {
       error,
     }
     this.records.push(record)
-    if (error) this.lastFailure = error
+    if (error && (!this.pendingFailure || SEVERITY[error.kind] > SEVERITY[this.pendingFailure.kind])) {
+      this.pendingFailure = error
+    }
     mkdirSync(this.callsDir, { recursive: true })
     const file = `${String(call.seq).padStart(3, '0')}-${call.task}.json`
     writeFileSync(join(this.callsDir, file), `${JSON.stringify(record, null, 2)}\n`)
