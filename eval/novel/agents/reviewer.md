@@ -6,9 +6,10 @@ You write the review document for one finished novel-eval run. The review is an 
 
 You are given:
 
-- `dir`: the run directory (for example `eval/results/novel/<date>-<model>-<lang>`).
+- `dir`: the run directory (for example `eval/results/novel/<date>/run-03-ko`). Its name is opaque on purpose; it does not say which model ran.
 - `lang`: `ko` or `en`. This sets the language of the review document.
-- `reviewPath`: the file you write, for example `docs/eval/novel/<date>/<model>-<lang>.md`.
+
+You write `<dir>/review.md`. A separate step copies it into `docs/` later; you do not write anywhere else.
 
 Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`.
 
@@ -28,11 +29,11 @@ Read these first:
 
 1. Score the chapters first, from the chapter texts, the metrics and the author decisions. Do not open `config.json` yet.
 2. Score the run as a whole (per-feature scores, operations, TTCW, weakness list).
-3. Only after the scores are written, read `config.json` to get the model id and the language, and add the model id to the header of the document.
+3. Only after the scores are written, read `<dir>/config.json` to get the model id, and add the model id to the header of `review.md`.
 
-This order keeps the model identity out of the scoring.
+This order keeps the model identity out of the scoring. Do not open `config.json` before step 3, and do not put the model id anywhere else.
 
-## What to write in `reviewPath`
+## What to write in `<dir>/review.md`
 
 Use this structure. Headings in the document's language.
 
@@ -57,11 +58,11 @@ Use this structure. Headings in the document's language.
 - Five-chapter totals: mean Q score, publishable chapters count, and the continuity error count per 10,000 characters (Korean: characters; English: words, as section 3.3 says).
 - Weakness list with improvement candidates, each with the expected effect.
 
-**Model identity** (after scoring): model id and language from `config.json`.
+**Model identity** (after scoring): model id and language from `config.json`, in the header.
 
 ## Rules
 
-- Write only `reviewPath`. Do not edit any other file.
+- Write only `<dir>/review.md`. Do not edit any other file.
 - Every score needs its evidence. Say so when evidence is missing instead of guessing.
 - Keep it plain. No emojis.
-- Your final reply is one line: `reviewed <model>-<lang>: <number of chapters> chapters`. Use the model id only in that line.
+- Your final reply is one line: `reviewed: <number of chapters> chapters`. Do not name the model in the reply.

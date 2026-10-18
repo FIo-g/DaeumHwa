@@ -9,19 +9,20 @@ You are given two values:
 - `dir`: the run directory. It holds `pending.json` (the item to judge) and is where you write `answer.json`.
 - `lang`: `ko` or `en`. It selects the story bible and the author guide.
 
-Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`. Paths inside `pending.json` (`textFile`, `chapterFile`) are relative to that root unless they are absolute.
+Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`. Paths inside `pending.json` (`textFile`, `chapterFile`) are relative to `<dir>`, not to the repository root. Resolve them against `dir` (for example `<dir>/chapters/01.attempt-1.md`), unless they are absolute.
 
 ## Steps
 
-1. Read `<dir>/pending.json`. Note its `kind`.
-2. Read the story bible `eval/fixtures/novel/<lang>/bible.json` and the author guide `eval/fixtures/novel/<lang>/author-guide.md`. Follow the guide's judgment rules for the kind.
-3. If the kind needs chapter text, read the file the pending names:
+1. If `<dir>/answer.error.txt` exists, read it first. It says why the previous answer was rejected. Fix that problem in the new `answer.json`.
+2. Read `<dir>/pending.json`. Note its `kind`.
+3. Read the story bible `eval/fixtures/novel/<lang>/bible.json` and the author guide `eval/fixtures/novel/<lang>/author-guide.md`. Follow the guide's judgment rules for the kind.
+4. If the kind needs chapter text, read the file the pending names (resolved against `<dir>`):
    - `draft_review`, `proofread`, `continuity`: read `textFile`.
    - `proposals` with `source` = `post_chapter`: read `chapterFile` when it is not null.
    - `interview_answer`, `proposals` from `interview` or `style`, `advice_note`: the pending file carries the material you need. Do not look for more.
-4. Write `<dir>/answer.json`. It must be one JSON object of the exact shape for the kind (see the table below), with the `kind` field equal to the pending `kind`.
-5. Re-read `answer.json` once to confirm it is valid JSON with the right fields.
-6. Reply with one line: `answered <kind>`. Nothing else.
+5. Write `<dir>/answer.json`. It must be one JSON object of the exact shape for the kind (see the table below), with the `kind` field equal to the pending `kind`.
+6. Re-read `answer.json` once to confirm it is valid JSON with the right fields.
+7. Reply with one line: `answered <kind>`. Nothing else.
 
 ## Answer shapes
 
@@ -56,7 +57,7 @@ Field notes:
 
 ## Rules
 
-- Write only `<dir>/answer.json`. Never edit or create any other file, and never write to `docs/`.
+- Write only `<dir>/answer.json`. You may read `<dir>/answer.error.txt`. Never edit or create any other file, and never write to `docs/`.
 - Do not read `config.json`, `state.json`, `worker.log`, `calls/`, or any other run directory, and do not inspect `eval/results/`. They are not your inputs.
 - Do not try to identify the AI model behind the run. Judge with the same standard every time.
 - Do not add commentary to the reply. The reply is one line.
