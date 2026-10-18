@@ -86,3 +86,36 @@ describe('chapterMetrics paragraphs and dialogue', () => {
     expect(result.chars).toBe(0)
   })
 })
+
+describe('chapterMetrics foreignRuns', () => {
+  it('flags Han, kana, Cyrillic and U+FFFD in Korean text at any length', () => {
+    const text = '그는 嬷嬷에게 말했다. ひらがな 카타カナ Привет 깨짐\uFFFD 끝.'
+    expect(chapterMetrics(text, 'ko', 100).foreignRuns).toEqual([
+      '嬷嬷',
+      'ひらがな',
+      'カナ',
+      'Привет',
+      '\uFFFD',
+    ])
+  })
+
+  it('still flags Latin runs of 4 or more letters in Korean text, not shorter ones', () => {
+    const result = chapterMetrics('그는 OK 말하고 Hello 했다', 'ko', 100)
+    expect(result.foreignRuns).toEqual(['Hello'])
+  })
+
+  it('flags Hangul, Han, kana and Cyrillic in English text', () => {
+    const text = 'She said 안녕 and 嬷嬷 then ありがとう, Привет.'
+    expect(chapterMetrics(text, 'en', 100).foreignRuns).toEqual([
+      '안녕',
+      '嬷嬷',
+      'ありがとう',
+      'Привет',
+    ])
+  })
+
+  it('does not flag Latin text in English or clean Korean text', () => {
+    expect(chapterMetrics('Plain English words only.', 'en', 100).foreignRuns).toEqual([])
+    expect(chapterMetrics('순수한 한국어 본문입니다.', 'ko', 100).foreignRuns).toEqual([])
+  })
+})

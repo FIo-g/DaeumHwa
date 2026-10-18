@@ -381,6 +381,25 @@ describe('OllamaAiClient.generateObject', () => {
     expect((error as OllamaHttpError).status).toBe(500)
   })
 
+  it('puts the start of the response body into the HTTP error message', async () => {
+    const body = `{"error":"model 'x' not found, try pulling it first"}${'!'.repeat(400)}`
+    const { fetch } = fakeFetch([new Response(body, { status: 404 })])
+    const error = await catchError(
+      client(fetch).generateObject({
+        task,
+        system: 'SYSTEM',
+        prompt: 'PROMPT',
+        schema,
+        effort: 'low',
+        maxTokens: 4000,
+      }),
+    )
+    expect(error).toBeInstanceOf(OllamaHttpError)
+    const message = (error as Error).message
+    expect(message).toContain("model 'x' not found, try pulling it first")
+    expect(message.length).toBeLessThan(300 + 60)
+  })
+
   it('passes the caller signal to fetch and maps an abort to CANCELLED', async () => {
     const controller = new AbortController()
     const calls: Call[] = []

@@ -122,7 +122,16 @@ export const draft: StepFn = async (ctx, key, state) => {
         )
         return { runId: run.runId, text: await run.done }
       })
-      if (!generated) return 'done'
+      if (!generated) {
+        // A failed attempt is already in `failed`. With an earlier attempt that has text, the best
+        // attempt so far is saved below; with none, the chapter is skipped.
+        if (attempts.length === 0) {
+          state.failed.push({ step: key, message: 'no draft text' })
+          persist(ctx, state)
+          return 'done'
+        }
+        break
+      }
       writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.md`, generated.text)
       attempts.push({ runId: generated.runId, usable: null, quality: null, reason: '' })
       persist(ctx, state)

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Anthropic, {
   APIConnectionError,
+  AuthenticationError,
   InternalServerError,
   RateLimitError,
 } from '@anthropic-ai/sdk'
@@ -306,6 +307,80 @@ describe('EvalClient failures', () => {
   })
 })
 
+describe('classifyError on configuration failures', () => {
+  it('treats auth, payment and missing-model statuses as external, not model', () => {
+    for (const status of [401, 402, 403, 404]) {
+      expect(classifyError({ status })).toBe('external-network')
+      expect(
+        classifyError(new AppError('AI_ERROR', `AI 호출에 실패했습니다: HTTP ${status}`)),
+      ).toBe('external-network')
+    }
+  })
+
+  it('treats the wording of a bad key or a missing model as external', () => {
+    expect(
+      classifyError(new AppError('AI_ERROR', 'AI 호출에 실패했습니다: API 키가 올바르지 않습니다')),
+    ).toBe('external-network')
+    expect(classifyError(new Error('Invalid API key'))).toBe('external-network')
+    expect(classifyError(new Error('authentication failed'))).toBe('external-network')
+    expect(classifyError(new Error("model 'gpt-oss:20b' not found, try pulling it first"))).toBe(
+      'external-network',
+    )
+  })
+
+  it('keeps a format failure and a 400 as model failures', () => {
+    expect(classifyError(new AppError('AI_ERROR', FORMAT_MESSAGE))).toBe('model')
+    expect(classifyError({ status: 400 })).toBe('model')
+  })
+
+  it('classifies the real client shapes for a bad key, a payment error and a missing Ollama model', async () => {
+    const args = {
+      system: '시스템 지시',
+      prompt: '질문',
+      schema: z.object({ answer: z.string() }),
+      effort: 'medium' as const,
+      maxTokens: 1000,
+      task: { name: 'proofread' as const, input: {} },
+    }
+    const rejected = new AuthenticationError(401, undefined, 'invalid x-api-key', new Headers())
+    const failing = async (): Promise<never> => {
+      throw rejected
+    }
+    const anthropic = {
+      messages: { parse: failing, create: failing },
+      beta: { messages: { parse: failing, stream: () => ({}) } },
+    } as unknown as Anthropic
+    const badKey = await thrownBy(
+      new AnthropicAiClient(anthropic, 'claude-haiku-5-5').generateObject(args),
+    )
+    expect(classifyError(badKey)).toBe('external-network')
+
+    for (const status of [402, 403]) {
+      const gateway = new ResponsesAiClient({
+        baseUrl: 'https://gateway.test/v1',
+        apiKey: null,
+        defaultModel: 'gateway-model',
+        retryBaseDelayMs: 0,
+        fetch: async () => new Response('{"error":{"message":"no"}}', { status }),
+      })
+      expect(classifyError(await thrownBy(gateway.generateObject(args)))).toBe('external-network')
+    }
+
+    const missing = new OllamaAiClient({
+      model: 'gpt-oss:20b',
+      numCtx: 1000,
+      baseUrl: 'http://ollama.test',
+      fetch: async () =>
+        new Response(`{"error":"model 'gpt-oss:20b' not found, try pulling it first"}`, {
+          status: 404,
+        }),
+    })
+    const notFound = await thrownBy(missing.generateObject(args))
+    expect(classifyError(notFound)).toBe('external-network')
+    expect((notFound as Error).message).toContain('not found, try pulling it first')
+  })
+})
+
 describe('classifyError on errors from the real inner clients', () => {
   const schema = z.object({ answer: z.string() })
   const baseArgs = {
@@ -445,6 +520,31 @@ describe('classifyError on errors from the real inner clients', () => {
     const outageError = await thrownBy(respond(503).generateObject(baseArgs))
     expect(classifyError(limitError)).toBe('external-limit')
     expect(classifyError(outageError)).toBe('external-network')
+  })
+
+  it('keeps the usage a failed call billed, from its error details', async () => {
+    const billed = new AppError('AI_ERROR', 'AI 호출에 실패했습니다: HTTP 500', {
+      usage: { inputTokens: 1200, outputTokens: 32000 },
+    })
+    const client = new EvalClient({
+      inner: queueClient([billed]),
+      profile: CLOUD,
+      lang: 'ko',
+      callsDir,
+    })
+    await thrownBy(client.generateObject(objectArgs()))
+    expect(client.records[0]?.usage).toEqual({ inputTokens: 1200, outputTokens: 32000 })
+    expect(client.records[0]?.error).toMatchObject({ kind: 'external-network' })
+  })
+
+  it('reports hangulLeft as null for Korean runs and as a count for English runs', async () => {
+    const ko = new EvalClient({ inner: spyClient().client, profile: CLOUD, lang: 'ko', callsDir })
+    await ko.generateObject(objectArgs())
+    expect(ko.records[0]?.hangulLeft).toBeNull()
+
+    const en = new EvalClient({ inner: spyClient().client, profile: CLOUD, lang: 'en', callsDir })
+    await en.generateObject(objectArgs())
+    expect(typeof en.records[0]?.hangulLeft).toBe('number')
   })
 
   it('records the real client failures with their kind', async () => {

@@ -53,7 +53,8 @@ export type CallRecord = {
   prompt: string
   output: unknown | null
   usage: AiUsage | null
-  hangulLeft: number
+  /** Hangul left in an English run's prompt; null for Korean runs, where it is the whole prompt. */
+  hangulLeft: number | null
   contextOverflow: boolean
   error: { kind: FailureKind; message: string; status?: number } | null
 }
@@ -88,6 +89,15 @@ const LIMIT_PATTERN = /usage limit|rate limit|quota|too many requests|요청이 
 const NETWORK_PATTERN =
   /fetch failed|connection error|socket hang up|\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|UND_ERR_[A-Z_]+)\b/i
 
+/**
+ * Statuses and wording that mean the harness is misconfigured (bad or missing key, no payment
+ * plan, model not installed or not in the plan), not that the model answered badly. They pause
+ * the run like a network failure, so a misconfigured run never completes as "model failures".
+ */
+const CONFIG_STATUSES = new Set([401, 402, 403, 404])
+const CONFIG_PATTERN =
+  /API 키가 올바르지 않습니다|invalid api key|authentication|unauthori[sz]ed|forbidden|model .*not found|not found, try pulling/i
+
 /** Higher wins when several failures are recorded before one is taken. */
 const SEVERITY: Record<FailureKind, number> = {
   model: 0,
@@ -113,6 +123,19 @@ function errorMessage(error: unknown): string {
     return String(error.message)
   }
   return String(error)
+}
+
+/**
+ * Tokens a failed call was billed. The inner clients attach them to the AppError they throw, so a
+ * call that failed after the server answered still counts in the run's totals.
+ */
+function billedUsageOf(error: unknown): AiUsage | null {
+  if (!(error instanceof AppError)) return null
+  const usage = (error.details as { usage?: unknown } | undefined)?.usage
+  if (typeof usage !== 'object' || usage === null) return null
+  const { inputTokens, outputTokens } = usage as Partial<AiUsage>
+  if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number') return null
+  return { inputTokens, outputTokens }
 }
 
 function errorField(error: unknown, key: 'status' | 'code' | 'cause'): unknown {
@@ -147,7 +170,8 @@ function hasNetworkCode(error: unknown, depth = 0): boolean {
 
 /**
  * Sorts a failed call into external limit, external network, or the model's own failure. Format,
- * refusal, max-tokens and timeout failures are the model's own and stay `model`.
+ * refusal, max-tokens and timeout failures are the model's own and stay `model`. Configuration
+ * failures (see CONFIG_STATUSES) are external network failures, so the run pauses.
  */
 export function classifyError(error: unknown): FailureKind {
   const message = errorMessage(error)
@@ -156,6 +180,9 @@ export function classifyError(error: unknown): FailureKind {
   // A server failure mid-answer (runner crash, dropped connection) is not the model's output.
   if (failureTag(error) === OLLAMA_STREAM_FAILURE) return 'external-network'
   if (status === 429 || LIMIT_PATTERN.test(message)) return 'external-limit'
+  if ((status !== undefined && CONFIG_STATUSES.has(status)) || CONFIG_PATTERN.test(message)) {
+    return 'external-network'
+  }
   if (status !== undefined && status >= 500) return 'external-network'
   if (hasNetworkCode(error) || NETWORK_PATTERN.test(message)) return 'external-network'
   return 'model'
@@ -428,7 +455,7 @@ export class EvalClient implements AiClient {
 
   private settle(call: Prepared, outcome: Outcome, firstTokenMs: number | null = null): void {
     const durationMs = this.now() - call.startedMs
-    const usage = outcome.ok ? outcome.usage : null
+    const usage = outcome.ok ? outcome.usage : billedUsageOf(outcome.error)
     const ollama = this.ollamaStats.get(call.task) ?? []
     this.ollamaStats.delete(call.task)
     const numCtx = this.profile.ollama?.numCtx
@@ -465,7 +492,7 @@ export class EvalClient implements AiClient {
       prompt: call.prompt,
       output: outcome.ok ? outcome.output : null,
       usage,
-      hangulLeft: countHangul(`${call.system}\n${call.prompt}`),
+      hangulLeft: this.lang === 'en' ? countHangul(`${call.system}\n${call.prompt}`) : null,
       contextOverflow:
         numCtx !== undefined && usage !== null && usage.inputTokens + usage.outputTokens >= numCtx,
       error,

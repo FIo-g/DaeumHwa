@@ -14,7 +14,11 @@ import { fileURLToPath } from 'node:url'
 import { ollamaTransport } from '@/ai/ollama'
 import { seoulToday } from '@/lib/dates'
 import { readPending } from './author-io'
+import { loadBible } from './bible'
+import { chapterMetrics } from './metrics'
 import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
+import { buildRunSummary } from './steps/finish'
+import { readCallRecords } from './steps/util'
 import {
   type RunConfig,
   type RunState,
@@ -28,7 +32,7 @@ import { acquireLock, releaseLock, workerAlive } from './worker-lock'
 
 // Command line for the novel eval. Every command prints exactly one JSON line on stdout. Long
 // steps run in a detached worker so they outlive the agent's command timeout.
-//   init | advance | worker | status | probe-ctx
+//   init | advance | worker | status | probe-ctx | resummarize
 
 const RESULTS_DIR = 'eval/results/novel'
 const LANGS = ['ko', 'en'] as const
@@ -409,6 +413,51 @@ export async function probeContext(o: ProbeOptions): Promise<{
   return { model: o.model, numCtx: chosen, file }
 }
 
+export type ResummarizeResult = { dir: string; chapters: number; calls: number }
+
+/**
+ * Rebuilds metrics/NN.json (from chapters/NN.md) and run-summary.json (from calls/ and state.json)
+ * with the current code. The database and the call records are not touched, so a run's numbers can
+ * be recomputed after a metric changes. Refuses a run that a worker holds.
+ */
+export function resummarizeRun(dir: string): ResummarizeResult {
+  if (!existsSync(path.join(dir, 'config.json'))) throw new Error(`not a run dir: ${dir}`)
+  if (workerAlive(dir)) throw new Error(`a worker is running in ${dir}; resummarize after it stops`)
+  const config = loadConfig(dir)
+  const state = loadState(dir)
+  const targetChars = loadBible(config.lang).targetChars
+
+  const chaptersDir = path.join(dir, 'chapters')
+  const chapterFiles = existsSync(chaptersDir)
+    ? readdirSync(chaptersDir)
+        .filter((name) => /^\d{2}\.md$/.test(name))
+        .sort()
+    : []
+  mkdirSync(path.join(dir, 'metrics'), { recursive: true })
+  for (const file of chapterFiles) {
+    const text = readFileSync(path.join(chaptersDir, file), 'utf8')
+    const metrics = chapterMetrics(text, config.lang, targetChars)
+    const name = `${file.slice(0, 2)}.json`
+    writeFileSync(path.join(dir, 'metrics', name), `${JSON.stringify(metrics, null, 2)}\n`)
+  }
+
+  const calls = readCallRecords(dir)
+  const summary = buildRunSummary(calls, state, config.lang)
+  writeFileSync(path.join(dir, 'run-summary.json'), `${JSON.stringify(summary, null, 2)}\n`)
+  return { dir, chapters: chapterFiles.length, calls: calls.length }
+}
+
+/** Resummarizes every run directory directly under a date folder, in name order. */
+export function resummarizeDate(folder: string): ResummarizeResult[] {
+  return readdirSync(folder, { withFileTypes: true })
+    .filter(
+      (entry) => entry.isDirectory() && existsSync(path.join(folder, entry.name, 'config.json')),
+    )
+    .map((entry) => entry.name)
+    .sort()
+    .map((name) => resummarizeRun(path.join(folder, name)))
+}
+
 type Flags = Record<string, string | true>
 
 function parseFlags(args: string[]): Flags {
@@ -480,9 +529,17 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         model: parseModel(stringFlag(flags, 'model')),
         sizes: optionalSizes(flags),
       })
+    case 'resummarize': {
+      // --date rebuilds every run under that date folder; --dir rebuilds one run.
+      if (typeof flags.date === 'string') {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(flags.date)) throw new Error('--date must be YYYY-MM-DD')
+        return resummarizeDate(path.resolve(RESULTS_DIR, flags.date))
+      }
+      return resummarizeRun(path.resolve(stringFlag(flags, 'dir')))
+    }
     default:
       throw new Error(
-        `usage: eval:novel init|advance|worker|status|probe-ctx (got ${command ?? 'nothing'})`,
+        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize (got ${command ?? 'nothing'})`,
       )
   }
 }

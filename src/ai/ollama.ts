@@ -57,11 +57,15 @@ export interface OllamaOptions {
 /** Non-2xx answer from the Ollama server. Passed through unchanged, not wrapped as AppError. */
 export class OllamaHttpError extends Error {
   readonly status: number
+  /** The start of the response body, which Ollama uses for reasons such as a missing model. */
+  readonly detail: string
 
-  constructor(status: number) {
-    super(`Ollama request failed with HTTP ${status}`)
+  constructor(status: number, body = '') {
+    const detail = body.trim().slice(0, 300)
+    super(`Ollama request failed with HTTP ${status}${detail ? `: ${detail}` : ''}`)
     this.name = 'OllamaHttpError'
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -416,8 +420,8 @@ export class OllamaAiClient implements AiClient {
       throw withCauseCode(error)
     }
     if (!response.ok) {
-      await response.body?.cancel().catch(() => undefined)
-      throw new OllamaHttpError(response.status)
+      const body = await response.text().catch(() => '')
+      throw new OllamaHttpError(response.status, body)
     }
     return response
   }
