@@ -10,6 +10,7 @@ import {
   IMPORTANCE_LABEL,
   PLACE_FIELD_LABELS,
   THREAD_STATUS_LABEL,
+  chapterLabel,
 } from '@/lib/labels'
 
 // Context pack (spec F9): the cards, facts, threads and summaries that one manuscript passage
@@ -337,8 +338,7 @@ export function renderContextPack(pack: ContextPack): string {
   lines.push('<previous_chapters>')
   if (pack.previousSummaries.length === 0) lines.push('(없음)')
   for (const s of pack.previousSummaries) {
-    const title = s.title.trim() ? ` ${s.title.trim()}` : ''
-    lines.push(`- ${s.position}화${title}: ${s.summary}`)
+    lines.push(`- ${chapterLabel(s.position, s.title)}: ${s.summary}`)
   }
   lines.push('</previous_chapters>', '')
 

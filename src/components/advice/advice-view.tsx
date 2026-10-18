@@ -1,16 +1,16 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
 import { AiBadge } from '@/components/app/ai-badge'
+import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
-import { SubmitButton } from '@/components/app/submit-button'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { AdviceResult } from '@/ai/tasks/direction-advice'
+import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
+import { useAiRun } from '@/lib/client/use-ai-run'
 import { formatKoreanDateTime } from '@/lib/dates'
-import { runDirectionAdviceAction } from '@/server/actions/ai-features'
 import { AdviceOption } from './advice-option'
 
 export type AdviceRunView = {
@@ -31,19 +31,22 @@ type AdviceViewProps = {
 /** Advice page body: the latest result, a request button, and earlier runs. */
 export function AdviceView({ workId, canRun, runs }: AdviceViewProps) {
   const router = useRouter()
-  const [pending, setPending] = useState(false)
+  const ai = useAiRun()
   const [latest, ...earlier] = runs
 
   async function requestAdvice() {
-    setPending(true)
-    try {
-      const created = await runAction(runDirectionAdviceAction({ workId }), {
-        success: '새 조언을 받았습니다.',
-      })
-      if (created) router.refresh()
-    } finally {
-      setPending(false)
-    }
+    // A route handler, not a Server Action: the advice can run for minutes.
+    const created = await ai.run((signal) =>
+      runAction(
+        postAction<{ runId: string; result: AdviceResult }>(
+          `/api/works/${workId}/advice`,
+          {},
+          { signal },
+        ),
+        { success: '새 조언을 받았습니다.' },
+      ),
+    )
+    if (created) router.refresh()
   }
 
   return (
@@ -52,16 +55,12 @@ export function AdviceView({ workId, canRun, runs }: AdviceViewProps) {
         <p className="text-sm text-muted-foreground">
           열린 떡밥, 인물 상태, 최근 회차 요약을 바탕으로 다음 전개 선택지를 제안합니다.
         </p>
-        {canRun && (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              void requestAdvice()
-            }}
-          >
-            <SubmitButton pending={pending}>다음 전개 조언 받기</SubmitButton>
-          </form>
-        )}
+        {canRun &&
+          (ai.running ? (
+            <AiRunStatus label="조언 만드는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+          ) : (
+            <Button onClick={() => void requestAdvice()}>다음 전개 조언 받기</Button>
+          ))}
       </div>
 
       {latest ? (

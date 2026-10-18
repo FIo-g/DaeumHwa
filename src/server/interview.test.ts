@@ -379,3 +379,75 @@ describe('skipTurn and completeInterview', () => {
     await expectAppError(completeInterview(db, viewer, session.id), 'FORBIDDEN')
   })
 })
+
+describe('answerTurn naming and thread dedup across answers', () => {
+  const repeatingExtraction = () => ({
+    summary: null,
+    entries: [
+      { name: '노은하', kind: 'character', aliases: [], summary: '', fields: [] },
+      {
+        name: '전직 시계탑 수리공 노은하',
+        kind: 'character',
+        aliases: [],
+        summary: '전직 시계탑 수리공',
+        fields: [],
+      },
+    ],
+    facts: [],
+    threads: [
+      {
+        title: '멈춘 종의 비밀',
+        description: '',
+        kind: 'planted',
+        evidence: '',
+        existingThreadRef: null,
+        targetChapterPosition: null,
+      },
+    ],
+    relations: [],
+  })
+
+  it('two answers that both name 노은하 leave exactly one pending entry card and one planted thread', async () => {
+    const session = await startInterview(db, owner, workId)
+    const client = new FakeAiClient({
+      overrides: { 'interview-extract': repeatingExtraction },
+    })
+
+    const first = await askNextQuestion(db, owner, session.id, client)
+    await answerTurn(
+      db,
+      editor,
+      { turnId: first.id, answer: '노은하는 시계탑 수리공이다.' },
+      client,
+    )
+    const second = await askNextQuestion(db, owner, session.id, client)
+    await answerTurn(db, editor, { turnId: second.id, answer: '노은하가 다시 나온다.' }, client)
+
+    const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+    const creates = rows.filter((r) => r.type === 'entry_create')
+    expect(creates).toHaveLength(1)
+    expect(creates[0].payload).toMatchObject({ name: '노은하' })
+    expect(rows.filter((r) => r.type === 'thread_create')).toHaveLength(1)
+  })
+
+  it('the second answer sees the first pending card in its known list', async () => {
+    const session = await startInterview(db, owner, workId)
+    const client = new RecordingAiClient({
+      overrides: { 'interview-extract': repeatingExtraction },
+    })
+
+    const first = await askNextQuestion(db, owner, session.id, client)
+    await answerTurn(
+      db,
+      editor,
+      { turnId: first.id, answer: '노은하는 시계탑 수리공이다.' },
+      client,
+    )
+    const second = await askNextQuestion(db, owner, session.id, client)
+    await answerTurn(db, editor, { turnId: second.id, answer: '노은하가 다시 나온다.' }, client)
+
+    const extractPrompts = client.prompts.filter((p) => p.includes('<known>'))
+    const last = extractPrompts[extractPrompts.length - 1]
+    expect(last).toContain('- 노은하 (인물, 승인 대기)')
+  })
+})

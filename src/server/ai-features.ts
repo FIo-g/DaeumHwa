@@ -22,6 +22,7 @@ import {
   resolveWorkSettings,
 } from '@/db/types'
 import { AppError } from '@/lib/errors'
+import { chapterLabel } from '@/lib/labels'
 import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
 import { assertEntryInWork, listFacts } from '@/server/facts'
@@ -112,6 +113,7 @@ export async function runDirectionAdvice(
   actor: Actor,
   input: { workId: string },
   client?: AiClient,
+  signal?: AbortSignal,
 ): Promise<{ runId: string; result: AdviceResult }> {
   const { workId } = input
   await requireWorkRole(db, workId, actor.userId, 'editor')
@@ -149,7 +151,7 @@ export async function runDirectionAdvice(
 
   const { output, runId } = await runAiTask(
     db,
-    { userId: actor.userId, workId },
+    { userId: actor.userId, workId, signal },
     directionAdviceTask,
     {
       work: {
@@ -191,6 +193,7 @@ export async function suggestStyleCard(
   actor: Actor,
   input: { workId: string; entryId: string },
   client?: AiClient,
+  signal?: AbortSignal,
 ): Promise<ProposalRow> {
   const { workId, entryId } = input
   await requireWorkRole(db, workId, actor.userId, 'editor')
@@ -202,7 +205,7 @@ export async function suggestStyleCard(
   }
   const { output } = await runAiTask(
     db,
-    { userId: actor.userId, workId },
+    { userId: actor.userId, workId, signal },
     styleSuggestTask,
     { entryName: entry.name, samples },
     client,
@@ -276,18 +279,18 @@ export async function startDraft(
 
   let position: number
   let chapterId: string | null = null
-  let chapterLabel: string
+  let promptLabel: string
   let previous: ChapterListItem | undefined
   if (input.chapterId) {
     const chapter = await getChapter(db, actor, input.chapterId)
     if (chapter.workId !== workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
     position = chapter.position
     chapterId = chapter.id
-    chapterLabel = `${chapter.position}화 ${chapter.title}`.trimEnd()
+    promptLabel = chapterLabel(chapter.position, chapter.title)
     previous = all.filter((c) => c.position < position).pop()
   } else {
     position = (await getLatestPosition(db, workId)) + 1
-    chapterLabel = `${position}화 (새 회차)`
+    promptLabel = `${position}화 (새 회차)`
     previous = all.length > 0 ? all[all.length - 1] : undefined
   }
 
@@ -318,7 +321,7 @@ export async function startDraft(
     packText: renderContextPack(pack),
     previousSummary,
     previousTail,
-    chapterLabel,
+    chapterLabel: promptLabel,
   })
 
   return startAiStream(

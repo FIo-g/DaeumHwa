@@ -113,6 +113,7 @@ describe('respond: every structured task answers with schema-valid JSON', () => 
         question: '주인공은 누구인가요?',
         answer: '서윤은 시계탑 수리공이다.',
         known: [],
+        threads: [],
       },
     ],
     [

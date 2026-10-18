@@ -16,6 +16,7 @@ import { extractionToProposals, type ExtractionContext } from '@/ai/extraction'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
 import { interviewQuestionTask } from '@/ai/tasks/interview-question'
 import { requireRowWork, requireWorkRole } from '@/server/access'
+import { loadKnownEntries } from '@/server/known-entries'
 import { insertProposals } from '@/server/proposal-store'
 
 // F1 interview service. Questions and answers are stored as interview_sessions / interview_turns.
@@ -124,7 +125,7 @@ export async function answerTurn(
   const turn = await loadTurn(db, input.turnId)
   await assertTurnOpen(db, turn)
 
-  const entries = await loadActiveEntries(db, workId)
+  const known = await loadKnownEntries(db, workId)
   const { output } = await runAiTask(
     db,
     { userId: actor.userId, workId },
@@ -133,19 +134,41 @@ export async function answerTurn(
       topic: turn.topic,
       question: turn.question,
       answer,
-      known: entries.map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases })),
+      known: [
+        ...known.active.map((e) => ({
+          name: e.name,
+          kind: e.kind,
+          aliases: e.aliases,
+          pending: false,
+        })),
+        ...known.pending.map((e) => ({
+          name: e.name,
+          kind: e.kind,
+          aliases: e.aliases,
+          pending: true,
+        })),
+      ],
+      threads: [
+        ...known.threads.map((t) => ({ title: t.title, pending: false })),
+        ...known.pendingThreadTitles.map((title) => ({ title, pending: true })),
+      ],
     },
     client,
   )
 
+  const pendingTitles = new Set(known.pendingThreadTitles)
   const context: ExtractionContext = {
     source: 'interview',
     sourceRef: turn.id,
     chapterId: null,
     chapterPosition: null,
-    existingEntries: entries,
+    existingEntries: known.active,
+    pendingEntries: known.pending,
     threadRefs: new Map(),
     factRefs: new Map(),
+    existingThreads: known.threads,
+    pendingThreadTitles: pendingTitles,
+    pendingThreadCreateTitles: pendingTitles,
   }
   const { proposals: items } = extractionToProposals(output, context)
 

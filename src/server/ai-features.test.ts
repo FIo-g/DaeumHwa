@@ -256,6 +256,23 @@ describe('draft', () => {
     expect(prompt).toContain('서윤이 문을 연다.')
   })
 
+  it('names the current chapter once when its title already starts with the number', async () => {
+    const current = await createTestChapter(db, workId, { position: 2, title: '2화', body: '' })
+    const client = new FakeAiClient()
+    const spy = vi.spyOn(client, 'streamText')
+    const { done } = await startDraft(
+      db,
+      actor,
+      { workId, chapterId: current.id, instructions: '서윤이 문을 연다.', entryIds: [] },
+      client,
+    )
+    await done
+
+    const prompt = spy.mock.calls[0][0].prompt
+    expect(prompt).toContain('<chapter>2화</chapter>')
+    expect(prompt).not.toContain('2화 2화')
+  })
+
   it('creates a chapter from a finished draft run with source ai_draft', async () => {
     const { runId, done } = await startDraft(
       db,

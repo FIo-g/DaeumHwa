@@ -8,6 +8,7 @@ import {
 } from '@/db/types'
 import { hasJongseong, JOSA } from '@/lib/korean'
 import type { NewProposal, ProposalPayloadMap } from '@/lib/proposal-payloads'
+import { ROLE_WORDS } from '@/ai/extraction-rules'
 
 // Structured-output schema shared by interview extraction (T12), chapter extraction (T13) and
 // import extraction (T16). Structured-output rules: no min/max/regex/default/optional; maps are
@@ -66,6 +67,10 @@ export type ExtractionContext = {
   threadRefs: Map<string, { id: string; title: string; status?: ThreadStatus }>
   /** Model-facing ref (e.g. "F1") to an existing fact. */
   factRefs: Map<string, { id: string }>
+  /** Pending entry_create proposals. A name or alias that matches one is not created again. */
+  pendingEntries?: { name: string; aliases: string[]; kind?: EntryKind }[]
+  /** Titles of pending thread_create proposals. A planted thread with one of these titles is not created again. */
+  pendingThreadCreateTitles?: Set<string>
   /** Titles of threads created by a pending proposal that may still receive events. */
   pendingThreadTitles?: Set<string>
   /** Every non-archived thread of the work. A planted thread that matches one of them by title is not created again. */
@@ -130,6 +135,47 @@ function collapse(s: string): string {
   return s.replace(/\s+/g, ' ').trim()
 }
 
+const ROLE_SET: ReadonlySet<string> = new Set(ROLE_WORDS)
+
+/** True for a role word or pronoun (주인공, 주인공은). Such a word is never a name. */
+function isRoleName(name: string): boolean {
+  return nameCandidates(name).some((form) => ROLE_SET.has(form))
+}
+
+/**
+ * Names and aliases of cards, looked up by a name from the model. Exact and particle-stripped
+ * forms match any card. The last word of a spaced name matches character cards only, and only
+ * when the incoming kind is character or unknown ("북쪽 시계탑" never joins a place "시계탑").
+ */
+class NameIndex<T> {
+  private readonly all = new Map<string, T>()
+  private readonly characters = new Map<string, T>()
+
+  /** The first item registered under a name wins. `kind` is the kind of the item's card. */
+  add(names: string[], item: T, kind: EntryKind | undefined): void {
+    for (const raw of names) {
+      const key = raw.trim()
+      if (!key) continue
+      if (!this.all.has(key)) this.all.set(key, item)
+      if (kind === 'character' && !this.characters.has(key)) this.characters.set(key, item)
+    }
+  }
+
+  find(name: string, kind: EntryKind | undefined): T | undefined {
+    for (const form of nameCandidates(name)) {
+      const hit = this.all.get(form)
+      if (hit) return hit
+    }
+    const words = name.trim().split(/\s+/)
+    if (words.length < 2 || (kind !== undefined && kind !== 'character')) return undefined
+    for (const form of nameCandidates(words[words.length - 1])) {
+      const hit = this.characters.get(form)
+      if (hit) return hit
+    }
+    return undefined
+  }
+}
+
 function lookupRef<V>(map: Map<string, V>, ref: string | null): V | undefined {
   if (ref === null) return undefined
   return map.get(ref.trim())
@@ -177,45 +223,75 @@ export function extractionToProposals(
   const proposals: NewProposal[] = []
   const pendingThreadEvents: PendingThreadEvent[] = []
 
-  // Existing entries, by exact name or alias (first one wins).
-  const existingByName = new Map<string, ExistingEntry>()
-  for (const e of ctx.existingEntries) {
-    for (const n of [e.name, ...e.aliases]) {
-      const key = n.trim()
-      if (key && !existingByName.has(key)) existingByName.set(key, e)
-    }
+  // Cards a name can refer to, searched in this order: wiki cards, pending entry_create
+  // proposals, then names created earlier in this extraction.
+  const wiki = new NameIndex<ExistingEntry>()
+  for (const e of ctx.existingEntries) wiki.add([e.name, ...e.aliases], e, e.kind)
+  const pending = new NameIndex<string>()
+  for (const p of ctx.pendingEntries ?? []) pending.add([p.name, ...p.aliases], p.name, p.kind)
+  const created = new NameIndex<string>()
+
+  type Hit =
+    { source: 'wiki'; entry: ExistingEntry } | { source: 'pending' | 'created'; name: string }
+  const locate = (name: string, kind: EntryKind | undefined): Hit | undefined => {
+    const entry = wiki.find(name, kind)
+    if (entry) return { source: 'wiki', entry }
+    const pendingName = pending.find(name, kind)
+    if (pendingName !== undefined) return { source: 'pending', name: pendingName }
+    const createdName = created.find(name, kind)
+    if (createdName !== undefined) return { source: 'created', name: createdName }
+    return undefined
   }
-  // Exact match first; the particle-stripped form of the incoming name is tried second.
-  const findExisting = (name: string): ExistingEntry | undefined => {
-    for (const key of nameCandidates(name)) {
-      const hit = existingByName.get(key)
-      if (hit) return hit
+  // Identity of a name for dedupe: the card it matches, else the name itself.
+  const identityOf = (name: string, hit: Hit | undefined): string => {
+    if (!hit) return `name:${name}`
+    return hit.source === 'wiki' ? `wiki:${hit.entry.id}` : `${hit.source}:${hit.name}`
+  }
+  // Kind of an extracted entry with this name, when the extraction has one.
+  const kindOfEntry = (name: string): EntryKind | undefined => {
+    for (const form of nameCandidates(name)) {
+      const hit = x.entries.find((e) => e.name.trim() === form)
+      if (hit) return hit.kind
     }
     return undefined
   }
 
-  // Entries: existing names are skipped; new ones become entry_create (deduped by name).
-  const newNames = new Set<string>()
-  const newNameOf = (name: string): string | undefined =>
-    nameCandidates(name).find((key) => newNames.has(key))
-  // Identity of a name for dedupe: the wiki entry when one matches, else the new entry's name.
-  const identityOf = (name: string): string => {
-    const existing = findExisting(name)
-    if (existing) return existing.id
-    return `new:${newNameOf(name) ?? nameCandidates(name)[0] ?? ''}`
-  }
-
+  // Entries: a name that matches a card is skipped; an alias that matches a wiki card adds the
+  // new name to that card; anything else becomes entry_create (deduped by name).
   for (const e of x.entries) {
     const name = e.name.trim()
-    if (!name) continue
-    if (findExisting(name) || newNameOf(name)) continue
-    newNames.add(name)
+    if (!name || isRoleName(name)) continue
 
     const aliases: string[] = []
     for (const raw of e.aliases) {
       const alias = raw.trim()
       if (alias && alias !== name && !aliases.includes(alias)) aliases.push(alias)
     }
+
+    if (locate(name, e.kind)) continue
+
+    const aliasHit = aliases.map((alias) => locate(alias, e.kind)).find((hit) => hit !== undefined)
+    if (aliasHit) {
+      if (aliasHit.source === 'wiki') {
+        const { entry } = aliasHit
+        const added = [name, ...aliases].filter(
+          (n, i, all) => n !== entry.name && !entry.aliases.includes(n) && all.indexOf(n) === i,
+        )
+        if (added.length > 0) {
+          proposals.push(
+            makeProposal(ctx, 'entry_update', {
+              entryId: entry.id,
+              entryName: entry.name,
+              patch: { aliases: added },
+            }),
+          )
+          wiki.add(added, entry, entry.kind)
+        }
+      }
+      continue
+    }
+
+    created.add([name, ...aliases], name, e.kind)
     const fieldMap = new Map<string, string>()
     for (const f of e.fields) {
       const k = f.key.trim()
@@ -232,20 +308,23 @@ export function extractionToProposals(
     )
   }
 
-  // Facts: subject binds to an existing entry when one matches (new entries stay null).
+  // Facts: subject binds to a wiki card when one matches (pending and new entries stay null).
   const seenFacts = new Set<string>()
   for (const f of x.facts) {
     const content = collapse(f.content)
     if (!content) continue
     const subjectName = f.subjectName.trim()
-    const key = `${identityOf(subjectName)}|${content}`
+    if (isRoleName(subjectName)) continue
+    const kind = kindOfEntry(subjectName)
+    const hit = locate(subjectName, kind)
+    const key = `${identityOf(subjectName, hit)}|${content}`
     if (seenFacts.has(key)) continue
     seenFacts.add(key)
 
     proposals.push(
       makeProposal(ctx, 'fact_create', {
         subjectName,
-        entryId: findExisting(subjectName)?.id ?? null,
+        entryId: hit?.source === 'wiki' ? hit.entry.id : null,
         content,
         suggestedStatus: f.suggestedStatus,
         sourceChapterId: ctx.chapterId,
@@ -257,8 +336,8 @@ export function extractionToProposals(
 
   // Threads. A target is an existing thread: by the model's ref, or for a planted thread by
   // title. Planted into an interview-planned thread -> one planted event. Other planted threads
-  // -> thread_create, unless the wiki already has them. developed/resolved -> thread_event, or
-  // pending when the target is a not-yet-approved thread; anything else is dropped.
+  // -> thread_create, unless the wiki or a pending proposal already has them. developed/resolved
+  // -> thread_event, or pending when the target is a not-yet-approved thread; anything else is dropped.
   const threadTargetOf = (
     ref: string | null,
     title: string,
@@ -322,6 +401,10 @@ export function extractionToProposals(
     }
 
     if (t.kind === 'planted') {
+      // A planted thread that a pending thread_create already proposes is not created again.
+      if ([...(ctx.pendingThreadCreateTitles ?? [])].some((p) => collapse(p) === collapse(title))) {
+        continue
+      }
       const key = collapse(title)
       if (seenCreates.has(key)) continue
       seenCreates.add(key)
@@ -349,27 +432,28 @@ export function extractionToProposals(
     }
   }
 
-  // Relations: undirected, starting at the chapter position.
+  // Relations: undirected, starting at the chapter position. A role word at either end is dropped.
   const seenRelations = new Set<string>()
   for (const r of x.relations) {
     const sourceName = r.sourceName.trim()
     const targetName = r.targetName.trim()
     if (!sourceName || !targetName) continue
+    if (isRoleName(sourceName) || isRoleName(targetName)) continue
     const kind = collapse(r.kind)
-    const sourceId = identityOf(sourceName)
-    const targetId = identityOf(targetName)
-    const sourceEntry = findExisting(sourceName)
-    const targetEntry = findExisting(targetName)
+    const sourceKind = kindOfEntry(sourceName)
+    const targetKind = kindOfEntry(targetName)
+    const sourceHit = locate(sourceName, sourceKind)
+    const targetHit = locate(targetName, targetKind)
     if (
-      sourceEntry &&
-      targetEntry &&
+      sourceHit?.source === 'wiki' &&
+      targetHit?.source === 'wiki' &&
       ctx.existingRelations?.some((rel) =>
-        coversRelation(rel, sourceEntry.id, targetEntry.id, kind, ctx.chapterPosition),
+        coversRelation(rel, sourceHit.entry.id, targetHit.entry.id, kind, ctx.chapterPosition),
       )
     ) {
       continue
     }
-    const key = `${sourceId}|${targetId}|${kind}`
+    const key = `${identityOf(sourceName, sourceHit)}|${identityOf(targetName, targetHit)}|${kind}`
     if (seenRelations.has(key)) continue
     seenRelations.add(key)
     proposals.push(

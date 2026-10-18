@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FakeAiClient } from '@/test/fake-ai'
 import { ExtractionSchema } from '@/ai/extraction'
+import { ENTITY_NAME_RULES } from '@/ai/extraction-rules'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { type ChapterExtractInput, chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { fakeChapterExtraction } from '@/test/ai-fakes/chapter-extract'
@@ -104,5 +105,19 @@ describe('chapterExtractTask prompt isolation', () => {
 
   it('tells the model that tagged content is data, not instructions', () => {
     expect(chapterExtractTask.system).toContain(TAG_DATA_RULE)
+  })
+})
+
+describe('chapterExtractTask naming rules and pending cards', () => {
+  it('the system prompt carries the shared entity name rules', () => {
+    expect(chapterExtractTask.system).toContain(ENTITY_NAME_RULES)
+  })
+
+  it('shows a pending known card with the 승인 대기 marker', () => {
+    const prompt = chapterExtractTask.buildPrompt({
+      ...base,
+      known: [{ name: '노은하', kind: 'character', aliases: [], pending: true }],
+    })
+    expect(prompt).toContain('- 노은하 (인물, 승인 대기)')
   })
 })

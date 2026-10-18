@@ -172,6 +172,16 @@ describe('buildContextPack', () => {
     ])
   })
 
+  it('prints previous chapter titles without repeating a leading episode number', async () => {
+    await addChapter(2, '이 요약', '2화')
+    await addChapter(3, '삼 요약', '3화 재회')
+    const pack = await buildContextPack(db, workId, { text: '', position: 4 })
+    const text = renderContextPack(pack)
+    expect(text).toContain('- 2화: 이 요약')
+    expect(text).toContain('- 3화 재회: 삼 요약')
+    expect(text).not.toContain('2화 2화')
+  })
+
   it('includes active naming rules', async () => {
     await db
       .insert(namingRules)

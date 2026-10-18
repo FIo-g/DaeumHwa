@@ -2,6 +2,7 @@ import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import type { EntryKind } from '@/db/types'
 import { type Extraction, ExtractionSchema } from '@/ai/extraction'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
+import { ENTITY_NAME_RULES } from '@/ai/extraction-rules'
 import type { AiTaskDef } from '@/ai/types'
 
 // interview-extract (F1): turns one interview answer into wiki candidates. The output is the shared
@@ -11,7 +12,10 @@ export type InterviewExtractInput = {
   topic: string
   question: string
   answer: string
-  known: { name: string; kind: EntryKind; aliases: string[] }[]
+  /** Wiki cards, plus pending entry cards (pending: true) that are still waiting for approval. */
+  known: { name: string; kind: EntryKind; aliases: string[]; pending: boolean }[]
+  /** Existing threads, plus pending thread_create titles (pending: true). */
+  threads: { title: string; pending: boolean }[]
 }
 
 const SYSTEM = [
@@ -22,7 +26,9 @@ const SYSTEM = [
   '- 이미 있는 카드(<known>)는 같은 이름을 쓰고, 새 대상만 entries에 넣는다.',
   '- evidence에는 답변 문장을 그대로 인용한다.',
   '- 앞으로 풀 비밀이나 복선은 threads에 kind "planted"로 넣는다. existingThreadRef와 targetChapterPosition은 답변에 회차가 나오지 않으면 null이다.',
+  '- 떡밥이 <threads>에 있는 제목과 같은 떡밥이면 그 제목을 그대로 쓴다.',
   '- summary는 null, supersedesFactRef는 null로 둔다.',
+  ENTITY_NAME_RULES,
   TAG_DATA_RULE,
   '- 모든 출력은 한국어로 쓴다.',
 ].join('\n')
@@ -36,9 +42,14 @@ export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string 
       : input.known
           .map((k) => {
             const alias = k.aliases.length > 0 ? `, 별칭: ${k.aliases.join(', ')}` : ''
-            return `- ${k.name} (${ENTRY_KIND_LABEL[k.kind]}${alias})`
+            const pending = k.pending ? ', 승인 대기' : ''
+            return `- ${k.name} (${ENTRY_KIND_LABEL[k.kind]}${alias}${pending})`
           })
           .join('\n')
+  const threads =
+    input.threads.length === 0
+      ? '(없음)'
+      : input.threads.map((t) => `- ${t.title}${t.pending ? ' (승인 대기)' : ''}`).join('\n')
   return [
     '<question>',
     `주제: ${input.topic}`,
@@ -50,6 +61,9 @@ export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string 
     '<known>',
     known,
     '</known>',
+    '<threads>',
+    threads,
+    '</threads>',
   ].join('\n')
 }
 

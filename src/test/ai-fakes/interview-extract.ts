@@ -35,9 +35,12 @@ export function fakeInterviewExtraction(input: InterviewExtractInput): Extractio
   }
 
   const threads: Extraction['threads'] = []
-  if (input.topic === '떡밥') {
+  const planted = Array.from(answer).slice(0, 20).join('')
+  // A planted thread already listed in <threads> (existing or pending) is not proposed again.
+  const listedTitles = new Set(input.threads.map((t) => t.title.trim()))
+  if (input.topic === '떡밥' && !listedTitles.has(planted)) {
     threads.push({
-      title: Array.from(answer).slice(0, 20).join(''),
+      title: planted,
       description: answer,
       kind: 'planted',
       evidence: sentence,

@@ -645,3 +645,167 @@ describe('extraction: planted threads, name matching and existing relations', ()
     expect(byType(proposals, 'relation_create')).toHaveLength(1)
   })
 })
+
+describe('extraction: dedup and naming rules', () => {
+  const entry = (name: string, extra: Partial<Extraction['entries'][number]> = {}) => ({
+    name,
+    kind: 'character' as const,
+    aliases: [],
+    summary: '',
+    fields: [],
+    ...extra,
+  })
+  const factOf = (subjectName: string, content = '왼손잡이다.') => ({
+    subjectName,
+    content,
+    evidence: '',
+    suggestedStatus: 'confirmed' as const,
+    supersedesFactRef: null,
+  })
+  const relationOf = (sourceName: string, targetName: string) => ({
+    sourceName,
+    targetName,
+    kind: '동료',
+    description: '',
+    evidence: '',
+  })
+
+  it('a name that is already pending as entry_create is not created again', () => {
+    const x: Extraction = { ...emptyExtraction, entries: [entry('노은하')] }
+    const ctx = makeCtx({
+      existingEntries: [],
+      pendingEntries: [{ name: '노은하', aliases: [] }],
+    })
+    expect(byType(extractionToProposals(x, ctx).proposals, 'entry_create')).toHaveLength(0)
+  })
+
+  it('an incoming alias that equals an existing card adds the new name as an alias', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('한시우', { aliases: ['주인공'] })],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'e1', name: '주인공', aliases: [], kind: 'character' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'entry_create')).toHaveLength(0)
+    const updates = byType(proposals, 'entry_update')
+    expect(updates).toHaveLength(1)
+    expect(updates[0].payload).toEqual({
+      entryId: 'e1',
+      entryName: '주인공',
+      patch: { aliases: ['한시우'] },
+    })
+  })
+
+  it('a long character name with a title in front matches the existing card by its last word', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('시계탑 수리공 노은하')],
+      facts: [factOf('전직 시계탑 수리공 노은하')],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'e2', name: '노은하', aliases: [], kind: 'character' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(byType(proposals, 'entry_create')).toHaveLength(0)
+    expect(byType(proposals, 'entry_update')).toHaveLength(0)
+    expect(byType(proposals, 'fact_create')[0].payload.entryId).toBe('e2')
+  })
+
+  it('role words used as names are not created, with or without a particle', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('주인공'), entry('주인공은')],
+    }
+    const { proposals } = extractionToProposals(x, makeCtx({ existingEntries: [] }))
+    expect(byType(proposals, 'entry_create')).toHaveLength(0)
+  })
+
+  it('a fact whose subject is a role word is dropped, and a relation with a role-word end is dropped', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      facts: [factOf('주인공')],
+      relations: [relationOf('그녀', '한시우')],
+    }
+    const { proposals } = extractionToProposals(x, makeCtx({ existingEntries: [] }))
+    expect(byType(proposals, 'fact_create')).toHaveLength(0)
+    expect(byType(proposals, 'relation_create')).toHaveLength(0)
+  })
+
+  it('a long place name is not merged into a place card by its last word', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('북쪽 시계탑', { kind: 'place' })],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'p1', name: '시계탑', aliases: [], kind: 'place' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    const creates = byType(proposals, 'entry_create')
+    expect(creates).toHaveLength(1)
+    expect(creates[0].payload.name).toBe('북쪽 시계탑')
+  })
+
+  it('a long name that matches by last word adds no alias to the existing card', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [entry('시계탑 수리공 노은하')],
+    }
+    const ctx = makeCtx({
+      existingEntries: [{ id: 'e2', name: '노은하', aliases: [], kind: 'character' }],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
+    expect(proposals).toHaveLength(0)
+  })
+
+  it('one answer that names 노은하 and 전직 시계탑 수리공 노은하 yields exactly one card', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      entries: [
+        entry('노은하'),
+        entry('전직 시계탑 수리공 노은하', { summary: '전직 시계탑 수리공' }),
+      ],
+    }
+    const { proposals } = extractionToProposals(x, makeCtx({ existingEntries: [] }))
+    const creates = byType(proposals, 'entry_create')
+    expect(creates).toHaveLength(1)
+    expect(creates[0].payload.name).toBe('노은하')
+  })
+
+  it('a fact about a pending entry name has no entryId', () => {
+    const x: Extraction = { ...emptyExtraction, facts: [factOf('노은하')] }
+    const ctx = makeCtx({
+      existingEntries: [],
+      pendingEntries: [{ name: '노은하', aliases: [] }],
+    })
+    const facts = byType(extractionToProposals(x, ctx).proposals, 'fact_create')
+    expect(facts).toHaveLength(1)
+    expect(facts[0].payload.entryId).toBeNull()
+  })
+
+  it('a planted thread whose title is already pending as thread_create is not created again', () => {
+    const x: Extraction = {
+      ...emptyExtraction,
+      threads: [
+        {
+          title: '멈춘 종의 비밀',
+          description: '',
+          kind: 'planted',
+          evidence: '',
+          existingThreadRef: null,
+          targetChapterPosition: null,
+        },
+      ],
+    }
+    const pendingCtx = makeCtx({
+      pendingThreadCreateTitles: new Set(['멈춘 종의 비밀']),
+    })
+    expect(byType(extractionToProposals(x, pendingCtx).proposals, 'thread_create')).toHaveLength(0)
+
+    const existingCtx = makeCtx({
+      existingThreads: [{ id: 't-9', title: '멈춘 종의 비밀', status: 'planned' }],
+    })
+    expect(byType(extractionToProposals(x, existingCtx).proposals, 'thread_create')).toHaveLength(0)
+  })
+})

@@ -3,6 +3,7 @@
 import { SparklesIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
+import { AiRunStatus } from '@/components/app/ai-run-status'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
 import { SubmitButton } from '@/components/app/submit-button'
@@ -18,8 +19,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import type { ProposalRow } from '@/db/types'
+import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
-import { suggestStyleCardAction } from '@/server/actions/ai-features'
+import { useAiRun } from '@/lib/client/use-ai-run'
 import {
   archiveStyleCardAction,
   createStyleCardAction,
@@ -115,21 +118,25 @@ export function StyleCards({ workId, cards, characters, canEdit }: StyleCardsPro
 }
 
 function SuggestButton({ workId, entryId }: { workId: string; entryId: string }) {
-  const [pending, setPending] = useState(false)
+  const ai = useAiRun()
+
+  // A route handler, not a Server Action: the suggestion can run for minutes.
+  function suggest() {
+    void ai.run((signal) =>
+      runAction(
+        postAction<ProposalRow>(`/api/works/${workId}/style-suggest`, { entryId }, { signal }),
+        { success: '문체 카드 제안을 승인 대기에 올렸습니다.' },
+      ),
+    )
+  }
+
+  if (ai.running) {
+    return (
+      <AiRunStatus label="문체 제안 만드는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+    )
+  }
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled={pending}
-      onClick={async () => {
-        setPending(true)
-        await runAction(suggestStyleCardAction({ workId, entryId }), {
-          success: '문체 카드 제안을 승인 대기에 올렸습니다.',
-        })
-        setPending(false)
-      }}
-    >
+    <Button type="button" variant="outline" size="sm" onClick={suggest}>
       <SparklesIcon />
       AI로 문체 카드 제안
     </Button>

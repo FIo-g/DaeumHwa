@@ -7,7 +7,7 @@ import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
 import { type ProofreadKind, proofreadTask } from '@/ai/tasks/proofread'
 import type { Db } from '@/db/client'
-import { chapters, facts, proposals, relations, threads, wikiEntries } from '@/db/schema'
+import { chapters, facts, proposals, relations } from '@/db/schema'
 import type { Actor, ChapterRow, IssueRow, ProposalRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { normalizeProposalText } from '@/lib/proposal-payloads'
@@ -16,6 +16,7 @@ import { ruleBasedSpellcheck } from '@/lib/korean/spelling-rules'
 import { locateQuote, sentenceAt } from '@/lib/korean/sentences'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
+import { loadKnownEntries } from '@/server/known-entries'
 import { listNamingRules } from '@/server/naming'
 import { deletePendingProposals, insertProposals } from '@/server/proposal-store'
 
@@ -134,15 +135,8 @@ export async function runChapterCheck(
   const meta = { userId: actor.userId, workId, chapterId: chapter.id, signal }
 
   const pack = await buildContextPack(db, workId, { text, position: chapter.position })
-  const entryRows = await db
-    .select()
-    .from(wikiEntries)
-    .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
+  const known = await loadKnownEntries(db, workId, { excludePostChapterOf: chapter.id })
   const rules = await listNamingRules(db, actor, workId)
-  const threadRows = await db
-    .select({ id: threads.id, title: threads.title, status: threads.status })
-    .from(threads)
-    .where(and(eq(threads.workId, workId), isNull(threads.archivedAt)))
   const relationRows = await db
     .select()
     .from(relations)
@@ -174,7 +168,20 @@ export async function runChapterCheck(
         chapterText: text,
         chapterPosition: chapter.position,
         chapterTitle: chapter.title,
-        known: entryRows.map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases })),
+        known: [
+          ...known.active.map((e) => ({
+            name: e.name,
+            kind: e.kind,
+            aliases: e.aliases,
+            pending: false,
+          })),
+          ...known.pending.map((e) => ({
+            name: e.name,
+            kind: e.kind,
+            aliases: e.aliases,
+            pending: true,
+          })),
+        ],
         openThreads,
         knownFacts,
       },
@@ -213,17 +220,14 @@ export async function runChapterCheck(
     sourceRef: extract.runId,
     chapterId: chapter.id,
     chapterPosition: chapter.position,
-    existingEntries: entryRows.map((e) => ({
-      id: e.id,
-      name: e.name,
-      aliases: e.aliases,
-      kind: e.kind,
-    })),
+    existingEntries: known.active,
+    pendingEntries: known.pending,
+    pendingThreadCreateTitles: new Set(known.pendingThreadTitles),
     threadRefs: new Map(
       pack.threads.map((t) => [t.ref, { id: t.id, title: t.title, status: t.status }]),
     ),
     factRefs: new Map([...resolveRefs(pack).facts].map(([ref, fact]) => [ref, { id: fact.id }])),
-    existingThreads: threadRows,
+    existingThreads: known.threads,
     existingRelations: relationRows.map((r) => ({
       sourceId: r.sourceEntryId,
       targetId: r.targetEntryId,
