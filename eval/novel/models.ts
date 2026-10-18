@@ -45,7 +45,7 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     effort: 'max',
     maxTokensFloor: 32000,
     timeoutMs: LOCAL_TIMEOUT_MS,
-    ollama: { numCtx: 65536, temperature: 0.6, topP: 0.95, topK: 20, minP: 0, think: true },
+    ollama: { numCtx: 262144, temperature: 1.0, topP: 0.95, topK: 20, minP: 0, think: true },
     variant: 'mlx',
   },
   'gpt-oss-20b': {
@@ -56,8 +56,8 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     effort: 'max',
     maxTokensFloor: 32000,
     timeoutMs: LOCAL_TIMEOUT_MS,
-    ollama: { numCtx: 65536, temperature: 1.0, topP: 1.0, think: 'high' },
-    variant: 'default',
+    ollama: { numCtx: 131072, temperature: 1.0, topP: 1.0, think: 'high' },
+    variant: 'gguf',
   },
   'exaone3.5-32b': {
     id: 'exaone3.5-32b',
@@ -65,10 +65,11 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     provider: 'ollama',
     model: 'exaone3.5:32b',
     effort: 'max',
-    maxTokensFloor: 32000,
+    // Its context is 32768 and it has no thinking mode, so a 32000 output floor would leave no room for the prompt.
+    maxTokensFloor: 8192,
     timeoutMs: LOCAL_TIMEOUT_MS,
-    ollama: { numCtx: 32768, think: false },
-    variant: 'default',
+    ollama: { numCtx: 32768, temperature: 1.0, think: false },
+    variant: 'gguf',
   },
   'haiku-5.5': {
     id: 'haiku-5.5',

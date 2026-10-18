@@ -43,8 +43,8 @@ const RUNNER_SCHEMA = {
   required: ['status', 'detail'],
 }
 
-if (!args || typeof args.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(args.date)) {
-  throw new Error('args.date (YYYY-MM-DD) is required')
+if (!args || typeof args.date !== 'string' || !/^\d{4}-\d{2}-\d{2}(-[a-z0-9]+)?$/.test(args.date)) {
+  throw new Error('args.date (YYYY-MM-DD or YYYY-MM-DD-suffix) is required')
 }
 const date = args.date
 const chapters = args.chapters || 5
