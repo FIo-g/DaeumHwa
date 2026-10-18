@@ -1,5 +1,5 @@
 import { FakeAiClient } from '@/test/fake-ai'
-import { OllamaAiClient, type OllamaOptions } from '@/ai/ollama'
+import { OllamaAiClient, type OllamaCallStats, type OllamaOptions } from '@/ai/ollama'
 import { OpencodeAiClient } from '@/ai/opencode'
 import type { AiClient, AiEffort } from '@/ai/types'
 
@@ -100,12 +100,17 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
 /** Builds the AI client a profile runs on. `fetch` is injected in tests. */
 export function createModelClient(
   profile: ModelProfile,
-  o: { fetch?: typeof fetch } = {},
+  o: { fetch?: typeof fetch; onStats?: (s: OllamaCallStats) => void } = {},
 ): AiClient {
   switch (profile.provider) {
     case 'ollama':
       if (!profile.ollama) throw new Error(`${profile.id}: ollama settings are missing`)
-      return new OllamaAiClient({ ...profile.ollama, model: profile.model, fetch: o.fetch })
+      return new OllamaAiClient({
+        ...profile.ollama,
+        model: profile.model,
+        fetch: o.fetch,
+        onStats: o.onStats,
+      })
     case 'opencode':
       return new OpencodeAiClient(undefined, profile.model)
     case 'fake':

@@ -115,8 +115,9 @@ export async function openRun(
   const db = drizzle(pg, { schema }) as unknown as Db
   await migrateDb(db, 'pglite')
   const bible = loadBible(config.lang)
-  const client = new EvalClient({
-    inner: o.inner ?? createModelClient(profile),
+  // The inner client reports Ollama timings to the eval client, which is built here first.
+  const client: EvalClient = new EvalClient({
+    inner: o.inner ?? createModelClient(profile, { onStats: (s) => client.onOllamaStats(s) }),
     profile,
     lang: config.lang,
     callsDir: join(dir, 'calls'),
@@ -157,6 +158,7 @@ export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
     if (state.data.userId) ctx.actor = { userId: state.data.userId }
 
     const key = state.plan[state.cursor] as string
+    ctx.client.setStep(key)
     let result: StepResult
     try {
       const step = STEPS[stepName(key)]

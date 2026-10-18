@@ -54,6 +54,7 @@ Use this structure. Headings in the document's language.
   - reader simulation and direction advice (grounded in the text, useful)
   - style proposal (captured the sample's style)
 - Operations: failures, retries, `wouldTimeOut`, `contextOverflow`, `hangulLeft`, tokens per step, time per step.
+- Speed (the `speed` block of `run-summary.json`): median generation tokens per second and median prompt tokens per second overall, the same per task (`byTask`), the median first-token time of streams, and the total call time per chapter (`perChapterMs`). Say the `source`: `ollama` means Ollama's internal timings, `wall` means wall-clock time including network and any thinking. The two are not comparable.
 - TTCW pass count (of 14 checks, as the criteria file describes), labeled as reference only.
 - Five-chapter totals: mean Q score, publishable chapters count, and the continuity error count per 10,000 characters (Korean: characters; English: words, as section 3.3 says).
 - Weakness list with improvement candidates, each with the expected effect.

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { FORMAT_MESSAGE, MAX_TOKENS_MESSAGE, jsonInstruction } from '@/ai/anthropic'
 import { AI_CANCELLED_MESSAGE, AI_TIMEOUT_MESSAGE } from '@/ai/types'
-import { OllamaAiClient, OllamaHttpError, stripThink } from '@/ai/ollama'
+import { type OllamaCallStats, OllamaAiClient, OllamaHttpError, stripThink } from '@/ai/ollama'
 import { AppError } from '@/lib/errors'
 
 type Call = { url: string; body: Record<string, unknown>; signal: AbortSignal | null | undefined }
@@ -376,6 +376,135 @@ describe('OllamaAiClient.streamText', () => {
 
     await expect(final).rejects.toMatchObject({ code: 'AI_ERROR' })
     await expect(final).rejects.toThrow('중간에 끊겼습니다')
+  })
+})
+
+describe('OllamaAiClient speed stats', () => {
+  function statsClient(fetchImpl: typeof fetch, onStats: (s: OllamaCallStats) => void) {
+    return new OllamaAiClient({
+      model: MODEL,
+      numCtx: 65536,
+      baseUrl: 'http://ollama.test',
+      fetch: fetchImpl,
+      onStats,
+    })
+  }
+
+  const timings = {
+    prompt_eval_count: 1000,
+    prompt_eval_duration: 2e9,
+    eval_count: 300,
+    eval_duration: 10e9,
+    total_duration: 13e9,
+  }
+
+  it('reports the non-stream timings in ms once per attempt', async () => {
+    const stats: OllamaCallStats[] = []
+    const { fetch } = fakeFetch([chatReply('{"a":"x"}', timings)])
+    await statsClient(fetch, (s) => stats.push(s)).generateObject({
+      task,
+      system: 'SYSTEM',
+      prompt: 'PROMPT',
+      schema,
+      effort: 'low',
+      maxTokens: 4000,
+    })
+
+    expect(stats).toEqual([
+      {
+        task: 'proofread',
+        model: MODEL,
+        promptTokens: 1000,
+        promptMs: 2000,
+        outputTokens: 300,
+        evalMs: 10000,
+        totalMs: 13000,
+      },
+    ])
+  })
+
+  it('reports stats twice when the structured call retries with the JSON instruction', async () => {
+    const stats: OllamaCallStats[] = []
+    const { fetch } = fakeFetch([chatReply('not json', timings), chatReply('{"a":"x"}', timings)])
+    await statsClient(fetch, (s) => stats.push(s)).generateObject({
+      task,
+      system: 'SYSTEM',
+      prompt: 'PROMPT',
+      schema,
+      effort: 'low',
+      maxTokens: 4000,
+    })
+
+    expect(stats).toHaveLength(2)
+    expect(stats.map((s) => s.outputTokens)).toEqual([300, 300])
+  })
+
+  it('reports zero for missing timing fields', async () => {
+    const stats: OllamaCallStats[] = []
+    const { fetch } = fakeFetch([chatReply('{"a":"x"}')])
+    await statsClient(fetch, (s) => stats.push(s)).generateObject({
+      task,
+      system: 'SYSTEM',
+      prompt: 'PROMPT',
+      schema,
+      effort: 'low',
+      maxTokens: 4000,
+    })
+
+    expect(stats).toEqual([
+      {
+        task: 'proofread',
+        model: MODEL,
+        promptTokens: 10,
+        promptMs: 0,
+        outputTokens: 5,
+        evalMs: 0,
+        totalMs: 0,
+      },
+    ])
+  })
+
+  it('reports stream stats once from the final done chunk', async () => {
+    const stats: OllamaCallStats[] = []
+    const { fetch } = fakeFetch([
+      ndjsonReply([
+        { model: MODEL, message: { role: 'assistant', content: '가' }, done: false },
+        {
+          model: MODEL,
+          message: { role: 'assistant', content: '' },
+          done: true,
+          done_reason: 'stop',
+          prompt_eval_count: 7,
+          prompt_eval_duration: 1e9,
+          eval_count: 3,
+          eval_duration: 5e8,
+          total_duration: 2e9,
+        },
+      ]),
+    ])
+    const { textStream, final } = statsClient(fetch, (s) => stats.push(s)).streamText({
+      task,
+      system: 'SYSTEM',
+      prompt: 'PROMPT',
+      effort: 'low',
+      maxTokens: 4000,
+    })
+    const pieces: string[] = []
+    for await (const piece of textStream) pieces.push(piece)
+    await final
+
+    expect(pieces.join('')).toBe('가')
+    expect(stats).toEqual([
+      {
+        task: 'proofread',
+        model: MODEL,
+        promptTokens: 7,
+        promptMs: 1000,
+        outputTokens: 3,
+        evalMs: 500,
+        totalMs: 2000,
+      },
+    ])
   })
 })
 

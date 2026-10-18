@@ -4,11 +4,66 @@ import { listRelations } from '@/server/relations'
 import { listStyleCards } from '@/server/styles'
 import { listThreads } from '@/server/threads'
 import { listEntries } from '@/server/wiki'
+import type { CallRecord, CallSpeed } from '../eval-client'
 import type { StepFn } from '../run'
 import { readCallRecords, requireWorkId, writeRunFile } from './util'
 
 // Writes the final wiki snapshot and the run summary. Calls are read from disk, so the summary
 // covers every resume, not only this process.
+
+const NO_SPEED: CallSpeed = { outputTokensPerSec: null, promptTokensPerSec: null, source: 'wall' }
+
+/** Records written before speed was recorded have no speed block. */
+function speedOf(call: CallRecord): CallSpeed {
+  return call.speed ?? NO_SPEED
+}
+
+/** Median of the numeric values; null when there are none. */
+function median(values: (number | null | undefined)[]): number | null {
+  const sorted = values.filter((v): v is number => typeof v === 'number').sort((a, b) => a - b)
+  if (sorted.length === 0) return null
+  const middle = sorted.length / 2
+  if (sorted.length % 2 === 1) return sorted[Math.floor(middle)] ?? null
+  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
+}
+
+/** Speed medians per task and for the whole run, and the total call time of each chapter. */
+function speedSummary(calls: CallRecord[]) {
+  const medians = (rows: CallRecord[]) => ({
+    medianOutputTokensPerSec: median(rows.map((c) => speedOf(c).outputTokensPerSec)),
+    medianPromptTokensPerSec: median(rows.map((c) => speedOf(c).promptTokensPerSec)),
+  })
+
+  const byTask: Record<
+    string,
+    ReturnType<typeof medians> & { calls: number; medianFirstTokenMs: number | null }
+  > = {}
+  for (const task of new Set(calls.map((c) => c.task))) {
+    const rows = calls.filter((c) => c.task === task)
+    byTask[task] = {
+      calls: rows.length,
+      ...medians(rows),
+      medianFirstTokenMs: median(rows.map((c) => c.firstTokenMs)),
+    }
+  }
+
+  // Chapter n is the calls whose step key starts with 'chN:'.
+  const perChapterMs: Record<string, number> = {}
+  for (const call of calls) {
+    const chapter = /^ch(\d+):/.exec(call.step ?? '')?.[1]
+    if (chapter !== undefined)
+      perChapterMs[chapter] = (perChapterMs[chapter] ?? 0) + call.durationMs
+  }
+
+  return {
+    byTask,
+    overall: {
+      ...medians(calls),
+      source: calls.some((c) => speedOf(c).source === 'ollama') ? 'ollama' : 'wall',
+    },
+    perChapterMs,
+  }
+}
 
 export const finish: StepFn = async (ctx, _key, state) => {
   const workId = requireWorkId(state)
@@ -54,6 +109,7 @@ export const finish: StepFn = async (ctx, _key, state) => {
     `${JSON.stringify(
       {
         calls: { total: calls.length, byTask },
+        speed: speedSummary(calls),
         wouldTimeOut: calls.filter((call) => call.wouldTimeOut).length,
         contextOverflow: calls.filter((call) => call.contextOverflow).length,
         hangulLeft: calls.reduce((sum, call) => sum + call.hangulLeft, 0),

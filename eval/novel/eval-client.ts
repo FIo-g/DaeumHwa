@@ -11,6 +11,7 @@ import { styleSuggestTask } from '@/ai/tasks/style-suggest'
 import { DEFAULT_AI_TIMEOUT_MS, STREAM_AI_TIMEOUT_MS } from '@/ai/run'
 import type { AiClient, AiEffort, AiUsage, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import type { AiTaskName } from '@/db/types'
+import type { OllamaCallStats } from '@/ai/ollama'
 import { AppError } from '@/lib/errors'
 import type { ModelProfile } from './models'
 import { EN_SYSTEMS } from './localize/en-systems'
@@ -22,12 +23,27 @@ import { countHangul, translateScaffold } from './localize/scaffold'
 
 export type FailureKind = 'external-limit' | 'external-network' | 'model'
 
+/**
+ * Generation and prompt speed of one call. Ollama calls use Ollama's own timings (`ollama`). Other
+ * providers use wall-clock time, which includes network and any thinking (`wall`).
+ */
+export type CallSpeed = {
+  outputTokensPerSec: number | null
+  promptTokensPerSec: number | null
+  source: 'ollama' | 'wall'
+}
+
 export type CallRecord = {
   seq: number
   task: AiTaskName
+  /** Step key the runner was on, e.g. 'ch2:draft'; null outside the step machine. */
+  step: string | null
   kind: 'object' | 'stream'
   startedAt: string
   durationMs: number
+  /** Streams: ms from the start to the first non-empty chunk. Objects: null. */
+  firstTokenMs: number | null
+  speed: CallSpeed
   model: string
   effortRequested: AiEffort
   maxTokens: number
@@ -137,9 +153,53 @@ export function classifyError(error: unknown): FailureKind {
   return 'model'
 }
 
+/** Speed of one call from its Ollama timings, or from wall-clock time when there are none. */
+function speedOf(args: {
+  ok: boolean
+  kind: 'object' | 'stream'
+  durationMs: number
+  firstTokenMs: number | null
+  usage: AiUsage | null
+  ollama: OllamaCallStats[]
+}): CallSpeed {
+  if (args.ollama.length > 0) {
+    if (!args.ok) return { outputTokensPerSec: null, promptTokensPerSec: null, source: 'ollama' }
+    const sum = (pick: (s: OllamaCallStats) => number) =>
+      args.ollama.reduce((total, s) => total + pick(s), 0)
+    return {
+      outputTokensPerSec: ratePerSec(
+        sum((s) => s.outputTokens),
+        sum((s) => s.evalMs),
+      ),
+      promptTokensPerSec: ratePerSec(
+        sum((s) => s.promptTokens),
+        sum((s) => s.promptMs),
+      ),
+      source: 'ollama',
+    }
+  }
+  const none: CallSpeed = { outputTokensPerSec: null, promptTokensPerSec: null, source: 'wall' }
+  if (!args.ok || args.usage === null) return none
+  // A stream's generation window starts at its first token; without one there is no window.
+  const windowMs =
+    args.kind === 'stream'
+      ? args.firstTokenMs === null
+        ? null
+        : args.durationMs - args.firstTokenMs
+      : args.durationMs
+  if (windowMs === null) return none
+  return { ...none, outputTokensPerSec: ratePerSec(args.usage.outputTokens, windowMs) }
+}
+
+/** Tokens per second from a token count and a duration in ms; null when the duration is zero. */
+function ratePerSec(tokens: number, ms: number): number | null {
+  return ms > 0 ? tokens / (ms / 1000) : null
+}
+
 type Prepared = {
   seq: number
   task: AiTaskName
+  step: string | null
   kind: 'object' | 'stream'
   startedMs: number
   startedAt: string
@@ -159,6 +219,9 @@ export class EvalClient implements AiClient {
   private seq: number
   /** Most severe failure recorded since the last take. */
   private pendingFailure: CallError | null = null
+  /** Ollama timings reported by the inner client, waiting for their call to settle. */
+  private readonly ollamaStats = new Map<AiTaskName, OllamaCallStats[]>()
+  private step: string | null = null
   private readonly inner: AiClient
   private readonly profile: ModelProfile
   private readonly lang: 'ko' | 'en'
@@ -178,6 +241,18 @@ export class EvalClient implements AiClient {
 
   get nextSeq(): number {
     return this.seq
+  }
+
+  /** Step key recorded on the calls that follow. The step runner sets it before each step. */
+  setStep(key: string | null): void {
+    this.step = key
+  }
+
+  /** Receives Ollama timings from the inner client. Each call takes its own by task name. */
+  onOllamaStats(stats: OllamaCallStats): void {
+    const list = this.ollamaStats.get(stats.task) ?? []
+    list.push(stats)
+    this.ollamaStats.set(stats.task, list)
   }
 
   /**
@@ -231,17 +306,32 @@ export class EvalClient implements AiClient {
       this.settle(call, { ok: false, error })
       throw error
     }
+    let firstTokenMs: number | null = null
+    const now = this.now
+    const startedMs = call.startedMs
+    const source = inner.textStream
+    // Passes the chunks through and times the first non-empty one.
+    const textStream = (async function* () {
+      for await (const piece of source) {
+        if (firstTokenMs === null && piece.length > 0) firstTokenMs = now() - startedMs
+        yield piece
+      }
+    })()
     const final = inner.final.then(
       (result) => {
-        this.settle(call, { ok: true, output: { text: result.text }, usage: result.usage })
+        this.settle(
+          call,
+          { ok: true, output: { text: result.text }, usage: result.usage },
+          firstTokenMs,
+        )
         return result
       },
       (error: unknown) => {
-        this.settle(call, { ok: false, error })
+        this.settle(call, { ok: false, error }, firstTokenMs)
         throw error
       },
     )
-    return { textStream: inner.textStream, final }
+    return { textStream, final }
   }
 
   private prepare(
@@ -260,6 +350,7 @@ export class EvalClient implements AiClient {
     return {
       seq,
       task,
+      step: this.step,
       kind,
       startedMs,
       startedAt: new Date(startedMs).toISOString(),
@@ -270,9 +361,11 @@ export class EvalClient implements AiClient {
     }
   }
 
-  private settle(call: Prepared, outcome: Outcome): void {
+  private settle(call: Prepared, outcome: Outcome, firstTokenMs: number | null = null): void {
     const durationMs = this.now() - call.startedMs
     const usage = outcome.ok ? outcome.usage : null
+    const ollama = this.ollamaStats.get(call.task) ?? []
+    this.ollamaStats.delete(call.task)
     const numCtx = this.profile.ollama?.numCtx
     const status = outcome.ok ? undefined : statusOf(outcome.error)
     const error: CallError | null = outcome.ok
@@ -285,9 +378,19 @@ export class EvalClient implements AiClient {
     const record: CallRecord = {
       seq: call.seq,
       task: call.task,
+      step: call.step,
       kind: call.kind,
       startedAt: call.startedAt,
       durationMs,
+      firstTokenMs: call.kind === 'stream' ? firstTokenMs : null,
+      speed: speedOf({
+        ok: outcome.ok,
+        kind: call.kind,
+        durationMs,
+        firstTokenMs,
+        usage,
+        ollama,
+      }),
       model: this.profile.model,
       effortRequested: 'max',
       maxTokens: call.maxTokens,

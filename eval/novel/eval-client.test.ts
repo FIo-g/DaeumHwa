@@ -405,6 +405,146 @@ describe('classifyError on errors from the real inner clients', () => {
   })
 })
 
+describe('EvalClient speed', () => {
+  const OLLAMA_STATS = {
+    task: 'proofread' as const,
+    model: QWEN.model,
+    promptTokens: 1000,
+    promptMs: 2000,
+    outputTokens: 300,
+    evalMs: 10000,
+    totalMs: 13000,
+  }
+
+  it('takes Ollama speed from the reported timings', async () => {
+    const spy = spyClient({ usage: { inputTokens: 1000, outputTokens: 300 } })
+    const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'ko', callsDir })
+    client.onOllamaStats(OLLAMA_STATS)
+    await client.generateObject(objectArgs())
+    expect(readRecord('001-proofread.json').speed).toEqual({
+      outputTokensPerSec: 30,
+      promptTokensPerSec: 500,
+      source: 'ollama',
+    })
+  })
+
+  it('matches Ollama stats to the call by task name', async () => {
+    const spy = spyClient({ usage: { inputTokens: 10, outputTokens: 200 } })
+    const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'ko', callsDir })
+    client.onOllamaStats({ ...OLLAMA_STATS, task: 'draft-chapter' })
+    await client.generateObject(objectArgs())
+    expect(readRecord('001-proofread.json').speed).toEqual({
+      outputTokensPerSec: null,
+      promptTokensPerSec: null,
+      source: 'wall',
+    })
+  })
+
+  it('uses wall-clock speed for object calls on other providers', async () => {
+    const clock = { t: 0 }
+    const inner: AiClient = {
+      provider: 'spy',
+      defaultModel: 'spy-model',
+      async generateObject<T>(): Promise<{ object: T; usage: AiUsage; model: string }> {
+        clock.t += 4000
+        return {
+          object: { ok: true } as T,
+          usage: { inputTokens: 10, outputTokens: 200 },
+          model: 'spy-model',
+        }
+      },
+      streamText(): never {
+        throw new Error('streamText is not used by this client')
+      },
+    }
+    const client = new EvalClient({
+      inner,
+      profile: CLOUD,
+      lang: 'ko',
+      callsDir,
+      now: () => clock.t,
+    })
+    await client.generateObject(objectArgs())
+    const record = readRecord('001-proofread.json')
+    expect(record.firstTokenMs).toBeNull()
+    expect(record.speed).toEqual({
+      outputTokensPerSec: 50,
+      promptTokensPerSec: null,
+      source: 'wall',
+    })
+  })
+
+  it('measures the first token and the generation time of a stream', async () => {
+    const clock = { t: 0 }
+    let resolveFinal!: (result: { text: string; usage: AiUsage; model: string }) => void
+    const final = new Promise<{ text: string; usage: AiUsage; model: string }>((resolve) => {
+      resolveFinal = resolve
+    })
+    const inner: AiClient = {
+      provider: 'spy',
+      defaultModel: 'spy-model',
+      generateObject(): never {
+        throw new Error('generateObject is not used by this client')
+      },
+      streamText() {
+        const textStream = (async function* () {
+          clock.t = 1000
+          yield 'Hello'
+          clock.t = 5000
+          resolveFinal({
+            text: 'Hello',
+            usage: { inputTokens: 10, outputTokens: 400 },
+            model: 'spy-model',
+          })
+        })()
+        return { textStream, final }
+      },
+    }
+    const client = new EvalClient({
+      inner,
+      profile: CLOUD,
+      lang: 'ko',
+      callsDir,
+      now: () => clock.t,
+    })
+    const stream = client.streamText({
+      task: { name: 'draft-chapter', input: {} },
+      system: DRAFT_SYSTEM,
+      prompt: 'draft',
+      effort: 'high',
+      maxTokens: 16000,
+    })
+    for await (const piece of stream.textStream) expect(piece).toBe('Hello')
+    await stream.final
+
+    const record = readRecord('001-draft-chapter.json')
+    expect(record).toMatchObject({ firstTokenMs: 1000, durationMs: 5000 })
+    expect(record.speed).toEqual({
+      outputTokensPerSec: 100,
+      promptTokensPerSec: null,
+      source: 'wall',
+    })
+  })
+
+  it('leaves speed null for failed calls', async () => {
+    const spy = spyClient({ error: new Error('boom') })
+    const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'ko', callsDir })
+    client.onOllamaStats(OLLAMA_STATS)
+    await thrownBy(client.generateObject(objectArgs()))
+    const record = readRecord('001-proofread.json')
+    expect(record.error).not.toBeNull()
+    expect(record.speed).toMatchObject({ outputTokensPerSec: null, promptTokensPerSec: null })
+  })
+
+  it('records the step key set by the runner', async () => {
+    const spy = spyClient()
+    const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'ko', callsDir })
+    client.setStep('ch2:proofread')
+    await client.generateObject(objectArgs())
+    expect(readRecord('001-proofread.json').step).toBe('ch2:proofread')
+  })
+})
+
 describe('EvalClient streams', () => {
   it('passes chunks through and writes the record when final settles', async () => {
     const spy = spyClient({ chunks: ['Hello ', 'world'] })

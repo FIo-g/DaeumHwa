@@ -14,9 +14,21 @@ import {
   type GenerateObjectArgs,
   type StreamTextArgs,
 } from '@/ai/types'
+import type { AiTaskName } from '@/db/types'
 import { AppError } from '@/lib/errors'
 
 export type OllamaThink = boolean | 'low' | 'medium' | 'high'
+
+/** Ollama's own timings for one successful HTTP attempt. Durations are already converted to ms. */
+export type OllamaCallStats = {
+  task: AiTaskName
+  model: string
+  promptTokens: number
+  promptMs: number
+  outputTokens: number
+  evalMs: number
+  totalMs: number
+}
 
 export interface OllamaOptions {
   model: string
@@ -32,6 +44,8 @@ export interface OllamaOptions {
   keepAlive?: string
   /** Injected in tests; defaults to the global fetch. */
   fetch?: typeof fetch
+  /** Called once per successful HTTP attempt with Ollama's timings. The app does not set it. */
+  onStats?: (s: OllamaCallStats) => void
 }
 
 /** Non-2xx answer from the Ollama server. Passed through unchanged, not wrapped as AppError. */
@@ -54,7 +68,13 @@ type ChatResponse = {
   done?: boolean
   done_reason?: string
   prompt_eval_count?: number
+  /** Nanoseconds. */
+  prompt_eval_duration?: number
   eval_count?: number
+  /** Nanoseconds. */
+  eval_duration?: number
+  /** Nanoseconds. */
+  total_duration?: number
   /** Set on an NDJSON line when the server failed mid-stream. */
   error?: string
 }
@@ -101,6 +121,7 @@ export class OllamaAiClient implements AiClient {
     let billed = NO_USAGE
     try {
       const first = await this.chat({
+        task: args.task.name,
         model,
         messages: [system, { role: 'user', content: args.prompt }],
         format: z.toJSONSchema(args.schema),
@@ -113,6 +134,7 @@ export class OllamaAiClient implements AiClient {
       if (checked.success) return { object: checked.data, usage: billed, model: first.model }
 
       const retry = await this.chat({
+        task: args.task.name,
         model,
         messages: [
           system,
@@ -188,6 +210,7 @@ export class OllamaAiClient implements AiClient {
           sawDone = true
           usage = usageOf(chunk)
           doneReason = chunk.done_reason
+          this.settings.onStats?.(statsOf(args.task.name, model, chunk))
         }
         pushVisible(visibleText(raw))
       }
@@ -229,6 +252,7 @@ export class OllamaAiClient implements AiClient {
 
   /** One non-streaming /api/chat call. The answer text is returned as-is, think block included. */
   private async chat(args: {
+    task: AiTaskName
     model: string
     messages: ChatMessage[]
     format?: unknown
@@ -246,6 +270,7 @@ export class OllamaAiClient implements AiClient {
       args.call,
     )
     const data = (await response.json()) as ChatResponse
+    this.settings.onStats?.(statsOf(args.task, args.model, data))
     return {
       content: data.message?.content ?? '',
       usage: usageOf(data),
@@ -328,6 +353,21 @@ function aiErrorWithUsage(message: string, usage: AiUsage): AppError {
 
 function usageOf(data: ChatResponse): AiUsage {
   return { inputTokens: data.prompt_eval_count ?? 0, outputTokens: data.eval_count ?? 0 }
+}
+
+const NS_PER_MS = 1_000_000
+
+/** Ollama's timings from one answer. Missing fields count as zero. */
+function statsOf(task: AiTaskName, model: string, data: ChatResponse): OllamaCallStats {
+  return {
+    task,
+    model: data.model ?? model,
+    promptTokens: data.prompt_eval_count ?? 0,
+    promptMs: (data.prompt_eval_duration ?? 0) / NS_PER_MS,
+    outputTokens: data.eval_count ?? 0,
+    evalMs: (data.eval_duration ?? 0) / NS_PER_MS,
+    totalMs: (data.total_duration ?? 0) / NS_PER_MS,
+  }
 }
 
 function addUsage(a: AiUsage, b: AiUsage): AiUsage {

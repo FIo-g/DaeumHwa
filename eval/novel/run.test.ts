@@ -139,6 +139,16 @@ describe('novel eval step machine', () => {
     }
     expect(existsSync(join(dir, 'wiki-final.json'))).toBe(true)
     expect(existsSync(join(dir, 'run-summary.json'))).toBe(true)
+    const summary = JSON.parse(readFileSync(join(dir, 'run-summary.json'), 'utf8')) as {
+      speed: {
+        byTask: Record<string, { calls: number }>
+        overall: { source: string }
+        perChapterMs: Record<string, number>
+      }
+    }
+    expect(summary.speed.byTask['draft-chapter']?.calls).toBeGreaterThanOrEqual(1)
+    expect(summary.speed.overall.source).toBe('wall')
+    expect(summary.speed.perChapterMs['1']).toBeDefined()
 
     const decisions = readFileSync(join(dir, 'author-decisions.jsonl'), 'utf8')
       .trim()
