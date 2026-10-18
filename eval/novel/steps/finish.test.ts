@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type { CallRecord } from '../eval-client'
 import { speedSummary } from './finish'
 
+/** An ISO start time the given number of ms after a fixed origin. */
+function at(ms: number): string {
+  return new Date(Date.UTC(2026, 9, 18, 0, 0, 0) + ms).toISOString()
+}
+
 // Only the fields speedSummary reads are set; the rest is cast away.
 function call(fields: Partial<CallRecord>): CallRecord {
   return {
     task: 'draft-chapter',
     step: null,
+    startedAt: at(0),
     durationMs: 0,
     firstTokenMs: null,
     speed: { outputTokensPerSec: null, promptTokensPerSec: null, source: 'wall' },
@@ -64,15 +70,36 @@ describe('speedSummary', () => {
     expect(speedSummary([wall, ollama]).overall.source).toBe('ollama')
   })
 
-  it('sums call time per chapter from the step keys and skips other steps', () => {
+  it('takes the wall time of a chapter from overlapping calls once, not summed', () => {
+    // continuity and extract run in parallel: 0-1000 ms and 100-1100 ms.
     const summary = speedSummary([
-      call({ step: 'ch1:draft', durationMs: 100 }),
-      call({ step: 'ch1:check', durationMs: 200 }),
-      call({ step: 'ch2:check', durationMs: 50 }),
-      call({ step: 'style:suggest', durationMs: 999 }),
-      call({ step: null, durationMs: 999 }),
+      call({ step: 'ch1:continuity', startedAt: at(0), durationMs: 1000 }),
+      call({ step: 'ch1:check', startedAt: at(100), durationMs: 1000 }),
+    ])
+    expect(summary.perChapterMs).toEqual({ '1': 1100 })
+    expect(summary.perChapterModelMs).toEqual({ '1': 2000 })
+  })
+
+  it("leaves out the gaps between a chapter's calls (author waits) from its wall time", () => {
+    // draft at 0-500 ms, the author answers, proofread at 10000-10400 ms.
+    const summary = speedSummary([
+      call({ step: 'ch1:draft', startedAt: at(0), durationMs: 500 }),
+      call({ step: 'ch1:proofread', startedAt: at(10_000), durationMs: 400 }),
+    ])
+    expect(summary.perChapterMs).toEqual({ '1': 900 })
+    expect(summary.perChapterModelMs).toEqual({ '1': 900 })
+  })
+
+  it('takes call time per chapter from the step keys and skips other steps', () => {
+    const summary = speedSummary([
+      call({ step: 'ch1:draft', startedAt: at(0), durationMs: 100 }),
+      call({ step: 'ch1:check', startedAt: at(1000), durationMs: 200 }),
+      call({ step: 'ch2:check', startedAt: at(2000), durationMs: 50 }),
+      call({ step: 'style:suggest', startedAt: at(3000), durationMs: 999 }),
+      call({ step: null, startedAt: at(4000), durationMs: 999 }),
     ])
     expect(summary.perChapterMs).toEqual({ '1': 300, '2': 50 })
+    expect(summary.perChapterModelMs).toEqual({ '1': 300, '2': 50 })
   })
 
   it('treats records without a speed block as null speed', () => {

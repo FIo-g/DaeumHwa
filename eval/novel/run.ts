@@ -124,7 +124,8 @@ export async function openRun(
     startSeq: Math.max(1, state.nextSeq),
   })
   setAiTimeoutOverride(profile.timeoutMs)
-  // 0 disables the product's daily token limit for eval runs.
+  // 0 disables the product's daily token limit for eval runs. close() puts the previous value back.
+  const previousDailyLimit = process.env.AI_DAILY_TOKEN_LIMIT
   process.env.AI_DAILY_TOKEN_LIMIT = '0'
   return {
     dir,
@@ -135,8 +136,10 @@ export async function openRun(
     actor: { userId: state.data.userId ?? '' },
     autoAuthor: o.autoAuthor ? (p) => fakeAnswer(p, bible) : undefined,
     close: async () => {
+      // The timeout override has no getter; null is the value a fresh process starts with.
       setAiTimeoutOverride(null)
-      delete process.env.AI_DAILY_TOKEN_LIMIT
+      if (previousDailyLimit === undefined) delete process.env.AI_DAILY_TOKEN_LIMIT
+      else process.env.AI_DAILY_TOKEN_LIMIT = previousDailyLimit
       await pg.close()
     },
   }

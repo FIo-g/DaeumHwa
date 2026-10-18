@@ -89,6 +89,30 @@ function faultyClient(faults: Fault[]): AiClient {
   }
 }
 
+/** FakeAiClient whose draft-chapter calls fail after the first `ok` ones succeed. */
+function draftsFailingAfter(ok: number): AiClient {
+  const inner = new FakeAiClient()
+  let drafts = 0
+  const failNow = (task: AiTaskName): boolean => {
+    if (task !== 'draft-chapter') return false
+    drafts += 1
+    return drafts > ok
+  }
+  return {
+    provider: 'test',
+    defaultModel: 'fake',
+    async generateObject<T>(args: GenerateObjectArgs<T>) {
+      return inner.generateObject(args)
+    },
+    streamText(args: StreamTextArgs) {
+      if (!failNow(args.task.name)) return inner.streamText(args)
+      const textStream = (async function* () {})()
+      const error = new AppError('AI_ERROR', FORMAT_MESSAGE)
+      return { textStream, final: Promise.reject(error) }
+    },
+  }
+}
+
 /** FakeAiClient whose chapter draft is longer than the proofreading limit. */
 function longDraftClient(): AiClient {
   const inner = new FakeAiClient()
@@ -281,6 +305,57 @@ describe('novel eval step machine', () => {
     const rows = await ctx.db.select().from(chapters)
     expect(rows).toHaveLength(1)
     expect(rows[0]?.body).toBe(attempt2)
+  }, 120_000)
+
+  it('a failed redo keeps the earlier draft as the chapter', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const bible = loadBible('ko')
+    const ctx = await open(dir, { inner: draftsFailingAfter(1), autoAuthor: true })
+    ctx.autoAuthor = (p) =>
+      p.kind === 'draft_review' && p.attempt === 1
+        ? { kind: 'draft_review', usable: false, quality: 1, reason: 'too short' }
+        : fakeAnswer(p, bible)
+
+    const state = await runUntilBlocked(ctx)
+    expect(state.status).toBe('done')
+    const attempt1 = readFileSync(join(dir, 'chapters', '01.attempt-1.md'), 'utf8')
+    const rows = await ctx.db.select().from(chapters)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.body).toBe(attempt1)
+    expect(state.failed).toEqual([expect.objectContaining({ step: 'ch1:draft' })])
+    expect(state.data.chapterIds[1]).toBe(rows[0]?.id)
+    // The later chapter steps still run on the saved chapter.
+    expect(state.data.marks['ch1:proposals']).toBe(true)
+  }, 120_000)
+
+  it('skips the chapter with a recorded reason when no attempt produced text', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const ctx = await open(dir, { inner: draftsFailingAfter(0), autoAuthor: true })
+    const state = await runUntilBlocked(ctx)
+    expect(state.status).toBe('done')
+    const rows = await ctx.db.select().from(chapters)
+    expect(rows).toHaveLength(0)
+    expect(state.failed.map((entry) => `${entry.step}: ${entry.message}`)).toContain(
+      'ch1:draft: no draft text',
+    )
+  }, 120_000)
+
+  it('close puts back the daily token limit it changed', async () => {
+    const before = process.env.AI_DAILY_TOKEN_LIMIT
+    process.env.AI_DAILY_TOKEN_LIMIT = '777'
+    try {
+      const dir = newDir()
+      makeRun(dir, 1, 2)
+      await open(dir, { inner: new FakeAiClient() })
+      expect(process.env.AI_DAILY_TOKEN_LIMIT).toBe('0')
+      await closeLast()
+      expect(process.env.AI_DAILY_TOKEN_LIMIT).toBe('777')
+    } finally {
+      if (before === undefined) delete process.env.AI_DAILY_TOKEN_LIMIT
+      else process.env.AI_DAILY_TOKEN_LIMIT = before
+    }
   }, 120_000)
 
   it('no duplicate chapter after a crash', async () => {

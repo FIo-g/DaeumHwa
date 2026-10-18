@@ -1,10 +1,18 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { acquireLock, releaseLock } from './worker-lock'
-import { advanceRun, formatStatus, initRun, probeContext, runWorker } from './cli'
+import {
+  advanceRun,
+  formatStatus,
+  initRun,
+  probeContext,
+  resummarizeDate,
+  resummarizeRun,
+  runWorker,
+} from './cli'
 import { loadState, newState, type RunConfig, saveState } from './state'
 
 const dirs: string[] = []
@@ -17,6 +25,101 @@ function tempDir(): string {
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
+/** A call record with only the fields the summary reads; the rest is the real shape. */
+function callRecord(fields: {
+  seq: number
+  task: string
+  step: string
+  startedAt: string
+  durationMs: number
+  usage: { inputTokens: number; outputTokens: number } | null
+}): string {
+  return `${JSON.stringify({
+    ...fields,
+    kind: 'object',
+    firstTokenMs: null,
+    speed: { outputTokensPerSec: null, promptTokensPerSec: null, source: 'wall' },
+    model: 'fake',
+    effortRequested: 'high',
+    maxTokens: 1000,
+    productTimeoutMs: 1000,
+    wouldTimeOut: false,
+    system: '',
+    prompt: '',
+    output: null,
+    hangulLeft: 0,
+    contextOverflow: false,
+    error: null,
+  })}\n`
+}
+
+describe('resummarize', () => {
+  it('rebuilds metrics and the run summary from disk and leaves the calls alone', () => {
+    const dir = join(tempDir(), 'run-01-ko')
+    initRun({ model: 'fake', lang: 'ko', dir })
+    mkdirSync(join(dir, 'chapters'), { recursive: true })
+    mkdirSync(join(dir, 'metrics'), { recursive: true })
+    mkdirSync(join(dir, 'calls'), { recursive: true })
+    // The chapter has a Han run, which the old metric missed; the stale metrics file says [].
+    writeFileSync(join(dir, 'chapters', '01.md'), `${'가'.repeat(100)} 嬷嬷\n`)
+    writeFileSync(join(dir, 'metrics', '01.json'), '{"foreignRuns": []}\n')
+    const calls = [
+      callRecord({
+        seq: 1,
+        task: 'chapter-extract',
+        step: 'ch1:check',
+        startedAt: '2026-10-18T00:00:00.000Z',
+        durationMs: 1000,
+        usage: { inputTokens: 10, outputTokens: 20 },
+      }),
+      callRecord({
+        seq: 2,
+        task: 'continuity-check',
+        step: 'ch1:continuity',
+        startedAt: '2026-10-18T00:00:00.500Z',
+        durationMs: 1000,
+        usage: null,
+      }),
+    ]
+    writeFileSync(join(dir, 'calls', '001-chapter-extract.json'), calls[0] as string)
+    writeFileSync(join(dir, 'calls', '002-continuity-check.json'), calls[1] as string)
+    const before = readFileSync(join(dir, 'calls', '001-chapter-extract.json'), 'utf8')
+    const state = loadState(dir)
+    state.failed = [{ step: 'ch1:draft', message: 'x' }]
+    saveState(dir, state)
+
+    const result = resummarizeRun(dir)
+
+    expect(result).toEqual({ dir, chapters: 1, calls: 2 })
+    const metrics = JSON.parse(readFileSync(join(dir, 'metrics', '01.json'), 'utf8'))
+    expect(metrics.foreignRuns).toEqual(['嬷嬷'])
+    const summary = JSON.parse(readFileSync(join(dir, 'run-summary.json'), 'utf8'))
+    expect(summary.calls.total).toBe(2)
+    expect(summary.calls.byTask['chapter-extract'].tokens).toBe(30)
+    expect(summary.speed.perChapterMs).toEqual({ '1': 1500 })
+    expect(summary.speed.perChapterModelMs).toEqual({ '1': 2000 })
+    expect(summary.hangulLeft).toBeNull()
+    expect(summary.failed).toEqual([{ step: 'ch1:draft', message: 'x' }])
+    expect(readFileSync(join(dir, 'calls', '001-chapter-extract.json'), 'utf8')).toBe(before)
+  })
+
+  it('rebuilds every run dir under a date folder', () => {
+    const folder = join(tempDir(), '2026-10-18')
+    initRun({ model: 'fake', lang: 'ko', dir: join(folder, 'run-01-ko') })
+    initRun({ model: 'fake', lang: 'en', dir: join(folder, 'run-02-en') })
+    const results = resummarizeDate(folder)
+    expect(results.map((r) => r.dir)).toEqual([
+      join(folder, 'run-01-ko'),
+      join(folder, 'run-02-en'),
+    ])
+    expect(
+      JSON.parse(readFileSync(join(folder, 'run-02-en', 'run-summary.json'), 'utf8')),
+    ).toMatchObject({
+      calls: { total: 0 },
+    })
+  })
 })
 
 describe('init', () => {

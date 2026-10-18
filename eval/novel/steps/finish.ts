@@ -6,6 +6,7 @@ import { listThreads } from '@/server/threads'
 import { listEntries } from '@/server/wiki'
 import type { CallRecord, CallSpeed } from '../eval-client'
 import type { StepFn } from '../run'
+import type { RunState } from '../state'
 import { readCallRecords, requireWorkId, writeRunFile } from './util'
 
 // Writes the final wiki snapshot and the run summary. Calls are read from disk, so the summary
@@ -47,12 +48,22 @@ export function speedSummary(calls: CallRecord[]) {
     }
   }
 
-  // Chapter n is the calls whose step key starts with 'chN:'.
-  const perChapterMs: Record<string, number> = {}
+  // Chapter n is the calls whose step key starts with 'chN:'. The wall time merges their intervals,
+  // so calls that overlap (continuity and extract run in parallel) count once, and the gaps between
+  // them (the author's wait) count zero. The model time is the plain sum of the call durations.
+  const chapterIntervals: Record<string, [number, number][]> = {}
+  const perChapterModelMs: Record<string, number> = {}
   for (const call of calls) {
     const chapter = /^ch(\d+):/.exec(call.step ?? '')?.[1]
-    if (chapter !== undefined)
-      perChapterMs[chapter] = (perChapterMs[chapter] ?? 0) + call.durationMs
+    if (chapter === undefined) continue
+    perChapterModelMs[chapter] = (perChapterModelMs[chapter] ?? 0) + call.durationMs
+    const start = Date.parse(call.startedAt)
+    chapterIntervals[chapter] ??= []
+    if (Number.isFinite(start)) chapterIntervals[chapter].push([start, start + call.durationMs])
+  }
+  const perChapterMs: Record<string, number> = {}
+  for (const [chapter, intervals] of Object.entries(chapterIntervals)) {
+    perChapterMs[chapter] = mergedMs(intervals)
   }
 
   return {
@@ -62,6 +73,50 @@ export function speedSummary(calls: CallRecord[]) {
       source: calls.some((c) => recordSpeed(c).source === 'ollama') ? 'ollama' : 'wall',
     },
     perChapterMs,
+    perChapterModelMs,
+  }
+}
+
+/** Total length of the union of the intervals, in ms. */
+export function mergedMs(intervals: [number, number][]): number {
+  const sorted = [...intervals].sort((a, b) => a[0] - b[0])
+  let total = 0
+  let current: [number, number] | null = null
+  for (const [start, end] of sorted) {
+    if (current && start <= current[1]) {
+      current[1] = Math.max(current[1], end)
+    } else {
+      if (current) total += current[1] - current[0]
+      current = [start, end]
+    }
+  }
+  if (current) total += current[1] - current[0]
+  return total
+}
+
+/**
+ * The run summary from the call records and the state. Pure, so `resummarize` can rebuild it from
+ * disk without the database. Korean runs report no hangul count: Korean text is the whole prompt.
+ */
+export function buildRunSummary(calls: CallRecord[], state: RunState, lang: 'ko' | 'en') {
+  const byTask: Record<string, { count: number; tokens: number; totalMs: number }> = {}
+  for (const call of calls) {
+    const row = byTask[call.task] ?? { count: 0, tokens: 0, totalMs: 0 }
+    row.count += 1
+    row.tokens += (call.usage?.inputTokens ?? 0) + (call.usage?.outputTokens ?? 0)
+    row.totalMs += call.durationMs
+    byTask[call.task] = row
+  }
+  return {
+    calls: { total: calls.length, byTask },
+    speed: speedSummary(calls),
+    wouldTimeOut: calls.filter((call) => call.wouldTimeOut).length,
+    contextOverflow: calls.filter((call) => call.contextOverflow).length,
+    hangulLeft: lang === 'en' ? calls.reduce((sum, call) => sum + (call.hangulLeft ?? 0), 0) : null,
+    failed: state.failed,
+    pauses: state.pauses,
+    drafts: state.data.drafts,
+    focusCounts: state.data.focusCounts,
   }
 }
 
@@ -94,33 +149,10 @@ export const finish: StepFn = async (ctx, _key, state) => {
   )
 
   const calls = readCallRecords(ctx.dir)
-  const byTask: Record<string, { count: number; tokens: number; totalMs: number }> = {}
-  for (const call of calls) {
-    const row = byTask[call.task] ?? { count: 0, tokens: 0, totalMs: 0 }
-    row.count += 1
-    row.tokens += (call.usage?.inputTokens ?? 0) + (call.usage?.outputTokens ?? 0)
-    row.totalMs += call.durationMs
-    byTask[call.task] = row
-  }
-
   writeRunFile(
     ctx.dir,
     'run-summary.json',
-    `${JSON.stringify(
-      {
-        calls: { total: calls.length, byTask },
-        speed: speedSummary(calls),
-        wouldTimeOut: calls.filter((call) => call.wouldTimeOut).length,
-        contextOverflow: calls.filter((call) => call.contextOverflow).length,
-        hangulLeft: calls.reduce((sum, call) => sum + call.hangulLeft, 0),
-        failed: state.failed,
-        pauses: state.pauses,
-        drafts: state.data.drafts,
-        focusCounts: state.data.focusCounts,
-      },
-      null,
-      2,
-    )}\n`,
+    `${JSON.stringify(buildRunSummary(calls, state, ctx.config.lang), null, 2)}\n`,
   )
   return 'done'
 }

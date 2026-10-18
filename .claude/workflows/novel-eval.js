@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Run the novel quality eval per model and language: advance each run, let author agents answer pending items, then write reviews and (optionally) a summary',
   whenToUse:
-    'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. Pass summary: true on a final invocation with runs: [] to write the cross-run summary.',
+    'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. A run whose review.md already exists is not reviewed again unless args.rereview is true. Pass summary: true on a final invocation with runs: [] to write the cross-run summary.',
   phases: [
     { title: 'Run', detail: 'init and advance each run; author agents answer pending items' },
     { title: 'Review', detail: 'Sonnet reviewer per finished run, then a copy into docs' },
@@ -33,6 +33,9 @@ const MODEL_QUEUES = {
 }
 const QUEUE_NAMES = ['local', 'cloud']
 const MAX_LOOP_ITERATIONS = 400
+// The same pending item coming back this many times in a row means the author's answers do not
+// clear it. The run stops with status error rather than spending agents on it.
+const MAX_SAME_PENDING = 5
 
 const RUNNER_SCHEMA = {
   type: 'object',
@@ -49,6 +52,7 @@ if (!args || typeof args.date !== 'string' || !/^\d{4}-\d{2}-\d{2}(-[a-z0-9]+)?$
 const date = args.date
 const chapters = args.chapters || 5
 const withSummary = args.summary === true
+const rereview = args.rereview === true
 const runs = Array.isArray(args.runs)
   ? args.runs
   : ALL_MODELS.flatMap((model) => LANGS.map((lang) => ({ model, lang })))
@@ -68,14 +72,49 @@ const runDir = (run) => {
   return `eval/results/novel/${date}/run-${String(n).padStart(2, '0')}-${run.lang}`
 }
 const docsReviewPath = (run) => `docs/eval/novel/${date}/${run.model}-${run.lang}.md`
-const safe = (promise) => promise.catch(() => null)
+
+function errorText(err) {
+  return err && err.message ? err.message : String(err)
+}
+
+// Every agent call goes through here. A throw or an empty result is logged with the run label and
+// returns null, so no failure is dropped silently. options.label names the agent in the log.
+async function agentLogged(prompt, options) {
+  try {
+    const result = await agent(prompt, options)
+    if (result === null || result === undefined) {
+      log(`${options.label}: agent returned no result`)
+      return null
+    }
+    return result
+  } catch (err) {
+    log(`${options.label}: agent failed: ${errorText(err)}`)
+    return null
+  }
+}
+
+// The status a runner reported, trimmed and lowercased. A missing result is an error.
+function runnerStatus(step) {
+  if (!step || typeof step.status !== 'string') return 'error'
+  return step.status.trim().toLowerCase()
+}
+
+// The step and pending kind from the advance JSON line. Equal keys mean the same item is waiting.
+function pendingKeyOf(detail) {
+  try {
+    const parsed = JSON.parse(detail)
+    return `${parsed.step}|${parsed.pendingKind}`
+  } catch (err) {
+    return detail
+  }
+}
 
 function runnerPrompt(run, dir, first) {
   const initStep = first
     ? [
         'Step 1. Run this command once, from the repository root:',
         `  cd ${REPO} && pnpm eval:novel init --model ${run.model} --lang ${run.lang} --chapters ${chapters} --dir ${dir}`,
-        'If it fails, return status "blocked" and the error text as detail, and stop.',
+        'If the command fails, or its JSON line has an "error" field, return status "error" with the error text as detail, and stop.',
         'Otherwise go to step 2.',
       ].join('\n')
     : 'Do NOT run init. Go straight to step 2.'
@@ -87,12 +126,24 @@ function runnerPrompt(run, dir, first) {
     'Step 2. Run this command with the Bash timeout set to 600000 ms:',
     `  cd ${REPO} && pnpm eval:novel advance --dir ${dir}`,
     'The command prints one JSON line on stdout, with a "status" field. Read that last JSON line.',
+    'If the line has an "error" field and no "status" field, or the command exits non-zero, the command failed: return status "error" with the error text as detail, and stop.',
     'If status is "running", run the same advance command again.',
     'Run advance at most 20 times in this invocation. Stop as soon as status is not "running".',
     '',
     'Return:',
-    '- status: the "status" value from the last JSON line (or "running" if you hit the 20-call limit).',
+    '- status: the "status" value from the last JSON line (or "running" if you hit the 20-call limit, or "error" if a command failed).',
     '- detail: the last JSON line verbatim (or the error text if a command failed).',
+  ].join('\n')
+}
+
+// Checks whether the run already has a review. The reviewer and the docs copy are skipped when it does.
+function reviewExistsPrompt(dir) {
+  return [
+    'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself.',
+    '',
+    'Run this command from the repository root:',
+    `  cd ${REPO} && if test -f ${dir}/review.md; then echo exists; else echo missing; fi`,
+    'Return status "exists" or "missing", as the command printed it. If the command fails, return status "error" and the error text as detail.',
   ].join('\n')
 }
 
@@ -150,22 +201,46 @@ function summaryPrompt(results) {
 const reviews = []
 const results = []
 
+// Reviews a finished run and copies the review into docs. A run that already has review.md keeps
+// it (its notes are never overwritten) unless args.rereview is true. Returns null on failure.
 async function reviewRun(run, dir, label) {
-  const reviewed = await agent(reviewerPrompt(dir, run.lang), {
+  if (!rereview) {
+    const found = await agentLogged(reviewExistsPrompt(dir), {
+      label: `check review ${label}`,
+      phase: 'Review',
+      model: 'haiku',
+      schema: RUNNER_SCHEMA,
+    })
+    const foundStatus = runnerStatus(found)
+    if (foundStatus === 'exists') {
+      log(`${label}: review.md exists, review and copy skipped (args.rereview is not true)`)
+      return 'skipped'
+    }
+    if (foundStatus !== 'missing') {
+      log(`${label}: could not check review.md, review skipped`)
+      return null
+    }
+  }
+  const reviewed = await agentLogged(reviewerPrompt(dir, run.lang), {
     label: `review ${label}`,
     phase: 'Review',
     model: 'sonnet',
   })
-  if (reviewed === null || reviewed === undefined) {
+  if (reviewed === null) {
     log(`${label}: review returned no result, copy skipped`)
     return null
   }
-  return agent(copyPrompt(run, dir), {
+  const copied = await agentLogged(copyPrompt(run, dir), {
     label: `copy review ${label}`,
     phase: 'Review',
     model: 'haiku',
     schema: RUNNER_SCHEMA,
   })
+  if (runnerStatus(copied) !== 'copied') {
+    log(`${label}: review copy did not succeed: ${copied ? copied.detail : 'no result'}`)
+    return null
+  }
+  return copied.detail
 }
 
 // Returns the run's final status. Throws only for errors the caller must record.
@@ -175,59 +250,75 @@ async function executeRun(run) {
   let first = true
   let status = 'running'
   let iterations = 0
+  let lastPending = null
+  let samePending = 0
 
   while (true) {
     if (iterations >= MAX_LOOP_ITERATIONS) {
       log(`${label}: loop limit of ${MAX_LOOP_ITERATIONS} iterations hit`)
       status = 'iteration-limit'
-      await safe(
-        agent(resumePrompt(run, dir, status, 'workflow loop limit reached'), {
-          label: `resume ${label}`,
-          phase: 'Run',
-          model: 'sonnet',
-        }),
-      )
+      await agentLogged(resumePrompt(run, dir, status, 'workflow loop limit reached'), {
+        label: `resume ${label}`,
+        phase: 'Run',
+        model: 'sonnet',
+      })
       break
     }
     iterations++
 
-    const step = await agent(runnerPrompt(run, dir, first), {
+    const step = await agentLogged(runnerPrompt(run, dir, first), {
       label: `run ${label}`,
       phase: 'Run',
       model: 'haiku',
       schema: RUNNER_SCHEMA,
     })
     first = false
-    status = step && typeof step.status === 'string' ? step.status.trim() : 'blocked'
+    status = runnerStatus(step)
     const detail =
       step && typeof step.detail === 'string' ? step.detail : 'runner agent returned no result'
 
     if (status === 'running') continue
 
     if (status === 'pending') {
-      await safe(
-        agent(authorPrompt(dir, run.lang), {
-          label: `author ${label}`,
+      const key = pendingKeyOf(detail)
+      samePending = key === lastPending ? samePending + 1 : 1
+      lastPending = key
+      if (samePending >= MAX_SAME_PENDING) {
+        const message = `the same pending item came back ${samePending} times in a row after author answers (${key})`
+        log(`${label}: stopped: ${message}`)
+        status = 'error'
+        await agentLogged(resumePrompt(run, dir, status, message), {
+          label: `resume ${label}`,
           phase: 'Run',
           model: 'sonnet',
-        }),
-      )
+        })
+        break
+      }
+      await agentLogged(authorPrompt(dir, run.lang), {
+        label: `author ${label}`,
+        phase: 'Run',
+        model: 'sonnet',
+      })
       continue
     }
 
     if (status === 'done') {
-      reviews.push(safe(reviewRun(run, dir, label)))
+      reviews.push(
+        reviewRun(run, dir, label).catch((err) => {
+          log(`${label}: review error: ${errorText(err)}`)
+          return null
+        }),
+      )
       break
     }
 
-    // paused-limit, paused-error, blocked, or anything unexpected
-    await safe(
-      agent(resumePrompt(run, dir, status, detail), {
-        label: `resume ${label}`,
-        phase: 'Run',
-        model: 'sonnet',
-      }),
-    )
+    if (status === 'error') log(`${label}: error: ${detail}`)
+    // paused-limit, paused-error, blocked, error, or anything unexpected
+    await agentLogged(resumePrompt(run, dir, status, detail), {
+      label: `resume ${label}`,
+      phase: 'Run',
+      model: 'sonnet',
+    })
     break
   }
 
@@ -241,7 +332,8 @@ async function runOne(run) {
   try {
     status = await executeRun(run)
   } catch (err) {
-    log(`${label}: error: ${err && err.message ? err.message : String(err)}`)
+    log(`${label}: error: ${errorText(err)}`)
+    status = 'error'
   }
   results.push({ model: run.model, lang: run.lang, status })
   log(`${label}: ${status}`)
@@ -273,13 +365,11 @@ log(`reviews finished: ${reviewResults.filter(Boolean).length}/${reviews.length}
 
 if (withSummary) {
   phase('Summary')
-  await safe(
-    agent(summaryPrompt(results), {
-      label: 'summary',
-      phase: 'Summary',
-      model: 'sonnet',
-    }),
-  )
+  await agentLogged(summaryPrompt(results), {
+    label: 'summary',
+    phase: 'Summary',
+    model: 'sonnet',
+  })
 } else {
   log('summary skipped (args.summary is not true)')
 }
