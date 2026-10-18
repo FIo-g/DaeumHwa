@@ -4,7 +4,7 @@
 
 ## 요약
 
-- MLX 빌드는 세 모델 모두 Ollama 라이브러리에서 찾지 못했다. gpt-oss와 EXAONE 3.5의 라이브러리 태그 목록에는 `-mlx` 태그가 없고, Ollama의 safetensors 가져오기 목록(`create/create.go`)에도 gpt-oss와 EXAONE 아키텍처가 없었다. 그래서 두 모델은 기본 태그(GGUF 계열)를 받았다.
+- gpt-oss와 EXAONE 3.5는 MLX 빌드를 Ollama 라이브러리에서 찾지 못했다. 두 모델의 라이브러리 태그 목록에는 `-mlx` 태그가 없고, Ollama의 safetensors 가져오기 목록(`create/create.go`)에도 두 아키텍처가 없었다. 그래서 두 모델은 기본 태그(GGUF 계열)를 받았다.
 - `qwen3.8:27b-mlx`는 이미 설치되어 있어 다시 받지 않았다.
 - 샘플링 값은 공식 모델 카드의 권장값을 따랐다. EXAONE 3.5는 공식 권장값이 없어서 Ollama 패키지 기본값(temperature 1.0)을 썼고, 그 사실을 표에 표시했다.
 

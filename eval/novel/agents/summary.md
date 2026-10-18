@@ -28,11 +28,10 @@ Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`.
 
 ## Runs with different chapter counts
 
-- Runs may have different chapter counts. Read `chapters` from each run's `config.json`.
-- By user decision (2026-10-18), qwen3.8-27b runs only 2 chapters, because one chapter took 152 minutes of model time. The other models run 5 chapters.
-- The opening paragraph of `summary.md` must state which runs are 2-chapter runs and why.
-- Compare like with like. Every per-chapter comparison table (Q1–Q9 means, verdicts, threshold failures, extraction and continuity results) is built from chapters 1–2, the chapters every run shares. Label each such table "1~2화 기준".
-- Full-run figures for 5-chapter runs (all chapters, cumulative setting contradictions, TTCW pass rate) may also be shown. Each must carry the run's chapter count. Do not put them next to a 2-chapter run as if they were comparable.
+- By user decision (2026-10-18), every run in this matrix runs 1 chapter. Read `chapters` from each run's `config.json` anyway. If a run ever has more chapters than the others, compare like with like: build every per-chapter comparison table (Q1–Q9 means, verdicts, threshold failures, extraction and continuity results) from the chapters all runs share, label it "N화 기준" with that shared count, and label any full-run figure with the run's own chapter count.
+- With 1 chapter, direction advice (which appears from chapter 2 on) and character style suggestions (which run after chapter 2) do not occur. State this in the opening paragraph of `summary.md`. Do not score their absence as a failure.
+- The matrix may be partial. The canonical set is qwen3.8-27b, gpt-oss-20b, exaone3.5-32b, haiku-5.5, and luna-6, each in ko and en (10 runs). For each canonical run with no review file `<model>-<lang>.md` in `docs/eval/novel/<date>/`, write "미실행 (나중에 이어서 돌림)" in the 10-run table and in the per-feature and speed tables. Base every comparison only on the runs that exist. Say which local models (qwen3.8-27b, gpt-oss-20b, exaone3.5-32b) are missing from the local-vs-cloud comparison.
+- Some reviews were reused from pilot runs with identical settings. Each such review starts with a "> 참고:" line. Treat them as normal results.
 - Speed and time per chapter are per-chapter figures, so they are comparable across runs whatever the chapter count.
 
 ## Rules
