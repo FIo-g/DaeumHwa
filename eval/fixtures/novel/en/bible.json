@@ -1,0 +1,235 @@
+{
+  "lang": "en",
+  "work": {
+    "title": "The Key to the Ashen Bell Tower",
+    "genre": "fantasy mystery",
+    "logline": "An orphan girl in a fog-bound harbor town follows the secret beneath a bell tower with nothing but a key her missing mother left behind.",
+    "synopsis": "Han Serin, sixteen, grew up in the Cheonghae Orphanage. On the first morning of spring she climbs to the top of the Ashen Bell Tower for the first time and meets the swordsman Do Yunseo. He hands her a sealed letter and a silver key left by her mother, Han Seoyeon, who went down beneath the tower three years ago and never came back. Slipping past Baek Jiwon, the warden who guards the tower, Serin learns the rumor of the tunnel below and the rule of the key one piece at a time, and in the end she leaves the orphanage to live at the tower."
+  },
+  "targetChars": 12100,
+  "characters": [
+    {
+      "key": "serin",
+      "name": "Han Serin",
+      "aliases": ["Serin"],
+      "role": "protagonist",
+      "voice": "Casual speech. Short and blunt. Asks what she wants to know straight out, never in a roundabout way. Does not trail off even when scared.",
+      "main": true,
+      "summary": "A sixteen-year-old girl raised in the Cheonghae Orphanage. Left-handed. Since her mother Han Seoyeon went missing, she has been chasing the secret of the bell tower."
+    },
+    {
+      "key": "yunseo",
+      "name": "Do Yunseo",
+      "aliases": ["Yunseo"],
+      "role": "ally",
+      "voice": "Polite speech. Finishes in a word or two. States conclusions without explaining. Almost never says anything that shows feeling.",
+      "main": true,
+      "summary": "A twenty-seven-year-old swordsman from Cheonghae Harbor. A man of few words. He owes Han Seoyeon a debt, and at her request he brings Serin the letter and the key."
+    },
+    {
+      "key": "jiwon",
+      "name": "Baek Jiwon",
+      "aliases": ["Warden Baek"],
+      "role": "warden",
+      "voice": "Courteous speech laced with sarcasm. Puts rules and procedure first. Calls Serin 'young miss'.",
+      "main": true,
+      "summary": "The warden of the Ashen Bell Tower. Lets no one into the tower without permission. Once borrowed silver from Han Seoyeon."
+    },
+    {
+      "key": "seoyeon",
+      "name": "Han Seoyeon",
+      "aliases": ["Seoyeon"],
+      "role": "Serin's mother",
+      "voice": "Appears in the text only through her letter and notes. Writes short, tidy sentences.",
+      "main": false,
+      "summary": "Serin's mother. She went down beneath the bell tower three years ago and went missing. She studied the tower's seal."
+    },
+    {
+      "key": "haeok",
+      "name": "Yun Haeok",
+      "aliases": ["the Director"],
+      "role": "orphanage director",
+      "voice": "Warm but firm, polite speech. Always calls the children by name.",
+      "main": false,
+      "summary": "Director of the Cheonghae Orphanage. Around sixty. Has kept the chest Han Seoyeon left with her for three years."
+    },
+    {
+      "key": "duseok",
+      "name": "Gwak Duseok",
+      "aliases": ["Old Gwak"],
+      "role": "soup-house owner",
+      "voice": "Chatty, exaggerating, casual speech. Tells rumors as if they were facts.",
+      "main": false,
+      "summary": "Owner of a soup house on the Cheonghae docks. Knows every rumor in the harbor."
+    }
+  ],
+  "places": [
+    {
+      "key": "jongru",
+      "name": "the Ashen Bell Tower",
+      "aliases": ["the bell tower"],
+      "summary": "A nine-story stone bell tower on the hill above Cheonghae Harbor. A great bell hangs at the top, and rumor says a sealed tunnel lies beneath it."
+    },
+    {
+      "key": "cheonghae",
+      "name": "Cheonghae Harbor",
+      "aliases": [],
+      "summary": "A harbor town where thick fog rolls in every night. The market opens only during the day."
+    },
+    {
+      "key": "orphanage",
+      "name": "the Cheonghae Orphanage",
+      "aliases": ["the orphanage"],
+      "summary": "Where Serin grew up. An old two-story building below the hill by the docks."
+    },
+    {
+      "key": "dorm",
+      "name": "the Tower Quarters",
+      "aliases": [],
+      "summary": "Small rooms behind the tower's ground floor, where people who help with the tower's work live."
+    }
+  ],
+  "items": [
+    {
+      "key": "key",
+      "name": "the Silver Key",
+      "aliases": ["the key"],
+      "summary": "The key Han Seoyeon left to Serin. It has one thin scratch. Serin wears it around her neck."
+    },
+    {
+      "key": "letter",
+      "name": "Mother's Letter",
+      "aliases": ["the letter"],
+      "summary": "The sealed letter Han Seoyeon left. Serin has not opened it yet."
+    },
+    {
+      "key": "chest",
+      "name": "Mother's Chest",
+      "aliases": ["the chest"],
+      "summary": "A small wooden chest Han Seoyeon left at the orphanage. Only the Silver Key opens it."
+    }
+  ],
+  "facts": [
+    { "key": "f-serin-left", "subject": "Han Serin", "content": "Han Serin is left-handed.", "validFrom": null, "validTo": null },
+    { "key": "f-serin-age", "subject": "Han Serin", "content": "Han Serin is sixteen years old.", "validFrom": null, "validTo": null },
+    { "key": "f-serin-orphanage", "subject": "Han Serin", "content": "Han Serin lives at the Cheonghae Orphanage.", "validFrom": null, "validTo": 4 },
+    { "key": "f-serin-dorm", "subject": "Han Serin", "content": "Han Serin lives in the Tower Quarters.", "validFrom": 5, "validTo": null },
+    { "key": "f-serin-key", "subject": "Han Serin", "content": "Han Serin wears the Silver Key around her neck.", "validFrom": 1, "validTo": null },
+    { "key": "f-yunseo-age", "subject": "Do Yunseo", "content": "Do Yunseo is twenty-seven years old.", "validFrom": null, "validTo": null },
+    { "key": "f-yunseo-dagger", "subject": "Do Yunseo", "content": "Do Yunseo holds his dagger in his right hand.", "validFrom": null, "validTo": null },
+    { "key": "f-yunseo-origin", "subject": "Do Yunseo", "content": "Do Yunseo is from Cheonghae Harbor.", "validFrom": null, "validTo": null },
+    { "key": "f-jiwon-warden", "subject": "Baek Jiwon", "content": "Baek Jiwon is the warden of the Ashen Bell Tower.", "validFrom": null, "validTo": null },
+    { "key": "f-jiwon-debt", "subject": "Baek Jiwon", "content": "Baek Jiwon borrowed thirty silver coins from Han Seoyeon.", "validFrom": null, "validTo": null },
+    { "key": "f-seoyeon-missing", "subject": "Han Seoyeon", "content": "Han Seoyeon went down beneath the bell tower three years ago and went missing.", "validFrom": null, "validTo": null },
+    { "key": "f-haeok-chest", "subject": "Yun Haeok", "content": "Yun Haeok kept the chest Han Seoyeon left with her for three years.", "validFrom": null, "validTo": null },
+    { "key": "f-jongru-height", "subject": "the Ashen Bell Tower", "content": "The Ashen Bell Tower is a nine-story stone building.", "validFrom": null, "validTo": null },
+    { "key": "f-jongru-first", "subject": "the Ashen Bell Tower", "content": "Serin first climbed to the top of the tower on the first day of spring.", "validFrom": null, "validTo": null },
+    { "key": "f-jongru-entry", "subject": "the Ashen Bell Tower", "content": "No one may pass the tower's inner iron door without the warden's permission.", "validFrom": null, "validTo": null },
+    { "key": "f-cheonghae-fog", "subject": "Cheonghae Harbor", "content": "Thick fog rolls into Cheonghae Harbor every night.", "validFrom": null, "validTo": null },
+    { "key": "f-cheonghae-market", "subject": "Cheonghae Harbor", "content": "The Cheonghae Harbor market opens only during the day.", "validFrom": null, "validTo": null },
+    { "key": "f-key-moon", "subject": "the Silver Key", "content": "The Silver Key fits a lock only on a night when the moon is full.", "validFrom": null, "validTo": null },
+    { "key": "f-key-scratch", "subject": "the Silver Key", "content": "The Silver Key has one thin scratch.", "validFrom": null, "validTo": null },
+    { "key": "f-letter-sealed", "subject": "Mother's Letter", "content": "Mother's Letter is still sealed and unopened.", "validFrom": null, "validTo": null },
+    { "key": "f-chest-note", "subject": "Mother's Chest", "content": "Inside the chest is a note that reads, 'Nine floors down, find the bell that does not ring.'", "validFrom": 4, "validTo": null }
+  ],
+  "threads": [
+    { "key": "t-letter", "title": "The seal on Mother's Letter", "description": "The seal on the letter Han Seoyeon left. Its contents stay hidden until Serin opens it.", "plannedChapter": 1, "targetChapter": 8, "importance": "high" },
+    { "key": "t-tunnel", "title": "The tunnel beneath the tower", "description": "The rumor of a sealed tunnel beneath the bell tower. The goal is to find its entrance.", "plannedChapter": 2, "targetChapter": 9, "importance": "high" },
+    { "key": "t-debt", "title": "Baek Jiwon's silver debt", "description": "The thirty silver coins Baek Jiwon borrowed from Han Seoyeon. When and how he repays them is still open.", "plannedChapter": 4, "targetChapter": 10, "importance": "medium" },
+    { "key": "t-smuggler", "title": "The Cheonghae smuggling ship", "description": "A smuggling ship that slips in and out of the harbor on foggy nights. It does not appear in chapters 1–5.", "plannedChapter": null, "targetChapter": 10, "importance": "low" }
+  ],
+  "namingRules": [
+    { "canonical": "Baek Jiwon", "variants": ["Baek Jiyeon"], "note": "The tower warden. Watch for a one-letter misspelling of the name." },
+    { "canonical": "Han Serin", "variants": ["Han Saerin"], "note": "The protagonist's name." }
+  ],
+  "workStyle": {
+    "name": "Work style",
+    "tone": "Third-person limited, from Serin's point of view. Dry and calm. Sensory detail leans on fog, sound and cold.",
+    "rules": "- No paragraph runs longer than three sentences.\n- Drive scenes with dialogue and action. Slip explanation in briefly.\n- Do not name emotions; show them through gesture and objects.\n- End each chapter on a question or tension that carries into the next.",
+    "examples": "The fog had swallowed half the stairs. Serin braced her left hand on the railing. The iron was cold enough to stick to her palm.\n\n\"Anyone up here?\"\n\nInstead of an answer, the bell upstairs shivered once. It did not ring. There was no wind, and still the bell trembled on its own."
+  },
+  "answerBank": [
+    { "key": "protagonist", "topics": ["protagonist", "Han Serin", "Serin", "personality", "age"], "answer": "The protagonist is Han Serin, and she's sixteen. She grew up at the Cheonghae Orphanage and she's left-handed. She's blunt and asks what she wants to know right away, and she doesn't back down even when she's scared. Since her mother Han Seoyeon disappeared three years ago, she's been fixated on the bell tower." },
+    { "key": "protagonist-goal", "topics": ["protagonist", "goal", "motivation", "desire"], "answer": "Serin's goal is to find out why her mother went down beneath the bell tower and whether she's still alive. She acts calm on the surface, but she also resents her mother a little for leaving her behind." },
+    { "key": "yunseo", "topics": ["main characters", "Do Yunseo", "Yunseo", "ally"], "answer": "Do Yunseo is a twenty-seven-year-old swordsman from Cheonghae Harbor. He barely talks and only says a word or two, politely. He holds his dagger in his right hand. He once owed Han Seoyeon a debt, and at her request he brings Serin the letter and the Silver Key." },
+    { "key": "jiwon", "topics": ["main characters", "Baek Jiwon", "warden", "antagonist"], "answer": "Baek Jiwon is the warden of the Ashen Bell Tower. His courteous way of talking hides sarcasm, and he calls Serin 'young miss'. He uses the rules to keep anyone from passing the tower's inner iron door without permission. He once borrowed thirty silver coins from Han Seoyeon." },
+    { "key": "seoyeon", "topics": ["main characters", "Han Seoyeon", "mother", "missing"], "answer": "Han Seoyeon is Serin's mother. She was studying the tower's seal when she went down beneath the bell tower three years ago and went missing. In the text she only appears through her letter or notes." },
+    { "key": "minor", "topics": ["main characters", "supporting", "Yun Haeok", "Gwak Duseok", "director"], "answer": "For supporting characters, there's Yun Haeok, the director of the Cheonghae Orphanage. She's warm but firm, and she's kept the chest Han Seoyeon left with her for three years. And there's Gwak Duseok, who runs a soup house on the docks. He's chatty and knows every rumor in the harbor." },
+    { "key": "rule-key", "topics": ["world rules", "key", "Silver Key", "rule", "magic"], "answer": "The Silver Key only fits a lock on a night when the moon is full. On any other day it won't go into the keyhole at all. The key has one thin scratch." },
+    { "key": "rule-bell", "topics": ["world rules", "bell", "seal", "rule"], "answer": "I've decided there's a rule between the tower's bell and the seal, but it only comes out around chapter 7. What I can say now is that the bell sometimes trembles on its own without ringing." },
+    { "key": "places", "topics": ["main places", "bell tower", "Cheonghae Harbor", "place", "setting"], "answer": "The story is set in Cheonghae Harbor. Thick fog rolls in every night, and the market only opens during the day. On the hill stands the Ashen Bell Tower, a nine-story stone bell tower, and rumor says a sealed tunnel lies beneath it. The Cheonghae Orphanage where Serin grew up is an old two-story building below the hill by the docks, and from chapter 5 Serin lives in the Tower Quarters behind the tower's ground floor." },
+    { "key": "conflict", "topics": ["central conflict", "conflict", "opposition", "crisis"], "answer": "The central conflict is between Serin, who wants to get beneath the bell tower, and the warden Baek Jiwon, who stops her. Serin gathers the key's rule and the rumors to find the entrance, and Baek Jiwon blocks her with the rules. Why he goes so far to stop her hasn't been revealed yet." },
+    { "key": "threads", "topics": ["foreshadowing", "setup", "secret", "letter", "tunnel", "debt"], "answer": "There are three threads. Mother's sealed letter appears in chapter 1 and is resolved around chapter 8. The rumor of the tunnel beneath the tower appears in chapter 2, and the entrance is found around chapter 9. The thirty silver coins Baek Jiwon borrowed from Han Seoyeon come up in chapter 4 and are settled around chapter 10. There's also a smuggling ship, but it doesn't appear in chapters 1–5." },
+    { "key": "ending", "topics": ["ending direction", "ending", "finale", "direction"], "answer": "I haven't decided the ending yet. I've only decided that Serin finds traces of her mother beneath the bell tower." },
+    { "key": "style", "topics": ["style", "point of view", "mood", "tone"], "answer": "It's written in third-person limited from Serin's point of view. Dry and calm, building mood through senses like fog, sound and cold. Emotions are shown through gestures rather than stated, and paragraphs are kept short." },
+    { "key": "unknown", "topics": ["other"], "answer": "I haven't decided that yet." }
+  ],
+  "chapters": [
+    {
+      "position": 1,
+      "title": "The Ashen Bell Tower",
+      "instructions": "On the first morning of spring, Han Serin, sent by the orphanage to deliver laundry to the bell tower, climbs all the way to the top of the nine-story tower for the first time. The tower warden Baek Jiwon spots her and chases her back down. As Serin goes down the stairs, the swordsman Do Yunseo appears and hands her a sealed letter and a silver key left by her mother, Han Seoyeon, who went down beneath the tower three years ago and went missing. Serin tucks the letter into her coat without opening it and hangs the key around her neck. Her left-handedness must show through what she does. In the last scene, the bell at the top trembles on its own without ringing.",
+      "mustInclude": [
+        "On the first morning of spring Serin climbs to the top of the nine-story tower for the first time",
+        "Warden Baek Jiwon chases Serin away",
+        "Do Yunseo hands her a sealed letter and a silver key",
+        "Serin tucks the letter away unopened and hangs the key around her neck",
+        "Serin does something with her left hand",
+        "The bell trembles on its own without ringing"
+      ],
+      "summary": "On the first morning of spring, Serin climbs to the top of the bell tower for the first time and is chased off by the warden Baek Jiwon. The swordsman Do Yunseo gives her the sealed letter and the Silver Key left by her missing mother, Han Seoyeon. Serin does not open the letter and hangs the key around her neck."
+    },
+    {
+      "position": 2,
+      "title": "The Fog Harbor",
+      "instructions": "That night, on the foggy Cheonghae docks. Serin and Do Yunseo eat dinner at the soup house run by Gwak Duseok. Do Yunseo briefly reveals that he is from Cheonghae Harbor. Gwak Duseok gleefully spins the rumor that a sealed tunnel lies beneath the bell tower and that people who went down there before never came back. When Serin says she needs to buy a lantern at the market tomorrow, Gwak Duseok adds that the market only opens during the day. On the way home, in the fog, they sense someone following them, and the chapter ends there.",
+      "mustInclude": [
+        "Serin and Do Yunseo eat dinner at Gwak Duseok's soup house",
+        "Do Yunseo reveals he is from Cheonghae Harbor",
+        "Gwak Duseok tells the rumor of the tunnel beneath the tower",
+        "Someone mentions that the market only opens during the day",
+        "On the way home someone seems to be following them"
+      ],
+      "summary": "On a foggy night, Serin and Do Yunseo hear at Gwak Duseok's soup house the rumor that a sealed tunnel lies beneath the bell tower. Do Yunseo reveals he is from Cheonghae Harbor, and on the way back someone follows the two of them."
+    },
+    {
+      "position": 3,
+      "title": "The Warden's Eye",
+      "instructions": "The next day, Serin buys a lantern at the market and goes to the bell tower. At the tower's inner iron door, the warden Baek Jiwon blocks her way. Citing the rule that no one may pass the iron door without the warden's permission, he refuses her in a polite but sarcastic tone. Serin tries the Silver Key in the lock at the bottom of the iron door, but it will not go in. Later, Do Yunseo comes and passes on something Han Seoyeon once said: 'That key only fits on a night when the moon is full.' The chapter ends with Serin counting that nine days remain until the full moon.",
+      "mustInclude": [
+        "Serin buys a lantern at the market during the day",
+        "Baek Jiwon blocks her at the iron door, saying no one may pass without permission",
+        "The Silver Key will not go into the lock",
+        "Do Yunseo passes on Han Seoyeon's words that the key only fits on a full-moon night",
+        "Nine days remain until the full moon"
+      ],
+      "summary": "At the tower's inner iron door, Serin is refused entry by the warden Baek Jiwon and finds that the Silver Key will not go into the lock. Do Yunseo passes on Han Seoyeon's words that the key only fits on a night when the moon is full."
+    },
+    {
+      "position": 4,
+      "title": "Full Moon",
+      "instructions": "Nine days later, the night of the full moon. Yun Haeok, the orphanage director, calls Serin to the storeroom and brings out the small wooden chest Han Seoyeon left with her three years ago. When Serin puts the Silver Key in, this time it slides in and the chest opens. Inside is only a short note that reads, 'Nine floors down, find the bell that does not ring.' Just then the warden Baek Jiwon comes to the orphanage and says that he once borrowed thirty silver coins from Han Seoyeon and will repay them to Serin. He does not say when; instead he asks Serin whether she would like to help with the tower's work, and leaves.",
+      "mustInclude": [
+        "On the full-moon night Yun Haeok brings out the chest Han Seoyeon left",
+        "The Silver Key goes in and the chest opens",
+        "The note reads 'Nine floors down, find the bell that does not ring.'",
+        "Baek Jiwon says he borrowed thirty silver coins from Han Seoyeon and will repay Serin",
+        "Baek Jiwon asks Serin whether she would like to help with the tower's work"
+      ],
+      "summary": "On the night of the full moon, Serin opens her mother's chest, kept by the director Yun Haeok, with the Silver Key and finds a note: 'Nine floors down, find the bell that does not ring.' Baek Jiwon says he will repay Serin the thirty silver coins he borrowed from Han Seoyeon and offers her work at the tower."
+    },
+    {
+      "position": 5,
+      "title": "The Tower Quarters",
+      "instructions": "Serin accepts Baek Jiwon's offer and leaves the orphanage to move into the Tower Quarters. In the morning farewell scene with the director Yun Haeok, Yun Haeok calls Serin by name and gives her a brief word of advice. Do Yunseo carries her things without a word. In the cramped room behind the tower's ground floor, Serin slips the still-unopened letter under her pillow. On the first night, though the bell hangs at the top of the nine-story tower, a faint bell sound rises from somewhere beneath her feet, and the chapter ends there.",
+      "mustInclude": [
+        "Serin leaves the orphanage and moves into the Tower Quarters",
+        "A farewell scene where Yun Haeok calls Serin by name and gives advice",
+        "Do Yunseo carries her things",
+        "Serin slips the unopened letter under her pillow",
+        "On the first night a faint bell sound comes from beneath her feet"
+      ],
+      "summary": "Serin leaves the orphanage for the Tower Quarters and says goodbye to the director Yun Haeok. On the first night, though the bell hangs at the top, a faint bell sound rises from beneath her feet."
+    }
+  ]
+}
