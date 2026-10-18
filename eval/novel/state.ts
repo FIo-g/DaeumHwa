@@ -1,0 +1,123 @@
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import type { ModelId } from './models'
+
+// Run config and resumable progress for one novel eval run. Both files live in the run directory.
+
+export type RunConfig = {
+  runId: string
+  modelId: ModelId
+  lang: 'ko' | 'en'
+  chapters: number
+  questions: number
+  maxDraftAttempts: number
+  createdAt: string
+  commit: string
+}
+
+export type RunStatus =
+  'new' | 'running' | 'pending' | 'done' | 'paused-limit' | 'paused-error' | 'blocked'
+
+export type DraftAttempt = {
+  runId: string
+  usable: boolean | null
+  quality: number | null
+  reason: string
+}
+
+export type RunData = {
+  userId?: string
+  workId?: string
+  sessionId?: string
+  asked: number
+  openTurnId?: string
+  turnProposalIds?: string[]
+  chapterIds: Record<number, string>
+  drafts: Record<number, DraftAttempt[]>
+  /** Idempotency markers, e.g. 'ch1:chapter-created'. */
+  marks: Record<string, true>
+  styleProposalIds?: string[]
+  /** Ids of proposals returned by runChapterCheck for chapter n; read by the ch{n}:proposals step. */
+  checkProposalIds?: Record<number, string[]>
+  focusCounts: Record<string, number>
+}
+
+export type RunState = {
+  status: RunStatus
+  cursor: number
+  plan: string[]
+  data: RunData
+  pauses: Record<string, number>
+  retried: Record<string, number>
+  failed: { step: string; message: string }[]
+  message: string | null
+  nextSeq: number
+  updatedAt: string
+}
+
+const CONFIG_FILE = 'config.json'
+const STATE_FILE = 'state.json'
+
+export function buildPlan(c: Pick<RunConfig, 'chapters'>): string[] {
+  const plan = ['setup', 'interview']
+  for (let n = 1; n <= c.chapters; n++) {
+    if (n >= 2) plan.push(`ch${n}:advice`)
+    plan.push(
+      `ch${n}:draft`,
+      `ch${n}:proofread`,
+      `ch${n}:check`,
+      `ch${n}:continuity`,
+      `ch${n}:proposals`,
+    )
+    if (n === 2) plan.push('style:suggest', 'style:review')
+    plan.push(`ch${n}:reader`)
+  }
+  plan.push('finish')
+  return plan
+}
+
+export function newState(c: RunConfig): RunState {
+  return {
+    status: 'new',
+    cursor: 0,
+    plan: buildPlan(c),
+    data: {
+      asked: 0,
+      chapterIds: {},
+      drafts: {},
+      marks: {},
+      focusCounts: {},
+    },
+    pauses: {},
+    retried: {},
+    failed: [],
+    message: null,
+    nextSeq: 0,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export function loadConfig(dir: string): RunConfig {
+  return JSON.parse(readFileSync(path.join(dir, CONFIG_FILE), 'utf8')) as RunConfig
+}
+
+export function saveConfig(dir: string, c: RunConfig): void {
+  writeJson(dir, CONFIG_FILE, c)
+}
+
+export function loadState(dir: string): RunState {
+  return JSON.parse(readFileSync(path.join(dir, STATE_FILE), 'utf8')) as RunState
+}
+
+/** Writes to a tmp file and renames it, so an interrupted save never leaves a half-written state. */
+export function saveState(dir: string, s: RunState): void {
+  writeJson(dir, STATE_FILE, s)
+}
+
+function writeJson(dir: string, name: string, value: unknown): void {
+  mkdirSync(dir, { recursive: true })
+  const target = path.join(dir, name)
+  const tmp = `${target}.tmp`
+  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`)
+  renameSync(tmp, target)
+}
