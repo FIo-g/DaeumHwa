@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { approveProposal, rejectProposal, type ProposalView } from '@/server/proposals'
+import { inArray } from 'drizzle-orm'
+import { proposals } from '@/db/schema'
+import { AppError } from '@/lib/errors'
+import { APPLY_ORDER, approveProposal, type ProposalView, rejectProposal } from '@/server/proposals'
 import type { CallRecord } from '../eval-client'
 import {
   type Answer,
@@ -42,10 +45,15 @@ export function isMarked(state: RunState, key: string): boolean {
 }
 
 /**
- * Sets an idempotency mark and saves. The test hook `throwAfter` throws once, after the mark is
- * already on disk, so a rerun must not repeat the work the mark covers.
+ * Sets an idempotency mark and saves. A side effect commits before its mark, so the test hooks
+ * can throw either just before the mark is set (`throwBeforeMark`) or just after it is saved
+ * (`throwAfter`). Each throws once.
  */
 export function mark(ctx: RunContext, state: RunState, key: string): void {
+  if (ctx.throwBeforeMark?.(key)) {
+    ctx.throwBeforeMark = undefined
+    throw new Error(`test hook: throwBeforeMark ${key}`)
+  }
   state.data.marks[key] = true
   persist(ctx, state)
   if (ctx.throwAfter === key) {
@@ -78,6 +86,42 @@ export async function withModelRetry<T>(
       persist(ctx, state)
       return null
     }
+  }
+}
+
+const AI_CODES = new Set(['AI_ERROR', 'AI_LIMIT'])
+
+/**
+ * An AppError that a service raises because of the content it was given (an empty or over-long
+ * text, a proposal the product refuses). AI errors are not included: they keep the model routing.
+ */
+export function isContentError(error: unknown): error is AppError {
+  return error instanceof AppError && !AI_CODES.has(error.code)
+}
+
+/** Records a content error in `failed` as step and "<code> <message>". */
+export function recordFailure(ctx: RunContext, state: RunState, step: string, error: AppError) {
+  state.failed.push({ step, message: `${error.code} ${error.message}` })
+  persist(ctx, state)
+}
+
+/**
+ * Runs a service call whose failure can come from model output. AI failures keep the
+ * withModelRetry routing. A content error is recorded in `failed` and the call returns null, so
+ * the caller skips the item. Anything else still pauses the run.
+ */
+export async function guarded<T>(
+  ctx: RunContext,
+  state: RunState,
+  label: string,
+  fn: () => Promise<T>,
+): Promise<T | null> {
+  try {
+    return await withModelRetry(ctx, state, label, fn)
+  } catch (error) {
+    if (!isContentError(error)) throw error
+    recordFailure(ctx, state, label, error)
+    return null
   }
 }
 
@@ -152,19 +196,55 @@ export function settle(ctx: RunContext, p: Pending, answer: Answer): void {
   clearPending(ctx.dir)
 }
 
-/** Approves or rejects each proposal once. A decision already marked is skipped on a rerun. */
+/**
+ * Approves or rejects each proposal once, in APPLY_ORDER. A proposal that is no longer pending
+ * was already decided by an earlier run (its mark was lost), so it counts as applied. A content
+ * error on one proposal is recorded under `step` and the rest still go through.
+ */
 export async function applyProposalDecisions(
   ctx: RunContext,
   state: RunState,
+  step: string,
   decisions: { id: string; approve: boolean; reason: string }[],
 ): Promise<void> {
-  for (const decision of decisions) {
+  if (decisions.length === 0) return
+  const rows = await ctx.db
+    .select({ id: proposals.id, type: proposals.type, status: proposals.status })
+    .from(proposals)
+    .where(
+      inArray(
+        proposals.id,
+        decisions.map((decision) => decision.id),
+      ),
+    )
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const rank = (id: string): number => {
+    const type = byId.get(id)?.type
+    const index = type ? APPLY_ORDER.indexOf(type) : -1
+    return index === -1 ? APPLY_ORDER.length : index
+  }
+  const ordered = [...decisions].sort((a, b) => rank(a.id) - rank(b.id))
+
+  for (const decision of ordered) {
     const key = `decided:${decision.id}`
     if (isMarked(state, key)) continue
-    if (decision.approve) {
-      await approveProposal(ctx.db, ctx.actor, { proposalId: decision.id, note: decision.reason })
-    } else {
-      await rejectProposal(ctx.db, ctx.actor, { proposalId: decision.id, note: decision.reason })
+    if (byId.get(decision.id)?.status === 'pending') {
+      try {
+        if (decision.approve) {
+          await approveProposal(ctx.db, ctx.actor, {
+            proposalId: decision.id,
+            note: decision.reason,
+          })
+        } else {
+          await rejectProposal(ctx.db, ctx.actor, {
+            proposalId: decision.id,
+            note: decision.reason,
+          })
+        }
+      } catch (error) {
+        if (!isContentError(error)) throw error
+        recordFailure(ctx, state, step, error)
+      }
     }
     mark(ctx, state, key)
   }

@@ -74,7 +74,7 @@ export const styleReview: StepFn = async (ctx, key, state) => {
     persist(ctx, state)
     return 'pending'
   }
-  await applyProposalDecisions(ctx, state, answer.decisions)
+  await applyProposalDecisions(ctx, state, key, answer.decisions)
   mark(ctx, state, key)
   settle(ctx, review, answer)
   return 'done'

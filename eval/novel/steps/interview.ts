@@ -1,16 +1,19 @@
+import { eq } from 'drizzle-orm'
+import { interviewSessions, interviewTurns } from '@/db/schema'
 import {
-  askNextQuestion,
   answerTurn,
+  askNextQuestion,
   completeInterview,
   skipTurn,
   startInterview,
 } from '@/server/interview'
 import { listProposals } from '@/server/proposals'
 import type { Answer, Pending } from '../author-io'
-import type { StepFn } from '../run'
+import type { RunContext, StepFn } from '../run'
 import {
   applyProposalDecisions,
   consult,
+  guarded,
   isMarked,
   mark,
   pendingFor,
@@ -22,10 +25,30 @@ import {
 } from './util'
 
 // Interview: one question at a time. Each answer is extracted into pending proposals, and the
-// author decides each one. Every AI call and every service write is marked so a rerun resumes.
+// author decides each one. Every service write is followed by a mark. The database is checked
+// first on a rerun, so a write that committed before its mark is adopted, not repeated.
 
 type InterviewAnswer = Extract<Answer, { kind: 'interview_answer' }>
 type ProposalsAnswer = Extract<Answer, { kind: 'proposals' }>
+
+async function loadTurn(ctx: RunContext, turnId: string) {
+  const [row] = await ctx.db
+    .select()
+    .from(interviewTurns)
+    .where(eq(interviewTurns.id, turnId))
+    .limit(1)
+  if (!row) throw new Error(`interview turn is missing: ${turnId}`)
+  return row
+}
+
+async function sessionStatus(ctx: RunContext, sessionId: string): Promise<string | undefined> {
+  const [row] = await ctx.db
+    .select({ status: interviewSessions.status })
+    .from(interviewSessions)
+    .where(eq(interviewSessions.id, sessionId))
+    .limit(1)
+  return row?.status
+}
 
 export const interview: StepFn = async (ctx, _key, state) => {
   const workId = requireWorkId(state)
@@ -54,48 +77,45 @@ export const interview: StepFn = async (ctx, _key, state) => {
     const step = `interview:${turnId}`
 
     if (!isMarked(state, `${step}:answered`)) {
-      // While the question is open this returns it without a model call, so a resume reads the
-      // same question back.
-      const turn = await askNextQuestion(ctx.db, ctx.actor, sessionId, ctx.client)
-      const question: Pending = {
-        kind: 'interview_answer',
-        step,
-        turnId: turn.id,
-        focus: turn.focus,
-        topic: turn.topic,
-        question: turn.question,
-        asked: state.data.asked + 1,
-        limit: ctx.config.questions,
-      }
-      const answer = consult(ctx, question) as InterviewAnswer | null
-      if (!answer) {
-        persist(ctx, state)
-        return 'pending'
-      }
-      const extracted = await withModelRetry(ctx, state, 'interview:answer', () =>
-        answerTurn(ctx.db, ctx.actor, { turnId: turn.id, answer: answer.answer }, ctx.client),
-      )
-      if (extracted) {
-        state.data.turnProposalIds = extracted.proposals.map((row) => row.id)
-      } else {
-        // The extraction failed twice. Skip the question so the interview can move on.
-        await skipTurn(ctx.db, ctx.actor, turn.id)
-        state.data.turnProposalIds = []
+      const turn = await loadTurn(ctx, turnId)
+      // Still open: ask the author and extract. Already answered or skipped (the commit happened
+      // before the mark was saved): go straight to the bookkeeping.
+      if (turn.answer === null && !turn.skipped) {
+        const question: Pending = {
+          kind: 'interview_answer',
+          step,
+          turnId,
+          focus: turn.focus,
+          topic: turn.topic,
+          question: turn.question,
+          asked: state.data.asked + 1,
+          limit: ctx.config.questions,
+        }
+        const answer = consult(ctx, question) as InterviewAnswer | null
+        if (!answer) {
+          persist(ctx, state)
+          return 'pending'
+        }
+        const extracted = await guarded(ctx, state, 'interview:answer', () =>
+          answerTurn(ctx.db, ctx.actor, { turnId, answer: answer.answer }, ctx.client),
+        )
+        // The extraction failed or the answer was empty: skip the question so the interview moves on.
+        if (!extracted) await skipTurn(ctx.db, ctx.actor, turnId)
       }
       state.data.focusCounts[turn.focus] = (state.data.focusCounts[turn.focus] ?? 0) + 1
       mark(ctx, state, `${step}:answered`)
-      settle(ctx, question, answer)
+      // The answer's effects are saved. Log it if the question is still waiting for settling.
+      const waiting = pendingFor(ctx.dir, step, 'interview_answer')
+      const logged = waiting ? consult(ctx, waiting) : null
+      if (waiting && logged) settle(ctx, waiting, logged)
     }
 
     let proposals = pendingFor(ctx.dir, step, 'proposals')
     if (!proposals) {
-      const ids = state.data.turnProposalIds ?? []
-      const views = (
-        await listProposals(ctx.db, ctx.actor, workId, {
-          source: 'interview',
-          sourceRef: turnId,
-        })
-      ).filter((view) => ids.includes(view.id))
+      const views = await listProposals(ctx.db, ctx.actor, workId, {
+        source: 'interview',
+        sourceRef: turnId,
+      })
       if (views.length > 0) {
         proposals = {
           kind: 'proposals',
@@ -113,18 +133,20 @@ export const interview: StepFn = async (ctx, _key, state) => {
         persist(ctx, state)
         return 'pending'
       }
-      await applyProposalDecisions(ctx, state, decided.decisions)
+      await applyProposalDecisions(ctx, state, step, decided.decisions)
       settle(ctx, proposals, decided)
     }
 
     state.data.asked += 1
     state.data.openTurnId = undefined
-    state.data.turnProposalIds = undefined
     persist(ctx, state)
   }
 
   if (!isMarked(state, 'interview:completed')) {
-    await completeInterview(ctx.db, ctx.actor, sessionId)
+    // Ended by an earlier run whose mark was lost: nothing to end again.
+    if ((await sessionStatus(ctx, sessionId)) === 'active') {
+      await completeInterview(ctx.db, ctx.actor, sessionId)
+    }
     mark(ctx, state, 'interview:completed')
   }
   return 'done'

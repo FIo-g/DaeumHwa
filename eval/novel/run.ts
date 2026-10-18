@@ -47,6 +47,8 @@ export type RunContext = {
   autoAuthor?: (p: Pending) => Answer
   /** Test hook: throw once, right after this mark is saved. */
   throwAfter?: string
+  /** Test hook: throw once, after a side effect commits and before its mark is set. */
+  throwBeforeMark?: (key: string) => boolean
 }
 
 export type StepResult = 'done' | 'pending'
@@ -118,7 +120,7 @@ export async function openRun(
     profile,
     lang: config.lang,
     callsDir: join(dir, 'calls'),
-    startSeq: state.nextSeq,
+    startSeq: Math.max(1, state.nextSeq),
   })
   setAiTimeoutOverride(profile.timeoutMs)
   // 0 disables the product's daily token limit for eval runs.
@@ -132,6 +134,8 @@ export async function openRun(
     actor: { userId: state.data.userId ?? '' },
     autoAuthor: o.autoAuthor ? (p) => fakeAnswer(p, bible) : undefined,
     close: async () => {
+      setAiTimeoutOverride(null)
+      delete process.env.AI_DAILY_TOKEN_LIMIT
       await pg.close()
     },
   }
@@ -159,7 +163,7 @@ export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
       if (!step) throw new Error(`no step for ${key}`)
       result = await step(ctx, key, state)
     } catch (error) {
-      return pause(ctx, state, key, error)
+      return pause(ctx, key, error)
     }
 
     if (result === 'done') {
@@ -176,11 +180,10 @@ export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
     }
     const rejected = join(ctx.dir, 'answer.error.txt')
     if (existsSync(rejected)) {
-      return pause(ctx, state, key, new Error(readFileSync(rejected, 'utf8').trim()))
+      return pause(ctx, key, new Error(readFileSync(rejected, 'utf8').trim()))
     }
     const pending = readPending(ctx.dir)
-    if (!pending)
-      return pause(ctx, state, key, new Error(`${key} is pending but has no pending.json`))
+    if (!pending) return pause(ctx, key, new Error(`${key} is pending but has no pending.json`))
     writeFileSync(
       join(ctx.dir, 'answer.json'),
       `${JSON.stringify(ctx.autoAuthor?.(pending), null, 2)}\n`,
@@ -188,8 +191,13 @@ export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
   }
 }
 
-/** External limits and network errors pause the run; three pauses on one step block it. */
-function pause(ctx: RunContext, state: RunState, key: string, error: unknown): RunState {
+/**
+ * External limits and network errors pause the run; three pauses on one step block it. The state
+ * is taken from disk again first: changes made after the last save belong to the failed attempt.
+ * Side effects that committed are adopted from the database on the next run.
+ */
+function pause(ctx: RunContext, key: string, error: unknown): RunState {
+  const state = loadState(ctx.dir)
   const failure =
     error instanceof ExternalFailureError ? error.failure : ctx.client.takeLastFailure()
   if (failure && failure.kind !== 'model') {

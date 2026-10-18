@@ -6,7 +6,7 @@ import {
 } from '@/server/ai-features'
 import { listEntries } from '@/server/wiki'
 import { type ProofreadSuggestion, runChapterCheck, runProofread } from '@/server/chapter-check'
-import { getChapter, saveChapter, setChapterStatus } from '@/server/chapters'
+import { getChapter, listChapters, saveChapter, setChapterStatus } from '@/server/chapters'
 import { listIssues, resolveIssue } from '@/server/issues'
 import { listProposals } from '@/server/proposals'
 import { chapterMetrics } from '../metrics'
@@ -17,6 +17,7 @@ import {
   applySuggestions,
   chapterOf,
   consult,
+  guarded,
   isMarked,
   mark,
   pad,
@@ -40,6 +41,12 @@ function chapterSpec(ctx: RunContext, n: number) {
   const spec = ctx.bible.chapters[n - 1]
   if (!spec) throw new Error(`bible has no chapter ${n}`)
   return spec
+}
+
+/** The chapter already saved at manuscript position n, if an earlier run created it. */
+async function chapterAt(ctx: RunContext, workId: string, n: number): Promise<string | null> {
+  const rows = await listChapters(ctx.db, ctx.actor, workId)
+  return rows.find((row) => row.position === n)?.id ?? null
 }
 
 export const advice: StepFn = async (ctx, key, state) => {
@@ -76,11 +83,24 @@ export const draft: StepFn = async (ctx, key, state) => {
   if (isMarked(state, created)) return 'done'
   const spec = chapterSpec(ctx, n)
   const workId = requireWorkId(state)
+
+  // The chapter was saved before its mark was: adopt it, never draft it again.
+  const existing = await chapterAt(ctx, workId, n)
+  if (existing) {
+    state.data.chapterIds[n] = existing
+    mark(ctx, state, created)
+    return 'done'
+  }
+
   const attempts = (state.data.drafts[n] ??= [])
   const maxAttempts = ctx.config.maxDraftAttempts
 
   for (;;) {
-    let current = attempts.at(-1)
+    const last = attempts.at(-1)
+    // A verdict that ends the attempts is final: a rerun never drafts again for it.
+    if (last && last.usable !== null && (last.usable || attempts.length >= maxAttempts)) break
+
+    let current = last
     if (!current || current.usable !== null) {
       const attemptNo = attempts.length + 1
       const entries = await listEntries(ctx.db, ctx.actor, workId)
@@ -138,12 +158,14 @@ export const draft: StepFn = async (ctx, key, state) => {
   }
 
   const chosen = pickAttempt(attempts)
-  const chapter = await createChapterFromDraft(ctx.db, ctx.actor, {
-    workId,
-    runId: chosen.runId,
-    title: spec.title,
-  })
-  state.data.chapterIds[n] = chapter.id
+  const chapter = await guarded(ctx, state, key, () =>
+    createChapterFromDraft(ctx.db, ctx.actor, {
+      workId,
+      runId: chosen.runId,
+      title: spec.title,
+    }),
+  )
+  if (chapter) state.data.chapterIds[n] = chapter.id
   mark(ctx, state, created)
   return 'done'
 }
@@ -159,52 +181,61 @@ export const proofread: StepFn = async (ctx, key, state) => {
   const statusMark = `${key}:status`
 
   if (!isMarked(state, savedMark)) {
-    let check = pendingFor(ctx.dir, key, 'proofread')
-    if (!check) {
+    let review = pendingFor(ctx.dir, key, 'proofread')
+    if (!review) {
       const chapter = await getChapter(ctx.db, ctx.actor, chapterId)
-      const proofed = await withModelRetry(ctx, state, key, () =>
+      const proofed = await guarded(ctx, state, key, () =>
         runProofread(ctx.db, ctx.actor, { chapterId, useAi: true }, ctx.client),
       )
-      if (!proofed) return 'done'
-      writeRunFile(ctx.dir, beforeFile, chapter.body)
-      writeRunFile(ctx.dir, suggestionsFile, JSON.stringify(proofed.suggestions, null, 2))
-      check = {
-        kind: 'proofread',
-        step: key,
-        chapter: n,
-        textFile: beforeFile,
-        items: proofed.suggestions.map((s, i) => ({
-          id: String(i),
-          quote: s.quote,
-          replacement: s.replacement,
-          kind: s.kind,
-          reason: s.reason,
-          source: s.source,
-        })),
+      if (proofed) {
+        writeRunFile(ctx.dir, beforeFile, chapter.body)
+        writeRunFile(ctx.dir, suggestionsFile, JSON.stringify(proofed.suggestions, null, 2))
+        review = {
+          kind: 'proofread',
+          step: key,
+          chapter: n,
+          textFile: beforeFile,
+          items: proofed.suggestions.map((s, i) => ({
+            id: String(i),
+            quote: s.quote,
+            replacement: s.replacement,
+            kind: s.kind,
+            reason: s.reason,
+            source: s.source,
+          })),
+        }
+      } else {
+        // Proofreading failed and is recorded in `failed`: the chapter keeps its body.
+        writeRunFile(ctx.dir, beforeFile, chapter.body)
+        writeRunFile(ctx.dir, suggestionsFile, '[]\n')
+        writeRunFile(ctx.dir, afterFile, chapter.body)
+        mark(ctx, state, savedMark)
       }
     }
-    const answer = consult(ctx, check) as Extract<Answer, { kind: 'proofread' }> | null
-    if (!answer) {
-      persist(ctx, state)
-      return 'pending'
+    if (review && !isMarked(state, savedMark)) {
+      const answer = consult(ctx, review) as Extract<Answer, { kind: 'proofread' }> | null
+      if (!answer) {
+        persist(ctx, state)
+        return 'pending'
+      }
+      const suggestions = JSON.parse(readRunFile(ctx.dir, suggestionsFile)) as ProofreadSuggestion[]
+      const accepted = answer.decisions
+        .filter((d) => d.accept)
+        .map((d) => suggestions[Number(d.id)])
+        .filter((s): s is ProofreadSuggestion => s !== undefined)
+      const after = applySuggestions(readRunFile(ctx.dir, beforeFile), accepted)
+      const current = await getChapter(ctx.db, ctx.actor, chapterId)
+      if (after !== current.body) {
+        await saveChapter(ctx.db, ctx.actor, {
+          chapterId,
+          body: after,
+          expectedVersion: current.version,
+        })
+      }
+      writeRunFile(ctx.dir, afterFile, after)
+      mark(ctx, state, savedMark)
+      settle(ctx, review, answer)
     }
-    const suggestions = JSON.parse(readRunFile(ctx.dir, suggestionsFile)) as ProofreadSuggestion[]
-    const accepted = answer.decisions
-      .filter((d) => d.accept)
-      .map((d) => suggestions[Number(d.id)])
-      .filter((s): s is ProofreadSuggestion => s !== undefined)
-    const after = applySuggestions(readRunFile(ctx.dir, beforeFile), accepted)
-    const current = await getChapter(ctx.db, ctx.actor, chapterId)
-    if (after !== current.body) {
-      await saveChapter(ctx.db, ctx.actor, {
-        chapterId,
-        body: after,
-        expectedVersion: current.version,
-      })
-    }
-    writeRunFile(ctx.dir, afterFile, after)
-    mark(ctx, state, savedMark)
-    settle(ctx, check, answer)
   }
 
   if (!isMarked(state, statusMark)) {
@@ -247,7 +278,7 @@ export const continuity: StepFn = async (ctx, key, state) => {
     return 'done'
   }
   const openIds = new Set(open.map((issue) => issue.id))
-  const check: Extract<Pending, { kind: 'continuity' }> = pendingFor(
+  const review: Extract<Pending, { kind: 'continuity' }> = pendingFor(
     ctx.dir,
     key,
     'continuity',
@@ -265,7 +296,7 @@ export const continuity: StepFn = async (ctx, key, state) => {
       suggestion: issue.suggestion,
     })),
   }
-  const answer = consult(ctx, check) as Extract<Answer, { kind: 'continuity' }> | null
+  const answer = consult(ctx, review) as Extract<Answer, { kind: 'continuity' }> | null
   if (!answer) {
     persist(ctx, state)
     return 'pending'
@@ -279,7 +310,7 @@ export const continuity: StepFn = async (ctx, key, state) => {
     })
   }
   mark(ctx, state, key)
-  settle(ctx, check, answer)
+  settle(ctx, review, answer)
   return 'done'
 }
 
@@ -312,7 +343,7 @@ export const proposals: StepFn = async (ctx, key, state) => {
     persist(ctx, state)
     return 'pending'
   }
-  await applyProposalDecisions(ctx, state, answer.decisions)
+  await applyProposalDecisions(ctx, state, key, answer.decisions)
   mark(ctx, state, key)
   settle(ctx, decision, answer)
   return 'done'
@@ -322,7 +353,7 @@ export const reader: StepFn = async (ctx, key, state) => {
   const n = chapterOf(key)
   const chapterId = state.data.chapterIds[n]
   if (!chapterId || isMarked(state, key)) return 'done'
-  const simulated = await withModelRetry(ctx, state, key, () =>
+  const simulated = await guarded(ctx, state, key, () =>
     runReaderSimulation(ctx.db, ctx.actor, { chapterId }, ctx.client),
   )
   if (simulated) {

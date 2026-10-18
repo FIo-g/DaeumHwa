@@ -1,22 +1,24 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FORMAT_MESSAGE } from '@/ai/anthropic'
 import type { AiClient, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
+import { chapters, interviewSessions, proposals } from '@/db/schema'
 import type { AiTaskName } from '@/db/types'
-import { chapters } from '@/db/schema'
+import { AppError } from '@/lib/errors'
+import { MAX_PROOFREAD_AI_CHARS } from '@/server/chapter-check'
 import { listNamingRules } from '@/server/naming'
 import { listThreads } from '@/server/threads'
-import { AppError } from '@/lib/errors'
 import { FakeAiClient } from '@/test/fake-ai'
 import { readPending } from './author-io'
 import { loadBible } from './bible'
 import { fakeAnswer } from './fake-author'
 import { createRun, openRun, runUntilBlocked } from './run'
+import { applySuggestions, selectDraftEntries } from './steps/util'
 
 type OpenRun = Awaited<ReturnType<typeof openRun>>
-import { selectDraftEntries, applySuggestions } from './steps/util'
 
 const opened: OpenRun[] = []
 const dirs: string[] = []
@@ -44,8 +46,15 @@ async function open(dir: string, o: Parameters<typeof openRun>[1] = {}): Promise
   return ctx
 }
 
+/** Closes the most recently opened run, as a process exit would. */
+async function closeLast(): Promise<void> {
+  const ctx = opened.pop()
+  await ctx?.close()
+}
+
 afterEach(async () => {
   while (opened.length > 0) await opened.pop()?.close()
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
 type Fault = { task: AiTaskName; error: () => unknown; times?: number }
@@ -80,9 +89,41 @@ function faultyClient(faults: Fault[]): AiClient {
   }
 }
 
+/** FakeAiClient whose chapter draft is longer than the proofreading limit. */
+function longDraftClient(): AiClient {
+  const inner = new FakeAiClient()
+  const long = '가'.repeat(MAX_PROOFREAD_AI_CHARS + 1)
+  return {
+    provider: 'test',
+    defaultModel: 'fake',
+    async generateObject<T>(args: GenerateObjectArgs<T>) {
+      return inner.generateObject(args)
+    },
+    streamText(args: StreamTextArgs) {
+      const result = inner.streamText(args)
+      if (args.task.name !== 'draft-chapter') return result
+      const textStream = (async function* () {
+        yield long
+      })()
+      return { textStream, final: result.final.then((r) => ({ ...r, text: long })) }
+    },
+  }
+}
+
 function callFiles(dir: string): string[] {
   const calls = `${dir}/calls`
   return existsSync(calls) ? readdirSync(calls).sort() : []
+}
+
+function callsOf(dir: string, task: string): string[] {
+  return callFiles(dir).filter((name) => name.endsWith(`-${task}.json`))
+}
+
+function decisionKinds(dir: string): string[] {
+  return readFileSync(join(dir, 'author-decisions.jsonl'), 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => (JSON.parse(line) as { kind: string }).kind)
 }
 
 describe('novel eval step machine', () => {
@@ -152,10 +193,10 @@ describe('novel eval step machine', () => {
     const paused = await runUntilBlocked(first)
     expect(paused.status).toBe('paused-limit')
     expect(paused.plan[paused.cursor]).toBe('ch1:draft')
+    expect(paused.pauses['ch1:draft']).toBe(1)
     const seqBefore = paused.nextSeq
     const callsBefore = callFiles(dir)
-    await first.close()
-    opened.pop()
+    await closeLast()
 
     const second = await open(dir, { autoAuthor: true })
     const done = await runUntilBlocked(second)
@@ -180,8 +221,7 @@ describe('novel eval step machine', () => {
       ])
       const ctx = await open(dir, { inner, autoAuthor: true })
       status = (await runUntilBlocked(ctx)).status
-      await ctx.close()
-      opened.pop()
+      await closeLast()
     }
     expect(status).toBe('blocked')
   }, 120_000)
@@ -239,14 +279,147 @@ describe('novel eval step machine', () => {
     first.throwAfter = 'ch1:chapter-created'
     const crashed = await runUntilBlocked(first)
     expect(crashed.status).toBe('paused-error')
-    await first.close()
-    opened.pop()
+    await closeLast()
 
     const second = await open(dir, { autoAuthor: true })
     const state = await runUntilBlocked(second)
     expect(state.status).toBe('done')
     const rows = await second.db.select().from(chapters)
     expect(rows.map((row) => row.position)).toEqual([1])
+  }, 120_000)
+
+  it('resumes after a chapter commit that lost its mark, without a second draft', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const first = await open(dir, { autoAuthor: true })
+    first.throwBeforeMark = (key) => key === 'ch1:chapter-created'
+    const crashed = await runUntilBlocked(first)
+    expect(crashed.status).toBe('paused-error')
+    expect(await first.db.select().from(chapters)).toHaveLength(1)
+    const callsBefore = callFiles(dir)
+    await closeLast()
+
+    const second = await open(dir, { autoAuthor: true })
+    const state = await runUntilBlocked(second)
+    expect(state.status).toBe('done')
+    const rows = await second.db.select().from(chapters)
+    expect(rows.map((row) => row.position)).toEqual([1])
+    expect(existsSync(join(dir, 'chapters', '01.attempt-2.md'))).toBe(false)
+    const newFiles = callFiles(dir).filter((name) => !callsBefore.includes(name))
+    expect(newFiles.some((name) => name.endsWith('-draft-chapter.json'))).toBe(false)
+  }, 120_000)
+
+  it('resumes after an answer commit that lost its mark, without a new question', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const first = await open(dir, { autoAuthor: true })
+    first.throwBeforeMark = (key) => key.startsWith('interview:') && key.endsWith(':answered')
+    const crashed = await runUntilBlocked(first)
+    expect(crashed.status).toBe('paused-error')
+    await closeLast()
+
+    const second = await open(dir, { autoAuthor: true })
+    const state = await runUntilBlocked(second)
+    expect(state.status).toBe('done')
+    expect(state.failed).toEqual([])
+    // Two questions in total: the crashed turn was not asked again.
+    expect(callsOf(dir, 'interview-question')).toHaveLength(2)
+    expect(decisionKinds(dir).filter((kind) => kind === 'interview_answer')).toHaveLength(2)
+  }, 120_000)
+
+  it('resumes after a decision commit that lost its mark, without approving twice', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const first = await open(dir, { autoAuthor: true })
+    first.throwBeforeMark = (key) => key.startsWith('decided:')
+    const crashed = await runUntilBlocked(first)
+    expect(crashed.status).toBe('paused-error')
+    await closeLast()
+
+    const second = await open(dir, { autoAuthor: true })
+    const state = await runUntilBlocked(second)
+    expect(state.status).toBe('done')
+    // A second approval would fail with BAD_STATE and be recorded here.
+    expect(state.failed).toEqual([])
+    const approved = await second.db
+      .select()
+      .from(proposals)
+      .where(eq(proposals.status, 'approved'))
+    expect(approved.length).toBeGreaterThan(0)
+  }, 120_000)
+
+  it('resumes after completing the interview commit that lost its mark', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const first = await open(dir, { autoAuthor: true })
+    first.throwBeforeMark = (key) => key === 'interview:completed'
+    const crashed = await runUntilBlocked(first)
+    expect(crashed.status).toBe('paused-error')
+    await closeLast()
+
+    const second = await open(dir, { autoAuthor: true })
+    const state = await runUntilBlocked(second)
+    expect(state.status).toBe('done')
+    expect(state.failed).toEqual([])
+    const [session] = await second.db.select().from(interviewSessions)
+    expect(session?.status).toBe('completed')
+  }, 120_000)
+
+  it('records an over-long draft at proofread and still saves the chapter', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const ctx = await open(dir, { inner: longDraftClient(), autoAuthor: true })
+    const state = await runUntilBlocked(ctx)
+
+    expect(state.status).toBe('done')
+    expect(state.failed).toContainEqual(
+      expect.objectContaining({
+        step: 'ch1:proofread',
+        message: expect.stringMatching(/^VALIDATION /),
+      }),
+    )
+    const rows = await ctx.db.select().from(chapters)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.status).toBe('done')
+    expect(existsSync(join(dir, 'chapters', '01.md'))).toBe(true)
+  }, 120_000)
+
+  it('records a proposal that cannot be approved and applies the others', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const bible = loadBible('ko')
+    const ctx = await open(dir)
+    let refusedId: string | null = null
+    let batch: string[] = []
+
+    let state = await runUntilBlocked(ctx)
+    while (state.status === 'pending') {
+      const pending = readPending(dir)
+      if (!pending) throw new Error('pending without pending.json')
+      if (pending.kind === 'proposals' && refusedId === null && pending.items.length > 1) {
+        // Break the first proposal's payload so the product refuses to approve it.
+        refusedId = pending.items[0]?.id ?? null
+        batch = pending.items.map((item) => item.id)
+        await ctx.db
+          .update(proposals)
+          .set({ payload: {} })
+          .where(eq(proposals.id, refusedId ?? ''))
+      }
+      writeFileSync(join(dir, 'answer.json'), JSON.stringify(fakeAnswer(pending, bible)))
+      state = await runUntilBlocked(ctx)
+    }
+
+    expect(refusedId).not.toBeNull()
+    expect(state.status).toBe('done')
+    expect(state.failed).toContainEqual(
+      expect.objectContaining({ message: expect.stringMatching(/^VALIDATION /) }),
+    )
+    const rows = await ctx.db.select().from(proposals)
+    const byId = new Map(rows.map((row) => [row.id, row.status]))
+    expect(byId.get(refusedId ?? '')).toBe('pending')
+    for (const id of batch.filter((other) => other !== refusedId)) {
+      expect(byId.get(id)).toBe('approved')
+    }
   }, 120_000)
 
   it('selectDraftEntries matches names and aliases', () => {
