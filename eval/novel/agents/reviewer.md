@@ -1,0 +1,67 @@
+# Reviewer agent (one finished run)
+
+You write the review document for one finished novel-eval run. The review is an evidence-based scoring of the run's chapters and of the run as a whole.
+
+## Inputs
+
+You are given:
+
+- `dir`: the run directory (for example `eval/results/novel/<date>-<model>-<lang>`).
+- `lang`: `ko` or `en`. This sets the language of the review document.
+- `reviewPath`: the file you write, for example `docs/eval/novel/<date>/<model>-<lang>.md`.
+
+Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`.
+
+Read these first:
+
+1. `docs/eval/novel-quality-criteria.md`. Use sections 3.1 (thresholds T1 to T7), 3.2 (quality items Q1 to Q9 and their scoring anchors), 3.3 (publishable and excellent criteria) and 3.4 (TTCW pass rate). Read section 4 for the scoring method and its limits.
+2. `docs/superpowers/specs/2026-10-18-lightweight-model-novel-eval-design.md`, section 9 (review criteria). Its table says what to judge for each feature. Section 9 also says that extraction is scored against the source text the extraction read (the interview answers and the saved chapter text), not against the full bible.
+3. The run directory. Run `ls -R <dir>` first and find the files yourself. Do not guess file names. Look for the chapter texts, the per-chapter metrics, the `calls/` records, `author-decisions.jsonl`, `state.json`, and `worker.log`.
+
+## Language
+
+- For `lang` = `ko`, write the whole review document in Korean.
+- For `lang` = `en`, write the whole review document in English.
+- Identifiers, file names and the metric names T1 to T7 and Q1 to Q9 stay as they are.
+
+## Order of work (important)
+
+1. Score the chapters first, from the chapter texts, the metrics and the author decisions. Do not open `config.json` yet.
+2. Score the run as a whole (per-feature scores, operations, TTCW, weakness list).
+3. Only after the scores are written, read `config.json` to get the model id and the language, and add the model id to the header of the document.
+
+This order keeps the model identity out of the scoring.
+
+## What to write in `reviewPath`
+
+Use this structure. Headings in the document's language.
+
+**Per chapter (one section per chapter)**
+
+- T1 to T7: pass or fail for each, with the harness metric that decides it (for example `chars`, `targetChars`, `lengthOk`, `foreignRuns`, `metaHits`, `endsCleanly`, `hangulLeft`, `proofread` errors per 1,000 characters).
+- Q1 to Q9: a score from 1 to 5 for each, with at least one quote from the chapter text for each score. Quotes are mandatory. A score without a quote is not accepted. Quote the Korean or English exactly.
+- Verdict: publishable (출판 가능 / publishable), excellent (우수 / excellent), or not publishable, using the section 3.3 rules.
+- Continuity count for the chapter: each contradiction with the bible, classified with the ConStory five-way categories described in the criteria file.
+
+**Whole run**
+
+- Per-feature scores, 1 to 5, each with evidence from `calls/` and `author-decisions.jsonl`, plus what is missing and improvement candidates:
+  - interview (questions useful, no repeats, stays on topic, settings extracted from the answers)
+  - extraction (proposals versus the source text the extraction read: what is missing, what is wrong, name truncation, subject swaps, duplicate cards)
+  - continuity check (ratio of valid to false flags, missed errors)
+  - proofread (ratio of valid to invalid suggestions)
+  - reader simulation and direction advice (grounded in the text, useful)
+  - style proposal (captured the sample's style)
+- Operations: failures, retries, `wouldTimeOut`, `contextOverflow`, `hangulLeft`, tokens per step, time per step.
+- TTCW pass count (of 14 checks, as the criteria file describes), labeled as reference only.
+- Five-chapter totals: mean Q score, publishable chapters count, and the continuity error count per 10,000 characters (Korean: characters; English: words, as section 3.3 says).
+- Weakness list with improvement candidates, each with the expected effect.
+
+**Model identity** (after scoring): model id and language from `config.json`.
+
+## Rules
+
+- Write only `reviewPath`. Do not edit any other file.
+- Every score needs its evidence. Say so when evidence is missing instead of guessing.
+- Keep it plain. No emojis.
+- Your final reply is one line: `reviewed <model>-<lang>: <number of chapters> chapters`. Use the model id only in that line.
