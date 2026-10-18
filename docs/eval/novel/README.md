@@ -7,14 +7,16 @@
 - 구현 계획: `docs/superpowers/plans/2026-10-18-lightweight-model-novel-eval.md`
 - 로컬 모델 설정 기록: `docs/eval/novel/model-setup.md`
 - 하네스 코드: `eval/novel/`, 저장 워크플로: `.claude/workflows/novel-eval.js`
+- **이번 결과 비교 요약:** `docs/eval/novel/2026-10-18/summary.md`
+- **후속 과제 (AI 응답 개선):** `docs/eval/novel/follow-up-ai-improvement.md`
 
-## 1. 현재 상황 (2026-10-18 기준)
+## 1. 현재 상황 (2026-10-19 기준)
 
 실행 날짜 폴더는 `2026-10-18`이고, 모든 실행이 1화짜리다.
 
 | 모델 | 한국어 | 영어 | 비고 |
 |---|---|---|---|
-| qwen3.8 27B (로컬, MLX) | 완료 | 완료 | 1화에 모델 시간 약 2.5시간 |
+| qwen3.8 27B (로컬, MLX) | 완료 | 완료 | 한 화 처리 84~98분 |
 | gpt-oss 20B (로컬, GGUF) | **미실행** | **미실행** | 다음에 이어서 돌림 |
 | exaone3.5 32B (로컬, GGUF) | **미실행** | **미실행** | 다음에 이어서 돌림 |
 | Haiku 5.5 (클라우드) | 완료 | 완료 | effort high |
