@@ -5,6 +5,7 @@ import {
   StyleSuggestSchema,
   styleSuggestTask,
 } from '@/ai/tasks/style-suggest'
+import { fakeStyle } from '@/test/ai-fakes/style-suggest'
 
 const input = {
   entryName: '서윤',
@@ -40,7 +41,7 @@ describe('styleSuggestTask', () => {
   })
 
   it('fake output satisfies the schema and names the entry', () => {
-    const output = StyleSuggestSchema.parse(styleSuggestTask.fake(input))
+    const output = StyleSuggestSchema.parse(fakeStyle(input))
     expect(output.name).toBe('서윤 말투')
     expect(output.tone).not.toBe('')
     expect(output.rules).not.toBe('')

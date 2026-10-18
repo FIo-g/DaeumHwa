@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getAiClient, getDefaultModel, getImportModel, setAiClientForTests } from '@/ai'
 import { AnthropicAiClient } from '@/ai/anthropic'
-import { FakeAiClient } from '@/ai/fake'
 import { OpencodeAiClient } from '@/ai/opencode'
+import { AppError } from '@/lib/errors'
+import { FakeAiClient } from '@/test/fake-ai'
 
 const ENV_KEYS = [
   'AI_PROVIDER',
@@ -74,8 +75,22 @@ describe('default and import models', () => {
 })
 
 describe('getAiClient', () => {
-  it('returns the fake client in demo mode', () => {
-    expect(getAiClient()).toBeInstanceOf(FakeAiClient)
+  it('throws AI_ERROR with the Korean key message when no key is set', () => {
+    let caught: unknown
+    try {
+      getAiClient()
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(AppError)
+    expect((caught as AppError).code).toBe('AI_ERROR')
+    expect((caught as AppError).message).toBe('AI 키가 설정되지 않아 AI 기능을 쓸 수 없습니다.')
+  })
+
+  it('does not cache the client when no provider resolves', () => {
+    expect(() => getAiClient()).toThrow(AppError)
+    process.env.ANTHROPIC_API_KEY = 'a'
+    expect(getAiClient()).toBeInstanceOf(AnthropicAiClient)
   })
 
   it('returns the Anthropic client when ANTHROPIC_API_KEY is set', () => {
@@ -101,9 +116,15 @@ describe('getAiClient', () => {
     expect(getAiClient()).toBeInstanceOf(OpencodeAiClient)
   })
 
-  it('AI_PROVIDER=fake picks the fake client even with keys set', () => {
+  it('an unknown AI_PROVIDER=fake falls back to the key-based provider', () => {
     process.env.AI_PROVIDER = 'fake'
     process.env.OPENCODE_API_KEY = 'b'
-    expect(getAiClient()).toBeInstanceOf(FakeAiClient)
+    expect(getAiClient()).toBeInstanceOf(OpencodeAiClient)
+  })
+
+  it('returns the override set for tests', () => {
+    const fake = new FakeAiClient()
+    setAiClientForTests(fake)
+    expect(getAiClient()).toBe(fake)
   })
 })

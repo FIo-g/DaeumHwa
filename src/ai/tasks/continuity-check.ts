@@ -3,7 +3,7 @@ import { type ContextPack, renderContextPack, resolveRefs } from '@/ai/context'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import { ISSUE_KINDS, type IssueKind, SEVERITIES, type Severity } from '@/db/types'
-import { locateQuote, splitSentences } from '@/lib/korean/sentences'
+import { locateQuote } from '@/lib/korean/sentences'
 
 // Continuity check (F7): finds places where the manuscript contradicts the approved wiki.
 // Every issue must quote the manuscript and point at a wiki fact or entry, or it is dropped.
@@ -134,76 +134,6 @@ export function resolveContinuityIssues(
   }))
 }
 
-/** Deterministic stand-in: left/right hand and age contradictions between a wiki fact and a sentence about the same subject. */
-function fakeContinuity(input: ContinuityInput): ContinuityOutput {
-  const sentences = splitSentences(input.chapterText)
-  const issues: ContinuityIssue[] = []
-  for (const entry of input.pack.entries) {
-    const names = [entry.name, ...entry.aliases]
-    const subjectSentences = sentences.filter((s) => names.some((n) => s.text.includes(n)))
-    for (const fact of entry.facts) {
-      const handIssue = fakeHandIssue(fact, subjectSentences)
-      const ageIssue = handIssue ? null : fakeAgeIssue(fact, subjectSentences)
-      const found = handIssue ?? ageIssue
-      if (!found) continue
-      issues.push({
-        quote: found.quote,
-        kind: 'contradiction',
-        severity: fact.status === 'confirmed' ? found.severity : 'low',
-        factRef: fact.ref,
-        entryRef: entry.ref,
-        wikiExcerpt: fact.content,
-        explanation:
-          fact.status === 'confirmed'
-            ? found.explanation
-            : `가정/미정 설정과 다릅니다. ${found.explanation}`,
-        suggestion: found.suggestion,
-      })
-    }
-  }
-  return { issues }
-}
-
-function fakeHandIssue(
-  fact: ContextPack['entries'][number]['facts'][number],
-  subjectSentences: { text: string }[],
-): { quote: string; severity: Severity; explanation: string; suggestion: string } | null {
-  const factHand = fact.content.includes('왼손')
-    ? '왼손'
-    : fact.content.includes('오른손')
-      ? '오른손'
-      : null
-  if (!factHand) return null
-  const otherHand = factHand === '왼손' ? '오른손' : '왼손'
-  const sentence = subjectSentences.find((s) => s.text.includes(otherHand))
-  if (!sentence) return null
-  return {
-    quote: sentence.text,
-    severity: 'medium',
-    explanation: `위키는 ${factHand}으로 설정되어 있는데 원고는 ${otherHand}을 씁니다.`,
-    suggestion: sentence.text.replace(otherHand, factHand),
-  }
-}
-
-function fakeAgeIssue(
-  fact: ContextPack['entries'][number]['facts'][number],
-  subjectSentences: { text: string }[],
-): { quote: string; severity: Severity; explanation: string; suggestion: string } | null {
-  const factAge = /(\d+)\s*살/.exec(fact.content)?.[1]
-  if (!factAge) return null
-  for (const sentence of subjectSentences) {
-    const match = /(\d+)\s*살/.exec(sentence.text)
-    if (!match || match[1] === factAge) continue
-    return {
-      quote: sentence.text,
-      severity: 'medium',
-      explanation: `위키의 나이(${factAge}살)와 원고의 나이(${match[1]}살)가 다릅니다.`,
-      suggestion: sentence.text.replace(match[0], `${factAge}살`),
-    }
-  }
-  return null
-}
-
 export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> = {
   name: 'continuity-check',
   effort: 'high',
@@ -220,7 +150,6 @@ export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> =
     ].join('\n')
   },
   schema: ContinuitySchema,
-  fake: fakeContinuity,
   postProcess(output, input) {
     return {
       issues: locateIssues(output, input).map((l) => ({

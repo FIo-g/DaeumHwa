@@ -24,9 +24,9 @@ async function load() {
 }
 
 describe('getAiProvider', () => {
-  it('is fake when no key and no provider are set', async () => {
+  it('is null when no key and no provider are set', async () => {
     const { getAiProvider } = await load()
-    expect(getAiProvider()).toBe('fake')
+    expect(getAiProvider()).toBeNull()
   })
 
   it('picks anthropic when only ANTHROPIC_API_KEY is set', async () => {
@@ -56,12 +56,12 @@ describe('getAiProvider', () => {
   })
 
   it.each([
-    ['fake', {}, 'fake'],
-    ['fake', { ANTHROPIC_API_KEY: 'a', OPENCODE_API_KEY: 'b' }, 'fake'],
     ['anthropic', {}, 'anthropic'],
     ['anthropic', { OPENCODE_API_KEY: 'b' }, 'anthropic'],
     ['opencode', {}, 'opencode'],
     ['opencode', { ANTHROPIC_API_KEY: 'a' }, 'opencode'],
+    ['fake', {}, null],
+    ['fake', { OPENCODE_API_KEY: 'b' }, 'opencode'],
   ])('AI_PROVIDER=%s with env %j resolves to %s', async (provider, env, expected) => {
     process.env.AI_PROVIDER = provider
     for (const [key, value] of Object.entries(env)) process.env[key] = value
@@ -84,39 +84,26 @@ describe('getAiProvider', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     process.env.AI_PROVIDER = ''
     const { getAiProvider } = await load()
-    expect(getAiProvider()).toBe('fake')
+    expect(getAiProvider()).toBeNull()
     expect(warn).not.toHaveBeenCalled()
   })
 })
 
-describe('isDemoMode', () => {
-  it('is demo mode only when the resolved provider is fake', async () => {
-    const { isDemoMode } = await load()
-    expect(isDemoMode()).toBe(true)
+describe('isAiConfigured', () => {
+  it('is false when no provider resolves', async () => {
+    const { isAiConfigured } = await load()
+    expect(isAiConfigured()).toBe(false)
   })
 
-  it('is not demo mode when an API key is set', async () => {
+  it('is true when an API key is set', async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key'
-    const { isDemoMode } = await load()
-    expect(isDemoMode()).toBe(false)
+    const { isAiConfigured } = await load()
+    expect(isAiConfigured()).toBe(true)
   })
 
-  it('is not demo mode when only OPENCODE_API_KEY is set', async () => {
+  it('is true when only OPENCODE_API_KEY is set', async () => {
     process.env.OPENCODE_API_KEY = 'oc-key'
-    const { isDemoMode } = await load()
-    expect(isDemoMode()).toBe(false)
-  })
-
-  it('AI_PROVIDER overrides the key checks', async () => {
-    process.env.ANTHROPIC_API_KEY = 'test-key'
-    process.env.AI_PROVIDER = 'fake'
-    const { isDemoMode } = await load()
-    expect(isDemoMode()).toBe(true)
-  })
-
-  it('AI_PROVIDER=opencode is not demo mode even without a key', async () => {
-    process.env.AI_PROVIDER = 'opencode'
-    const { isDemoMode } = await load()
-    expect(isDemoMode()).toBe(false)
+    const { isAiConfigured } = await load()
+    expect(isAiConfigured()).toBe(true)
   })
 })

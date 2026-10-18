@@ -35,28 +35,29 @@
 
 ## Execution Model (orchestrator notes)
 
-| Wave | Tasks (parallel inside a wave) | Why this order |
-|---|---|---|
-| 1 | Task 1 (demo removal), Task 2 (E2E stub + docs) | Task 1 changes `AiClient`/`AiTaskDef` that every later task touches; Task 2 touches only `e2e/`, `package.json`, `playwright.config.ts`, docs |
-| 2 | Task 3 (timeouts/cancel), Task 4 (titles), Task 5 (length warning) | Disjoint files; Task 4 owns the only migration of this wave |
-| 3 | Task 6 (advice/style routes), Task 7 (extraction dedup) | Both build on Task 3; Task 6 owns `ai-features.ts` + new routes, Task 7 owns extraction + `interview.ts` + `chapter-check.ts` |
-| 4 | Task 8 (continuous interview) | Builds on Tasks 3 and 7; owns the second migration |
-| 5 | Task 9 (crash investigation) | Needs the finished app and the stub |
-| 6 | Task 10 (verification gate) | Full lint/typecheck/test/build/e2e |
-| 7 | Sonnet review → Haiku fixes → Task 10 again | |
-
+| Wave | Tasks (parallel inside a wave)                                     | Why this order                                                                                                                                |
+| ---- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Task 1 (demo removal), Task 2 (E2E stub + docs)                    | Task 1 changes `AiClient`/`AiTaskDef` that every later task touches; Task 2 touches only `e2e/`, `package.json`, `playwright.config.ts`, docs |
+| 2    | Task 3 (timeouts/cancel), Task 4 (titles), Task 5 (length warning) | Disjoint files; Task 4 owns the only migration of this wave                                                                                   |
+| 3    | Task 6 (advice/style routes), Task 7 (extraction dedup)            | Both build on Task 3; Task 6 owns `ai-features.ts` + new routes, Task 7 owns extraction + `interview.ts` + `chapter-check.ts`                 |
+| 4    | Task 8 (continuous interview)                                      | Builds on Tasks 3 and 7; owns the second migration                                                                                            |
+| 5    | Task 9 (crash investigation)                                       | Needs the finished app and the stub                                                                                                           |
+| 6    | Task 10 (verification gate)                                        | Full lint/typecheck/test/build/e2e                                                                                                            |
+| 7    | Sonnet review → Haiku fixes → Task 10 again                        |                                                                                                                                               |
 
 ---
 
 ### Task 1: Remove demo mode; move fake AI output into test code (§A)
 
 **Files:**
+
 - Modify: `src/ai/types.ts`, `src/ai/run.ts`, `src/ai/index.ts`, `src/ai/models.ts`, `src/lib/ai-mode.ts`, every `src/ai/tasks/*.ts` (delete `fake*` functions and the `fake:` property), `src/server/ai-features.ts` (`startDraft`: `input` instead of `fake`), `src/app/(app)/layout.tsx`, `src/app/(app)/works/[workId]/chapters/[chapterId]/writing-data.ts`, `src/components/writing/types.ts` (drop `demo`), `eval/run-continuity.ts` (import path only), `eslint.config.mjs`
 - Delete: `src/ai/fake.ts`, `src/ai/fake.test.ts`, `src/components/app/demo-banner.tsx`
 - Create: `src/test/fake-ai.ts`, `src/test/fake-ai.test.ts`, `src/test/ai-fakes/<task>.ts` (one per task, the moved fake functions with their helpers) and `src/test/ai-fakes/index.ts`, `src/components/app/ai-setup-banner.tsx`
 - Modify tests: every test that imports `@/ai/fake` or a `fake*` function from a task file
 
 **Interfaces:**
+
 - Produces (`src/ai/types.ts`):
   ```ts
   export type AiTaskRef = { name: AiTaskName; input: unknown }
@@ -89,10 +90,12 @@
 ### Task 2: E2E AI stub server, e2e wiring and docs (§A)
 
 **Files:**
+
 - Create: `e2e/ai-stub/server.ts`, `e2e/ai-stub/responders.ts`, `e2e/ai-stub/responders.test.ts`
 - Modify: `package.json` (scripts), `playwright.config.ts`, `vitest.config.ts` (add `'e2e/ai-stub/**/*.test.ts'` to `include`), `.env.example`, `README.md`, `CLAUDE.md`
 
 **Interfaces:**
+
 - Consumes: task definitions in `src/ai/tasks/*` (`system`, `buildPrompt`, `schema`, `name`) and the draft system prompt in `src/server/ai-features.ts`. Do not depend on Task 1's types; read `system` strings only.
 - Produces: `respond(body: { system: string | { type: 'text'; text: string }[]; messages: { role: string; content: string }[]; model: string; stream?: boolean }): { task: string; text: string; delayMs: number }` in `responders.ts`; HTTP server on `E2E_AI_STUB_PORT` (default `3199`) with `GET /health` → 200 `ok` and `POST /v1/messages`.
 - Produces scripts: `"e2e:ai-stub": "tsx e2e/ai-stub/server.ts"`; `e2e:server` uses `AI_PROVIDER=anthropic ANTHROPIC_API_KEY=e2e-stub ANTHROPIC_BASE_URL=http://127.0.0.1:3199` instead of `AI_PROVIDER=fake` (all three commands in the chain).
@@ -108,11 +111,13 @@
 ### Task 3: AI timeouts and cancel (§D)
 
 **Files:**
+
 - Modify: `src/lib/errors.ts`, `src/ai/types.ts`, `src/ai/anthropic.ts`, `src/ai/opencode.ts`, `src/ai/responses.ts`, `src/ai/run.ts`, `src/server/chapter-check.ts` (`runChapterCheck`, `runProofread`), `src/server/ai-features.ts` (`runReaderSimulation`, `startDraft`), `src/server/imports.ts` (pass `timeoutMs: 240_000` in meta), `src/app/api/works/[workId]/chapters/shared.ts`, the `check`, `proofread`, `reader-sim` and `draft` routes, `src/lib/client/post-json.ts`, `src/lib/client/run-action.ts`, `src/components/writing/panels/{check,proofread,reader,draft}-panel.tsx`
 - Create: `src/lib/client/use-ai-run.ts`, `src/components/app/ai-run-status.tsx`
 - Test: `src/ai/anthropic.test.ts`, `src/ai/responses.test.ts`, `src/ai/run.test.ts`, `src/lib/client/post-json.test.ts`, `src/lib/client/run-action.test.ts`, `src/lib/client/use-ai-run.test.tsx`, `src/components/writing/panels/check-panel.test.tsx` (create if missing)
 
 **Interfaces:**
+
 - Consumes: Task 1 types.
 - Produces:
   - `ErrorCode` gains `'CANCELLED'`. `src/ai/run.ts` exports `AI_CANCELLED_MESSAGE = '취소했습니다.'`, `AI_TIMEOUT_MESSAGE = 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.'`, `DEFAULT_AI_TIMEOUT_MS = 120_000`, `STREAM_AI_TIMEOUT_MS = 280_000`.
@@ -140,11 +145,13 @@
 ### Task 4: Chapter titles without a duplicated number (§F)
 
 **Files:**
+
 - Modify: `src/lib/labels.ts`, `src/server/chapters.ts` (`createChapter`, `appendImportChapters`, and the chapter title save path — find every service that writes `chapters.title`, including the manuscript save in `src/server/manuscript.ts` if it writes the title)
 - Create: `drizzle/0001_strip_chapter_title_prefix.sql` via `pnpm drizzle-kit generate --custom --name=strip_chapter_title_prefix`
 - Test: `src/lib/labels.test.ts`, `src/server/chapters.test.ts`, `src/db/migrations.test.ts` (create)
 
 **Interfaces:**
+
 - Produces: `stripEpisodePrefix(title: string): string` in `src/lib/labels.ts` — removes a leading `(제\s*)?\d+\s*화` only when followed by end of string or one of `\s . : · - – — ) ]`, then trims leading separators/spaces. `chapterLabel(position, title)` uses it.
 
 - [ ] **Step 1: Failing tests**
@@ -158,11 +165,13 @@
 ### Task 5: Warn before completing a chapter under the target length (§F)
 
 **Files:**
+
 - Create: `src/lib/chapter-length.ts`, `src/lib/chapter-length.test.ts`, `src/components/chapters/complete-confirm-dialog.tsx`
 - Modify: `src/components/writing/writing-workspace.tsx` (`changeStatus`), `src/components/chapters/chapter-table.tsx`, the chapters page that renders `ChapterTable` (pass `targetChars` from work settings via `resolveWorkSettings`/`DEFAULT_WORK_SETTINGS` in `src/db/types.ts`)
 - Test: `src/components/chapters/chapter-table.test.tsx` (create or extend)
 
 **Interfaces:**
+
 - Produces: `lengthShortfall(charCount: number, targetChars: number): { percent: number } | null` (`null` when `targetChars <= 0` or `charCount >= targetChars`; `percent = Math.round(charCount / targetChars * 100)`); `shortfallMessage(charCount: number, targetChars: number): string` → `` `목표 ${targetChars.toLocaleString('ko-KR')}자 중 ${charCount.toLocaleString('ko-KR')}자(${percent}%)입니다. 그래도 완료할까요?` ``.
 - Produces: `<CompleteConfirmDialog open message onConfirm onOpenChange />` built on `src/components/ui/alert-dialog.tsx`, title `분량이 목표보다 적습니다`, confirm `완료하기`, cancel `계속 쓰기`.
 
@@ -174,10 +183,12 @@
 ### Task 6: Direction advice and style suggestion as cancellable routes (§D)
 
 **Files:**
+
 - Create: `src/app/api/works/[workId]/work-route.ts`, `src/app/api/works/[workId]/advice/route.ts`, `src/app/api/works/[workId]/style-suggest/route.ts`, route tests next to them
 - Modify: `src/server/ai-features.ts` (`runDirectionAdvice`, `suggestStyleCard` gain trailing `signal?`), `src/server/actions/ai-features.ts` (remove `runDirectionAdviceAction`, `suggestStyleCardAction`), `src/components/advice/advice-view.tsx`, `src/components/wiki/style-cards.tsx`
 
 **Interfaces:**
+
 - Consumes: Task 3 (`useAiRun`, `AiRunStatus`, `postAction(…, { signal })`, `AiRunMeta.signal`).
 - Produces: `runWorkRoute<I, T>(request: Request, workId: string, schema: z.ZodType<I>, fn: (db: Db, actor: Actor, input: I, signal: AbortSignal) => Promise<T>): Promise<Response>` — same contract as `runChapterRoute` (session check, body parse, `withAction`, `revalidateWork(workId)`, `Cache-Control: no-store`, HTTP 200 with `ActionResult`). Task 8 uses it.
 - Routes: `POST /api/works/[workId]/advice` body `{}` → `ActionResult<{ runId: string; result: AdviceResult }>`; `POST /api/works/[workId]/style-suggest` body `{ entryId: uuid }` → `ActionResult<ProposalRow>`.
@@ -190,11 +201,13 @@
 ### Task 7: Extraction dedup and naming rules (§C)
 
 **Files:**
+
 - Create: `src/ai/extraction-rules.ts`, `src/server/known-entries.ts`, `src/server/known-entries.test.ts`
 - Modify: `src/ai/extraction.ts`, `src/ai/tasks/interview-extract.ts`, `src/ai/tasks/chapter-extract.ts` (both the chapter and the import extract task system prompts), `src/server/interview.ts` (`answerTurn` only), `src/server/chapter-check.ts` (known entries for chapter extraction), `src/test/ai-fakes/interview-extract.ts` (accepts the new input fields)
 - Test: `src/ai/extraction.test.ts`, `src/ai/tasks/interview.test.ts`, `src/server/interview.test.ts`
 
 **Interfaces:**
+
 - Produces (`extraction-rules.ts`): `ROLE_WORDS = ['주인공', '남주', '여주', '남자 주인공', '여자 주인공', '악역', '조연', '화자', '나', '그', '그녀', '그들'] as const`; `ENTITY_NAME_RULES: string` — rule lines appended to every extraction system prompt, containing these two examples verbatim: `"전직 시계탑 수리공 노은하" → name "노은하", summary "전직 시계탑 수리공"` and `"한기준은 전전대 관리자였고 한시우는 그의 아들이다" → 한기준 summary "전전대 관리자", 한시우 summary "한기준의 아들"`, plus: role words and pronouns are never names, never fact subjects and never relation ends (use the person's name); no name in the answer → no card; `<known>` names marked `(승인 대기)` are already proposed and must be reused.
 - Produces (`known-entries.ts`): `type KnownEntries = { active: { id: string; name: string; aliases: string[]; kind: EntryKind }[]; pending: { name: string; aliases: string[]; kind: EntryKind }[]; threads: { id: string; title: string; status: ThreadStatus }[]; pendingThreadTitles: string[] }`; `loadKnownEntries(db: Db, workId: string, opts?: { excludePostChapterOf?: string }): Promise<KnownEntries>` — `active` = non-archived wiki entries; `pending` = `status = 'pending'` `entry_create` proposals of the work; `threads` = non-archived threads; `pendingThreadTitles` = titles of pending `thread_create` proposals; pending items exclude `post_chapter` proposals of chapter `excludePostChapterOf`.
 - Produces (`extraction.ts`): `ExtractionContext.pendingEntries?: { name: string; aliases: string[] }[]`; `ExtractionContext.pendingThreadCreateTitles?: Set<string>` (a planted thread whose collapsed title matches one is not created again).
@@ -219,25 +232,47 @@
 ### Task 8: Continuous interview (§B, §F copy)
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (`interviewTurns.focus`), `src/db/types.ts`, `src/ai/tasks/interview-question.ts`, `src/ai/tasks/interview-extract.ts` (focus), `src/server/interview.ts`, `src/server/actions/interview.ts` (remove `askNextQuestionAction` and `answerTurnAction`), `src/components/interview/interview-session.tsx`, `src/components/interview/question-card.tsx`, `src/app/(app)/works/[workId]/interview/page.tsx`, `src/test/ai-fakes/interview-question.ts` and `interview-extract.ts` (new shapes), `e2e/ai-stub/responders.ts` (interview-question output gets `focus`)
 - Create: `drizzle/0002_*.sql` via `pnpm db:generate`; `src/app/api/works/[workId]/interview/next/route.ts`, `src/app/api/works/[workId]/interview/answer/route.ts`, `src/app/api/works/[workId]/interview/shared.ts`, route tests next to them
 - Test: `src/server/interview.test.ts`, `src/ai/tasks/interview.test.ts`, `src/components/interview/interview-session.test.tsx` (create or extend)
 
 **Interfaces:**
+
 - Consumes: Task 3 (`useAiRun`, `AiRunStatus`, `postAction` with signal, `AiRunMeta.signal`), Task 7 (`loadKnownEntries`).
 - Produces (`src/db/types.ts`): `INTERVIEW_FOCUSES = ['setting', 'story'] as const`, `type InterviewFocus`; `interview_turns.focus text not null default 'setting'`.
 - Produces (`interview-question.ts`):
   ```ts
   export type InterviewQuestionInput = {
     work: { title: string; genre: string; logline: string; synopsis: string }
-    wiki: { counts: Record<EntryKind, number>; entries: { name: string; kind: EntryKind; factCount: number; summary: string }[]; openThreads: { title: string; targetChapterPosition: number | null }[] }
-    story: { latestPosition: number | null; recentSummaries: { position: number; title: string; summary: string }[]; readerReactions: { position: number; digest: string }[]; openIssueCount: number }
-    covered: { topic: string; question: string; answer: string | null; skipped: boolean; focus: InterviewFocus }[]
+    wiki: {
+      counts: Record<EntryKind, number>
+      entries: { name: string; kind: EntryKind; factCount: number; summary: string }[]
+      openThreads: { title: string; targetChapterPosition: number | null }[]
+    }
+    story: {
+      latestPosition: number | null
+      recentSummaries: { position: number; title: string; summary: string }[]
+      readerReactions: { position: number; digest: string }[]
+      openIssueCount: number
+    }
+    covered: {
+      topic: string
+      question: string
+      answer: string | null
+      skipped: boolean
+      focus: InterviewFocus
+    }[]
     coveredDropped: number
     recent: { topic: string; question: string; answer: string | null; skipped: boolean }[]
     rejected: string | null
   }
-  export type InterviewQuestion = { focus: InterviewFocus; topic: string; question: string; rationale: string }
+  export type InterviewQuestion = {
+    focus: InterviewFocus
+    topic: string
+    question: string
+    rationale: string
+  }
   ```
   Caps: entries 80 (summary cut to 40 chars; `factCount` = non-archived facts of the entry), openThreads 30, recentSummaries 5 (newest chapters with a non-empty summary), readerReactions 3 (newest done `reader-sim` runs of the work; digest ≤ 200 chars built from persona `overall` texts and the count of `dropOffRisk: 'high'`), covered 120 newest of all the work's turns across sessions in chronological order (question cut to 120 chars, answer cut to 80 chars), recent 6 newest answered/skipped turns of the current session (answer cut to 600 chars).
 - Produces (`interview-extract.ts`): `InterviewExtractInput.focus: InterviewFocus`.
@@ -261,6 +296,7 @@
 ### Task 9: Server crash investigation (§E)
 
 **Files:**
+
 - Create: `scripts/stress/interview-stress.ts` (Playwright script run with `pnpm exec tsx`), `docs/superpowers/reports/2026-10-18-server-crash-investigation.md`
 - Modify: only what a reproduced root cause requires, plus a regression test for it
 
@@ -272,6 +308,7 @@
 ### Task 10: Verification gate (§F graph, e2e coverage)
 
 **Files:**
+
 - Modify: `e2e/graph-and-export.spec.ts`, `e2e/core-flow.spec.ts` (title assertion)
 - Create: `e2e/interview.spec.ts`
 

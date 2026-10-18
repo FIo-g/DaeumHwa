@@ -114,7 +114,7 @@ const baseArgs = {
   schema: OutputSchema,
   effort: 'low' as const,
   maxTokens: 500,
-  fake: () => ({ answer: '가짜', score: 0 }),
+  task: { name: 'proofread' as const, input: {} },
 }
 
 function inputText(body: Record<string, unknown>): string {
@@ -470,7 +470,7 @@ describe('ResponsesAiClient streaming', () => {
       prompt: '초안',
       effort: 'medium',
       maxTokens: 500,
-      fake: () => '',
+      task: { name: 'proofread' as const, input: {} },
     })
     const chunks: string[] = []
     for await (const chunk of result.textStream) chunks.push(chunk)
@@ -501,7 +501,7 @@ describe('ResponsesAiClient streaming', () => {
       prompt: '초안',
       effort: 'high' as const,
       maxTokens: 500,
-      fake: () => '',
+      task: { name: 'proofread' as const, input: {} },
     }
     const first = client.streamText(streamArgs)
     expect((await first.final).text).toBe('둘째.')
@@ -531,7 +531,7 @@ describe('ResponsesAiClient streaming', () => {
       prompt: '초안',
       effort: 'low',
       maxTokens: 500,
-      fake: () => '',
+      task: { name: 'proofread' as const, input: {} },
     })
     await expect(result.final).rejects.toMatchObject({
       code: 'AI_ERROR',
@@ -554,7 +554,7 @@ describe('ResponsesAiClient stream cleanup', () => {
       prompt: '초안',
       effort: 'low',
       maxTokens: 500,
-      fake: () => '',
+      task: { name: 'proofread' as const, input: {} },
     })
     await expect(result.final).rejects.toMatchObject({ code: 'AI_ERROR' })
     expect(hold.cancelled).toBe(true)

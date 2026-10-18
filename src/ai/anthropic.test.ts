@@ -87,7 +87,7 @@ const baseArgs = {
   schema: OutputSchema,
   effort: 'medium' as const,
   maxTokens: 1000,
-  fake: () => ({ answer: '가짜', score: 0 }),
+  task: { name: 'proofread' as const, input: {} },
 }
 
 describe('AnthropicAiClient defaults', () => {
@@ -259,7 +259,7 @@ describe('AnthropicAiClient.streamText', () => {
       prompt: '초안 써 줘',
       effort: 'high',
       maxTokens: 2000,
-      fake: () => '가짜',
+      task: { name: 'proofread' as const, input: {} },
     })
     const chunks: string[] = []
     for await (const chunk of textStream) chunks.push(chunk)
@@ -282,7 +282,7 @@ describe('AnthropicAiClient.streamText', () => {
       prompt: '초안',
       effort: 'high',
       maxTokens: 2000,
-      fake: () => '',
+      task: { name: 'proofread' as const, input: {} },
     })
     await final
     expect(calls[0].path).toBe('beta.messages.stream')
@@ -299,7 +299,7 @@ describe('AnthropicAiClient.streamText', () => {
       prompt: 'p',
       effort: 'low',
       maxTokens: 100,
-      fake: () => '',
+      task: { name: 'proofread' as const, input: {} },
     })
     await expect(final).rejects.toMatchObject({
       code: 'AI_ERROR',
@@ -315,7 +315,7 @@ describe('AnthropicAiClient.streamText', () => {
       prompt: 'p',
       effort: 'low',
       maxTokens: 100,
-      fake: () => '',
+      task: { name: 'proofread' as const, input: {} },
     })
     const error = await final.catch((e: unknown) => e)
     expect(error).toBeInstanceOf(AppError)
@@ -334,7 +334,7 @@ describe('AnthropicAiClient.streamText', () => {
       prompt: 'p',
       effort: 'low',
       maxTokens: 100,
-      fake: () => '',
+      task: { name: 'proofread' as const, input: {} },
     })
     await expect(final).rejects.toMatchObject({ code: 'AI_ERROR' })
   })

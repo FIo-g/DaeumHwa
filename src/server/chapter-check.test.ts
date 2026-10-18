@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
+import { FAKE_OUTPUTS } from '@/test/ai-fakes'
 import type { AiClient } from '@/ai/types'
 import type { Db } from '@/db/client'
 import { issues, namingRules, proposals, relations, threadEvents, threads } from '@/db/schema'
@@ -54,7 +55,8 @@ function scriptedClient(pick: (system: string) => unknown): AiClient {
     defaultModel: 'fake',
     async generateObject(args) {
       const scripted = pick(args.system)
-      const raw = scripted === undefined ? args.fake() : scripted
+      const raw =
+        scripted === undefined ? FAKE_OUTPUTS[args.task.name]?.(args.task.input) : scripted
       return {
         object: args.schema.parse(raw),
         usage: { inputTokens: 0, outputTokens: 0 },

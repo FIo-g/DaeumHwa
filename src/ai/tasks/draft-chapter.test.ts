@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
-import {
-  buildDraftPrompt,
-  DRAFT_SYSTEM,
-  type DraftPromptInput,
-  fakeDraft,
-} from '@/ai/tasks/draft-chapter'
+import { buildDraftPrompt, DRAFT_SYSTEM, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
+import { fakeDraft } from '@/test/ai-fakes/draft-chapter'
 
 const promptInput: DraftPromptInput = {
   instructions: '서윤이 편지를 발견한다. 편지에는 날짜가 적혀 있다.',

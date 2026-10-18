@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
 import { setAiClientForTests } from '@/ai'
 import type { Db } from '@/db/client'
 import { aiRuns } from '@/db/schema'
@@ -93,7 +93,8 @@ describe('POST /api/works/[workId]/draft', () => {
       override streamText(args: Parameters<FakeAiClient['streamText']>[0]) {
         const stream = super.streamText(args)
         const final = stream.final.then(
-          (result) => new Promise<typeof result>((resolve) => setTimeout(() => resolve(result), 50)),
+          (result) =>
+            new Promise<typeof result>((resolve) => setTimeout(() => resolve(result), 50)),
         )
         return { textStream: stream.textStream, final }
       }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
 import type { Db } from '@/db/client'
 import { aiRuns, chapterVersions, chapters, proposals } from '@/db/schema'
 import { AppError } from '@/lib/errors'

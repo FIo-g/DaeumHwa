@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { Persona } from '@/ai/personas'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
-import { locateQuote, splitSentences } from '@/lib/korean'
+import { locateQuote } from '@/lib/korean'
 
 // Reader simulation (spec F11): several reader personas react to one chapter.
 
@@ -16,7 +16,7 @@ export const READER_SIM_SYSTEM = `당신은 웹소설 플랫폼의 여러 독자
 ${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
 
-const REACTIONS = ['confused', 'bored', 'excited', 'dropoff', 'moved'] as const
+export const REACTIONS = ['confused', 'bored', 'excited', 'dropoff', 'moved'] as const
 const RISKS = ['low', 'medium', 'high'] as const
 
 export const ReaderSimSchema = z.object({
@@ -56,7 +56,6 @@ export const readerSimTask: AiTaskDef<ReaderSimInput, ReaderSimResult> = {
   system: READER_SIM_SYSTEM,
   buildPrompt: buildReaderSimPrompt,
   schema: ReaderSimSchema,
-  fake: fakeReaderSim,
   postProcess: postProcessReaderSim,
 }
 
@@ -87,31 +86,6 @@ function buildReaderSimPrompt(raw: ReaderSimInput): string {
     input.chapterText,
     '</manuscript>',
   ].join('\n')
-}
-
-const FAKE_RATINGS = [4, 3, 5, 2] as const
-const FAKE_RISKS = ['low', 'medium', 'low', 'high'] as const
-
-/** Deterministic demo output: quotes the first two sentences of the chapter. */
-function fakeReaderSim(input: ReaderSimInput): ReaderSimResult {
-  const quotes = splitSentences(input.chapterText)
-    .map((s) => s.text.trim())
-    .filter((text) => text.length > 0)
-    .slice(0, 2)
-  return {
-    personas: input.personas.map((persona, index) => ({
-      personaId: persona.id,
-      rating: FAKE_RATINGS[index % FAKE_RATINGS.length],
-      dropOffRisk: FAKE_RISKS[index % FAKE_RISKS.length],
-      overall: `${persona.name} 관점에서 이번 화는 무난하게 읽힙니다. (데모 응답)`,
-      moments: quotes.map((quote, j) => ({
-        quote,
-        reaction: REACTIONS[(index + j) % REACTIONS.length],
-        comment: '(데모) 이 장면의 흐름을 한 번 더 점검해 보세요.',
-      })),
-    })),
-    summary: '(데모) 독자 반응이 전반적으로 무난합니다. 도입부의 설명 분량을 확인해 보세요.',
-  }
 }
 
 /** Clamps ratings to 1-5 and drops moment quotes that are not found in the chapter text. */

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
 import { ExtractionSchema } from '@/ai/extraction'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { type ChapterExtractInput, chapterExtractTask } from '@/ai/tasks/chapter-extract'
+import { fakeChapterExtraction } from '@/test/ai-fakes/chapter-extract'
 
 const base: ChapterExtractInput = {
   chapterText: '서윤은 검을 쥐었다. 레이아가 웃었다. 서윤은 말이 없었다. 바람이 불었다.',
@@ -37,13 +38,13 @@ describe('chapterExtractTask', () => {
   })
 
   it('fake output validates with the extraction schema and summarizes the first sentence', () => {
-    const output = ExtractionSchema.parse(chapterExtractTask.fake(base))
+    const output = ExtractionSchema.parse(fakeChapterExtraction(base))
     expect(output.summary).toBe('서윤은 검을 쥐었다.')
   })
 
   it('fake adds a new character for a frequent subject word that is not known', () => {
     const text = '레이아는 웃었다. 레이아는 달렸다. 레이아는 멈췄다. 서윤은 왔다.'
-    const output = chapterExtractTask.fake({ ...base, chapterText: text })
+    const output = fakeChapterExtraction({ ...base, chapterText: text })
     const names = output.entries.map((e) => e.name)
     expect(names).toEqual(['레이아'])
     expect(output.entries[0]).toMatchObject({ kind: 'character', aliases: [], summary: '' })
@@ -51,7 +52,7 @@ describe('chapterExtractTask', () => {
 
   it('fake records one appearance fact per mentioned known or new entry', () => {
     const text = '레이아는 웃었다. 레이아는 달렸다. 레이아는 멈췄다. 서윤은 왔다.'
-    const output = chapterExtractTask.fake({ ...base, chapterText: text })
+    const output = fakeChapterExtraction({ ...base, chapterText: text })
     const subjects = output.facts.map((f) => f.subjectName).sort()
     expect(subjects).toEqual(['레이아', '서윤'])
     const seoyun = output.facts.find((f) => f.subjectName === '서윤')
@@ -64,7 +65,7 @@ describe('chapterExtractTask', () => {
   })
 
   it('fake returns no threads or relations', () => {
-    const output = chapterExtractTask.fake(base)
+    const output = fakeChapterExtraction(base)
     expect(output.threads).toEqual([])
     expect(output.relations).toEqual([])
   })
@@ -77,7 +78,7 @@ describe('chapterExtractTask', () => {
       schema: chapterExtractTask.schema,
       effort: chapterExtractTask.effort,
       maxTokens: chapterExtractTask.maxTokens,
-      fake: () => chapterExtractTask.fake(base),
+      task: { name: 'chapter-extract', input: base },
     })
     expect(result.object.summary).toBe('서윤은 검을 쥐었다.')
   })

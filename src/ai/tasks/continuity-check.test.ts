@@ -3,6 +3,7 @@ import type { ContextPack } from '@/ai/context'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
 import type { IssueKind } from '@/db/types'
+import { fakeContinuity } from '@/test/ai-fakes/continuity-check'
 
 const pack: ContextPack = {
   position: 1,
@@ -146,7 +147,7 @@ describe('continuityCheckTask.postProcess', () => {
 
 describe('continuityCheckTask fake', () => {
   it('flags a left/right hand contradiction quoting the manuscript sentence', () => {
-    const output = continuityCheckTask.schema.parse(continuityCheckTask.fake(input))
+    const output = continuityCheckTask.schema.parse(fakeContinuity(input))
     expect(output.issues).toHaveLength(1)
     expect(output.issues[0]).toMatchObject({
       quote: chapterText,
@@ -159,7 +160,7 @@ describe('continuityCheckTask fake', () => {
 
   it('returns no issues when nothing in the wiki contradicts the manuscript', () => {
     const quiet = { ...input, chapterText: '서윤이 웃었다.' }
-    expect(continuityCheckTask.fake(quiet).issues).toEqual([])
+    expect(fakeContinuity(quiet).issues).toEqual([])
   })
 
   it('has the Korean system prompt and the wiki and manuscript layout', () => {

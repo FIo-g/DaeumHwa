@@ -75,7 +75,7 @@ describe('ModelNotice', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('renders nothing in demo mode', () => {
+  it('renders nothing when no AI key is set', () => {
     process.env.AI_PROVIDER = 'fake'
     process.env.OPENCODE_MODEL = 'muse-spark-1.3-contributor'
     const { container } = render(<ModelNotice />)

@@ -8,7 +8,6 @@ import {
   DRAFT_MAX_TOKENS,
   DRAFT_SYSTEM,
   buildDraftPrompt,
-  fakeDraft,
 } from '@/ai/tasks/draft-chapter'
 import { type AdviceResult, directionAdviceTask } from '@/ai/tasks/direction-advice'
 import { type ReaderSimResult, readerSimTask } from '@/ai/tasks/reader-sim'
@@ -325,11 +324,11 @@ export async function startDraft(
     { userId: actor.userId, workId, chapterId },
     {
       task: 'draft-chapter',
+      input: { instructions },
       effort: DRAFT_EFFORT,
       maxTokens: DRAFT_MAX_TOKENS,
       system: DRAFT_SYSTEM,
       prompt,
-      fake: () => fakeDraft({ instructions }),
     },
     client,
   )

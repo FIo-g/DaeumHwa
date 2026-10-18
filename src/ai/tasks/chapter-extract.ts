@@ -2,8 +2,6 @@ import { ExtractionSchema, type Extraction } from '@/ai/extraction'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import type { EntryKind, ThreadStatus } from '@/db/types'
-import { findMentions } from '@/lib/korean/mentions'
-import { splitSentences } from '@/lib/korean/sentences'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 
 // Chapter extraction (F7 "새 사실 후보", F6 import): turns one manuscript chapter into wiki
@@ -33,13 +31,6 @@ export const CHAPTER_EXTRACT_SYSTEM = `당신은 장기 연재 웹소설의 설�
 - summary는 이 회차의 핵심 사건을 3문장 이내로 요약한다.
 ${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
-
-const SUMMARY_MAX_CHARS = 80
-const EVIDENCE_MAX_CHARS = 120
-const MAX_FAKE_NEW_ENTRIES = 5
-const MIN_FAKE_NAME_COUNT = 3
-/** Hangul word of 2 to 4 syllables directly followed by a subject particle. */
-const SUBJECT_WORD = /[가-힣]{2,4}(?=[은는이가])/g
 
 function buildPrompt(raw: ChapterExtractInput): string {
   const input = neutralizeDeep(raw)
@@ -84,56 +75,6 @@ function buildPrompt(raw: ChapterExtractInput): string {
   ].join('\n')
 }
 
-/** Deterministic stand-in: frequent subject words become characters, and every named entry gets one appearance fact. */
-function fakeExtraction(input: ChapterExtractInput): Extraction {
-  const sentences = splitSentences(input.chapterText)
-  const summary = (sentences[0]?.text ?? '').slice(0, SUMMARY_MAX_CHARS)
-
-  const knownNames = new Set(input.known.flatMap((k) => [k.name, ...k.aliases]))
-  const newNames = candidateNames(input.chapterText)
-    .filter((name) => !knownNames.has(name))
-    .slice(0, MAX_FAKE_NEW_ENTRIES)
-
-  const targets = [
-    ...input.known.map((k) => ({ id: k.name, names: [k.name, ...k.aliases] })),
-    ...newNames.map((name) => ({ id: name, names: [name] })),
-  ]
-  const namesById = new Map(targets.map((t) => [t.id, t.names]))
-  const facts = findMentions(input.chapterText, targets).map((mention) => {
-    const names = namesById.get(mention.entryId) ?? []
-    const sentence = sentences.find((s) => names.some((n) => s.text.includes(n)))
-    return {
-      subjectName: mention.entryId,
-      content: `${input.chapterPosition}화에 등장한다.`,
-      evidence: (sentence?.text ?? '').slice(0, EVIDENCE_MAX_CHARS),
-      suggestedStatus: 'confirmed' as const,
-      supersedesFactRef: null,
-    }
-  })
-
-  return {
-    summary,
-    entries: newNames.map((name) => ({
-      name,
-      kind: 'character' as const,
-      aliases: [],
-      summary: '',
-      fields: [],
-    })),
-    facts,
-    threads: [],
-    relations: [],
-  }
-}
-
-function candidateNames(text: string): string[] {
-  const counts = new Map<string, number>()
-  for (const match of text.matchAll(SUBJECT_WORD)) {
-    counts.set(match[0], (counts.get(match[0]) ?? 0) + 1)
-  }
-  return [...counts].filter(([, count]) => count >= MIN_FAKE_NAME_COUNT).map(([word]) => word)
-}
-
 export const chapterExtractTask: AiTaskDef<ChapterExtractInput, Extraction> = {
   name: 'chapter-extract',
   effort: 'medium',
@@ -141,5 +82,4 @@ export const chapterExtractTask: AiTaskDef<ChapterExtractInput, Extraction> = {
   system: CHAPTER_EXTRACT_SYSTEM,
   buildPrompt,
   schema: ExtractionSchema,
-  fake: fakeExtraction,
 }

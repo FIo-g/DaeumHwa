@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
 import { setAiClientForTests } from '@/ai'
 import { AppError } from '@/lib/errors'
 import type { Db } from '@/db/client'

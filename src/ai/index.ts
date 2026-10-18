@@ -1,6 +1,6 @@
-import { getAiProvider } from '@/lib/ai-mode'
+import { AI_KEY_MISSING_MESSAGE, getAiProvider } from '@/lib/ai-mode'
+import { AppError } from '@/lib/errors'
 import { AnthropicAiClient } from '@/ai/anthropic'
-import { FakeAiClient } from '@/ai/fake'
 import { OpencodeAiClient } from '@/ai/opencode'
 import { providerDefaultModel, providerImportModel } from '@/ai/models'
 import type { AiClient } from '@/ai/types'
@@ -8,17 +8,13 @@ import type { AiClient } from '@/ai/types'
 let cached: AiClient | null = null
 let override: AiClient | null = null
 
-/** The AI client for this process, chosen by the resolved AI provider. */
+/** The AI client for this process. Throws AI_ERROR when no AI key is configured. */
 export function getAiClient(): AiClient {
   if (override) return override
   if (!cached) {
     const provider = getAiProvider()
-    cached =
-      provider === 'fake'
-        ? new FakeAiClient()
-        : provider === 'opencode'
-          ? new OpencodeAiClient()
-          : new AnthropicAiClient()
+    if (provider === null) throw new AppError('AI_ERROR', AI_KEY_MISSING_MESSAGE)
+    cached = provider === 'opencode' ? new OpencodeAiClient() : new AnthropicAiClient()
   }
   return cached
 }

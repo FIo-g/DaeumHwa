@@ -20,7 +20,7 @@
 - `src/db` — Drizzle schema (`schema.ts`), `getDb()` (`client.ts`), unions and row types (`types.ts`)
 - `src/server/*` — domain services `fn(db, actor, input)`; first line checks `requireWorkRole`
 - `src/server/actions/*` — `'use server'` wrappers: zod-parse input → `withAction` → `revalidateWork` → `ActionResult`
-- `src/ai` — `AiClient` (Anthropic SDK or Fake), `tasks/*` (prompt + zod schema + fake output), `run.ts` (usage limit, `ai_runs`), `context.ts` (context pack)
+- `src/ai` — `AiClient` (Anthropic SDK or OpenCode Go), `tasks/*` (prompt + zod schema), `run.ts` (usage limit, `ai_runs`), `context.ts` (context pack)
 - `src/lib` — pure utilities (korean text, import parsing, diff, backup, search, schedule, labels, dates, errors, result)
 - `src/workers` + `src/lib/client` — Comlink Web Worker, IndexedDB drafts, autosave hook
 - `src/components/ui` — shadcn (Base UI flavor); `src/components/app` — shared app components; other folders per feature
@@ -53,4 +53,5 @@
 
 - Colocated `*.test.ts(x)`. Service tests: `const db = await createTestDb()` in `beforeEach`; data via `@/test/factories`.
 - Component tests start with `// @vitest-environment jsdom`.
-- AI in tests: pass a `FakeAiClient` or call `setAiClientForTests`. Never call the real API in tests.
+- AI in tests: `FakeAiClient` lives in `@/test/fake-ai` and its fixed outputs in `@/test/ai-fakes`; pass one in or call `setAiClientForTests`. Never call the real API in tests.
+- E2E AI answers come from the stub in `e2e/ai-stub` (`pnpm e2e:ai-stub`), not from `@/test/*`.

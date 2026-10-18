@@ -44,7 +44,6 @@ function makeData(role: Role, thread: ThreadItem): WritingData {
     workId: 'work-1',
     workTitle: '테스트 작품',
     role,
-    demo: false,
     targetChars: 5500,
     chapter: { id: 'c2', position: 2, archivedAt: null, title: '2화' } as never,
     chapters: [{ id: 'c2', position: 2, title: '2화' }],

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
 import { setAiClientForTests } from '@/ai'
 import type { AiClient } from '@/ai/types'
 import type { AiTaskDef } from '@/ai/types'
@@ -21,7 +21,13 @@ const task: AiTaskDef<{ q: string }, { text: string }> = {
   system: '시스템',
   buildPrompt: (input) => input.q,
   schema: TaskSchema,
-  fake: (input) => ({ text: `답: ${input.q}` }),
+}
+
+/** Fake client that answers the test task (`proofread`) with `답: <q>`. */
+function taskClient(): FakeAiClient {
+  return new FakeAiClient({
+    overrides: { proofread: (input) => ({ text: `답: ${(input as { q: string }).q}` }) },
+  })
 }
 
 const failingClient: AiClient = {
@@ -106,7 +112,7 @@ describe('runAiTask', () => {
       { userId, workId },
       task,
       { q: '안녕' },
-      new FakeAiClient(),
+      taskClient(),
     )
     expect(output).toEqual({ text: '답: 안녕' })
     const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
@@ -129,7 +135,7 @@ describe('runAiTask', () => {
       { userId, workId },
       withPost,
       { q: 'abc' },
-      new FakeAiClient(),
+      taskClient(),
     )
     expect(output).toEqual({ text: '답: ABC' })
     const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
@@ -156,7 +162,7 @@ describe('runAiTask', () => {
 
   it('uses the client set with setAiClientForTests when none is passed', async () => {
     const { db, userId, workId } = await setup()
-    setAiClientForTests(new FakeAiClient())
+    setAiClientForTests(taskClient())
     const { output } = await runAiTask(db, { userId, workId }, task, { q: '기본' })
     expect(output).toEqual({ text: '답: 기본' })
   })
@@ -192,7 +198,7 @@ describe('failed runs', () => {
         maxTokens: 500,
         system: 's',
         prompt: 'p',
-        fake: () => '',
+        input: { instructions: '' },
       },
       client,
     )
@@ -212,7 +218,7 @@ describe('failed runs', () => {
       ...failingClient,
       async generateObject(args) {
         return {
-          object: args.fake(),
+          object: args.schema.parse({ text: '답' }),
           usage: { inputTokens: 50, outputTokens: 70 },
           model: 'm',
         }
@@ -255,13 +261,9 @@ describe('concurrent runs', () => {
     const { db, userId, workId } = await setup()
     for (let i = 0; i < 3; i++)
       await insertRun(db, userId, { inputTokens: 0, outputTokens: 0, status: 'running' })
-    const error = await runAiTask(
-      db,
-      { userId, workId },
-      task,
-      { q: 'x' },
-      new FakeAiClient(),
-    ).catch((e: unknown) => e)
+    const error = await runAiTask(db, { userId, workId }, task, { q: 'x' }, taskClient()).catch(
+      (e: unknown) => e,
+    )
     expect(error).toMatchObject({ code: 'CONFLICT' })
     expect((error as AppError).code).not.toBe('AI_LIMIT')
     const rows = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
@@ -282,9 +284,9 @@ describe('concurrent runs', () => {
           maxTokens: 500,
           system: 's',
           prompt: 'p',
-          fake: () => '',
+          input: { instructions: '' },
         },
-        new FakeAiClient(),
+        taskClient(),
       ),
     ).rejects.toMatchObject({ code: 'CONFLICT' })
   })
@@ -300,13 +302,7 @@ describe('concurrent runs', () => {
       status: 'running',
       createdAt: old,
     })
-    const { output } = await runAiTask(
-      db,
-      { userId, workId },
-      task,
-      { q: 'ok' },
-      new FakeAiClient(),
-    )
+    const { output } = await runAiTask(db, { userId, workId }, task, { q: 'ok' }, taskClient())
     expect(output).toEqual({ text: '답: ok' })
   })
 })
@@ -346,7 +342,7 @@ describe('assertWithinLimit', () => {
 
     const before = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
     await expect(
-      runAiTask(db, { userId, workId }, task, { q: 'x' }, new FakeAiClient()),
+      runAiTask(db, { userId, workId }, task, { q: 'x' }, taskClient()),
     ).rejects.toMatchObject({ code: 'AI_LIMIT' })
     const after = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
     expect(after).toHaveLength(before.length)
@@ -382,13 +378,7 @@ describe('assertWithinLimit', () => {
     process.env.AI_DAILY_TOKEN_LIMIT = '0'
     await insertRun(db, userId, { inputTokens: 9_000_000, outputTokens: 9_000_000 })
     await expect(assertWithinLimit(db, userId)).resolves.toBeUndefined()
-    const { output } = await runAiTask(
-      db,
-      { userId, workId },
-      task,
-      { q: 'ok' },
-      new FakeAiClient(),
-    )
+    const { output } = await runAiTask(db, { userId, workId }, task, { q: 'ok' }, taskClient())
     expect(output).toEqual({ text: '답: ok' })
   })
 
@@ -413,9 +403,11 @@ describe('startAiStream', () => {
         maxTokens: 500,
         system: '시스템',
         prompt: '초안',
-        fake: () => '첫 문단입니다. 둘째 문단입니다.',
+        input: { instructions: '' },
       },
-      new FakeAiClient(),
+      new FakeAiClient({
+        overrides: { 'draft-chapter': () => '첫 문단입니다. 둘째 문단입니다.' },
+      }),
     )
     const chunks: string[] = []
     for await (const chunk of textStream) chunks.push(chunk)
@@ -439,7 +431,7 @@ describe('startAiStream', () => {
           maxTokens: 500,
           system: 's',
           prompt: 'p',
-          fake: () => '',
+          input: { instructions: '' },
         },
         failingClient,
       ),

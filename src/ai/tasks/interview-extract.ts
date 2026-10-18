@@ -1,6 +1,5 @@
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import type { EntryKind } from '@/db/types'
-import { stripJosa } from '@/lib/korean'
 import { type Extraction, ExtractionSchema } from '@/ai/extraction'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
@@ -54,65 +53,6 @@ export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string 
   ].join('\n')
 }
 
-/** The first sentence of the answer (ends at . ! ? or a line break). */
-function firstSentence(text: string): string {
-  const parts = text.split(/(?<=[.!?])\s+|\n+/)
-  return (parts[0] ?? '').trim() || text
-}
-
-/** First run of two or more Hangul syllables, with trailing particles stripped (서윤은 -> 서윤). */
-function firstNameToken(text: string): string {
-  const match = text.match(/[가-힣]{2,}/)
-  return match ? stripJosa(match[0]) : ''
-}
-
-/** Deterministic output: one fact from the first sentence, plus a protagonist/character card or a planted thread by topic. */
-function fakeExtraction(input: InterviewExtractInput): Extraction {
-  const answer = input.answer.trim()
-  const sentence = firstSentence(answer)
-  const token = firstNameToken(answer)
-  const knownNames = new Set(
-    input.known.flatMap((k) => [stripJosa(k.name), ...k.aliases.map((a) => stripJosa(a))]),
-  )
-
-  const entries: Extraction['entries'] = []
-  if (
-    (input.topic === '주인공' || input.topic === '주요 인물') &&
-    token !== '' &&
-    !knownNames.has(token)
-  ) {
-    entries.push({ name: token, kind: 'character', aliases: [], summary: sentence, fields: [] })
-  }
-
-  const threads: Extraction['threads'] = []
-  if (input.topic === '떡밥') {
-    threads.push({
-      title: Array.from(answer).slice(0, 20).join(''),
-      description: answer,
-      kind: 'planted',
-      evidence: sentence,
-      existingThreadRef: null,
-      targetChapterPosition: null,
-    })
-  }
-
-  return {
-    summary: null,
-    entries,
-    facts: [
-      {
-        subjectName: token,
-        content: sentence,
-        evidence: sentence,
-        suggestedStatus: 'assumed',
-        supersedesFactRef: null,
-      },
-    ],
-    threads,
-    relations: [],
-  }
-}
-
 export const interviewExtractTask: AiTaskDef<InterviewExtractInput, Extraction> = {
   name: 'interview-extract',
   effort: 'medium',
@@ -120,5 +60,4 @@ export const interviewExtractTask: AiTaskDef<InterviewExtractInput, Extraction> 
   system: SYSTEM,
   buildPrompt: buildInterviewExtractPrompt,
   schema: ExtractionSchema,
-  fake: fakeExtraction,
 }

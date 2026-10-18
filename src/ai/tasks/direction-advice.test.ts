@@ -6,6 +6,7 @@ import {
   AdviceSchema,
   directionAdviceTask,
 } from '@/ai/tasks/direction-advice'
+import { fakeAdvice } from '@/test/ai-fakes/direction-advice'
 
 const input: AdviceInput = {
   work: {
@@ -85,7 +86,7 @@ describe('directionAdviceTask', () => {
   })
 
   it('fake output has three options and satisfies the schema', () => {
-    const output = AdviceSchema.parse(directionAdviceTask.fake(input))
+    const output = AdviceSchema.parse(fakeAdvice(input))
     expect(output.options).toHaveLength(3)
     expect(output.recommendedIndex).toBeGreaterThanOrEqual(0)
     expect(output.recommendedIndex).toBeLessThanOrEqual(2)

@@ -20,7 +20,6 @@ function makeData(): WritingData {
     workId: 'work-1',
     workTitle: '테스트 작품',
     role: 'editor' as Role,
-    demo: false,
     targetChars: 5500,
     chapter: {
       id: 'c1',

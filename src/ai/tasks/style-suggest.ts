@@ -32,7 +32,6 @@ export const styleSuggestTask: AiTaskDef<StyleSuggestInput, StyleSuggestResult> 
   system: STYLE_SUGGEST_SYSTEM,
   buildPrompt: buildStylePrompt,
   schema: StyleSuggestSchema,
-  fake: fakeStyle,
 }
 
 function buildStylePrompt(raw: StyleSuggestInput): string {
@@ -43,14 +42,4 @@ function buildStylePrompt(raw: StyleSuggestInput): string {
     ...input.samples,
     '</samples>',
   ].join('\n')
-}
-
-/** Demo output: a fixed style card whose examples are the first three samples. */
-function fakeStyle(input: StyleSuggestInput): StyleSuggestResult {
-  return {
-    name: `${input.entryName} 말투`,
-    tone: '(데모) 짧고 단호한 말투입니다.',
-    rules: '- 반말을 쓴다.\n- 짧은 문장으로 끊어 말한다.\n- 감탄사를 자주 쓰지 않는다.',
-    examples: input.samples.slice(0, 3).join('\n'),
-  }
 }

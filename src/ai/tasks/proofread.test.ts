@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { proofreadTask } from '@/ai/tasks/proofread'
 
@@ -21,7 +21,7 @@ describe('proofreadTask', () => {
       schema: proofreadTask.schema,
       effort: proofreadTask.effort,
       maxTokens: proofreadTask.maxTokens,
-      fake: () => proofreadTask.fake(input),
+      task: { name: 'proofread', input },
     })
     expect(result.object).toEqual({ suggestions: [] })
   })

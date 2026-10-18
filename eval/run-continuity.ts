@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getAiClient } from '@/ai'
 import { buildContextPack } from '@/ai/context'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
 import { runAiTask } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
@@ -40,8 +40,6 @@ const FIXTURE_DIR = path.resolve(process.cwd(), 'eval/fixtures/continuity')
 const RESULTS_DIR = path.resolve(process.cwd(), 'eval/results')
 const SKIP_MESSAGE =
   'AI 키(ANTHROPIC_API_KEY 또는 OPENCODE_API_KEY)가 없어 평가를 건너뜁니다. --fake로 실행 흐름만 확인할 수 있습니다.'
-const FAKE_PROVIDER_SKIP_MESSAGE =
-  'AI_PROVIDER=fake 설정으로 평가를 건너뜁니다. 실제 평가는 AI_PROVIDER를 비우거나 anthropic, opencode로 설정하세요. --fake로 실행 흐름만 확인할 수 있습니다.'
 
 const WorkFixtureSchema = z.object({
   title: z.string(),
@@ -290,10 +288,8 @@ function printSummary(
 
 async function main(): Promise<void> {
   const useFake = process.argv.includes('--fake')
-  if (!useFake && getAiProvider() === 'fake') {
-    console.log(
-      process.env.AI_PROVIDER?.trim() === 'fake' ? FAKE_PROVIDER_SKIP_MESSAGE : SKIP_MESSAGE,
-    )
+  if (!useFake && getAiProvider() === null) {
+    console.log(SKIP_MESSAGE)
     return
   }
 

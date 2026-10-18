@@ -10,7 +10,7 @@ export default defineConfig({
     hookTimeout: 30000,
     pool: 'forks',
     passWithNoTests: true,
-    include: ['src/**/*.test.{ts,tsx}', 'eval/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}', 'eval/**/*.test.ts', 'e2e/ai-stub/**/*.test.ts'],
     setupFiles: ['src/test/setup.ts'],
   },
 })

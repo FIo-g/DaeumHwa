@@ -39,7 +39,6 @@ export const proofreadTask: AiTaskDef<{ text: string }, ProofreadOutput> = {
   system: PROOFREAD_SYSTEM,
   buildPrompt: ({ text }) => `<manuscript>\n${neutralizeTags(text)}\n</manuscript>`,
   schema: ProofreadSchema,
-  fake: () => ({ suggestions: [] }),
   postProcess(output, input) {
     const suggestions: ProofreadOutput['suggestions'] = []
     for (const s of output.suggestions) {

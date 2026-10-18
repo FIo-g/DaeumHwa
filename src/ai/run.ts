@@ -20,11 +20,11 @@ export type AiRunMeta = { userId: string; workId: string | null; chapterId?: str
 
 export interface StreamRunArgs {
   task: AiTaskName
+  input: unknown
   effort: AiEffort
   maxTokens: number
   system: string
   prompt: string
-  fake: () => string
   model?: string
 }
 
@@ -46,12 +46,12 @@ export async function runAiTask<I, O>(
   let usage: AiUsage | undefined
   try {
     const result = await client.generateObject({
+      task: { name: task.name, input },
       system: task.system,
       prompt: task.buildPrompt(input),
       schema: task.schema,
       effort: task.effort,
       maxTokens: task.maxTokens,
-      fake: () => task.fake(input),
       model: taskModel,
     })
     usage = result.usage
@@ -90,11 +90,11 @@ export async function startAiStream(
   let stream: ReturnType<AiClient['streamText']>
   try {
     stream = client.streamText({
+      task: { name: args.task, input: args.input },
       system: args.system,
       prompt: args.prompt,
       effort: args.effort,
       maxTokens: args.maxTokens,
-      fake: args.fake,
       model: args.model,
     })
   } catch (error) {

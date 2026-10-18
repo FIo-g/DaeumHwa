@@ -1,7 +1,6 @@
 import type { Db } from '@/db/client'
 import { type Actor, resolveWorkSettings } from '@/db/types'
 import type { WritingData } from '@/components/writing/types'
-import { isDemoMode } from '@/lib/ai-mode'
 import { AppError } from '@/lib/errors'
 import { getChapter, listChapters } from '@/server/chapters'
 import { listComments } from '@/server/comments'
@@ -48,7 +47,6 @@ export async function loadWritingData(
     workId,
     workTitle: work.title,
     role: work.role,
-    demo: isDemoMode(),
     targetChars: resolveWorkSettings(work.settings).targetChars,
     chapter,
     chapters: chapterOptions,

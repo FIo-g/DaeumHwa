@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Extraction } from '@/ai/extraction'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
 import type { GenerateObjectArgs } from '@/ai/types'
 import type { Db } from '@/db/client'
 import { aiRuns, chapters, importJobs, proposals, relations } from '@/db/schema'

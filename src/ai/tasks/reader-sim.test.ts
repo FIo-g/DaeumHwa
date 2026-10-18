@@ -7,6 +7,7 @@ import {
   ReaderSimSchema,
   readerSimTask,
 } from '@/ai/tasks/reader-sim'
+import { fakeReaderSim } from '@/test/ai-fakes/reader-sim'
 
 const CHAPTER = '서윤은 문을 열었다. "여기가 어디야?" 그녀가 물었다. 아무도 대답하지 않았다.'
 
@@ -70,7 +71,7 @@ describe('readerSimTask', () => {
   })
 
   it('fake output satisfies the schema and quotes the manuscript', () => {
-    const output = ReaderSimSchema.parse(readerSimTask.fake(input))
+    const output = ReaderSimSchema.parse(fakeReaderSim(input))
     expect(output.personas).toHaveLength(READER_PERSONAS.length)
     expect(output.summary).not.toBe('')
     const quotes = output.personas.flatMap((p) => p.moments.map((m) => m.quote))

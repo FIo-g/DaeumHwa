@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { FakeAiClient } from '@/ai/fake'
+import { FakeAiClient } from '@/test/fake-ai'
+import { fakeInterviewExtraction } from '@/test/ai-fakes/interview-extract'
+import { fakeInterviewQuestion } from '@/test/ai-fakes/interview-question'
 import { ExtractionSchema } from '@/ai/extraction'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
 import {
@@ -40,14 +42,14 @@ describe('interview-question task', () => {
   })
 
   it('fake output asks the first topic that has not been asked yet', () => {
-    const out = interviewQuestionTask.fake(emptyQuestionInput)
+    const out = fakeInterviewQuestion(emptyQuestionInput)
     expect(out.topic).toBe('주인공')
     expect(out.question).toBe('주인공은 누구이고, 이야기가 시작될 때 무엇을 가장 원하나요?')
     expect(out.rationale.length).toBeGreaterThan(0)
   })
 
   it('fake output skips topics already present in history, including skipped ones', () => {
-    const out = interviewQuestionTask.fake({
+    const out = fakeInterviewQuestion({
       ...emptyQuestionInput,
       history: [
         { topic: '주인공', question: 'q1', answer: null, skipped: true },
@@ -68,7 +70,7 @@ describe('interview-question task', () => {
       '결말 방향',
       '문체',
     ]
-    const out = interviewQuestionTask.fake({
+    const out = fakeInterviewQuestion({
       ...emptyQuestionInput,
       history: topics.map((topic) => ({ topic, question: 'q', answer: 'a', skipped: false })),
     })
@@ -84,7 +86,7 @@ describe('interview-question task', () => {
       schema: interviewQuestionTask.schema,
       effort: interviewQuestionTask.effort,
       maxTokens: interviewQuestionTask.maxTokens,
-      fake: () => interviewQuestionTask.fake(emptyQuestionInput),
+      task: { name: 'interview-question', input: emptyQuestionInput },
     })
     expect(result.object.topic).toBe('주인공')
   })
@@ -146,7 +148,7 @@ describe('interview-extract task', () => {
   })
 
   it('fake output for a protagonist answer creates a character and an assumed fact', () => {
-    const out = interviewExtractTask.fake(extractInput({}))
+    const out = fakeInterviewExtraction(extractInput({}))
     expect(() => ExtractionSchema.parse(out)).not.toThrow()
     expect(out.entries).toHaveLength(1)
     expect(out.entries[0]).toMatchObject({ name: '서윤', kind: 'character' })
@@ -164,7 +166,7 @@ describe('interview-extract task', () => {
   })
 
   it('fake output does not create an entry for a name that is already known', () => {
-    const out = interviewExtractTask.fake(
+    const out = fakeInterviewExtraction(
       extractInput({ known: [{ name: '서윤', kind: 'character', aliases: [] }] }),
     )
     expect(out.entries).toEqual([])
@@ -173,7 +175,7 @@ describe('interview-extract task', () => {
   })
 
   it('fake output matches a known alias with a particle attached', () => {
-    const out = interviewExtractTask.fake(
+    const out = fakeInterviewExtraction(
       extractInput({ known: [{ name: '이서윤', kind: 'character', aliases: ['서윤'] }] }),
     )
     expect(out.entries).toEqual([])
@@ -181,7 +183,7 @@ describe('interview-extract task', () => {
 
   it('fake output creates a planted thread for the 떡밥 topic', () => {
     const answer = '마지막 장의 편지에는 아직 아무도 모르는 비밀이 숨어 있다. 그건 나중에 밝힌다.'
-    const out = interviewExtractTask.fake(extractInput({ topic: '떡밥', answer }))
+    const out = fakeInterviewExtraction(extractInput({ topic: '떡밥', answer }))
     expect(out.threads).toHaveLength(1)
     expect(out.threads[0]).toMatchObject({
       kind: 'planted',
@@ -193,7 +195,7 @@ describe('interview-extract task', () => {
   })
 
   it('fake output for other topics creates only the fact', () => {
-    const out = interviewExtractTask.fake(
+    const out = fakeInterviewExtraction(
       extractInput({ topic: '문체', answer: '짧은 문장을 쓴다. 대사는 줄인다.' }),
     )
     expect(out.entries).toEqual([])

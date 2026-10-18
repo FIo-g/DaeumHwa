@@ -5,29 +5,31 @@ export type AiEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export type AiUsage = { inputTokens: number; outputTokens: number }
 
+/** Which task a call serves, and its input. Test clients use it to pick a fixed output; real clients ignore it. */
+export type AiTaskRef = { name: AiTaskName; input: unknown }
+
 export interface GenerateObjectArgs<T> {
+  task: AiTaskRef
   system: string
   prompt: string
   schema: z.ZodType<T>
   effort: AiEffort
   maxTokens: number
-  /** Returned by the fake client; the Anthropic client never calls it. */
-  fake: () => T
   model?: string
 }
 
 export interface StreamTextArgs {
+  task: AiTaskRef
   system: string
   prompt: string
   effort: AiEffort
   maxTokens: number
-  /** Returned by the fake client, split into chunks for streaming. */
-  fake: () => string
   model?: string
 }
 
 export interface AiClient {
-  provider: 'anthropic' | 'opencode' | 'fake'
+  /** Label of the backend, e.g. 'anthropic', 'opencode' or 'test'. */
+  provider: string
   defaultModel: string
   generateObject<T>(
     args: GenerateObjectArgs<T>,
@@ -38,7 +40,7 @@ export interface AiClient {
   }
 }
 
-/** One AI task: prompt, output schema, deterministic fake output and optional post-processing. */
+/** One AI task: prompt, output schema and optional post-processing. */
 export interface AiTaskDef<I, O> {
   name: AiTaskName
   effort: AiEffort
@@ -46,7 +48,6 @@ export interface AiTaskDef<I, O> {
   system: string
   buildPrompt(input: I): string
   schema: z.ZodType<O>
-  fake(input: I): O
   postProcess?(output: O, input: I): O
   model?: () => string | undefined
 }

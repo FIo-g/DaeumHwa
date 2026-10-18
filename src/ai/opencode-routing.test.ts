@@ -83,7 +83,7 @@ const baseArgs = {
   schema: OutputSchema,
   effort: 'low' as const,
   maxTokens: 500,
-  fake: () => ({ answer: '가짜', score: 0 }),
+  task: { name: 'proofread' as const, input: {} },
 }
 
 describe('apiFormatFor routing', () => {
