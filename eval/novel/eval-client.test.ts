@@ -425,6 +425,29 @@ describe('EvalClient streams', () => {
     expect(record).toMatchObject({ kind: 'stream', output: { text: 'Hello world' }, error: null })
   })
 
+  it('records and rethrows a synchronous throw from the inner generateObject', async () => {
+    const boom = { status: 503 }
+    const inner: AiClient = {
+      provider: 'sync-throw',
+      defaultModel: 'sync-model',
+      generateObject(): never {
+        throw boom
+      },
+      streamText() {
+        throw new Error('streamText is not used by this client')
+      },
+    }
+    const client = new EvalClient({ inner, profile: QWEN, lang: 'ko', callsDir })
+    await expect(client.generateObject(objectArgs())).rejects.toBe(boom)
+    const record = readRecord('001-proofread.json')
+    expect(record).toMatchObject({
+      kind: 'object',
+      error: { kind: 'external-network', status: 503 },
+    })
+    expect(client.nextSeq).toBe(2)
+    expect(client.takeLastFailure()).toMatchObject({ kind: 'external-network' })
+  })
+
   it('records and rethrows a synchronous throw from the inner streamText', () => {
     const boom = { status: 503 }
     const inner: AiClient = {

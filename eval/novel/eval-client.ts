@@ -73,7 +73,11 @@ const NETWORK_PATTERN =
   /fetch failed|connection error|socket hang up|\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|UND_ERR_[A-Z_]+)\b/i
 
 /** Higher wins when several failures are recorded before one is taken. */
-const SEVERITY: Record<FailureKind, number> = { model: 0, 'external-network': 1, 'external-limit': 2 }
+const SEVERITY: Record<FailureKind, number> = {
+  model: 0,
+  'external-network': 1,
+  'external-limit': 2,
+}
 
 /** Task defs that set their own time limit. Tasks without one use the product default. */
 const TASK_DEFS: readonly { name: AiTaskName; timeoutMs?: number }[] = [
@@ -188,19 +192,25 @@ export class EvalClient implements AiClient {
 
   async generateObject<T>(args: GenerateObjectArgs<T>) {
     const call = this.prepare(args.task.name, 'object', args.system, args.prompt, args.maxTokens)
-    const result = await this.inner
-      .generateObject<T>({
-        ...args,
-        system: call.system,
-        prompt: call.prompt,
-        effort: 'max',
-        maxTokens: call.maxTokens,
-        model: this.profile.model,
-      })
-      .catch((error: unknown): never => {
-        this.settle(call, { ok: false, error })
-        throw error
-      })
+    // A synchronous throw from a non-async inner client becomes a rejection, so it is recorded too.
+    const pending = (() => {
+      try {
+        return this.inner.generateObject<T>({
+          ...args,
+          system: call.system,
+          prompt: call.prompt,
+          effort: 'max',
+          maxTokens: call.maxTokens,
+          model: this.profile.model,
+        })
+      } catch (error) {
+        return Promise.reject(error)
+      }
+    })()
+    const result = await pending.catch((error: unknown): never => {
+      this.settle(call, { ok: false, error })
+      throw error
+    })
     this.settle(call, { ok: true, output: result.object, usage: result.usage })
     return result
   }
@@ -293,7 +303,10 @@ export class EvalClient implements AiClient {
       error,
     }
     this.records.push(record)
-    if (error && (!this.pendingFailure || SEVERITY[error.kind] > SEVERITY[this.pendingFailure.kind])) {
+    if (
+      error &&
+      (!this.pendingFailure || SEVERITY[error.kind] > SEVERITY[this.pendingFailure.kind])
+    ) {
       this.pendingFailure = error
     }
     mkdirSync(this.callsDir, { recursive: true })

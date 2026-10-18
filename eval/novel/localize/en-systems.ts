@@ -25,7 +25,6 @@ export const EN_INTERVIEW_TOPICS = [
   'central conflict',
   'threads',
   'ending direction',
-  ,
   'style',
 ] as const
 

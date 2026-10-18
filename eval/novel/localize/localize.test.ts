@@ -11,7 +11,7 @@ import { proofreadTask } from '@/ai/tasks/proofread'
 import { readerSimTask } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
 import { READER_PERSONAS } from '@/ai/personas'
-import { EN_SYSTEMS } from './en-systems'
+import { EN_INTERVIEW_TOPICS, EN_SYSTEMS } from './en-systems'
 import { findHangul, translateScaffold } from './scaffold'
 
 // English-content sample inputs for every task. Together they exercise every branch of the
@@ -325,6 +325,12 @@ describe('EN_SYSTEMS', () => {
       expect(EN_SYSTEMS[name].length).toBeGreaterThan(0)
       expect(findHangul(EN_SYSTEMS[name])).toEqual([])
     }
+  })
+
+  it('lists 8 non-empty interview topics with no empty array slot', () => {
+    expect(EN_INTERVIEW_TOPICS).toHaveLength(8)
+    expect(EN_INTERVIEW_TOPICS.every((topic) => topic.length > 0)).toBe(true)
+    expect(EN_SYSTEMS['interview-question']).not.toContain(', ,')
   })
 })
 
