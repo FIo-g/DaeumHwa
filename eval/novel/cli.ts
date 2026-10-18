@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readFileSync,
   readdirSync,
   realpathSync,
   writeFileSync,
@@ -13,7 +14,14 @@ import { fileURLToPath } from 'node:url'
 import { seoulToday } from '@/lib/dates'
 import { readPending } from './author-io'
 import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
-import { type RunConfig, type RunState, type RunStatus, loadConfig, loadState } from './state'
+import {
+  type RunConfig,
+  type RunState,
+  type RunStatus,
+  loadConfig,
+  loadState,
+  saveState,
+} from './state'
 import { createRun, openRun, runUntilBlocked } from './run'
 import { acquireLock, releaseLock, workerAlive } from './worker-lock'
 
@@ -132,7 +140,7 @@ export type SpawnWorker = (o: { dir: string; fakeAuthor: boolean }) => Promise<u
 
 const TSX_BIN = path.resolve('node_modules', '.bin', 'tsx')
 
-/** Starts `tsx eval/novel/cli.ts worker` detached, logging to worker.log. Resolves on exit. */
+/** Starts `tsx eval/novel/cli.ts worker` detached, logging to worker.log. Resolves on exit, rejects if it cannot start. */
 function spawnDetachedWorker(o: { dir: string; fakeAuthor: boolean }): Promise<void> {
   mkdirSync(o.dir, { recursive: true })
   const log = openSync(path.join(o.dir, 'worker.log'), 'a')
@@ -145,14 +153,40 @@ function spawnDetachedWorker(o: { dir: string; fakeAuthor: boolean }): Promise<v
   })
   closeSync(log)
   child.unref()
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     child.once('exit', () => resolve())
-    child.once('error', () => resolve())
+    child.once('error', reject)
   })
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+const LOG_TAIL_LINES = 20
+
+/** The last lines of worker.log, or null when the log is missing or empty. */
+function logTail(dir: string): string | null {
+  try {
+    const lines = readFileSync(path.join(dir, 'worker.log'), 'utf8')
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0)
+    return lines.slice(-LOG_TAIL_LINES).join('\n') || null
+  } catch {
+    return null
+  }
+}
+
+/** Marks the run paused-error with the reason a worker failed without saving a result. */
+function pausedError(dir: string, state: RunState, message: string): StatusJson {
+  const next: RunState = { ...state, status: 'paused-error', message }
+  saveState(dir, next)
+  return summarize(dir, next)
 }
 
 export type AdvanceOptions = {
@@ -169,34 +203,51 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
   const fakeAuthor = o.fakeAuthor ?? false
   const started = Date.now()
 
-  let spawnedDone = false
+  // Settles when the spawned worker exits (ok) or fails to start (error). Kept on an object so
+  // the closure's writes are visible after the loop.
+  const spawn: { settled: boolean; error: string | null } = { settled: false, error: null }
   const spawned = !workerAlive(dir)
   if (spawned) {
-    const spawn = o.spawnWorker ?? spawnDetachedWorker
-    Promise.resolve(spawn({ dir, fakeAuthor })).then(
-      () => {
-        spawnedDone = true
-      },
-      () => {
-        spawnedDone = true
-      },
-    )
+    const startWorker = o.spawnWorker ?? spawnDetachedWorker
+    Promise.resolve()
+      .then(() => startWorker({ dir, fakeAuthor }))
+      .then(
+        () => {
+          spawn.settled = true
+        },
+        (error: unknown) => {
+          spawn.settled = true
+          spawn.error = errorMessage(error)
+        },
+      )
   }
 
   for (;;) {
-    if (spawnedDone) break
+    if (spawn.settled) break
     if (!spawned && !workerAlive(dir)) break
     if (Date.now() - started >= maxMs) break
     await sleep(pollMs)
   }
 
   const state = loadState(dir)
-  const alive = workerAlive(dir)
-  const summary = summarize(dir, state)
-  if (alive && (state.status === 'new' || state.status === 'running')) {
-    return { ...summary, status: 'running' }
+  // A spawned child that has not exited yet may not hold the lock yet (startup gap), so it counts as live.
+  const live = (spawned && !spawn.settled) || workerAlive(dir)
+  if (live) {
+    const summary = summarize(dir, state)
+    if (state.status === 'new' || state.status === 'running')
+      return { ...summary, status: 'running' }
+    return summary
   }
-  return summary
+  // No live worker. A run still new or running, or a spawn failure, means the worker died
+  // before it saved a result. Report it as paused-error so the caller stops retrying.
+  if (spawn.error === null && state.status !== 'new' && state.status !== 'running') {
+    return summarize(dir, state)
+  }
+  return pausedError(
+    dir,
+    state,
+    spawn.error ?? logTail(dir) ?? 'worker exited without saving a result',
+  )
 }
 
 /** One run's summary, or every run under the results directory. */

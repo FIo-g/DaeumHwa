@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { acquireLock, releaseLock } from './worker-lock'
 import { advanceRun, formatStatus, initRun, probeContext, runWorker } from './cli'
-import { newState, type RunConfig } from './state'
+import { loadState, newState, type RunConfig, saveState } from './state'
 
 const dirs: string[] = []
 
@@ -106,6 +106,69 @@ describe('advance', () => {
     })
 
     expect(status).toMatchObject({ status: 'done', step: null })
+  })
+
+  it('reports a worker that exits without saving state as paused-error with the log tail', async () => {
+    const dir = join(tempDir(), 'run')
+    initRun({ model: 'fake', lang: 'ko', chapters: 1, questions: 2, dir })
+    const lines = Array.from({ length: 25 }, (_, i) => `line ${i + 1}`)
+    writeFileSync(join(dir, 'worker.log'), `${lines.join('\n')}\n`)
+
+    const status = await advanceRun(dir, {
+      pollMs: 10,
+      maxSeconds: 60,
+      spawnWorker: async () => {},
+    })
+
+    expect(status.status).toBe('paused-error')
+    expect(status.message).toContain('line 25')
+    expect(status.message).toContain('line 6')
+    expect(status.message).not.toContain('line 5')
+    expect(loadState(dir)).toMatchObject({ status: 'paused-error' })
+  })
+
+  it('turns a run left running by a dead worker into paused-error', async () => {
+    const dir = join(tempDir(), 'run')
+    initRun({ model: 'fake', lang: 'ko', dir })
+    saveState(dir, { ...loadState(dir), status: 'running' })
+    const dead = spawnSync(process.execPath, ['-e', '']).pid as number
+    writeFileSync(join(dir, 'worker.pid'), `${dead}\n`)
+
+    const status = await advanceRun(dir, {
+      pollMs: 10,
+      maxSeconds: 60,
+      spawnWorker: async () => {},
+    })
+
+    expect(status.status).toBe('paused-error')
+    expect(status.message).toBeTruthy()
+  })
+
+  it('reports a spawn failure as paused-error with the error message', async () => {
+    const dir = join(tempDir(), 'run')
+    initRun({ model: 'fake', lang: 'ko', dir })
+
+    const status = await advanceRun(dir, {
+      pollMs: 10,
+      maxSeconds: 60,
+      spawnWorker: async () => {
+        throw new Error('spawn tsx ENOENT')
+      },
+    })
+
+    expect(status).toMatchObject({ status: 'paused-error', message: 'spawn tsx ENOENT' })
+  })
+
+  it('reports running when the window ends while a worker holds the lock', async () => {
+    const dir = join(tempDir(), 'run')
+    initRun({ model: 'fake', lang: 'ko', dir })
+    expect(acquireLock(dir)).toBe(true)
+    try {
+      const status = await advanceRun(dir, { pollMs: 10, maxSeconds: 0 })
+      expect(status).toMatchObject({ status: 'running' })
+    } finally {
+      releaseLock(dir)
+    }
   })
 })
 
