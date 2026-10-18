@@ -3,12 +3,14 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { IssueRow } from '@/db/types'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
+import { useAiRun } from '@/lib/client/use-ai-run'
 import { ISSUE_KIND_LABEL, SEVERITY_LABEL } from '@/lib/labels'
 import { resolveIssueAction } from '@/server/actions/issues'
 import type { ChapterCheckResult } from '@/server/chapter-check'
@@ -44,7 +46,7 @@ export function CheckPanel({ data, api, text }: CheckPanelProps) {
     setSynced(data.issues)
     setIssues(data.issues)
   }
-  const [running, setRunning] = useState(false)
+  const ai = useAiRun()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [approvalOpen, setApprovalOpen] = useState(false)
   const [fixing, setFixing] = useState<IssueRow | null>(null)
@@ -75,18 +77,19 @@ export function CheckPanel({ data, api, text }: CheckPanelProps) {
   }, [api])
 
   async function runCheck() {
-    setRunning(true)
-    await api.saveNow()
     // A route handler, not a Server Action: the check can run for minutes, and Server Actions
     // run one at a time, so autosave and navigation would wait behind it.
-    const result = await runAction(
-      postAction<ChapterCheckResult>(
-        `/api/works/${data.workId}/chapters/${data.chapter.id}/check`,
-        {},
-      ),
-      { success: '점검을 마쳤습니다.' },
-    )
-    setRunning(false)
+    const result = await ai.run(async (signal) => {
+      await api.saveNow()
+      return runAction(
+        postAction<ChapterCheckResult>(
+          `/api/works/${data.workId}/chapters/${data.chapter.id}/check`,
+          {},
+          { signal },
+        ),
+        { success: '점검을 마쳤습니다.' },
+      )
+    })
     if (!result) return
     setIssues(result.issues)
     if (result.proposals.length > 0) setApprovalOpen(true)
@@ -129,11 +132,14 @@ export function CheckPanel({ data, api, text }: CheckPanelProps) {
   return (
     <section aria-label="회차 점검" className="grid gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        {editable && (
-          <Button size="sm" onClick={() => void runCheck()} disabled={running}>
-            {running ? '점검 중… (AI)' : '회차 점검'}
-          </Button>
-        )}
+        {editable &&
+          (ai.running ? (
+            <AiRunStatus label="점검 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+          ) : (
+            <Button size="sm" onClick={() => void runCheck()}>
+              회차 점검
+            </Button>
+          ))}
         {!editable && <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>}
         {issues.length > 0 && (
           <span className="text-sm text-muted-foreground">열린 지적 {issues.length}건</span>

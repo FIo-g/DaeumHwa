@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic, { APIConnectionTimeoutError, APIUserAbortError } from '@anthropic-ai/sdk'
 import { z } from 'zod'
-import { AnthropicAiClient } from '@/ai/anthropic'
+import { AnthropicAiClient, createAnthropicSdk } from '@/ai/anthropic'
+import { AI_TIMEOUT_MESSAGE } from '@/ai/types'
 import { AppError } from '@/lib/errors'
 
 type Call = { path: string; params: Record<string, unknown>; options?: unknown }
@@ -31,8 +32,8 @@ function stubSdk(opts?: {
 }) {
   const calls: Call[] = []
 
-  function makeStream(path: string, params: Record<string, unknown>) {
-    calls.push({ path, params })
+  function makeStream(path: string, params: Record<string, unknown>, options?: unknown) {
+    calls.push({ path, params, options })
     const deltas = opts?.streamDeltas ?? ['안녕', '하세요']
     let textHandler: ((delta: string) => void) | undefined
     const stream = {
@@ -69,12 +70,15 @@ function stubSdk(opts?: {
   const sdk = {
     messages: {
       parse: makeParse('messages.parse'),
-      stream: (params: Record<string, unknown>) => makeStream('messages.stream', params),
+      create: makeParse('messages.create'),
+      stream: (params: Record<string, unknown>, options?: unknown) =>
+        makeStream('messages.stream', params, options),
     },
     beta: {
       messages: {
         parse: makeParse('beta.messages.parse'),
-        stream: (params: Record<string, unknown>) => makeStream('beta.messages.stream', params),
+        stream: (params: Record<string, unknown>, options?: unknown) =>
+          makeStream('beta.messages.stream', params, options),
       },
     },
   }
@@ -337,5 +341,73 @@ describe('AnthropicAiClient.streamText', () => {
       task: { name: 'proofread' as const, input: {} },
     })
     await expect(final).rejects.toMatchObject({ code: 'AI_ERROR' })
+  })
+
+  it('passes the signal and timeout to the stream request', async () => {
+    const { sdk, calls } = stubSdk()
+    const controller = new AbortController()
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    const { final } = client.streamText({
+      system: 's',
+      prompt: 'p',
+      effort: 'low',
+      maxTokens: 100,
+      task: { name: 'proofread' as const, input: {} },
+      signal: controller.signal,
+      timeoutMs: 5000,
+    })
+    await final
+    expect(calls[0].options).toMatchObject({ signal: controller.signal, timeout: 5000 })
+  })
+
+  it('rejects final with CANCELLED when the stream request is aborted', async () => {
+    const { sdk } = stubSdk({ streamError: new APIUserAbortError() })
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    const { final } = client.streamText({
+      system: 's',
+      prompt: 'p',
+      effort: 'low',
+      maxTokens: 100,
+      task: { name: 'proofread' as const, input: {} },
+    })
+    await expect(final).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+  })
+})
+
+describe('AnthropicAiClient cancel and timeout', () => {
+  it('passes the signal and timeout to the structured request', async () => {
+    const { sdk, calls } = stubSdk()
+    const controller = new AbortController()
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    await client.generateObject({ ...baseArgs, signal: controller.signal, timeoutMs: 7000 })
+    expect(calls[0].options).toMatchObject({ signal: controller.signal, timeout: 7000 })
+  })
+
+  it('omits the timeout option when no timeout is given, so the SDK default applies', async () => {
+    const { sdk, calls } = stubSdk()
+    await new AnthropicAiClient(sdk, 'claude-haiku-5-5').generateObject(baseArgs)
+    expect(calls[0].options).not.toHaveProperty('timeout')
+  })
+
+  it('maps an SDK user abort to CANCELLED', async () => {
+    const { sdk } = stubSdk({ parseError: new APIUserAbortError() })
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
+      code: 'CANCELLED',
+      message: '취소했습니다.',
+    })
+  })
+
+  it('maps an SDK connection timeout to the Korean timeout message', async () => {
+    const { sdk } = stubSdk({ parseError: new APIConnectionTimeoutError() })
+    const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
+    await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
+      code: 'AI_ERROR',
+      message: AI_TIMEOUT_MESSAGE,
+    })
+  })
+
+  it('builds the default SDK with one retry at most', () => {
+    expect(createAnthropicSdk().maxRetries).toBe(1)
   })
 })

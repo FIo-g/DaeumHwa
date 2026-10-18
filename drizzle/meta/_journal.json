@@ -8,6 +8,13 @@
       "when": 1792156144078,
       "tag": "0000_fast_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792298681052,
+      "tag": "0001_strip_chapter_title_prefix",
+      "breakpoints": true
     }
   ]
 }

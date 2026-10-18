@@ -8,9 +8,19 @@ import {
   jsonInstruction,
   safeParseAnswer,
 } from '@/ai/anthropic'
-import type { AiClient, AiEffort, AiUsage, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
+import {
+  AI_CANCELLED_MESSAGE,
+  AI_TIMEOUT_MESSAGE,
+  type AiClient,
+  type AiEffort,
+  type AiUsage,
+  type GenerateObjectArgs,
+  type StreamTextArgs,
+} from '@/ai/types'
 
 const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
+/** Per-call overrides: the caller's cancel signal and time limit. */
+type CallOptions = { signal?: AbortSignal; timeoutMs?: number }
 const FORMAT_NAME = 'daeumhwa_answer'
 /** A 400 that names the structured-output parameter. Triggers one JSON-mode retry. */
 const FORMAT_REJECTED = /text\.format|json_schema|response_format/i
@@ -124,7 +134,7 @@ export class ResponsesAiClient implements AiClient {
       } catch (error) {
         billed = addUsage(billed, attemptUsage(error))
         const next = nextMode(error, mode)
-        if (!next) throw failure(error, billed)
+        if (!next) throw failure(error, billed, args.signal)
         mode = next
       }
     }
@@ -161,7 +171,7 @@ export class ResponsesAiClient implements AiClient {
         },
       }
     }
-    const response = await this.post(body)
+    const response = await this.post(body, args)
     const json = (await response.json()) as ResponseBody
     const usage = usageOf(json.usage)
     assertFinished(json, usage)
@@ -187,13 +197,14 @@ export class ResponsesAiClient implements AiClient {
     return body
   }
 
-  private async post(body: Record<string, unknown>): Promise<Response> {
+  private async post(body: Record<string, unknown>, call: CallOptions = {}): Promise<Response> {
     const headers: Record<string, string> = {
       'content-type': 'application/json',
       ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
       ...this.headers,
     }
     const payload = JSON.stringify(body)
+    const timeoutMs = call.timeoutMs ?? this.timeoutMs
     // Retries happen only here, before any answer body is read, so no stream text can repeat.
     for (let attempt = 0; ; attempt++) {
       const retriesLeft = attempt < MAX_RETRIES
@@ -203,7 +214,7 @@ export class ResponsesAiClient implements AiClient {
           method: 'POST',
           headers,
           body: payload,
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: attemptSignal(call.signal, timeoutMs),
         })
       } catch (error) {
         if (retriesLeft && error instanceof TypeError) {
@@ -238,10 +249,10 @@ export class ResponsesAiClient implements AiClient {
           this.plainModels.add(model)
           return result
         } catch (retryError) {
-          return this.failStream(channel, retryError)
+          return this.failStream(channel, retryError, args.signal)
         }
       }
-      return this.failStream(channel, error)
+      return this.failStream(channel, error, args.signal)
     }
   }
 
@@ -256,7 +267,7 @@ export class ResponsesAiClient implements AiClient {
       reasoning: withReasoning,
     })
     body.stream = true
-    const response = await this.post(body)
+    const response = await this.post(body, args)
     if (!response.body) throw new Error('응답 본문이 비어 있습니다')
 
     let text = ''
@@ -282,8 +293,8 @@ export class ResponsesAiClient implements AiClient {
     return { text: text || textOf(final.output), usage, model: final.model ?? model }
   }
 
-  private failStream(channel: TextChannel, error: unknown): never {
-    const aiError = failure(error, attemptUsage(error))
+  private failStream(channel: TextChannel, error: unknown, signal?: AbortSignal): never {
+    const aiError = failure(error, attemptUsage(error), signal)
     channel.fail(aiError)
     throw aiError
   }
@@ -452,10 +463,24 @@ function sleep(ms: number): Promise<void> {
  * Converts any error into the Korean AI_ERROR the app shows. `billed` is usage from every attempt
  * of the call, so run.ts still counts tokens the API already charged.
  */
-function failure(error: unknown, billed: AiUsage): AppError {
+function failure(error: unknown, billed: AiUsage, signal?: AbortSignal): AppError {
+  // The caller's cancel wins over the abort error the fetch raised.
+  if (signal?.aborted) return new AppError('CANCELLED', AI_CANCELLED_MESSAGE, usageDetails(billed))
+  if (isTimeoutError(error)) return aiErrorWithUsage(AI_TIMEOUT_MESSAGE, billed)
   if (error instanceof AppError) return aiErrorWithUsage(error.message, billed)
   if (error instanceof UnstructuredAnswer) return aiErrorWithUsage(FORMAT_MESSAGE, billed)
   return aiErrorWithUsage(`AI 호출에 실패했습니다: ${reasonOf(error).slice(0, 120)}`, billed)
+}
+
+/** The fetch timeout (AbortSignal.timeout) rejects with a TimeoutError. */
+function isTimeoutError(error: unknown): boolean {
+  return isRecord(error) && error.name === 'TimeoutError'
+}
+
+/** Aborts when the caller cancels or when the time limit passes, whichever comes first. */
+function attemptSignal(caller: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs)
+  return caller ? AbortSignal.any([caller, timeout]) : timeout
 }
 
 function reasonOf(error: unknown): string {
@@ -464,14 +489,17 @@ function reasonOf(error: unknown): string {
     if (error.status === 429) return '요청이 너무 많습니다'
     return error.message
   }
-  if (isRecord(error) && error.name === 'TimeoutError') return '응답 시간이 초과되었습니다'
   if (error instanceof Error) return error.message
   return String(error)
 }
 
-function aiErrorWithUsage(message: string, usage: AiUsage): AppError {
+function usageDetails(usage: AiUsage): { usage: AiUsage } | undefined {
   const billed = usage.inputTokens > 0 || usage.outputTokens > 0
-  return new AppError('AI_ERROR', message, billed ? { usage } : undefined)
+  return billed ? { usage } : undefined
+}
+
+function aiErrorWithUsage(message: string, usage: AiUsage): AppError {
+  return new AppError('AI_ERROR', message, usageDetails(usage))
 }
 
 /** Parses `data:` lines of a server-sent event stream. Events are split on blank lines. */

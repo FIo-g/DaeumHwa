@@ -3,12 +3,14 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { AiRunStatus } from '@/components/app/ai-run-status'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { runAction } from '@/lib/client/run-action'
+import { useAiRun } from '@/lib/client/use-ai-run'
 import { createChapterFromDraftAction } from '@/server/actions/ai-features'
 import type { WorkspaceApi, WritingData } from '../types'
 import { EDITOR_ONLY_NOTE, canEditChapter } from './shared'
@@ -34,14 +36,54 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   const [instructions, setInstructions] = useState('')
   const [targetChars, setTargetChars] = useState(String(data.targetChars))
   const [entryIds, setEntryIds] = useState<string[]>([])
-  const [streaming, setStreaming] = useState(false)
+  const ai = useAiRun()
   const [draft, setDraft] = useState<string | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
+  const [cancelled, setCancelled] = useState(false)
   const [appended, setAppended] = useState(false)
   const [creating, setCreating] = useState(false)
+  const streaming = ai.running
 
   function toggleCharacter(id: string, checked: boolean) {
     setEntryIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
+  }
+
+  /** Reads the streamed draft into state as it arrives. Resolves false when it failed or was aborted. */
+  async function streamDraft(
+    signal: AbortSignal,
+    body: { instructions: string; targetChars: number },
+  ): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/works/${data.workId}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chapterId: data.chapter.id, entryIds, ...body }),
+        signal,
+      })
+      if (!response.ok || !response.body) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null
+        toast.error(payload?.error ?? '초안을 쓰지 못했습니다.')
+        setDraft(null)
+        return false
+      }
+      setRunId(response.headers.get('X-Run-Id'))
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let text = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done || signal.aborted) break
+        text += decoder.decode(value, { stream: true })
+        setDraft(text)
+      }
+      text += decoder.decode()
+      if (signal.aborted) return false
+      setDraft(text)
+      return true
+    } catch {
+      if (!signal.aborted) toast.error('초안 작성이 중간에 끊겼습니다. 다시 시도해 주세요.')
+      return false
+    }
   }
 
   async function write() {
@@ -58,44 +100,15 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       return
     }
 
-    setStreaming(true)
     setDraft('')
     setRunId(null)
+    setCancelled(false)
     setAppended(false)
-    try {
-      const response = await fetch(`/api/works/${data.workId}/draft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chapterId: data.chapter.id,
-          instructions: trimmed,
-          targetChars: target,
-          entryIds,
-        }),
-      })
-      if (!response.ok || !response.body) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null
-        toast.error(payload?.error ?? '초안을 쓰지 못했습니다.')
-        setDraft(null)
-        return
-      }
-      setRunId(response.headers.get('X-Run-Id'))
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let text = ''
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        text += decoder.decode(value, { stream: true })
-        setDraft(text)
-      }
-      text += decoder.decode()
-      setDraft(text)
-    } catch {
-      toast.error('초안 작성이 중간에 끊겼습니다. 다시 시도해 주세요.')
-    } finally {
-      setStreaming(false)
-    }
+    // Resolves null when the author cancels. The partial text stays on screen, marked as stopped.
+    const completed = await ai.run((signal) =>
+      streamDraft(signal, { instructions: trimmed, targetChars: target }),
+    )
+    if (completed === null) setCancelled(true)
   }
 
   function appendToChapter() {
@@ -173,9 +186,13 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       )}
 
       <div>
-        <Button onClick={() => void write()} disabled={streaming || instructions.trim() === ''}>
-          {streaming ? '쓰는 중… (AI)' : '초안 쓰기'}
-        </Button>
+        {streaming ? (
+          <AiRunStatus label="쓰는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+        ) : (
+          <Button onClick={() => void write()} disabled={instructions.trim() === ''}>
+            초안 쓰기
+          </Button>
+        )}
       </div>
 
       {draft !== null && (
@@ -191,12 +208,13 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           <p className="text-xs text-muted-foreground">
             AI 초안은 작가가 고치고 저장해야 원고가 됩니다.
           </p>
+          {cancelled && <p className="text-sm text-muted-foreground">중간에 멈춘 초안입니다.</p>}
           {finished && (
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={appendToChapter} disabled={appended}>
                 {appended ? '원고 끝에 붙였습니다' : '현재 원고 끝에 붙이기'}
               </Button>
-              {runId && (
+              {runId && !cancelled && (
                 <Button variant="outline" onClick={() => void createChapter()} disabled={creating}>
                   새 회차로 만들기
                 </Button>

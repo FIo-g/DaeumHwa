@@ -1,6 +1,7 @@
 import { PageHeader } from '@/components/app/page-header'
 import { type ChapterTableRow, ChapterTable } from '@/components/chapters/chapter-table'
 import { NewChapterButton } from '@/components/chapters/new-chapter-button'
+import { resolveWorkSettings } from '@/db/types'
 import { hasRole } from '@/server/access'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { listChapters } from '@/server/chapters'
@@ -12,6 +13,7 @@ export default async function ChaptersPage({ params }: { params: Promise<{ workI
   const work = await guardPage(() => getWork(db, actor, workId))
   const rows = await guardPage(() => listChapters(db, actor, workId, { includeArchived: true }))
   const canEdit = hasRole(work.role, 'editor')
+  const targetChars = resolveWorkSettings(work.settings).targetChars
 
   const chapters: ChapterTableRow[] = rows.map((c) => ({
     id: c.id,
@@ -32,7 +34,12 @@ export default async function ChaptersPage({ params }: { params: Promise<{ workI
         description={`${visibleCount}화`}
         actions={canEdit ? <NewChapterButton workId={workId} /> : undefined}
       />
-      <ChapterTable workId={workId} chapters={chapters} canEdit={canEdit} />
+      <ChapterTable
+        workId={workId}
+        chapters={chapters}
+        targetChars={targetChars}
+        canEdit={canEdit}
+      />
     </div>
   )
 }

@@ -1,10 +1,23 @@
-import Anthropic, { APIError, AuthenticationError, RateLimitError } from '@anthropic-ai/sdk'
+import Anthropic, {
+  APIConnectionTimeoutError,
+  APIError,
+  APIUserAbortError,
+  AuthenticationError,
+  RateLimitError,
+} from '@anthropic-ai/sdk'
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { AppError } from '@/lib/errors'
 import { providerDefaultModel } from '@/ai/models'
-import type { AiClient, AiUsage, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
+import {
+  AI_CANCELLED_MESSAGE,
+  AI_TIMEOUT_MESSAGE,
+  type AiClient,
+  type AiUsage,
+  type GenerateObjectArgs,
+  type StreamTextArgs,
+} from '@/ai/types'
 
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01'
 /** Models that accept server-side fallback on the beta Messages API. */
@@ -84,7 +97,7 @@ export class AnthropicAiClient implements AiClient {
 
   constructor(sdk?: Anthropic, defaultModel?: string, options: AnthropicClientOptions = {}) {
     this.provider = options.provider ?? 'anthropic'
-    this.sdk = sdk ?? new Anthropic()
+    this.sdk = sdk ?? createAnthropicSdk()
     this.defaultModel = defaultModel ?? providerDefaultModel('anthropic')
     this.serverFallback = options.serverFallback ?? true
     this.jsonFallback = options.jsonFallback ?? false
@@ -114,24 +127,30 @@ export class AnthropicAiClient implements AiClient {
     const system = systemBlocks(args.system)
     const messages = [{ role: 'user' as const, content: args.prompt }]
     if (this.usesServerFallback(model)) {
-      const response = await this.sdk.beta.messages.parse({
+      const response = await this.sdk.beta.messages.parse(
+        {
+          model,
+          max_tokens: args.maxTokens,
+          system,
+          messages,
+          output_config: { format: betaZodOutputFormat(args.schema), effort: args.effort },
+          betas: [FALLBACK_BETA],
+          fallbacks: 'default',
+        },
+        requestOptions(args),
+      )
+      return objectResult(response as ObjectResponse<T>)
+    }
+    const response = await this.sdk.messages.parse(
+      {
         model,
         max_tokens: args.maxTokens,
         system,
         messages,
-        output_config: { format: betaZodOutputFormat(args.schema), effort: args.effort },
-        betas: [FALLBACK_BETA],
-        fallbacks: 'default',
-      })
-      return objectResult(response as ObjectResponse<T>)
-    }
-    const response = await this.sdk.messages.parse({
-      model,
-      max_tokens: args.maxTokens,
-      system,
-      messages,
-      output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
-    })
+        output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
+      },
+      requestOptions(args),
+    )
     return objectResult(response as ObjectResponse<T>)
   }
 
@@ -143,13 +162,16 @@ export class AnthropicAiClient implements AiClient {
     args: GenerateObjectArgs<T>,
     model: string,
   ): Promise<ObjectResult<T>> {
-    const response = await this.sdk.messages.create({
-      model,
-      max_tokens: args.maxTokens,
-      system: systemBlocks(args.system),
-      messages: [{ role: 'user' as const, content: args.prompt }],
-      output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
-    })
+    const response = await this.sdk.messages.create(
+      {
+        model,
+        max_tokens: args.maxTokens,
+        system: systemBlocks(args.system),
+        messages: [{ role: 'user' as const, content: args.prompt }],
+        output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
+      },
+      requestOptions(args),
+    )
     const usage = usageOf(response.usage)
     assertStopReason(response.stop_reason, usage)
     const checked = safeParseAnswer(args.schema, textOf(response.content))
@@ -168,17 +190,20 @@ export class AnthropicAiClient implements AiClient {
     billed: AiUsage,
   ): Promise<ObjectResult<T>> {
     try {
-      const response = await this.sdk.messages.create({
-        model,
-        max_tokens: args.maxTokens,
-        system: systemBlocks(args.system),
-        messages: [
-          {
-            role: 'user' as const,
-            content: `${args.prompt}\n\n${jsonInstruction(args.schema)}`,
-          },
-        ],
-      })
+      const response = await this.sdk.messages.create(
+        {
+          model,
+          max_tokens: args.maxTokens,
+          system: systemBlocks(args.system),
+          messages: [
+            {
+              role: 'user' as const,
+              content: `${args.prompt}\n\n${jsonInstruction(args.schema)}`,
+            },
+          ],
+        },
+        requestOptions(args),
+      )
       const usage = addUsage(billed, usageOf(response.usage))
       assertStopReason(response.stop_reason, usage)
       const checked = safeParseAnswer(args.schema, textOf(response.content))
@@ -240,13 +265,17 @@ export class AnthropicAiClient implements AiClient {
       messages: [{ role: 'user' as const, content: args.prompt }],
       ...(sendEffort ? { output_config: { effort: args.effort } } : {}),
     }
+    const options = requestOptions(args)
     const stream: TextStream = this.usesServerFallback(model)
-      ? this.sdk.beta.messages.stream({
-          ...params,
-          betas: [FALLBACK_BETA],
-          fallbacks: 'default',
-        })
-      : this.sdk.messages.stream(params)
+      ? this.sdk.beta.messages.stream(
+          {
+            ...params,
+            betas: [FALLBACK_BETA],
+            fallbacks: 'default',
+          },
+          options,
+        )
+      : this.sdk.messages.stream(params, options)
     stream.on('text', (delta: string) => channel.push(delta))
     const message = await stream.finalMessage()
     const usage = usageOf(message.usage)
@@ -267,6 +296,19 @@ export class AnthropicAiClient implements AiClient {
 
   private usesServerFallback(model: string): boolean {
     return this.serverFallback && FALLBACK_MODELS.has(model)
+  }
+}
+
+/** SDK client with one retry at most, so a stalled call cannot hold a request for minutes. */
+export function createAnthropicSdk(): Anthropic {
+  return new Anthropic({ maxRetries: 1 })
+}
+
+/** Per-request options for the SDK. Unset values are left out so the SDK defaults apply. */
+function requestOptions(args: { signal?: AbortSignal; timeoutMs?: number }) {
+  return {
+    ...(args.signal ? { signal: args.signal } : {}),
+    ...(args.timeoutMs !== undefined ? { timeout: args.timeoutMs } : {}),
   }
 }
 
@@ -383,6 +425,17 @@ function addUsage(a: AiUsage, b: AiUsage): AiUsage {
  */
 function toAiError(error: unknown, billed: AiUsage = NO_USAGE): AppError {
   if (error instanceof AppError) return error
+  const billedAny = billed.inputTokens > 0 || billed.outputTokens > 0
+  if (error instanceof APIUserAbortError) {
+    return new AppError(
+      'CANCELLED',
+      AI_CANCELLED_MESSAGE,
+      billedAny ? { usage: billed } : undefined,
+    )
+  }
+  if (error instanceof APIConnectionTimeoutError) {
+    return new AppError('AI_ERROR', AI_TIMEOUT_MESSAGE, billedAny ? { usage: billed } : undefined)
+  }
   let reason: string
   if (error instanceof AuthenticationError) {
     reason = 'API 키가 올바르지 않습니다'
@@ -395,7 +448,6 @@ function toAiError(error: unknown, billed: AiUsage = NO_USAGE): AppError {
   } else {
     reason = String(error)
   }
-  const billedAny = billed.inputTokens > 0 || billed.outputTokens > 0
   return new AppError(
     'AI_ERROR',
     `AI 호출에 실패했습니다: ${reason.slice(0, 120)}`,

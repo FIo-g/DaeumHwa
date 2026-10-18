@@ -73,7 +73,7 @@ export const ruleSpellChecker: SpellChecker = {
 /** Wraps the proofread task. `lastRunId` is the run of the most recent check call. */
 function aiSpellChecker(
   db: Db,
-  meta: { userId: string; workId: string; chapterId: string },
+  meta: { userId: string; workId: string; chapterId: string; signal?: AbortSignal },
   client: AiClient | undefined,
 ): SpellChecker & { lastRunId: () => string | null } {
   let runId: string | null = null
@@ -127,10 +127,11 @@ export async function runChapterCheck(
   actor: Actor,
   input: { chapterId: string },
   client?: AiClient,
+  signal?: AbortSignal,
 ): Promise<ChapterCheckResult> {
   const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId)
   const text = chapter.body
-  const meta = { userId: actor.userId, workId, chapterId: chapter.id }
+  const meta = { userId: actor.userId, workId, chapterId: chapter.id, signal }
 
   const pack = await buildContextPack(db, workId, { text, position: chapter.position })
   const entryRows = await db
@@ -320,6 +321,7 @@ export async function runProofread(
   actor: Actor,
   input: { chapterId: string; text?: string; useAi: boolean },
   client?: AiClient,
+  signal?: AbortSignal,
 ): Promise<{ suggestions: ProofreadSuggestion[]; runId: string | null }> {
   const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId)
   const text = input.text ?? chapter.body
@@ -332,7 +334,7 @@ export async function runProofread(
 
   const ruleSuggestions = await ruleSpellChecker.check(text)
   const ai = input.useAi
-    ? aiSpellChecker(db, { userId: actor.userId, workId, chapterId: chapter.id }, client)
+    ? aiSpellChecker(db, { userId: actor.userId, workId, chapterId: chapter.id, signal }, client)
     : null
   const aiSuggestions = ai ? await ai.check(text) : []
 

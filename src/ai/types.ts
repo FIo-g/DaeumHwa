@@ -5,6 +5,9 @@ export type AiEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export type AiUsage = { inputTokens: number; outputTokens: number }
 
+export const AI_CANCELLED_MESSAGE = '취소했습니다.'
+export const AI_TIMEOUT_MESSAGE = 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.'
+
 /** Which task a call serves, and its input. Test clients use it to pick a fixed output; real clients ignore it. */
 export type AiTaskRef = { name: AiTaskName; input: unknown }
 
@@ -16,6 +19,8 @@ export interface GenerateObjectArgs<T> {
   effort: AiEffort
   maxTokens: number
   model?: string
+  signal?: AbortSignal
+  timeoutMs?: number
 }
 
 export interface StreamTextArgs {
@@ -25,6 +30,8 @@ export interface StreamTextArgs {
   effort: AiEffort
   maxTokens: number
   model?: string
+  signal?: AbortSignal
+  timeoutMs?: number
 }
 
 export interface AiClient {
@@ -50,4 +57,5 @@ export interface AiTaskDef<I, O> {
   schema: z.ZodType<O>
   postProcess?(output: O, input: I): O
   model?: () => string | undefined
+  timeoutMs?: number
 }

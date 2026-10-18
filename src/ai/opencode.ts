@@ -39,6 +39,7 @@ export function createOpencodeSdk(options: { fetch?: typeof fetch } = {}): Anthr
     authToken: process.env.OPENCODE_API_KEY?.trim() || null,
     defaultHeaders: { ...SHARED_HEADERS },
     fetch: options.fetch,
+    maxRetries: 1,
   })
 }
 

@@ -218,7 +218,31 @@ describe('CheckPanel', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(fetchMock.mock.calls[0][0]).toBe('/api/works/work-1/chapters/c1/check')
-    expect(screen.getByRole('button', { name: '점검 중… (AI)' })).toBeTruthy()
+    expect(screen.getByText('점검 중… 0초')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '취소' })).toBeTruthy()
+  })
+
+  it('cancels a running check, aborts its request and brings back the check button', async () => {
+    // Like the browser, the fetch rejects with an AbortError once its signal aborts.
+    fetchMock.mockImplementation(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          )
+        }),
+    )
+    const api = makeApi()
+    render(<CheckPanel data={makeData({ issues: [] })} api={api} text="본문" />)
+
+    fireEvent.click(screen.getByRole('button', { name: '회차 점검' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '취소' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(await screen.findByRole('button', { name: '회차 점검' })).toBeTruthy()
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true)
+    expect(toast).toHaveBeenCalledWith('취소했습니다.')
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('shows the manuscript sentence and the wiki evidence side by side', () => {

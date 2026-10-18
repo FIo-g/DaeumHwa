@@ -59,6 +59,7 @@ export async function runReaderSimulation(
   actor: Actor,
   input: { chapterId: string; personaIds?: string[] },
   client?: AiClient,
+  signal?: AbortSignal,
 ): Promise<{ runId: string; result: ReaderSimResult }> {
   const chapterRow = await getChapter(db, actor, input.chapterId)
   await requireWorkRole(db, chapterRow.workId, actor.userId, 'editor')
@@ -69,7 +70,7 @@ export async function runReaderSimulation(
   const all = await listChapters(db, actor, chapterRow.workId)
   const { output, runId } = await runAiTask(
     db,
-    { userId: actor.userId, workId: chapterRow.workId, chapterId: chapterRow.id },
+    { userId: actor.userId, workId: chapterRow.workId, chapterId: chapterRow.id, signal },
     readerSimTask,
     {
       chapterText: chapterRow.body,
@@ -262,6 +263,7 @@ export async function startDraft(
     entryIds: string[]
   },
   client?: AiClient,
+  signal?: AbortSignal,
 ): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
   const { workId } = input
   const instructions = input.instructions.trim()
@@ -321,7 +323,7 @@ export async function startDraft(
 
   return startAiStream(
     db,
-    { userId: actor.userId, workId, chapterId },
+    { userId: actor.userId, workId, chapterId, signal },
     {
       task: 'draft-chapter',
       input: { instructions },

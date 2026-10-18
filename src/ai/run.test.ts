@@ -5,7 +5,15 @@ import { FakeAiClient } from '@/test/fake-ai'
 import { setAiClientForTests } from '@/ai'
 import type { AiClient } from '@/ai/types'
 import type { AiTaskDef } from '@/ai/types'
-import { assertWithinLimit, getTodayUsage, listAiRuns, runAiTask, startAiStream } from '@/ai/run'
+import {
+  AI_CANCELLED_MESSAGE,
+  AI_TIMEOUT_MESSAGE,
+  assertWithinLimit,
+  getTodayUsage,
+  listAiRuns,
+  runAiTask,
+  startAiStream,
+} from '@/ai/run'
 import type { Db } from '@/db/client'
 import { aiRuns } from '@/db/schema'
 import { AppError } from '@/lib/errors'
@@ -438,6 +446,149 @@ describe('startAiStream', () => {
     ).rejects.toMatchObject({ code: 'AI_ERROR' })
     const rows = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
     expect(rows[0].status).toBe('error')
+  })
+})
+
+describe('cancel and timeout', () => {
+  const usage = { inputTokens: 0, outputTokens: 0 }
+  const streamArgs = {
+    task: 'draft-chapter' as const,
+    effort: 'high' as const,
+    maxTokens: 500,
+    system: 's',
+    prompt: 'p',
+    input: { instructions: '' },
+  }
+
+  it('records a run as error and throws CANCELLED when the signal is already aborted', async () => {
+    const { db, userId, workId } = await setup()
+    const controller = new AbortController()
+    controller.abort()
+    const client = taskClient()
+    const spy = vi.spyOn(client, 'generateObject')
+    await expect(
+      runAiTask(db, { userId, workId, signal: controller.signal }, task, { q: '안녕' }, client),
+    ).rejects.toMatchObject({ code: 'CANCELLED', message: AI_CANCELLED_MESSAGE })
+    expect(spy).not.toHaveBeenCalled()
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.status).toBe('error')
+    expect(row.error).toBe('취소했습니다.')
+  })
+
+  it('records the timeout message when the client gives up on time', async () => {
+    const { db, userId, workId } = await setup()
+    const timingOut: AiClient = {
+      ...failingClient,
+      async generateObject() {
+        throw new AppError('AI_ERROR', AI_TIMEOUT_MESSAGE)
+      },
+    }
+    await expect(
+      runAiTask(db, { userId, workId }, task, { q: '안녕' }, timingOut),
+    ).rejects.toMatchObject({ code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.status).toBe('error')
+    expect(row.error).toBe(AI_TIMEOUT_MESSAGE)
+  })
+
+  it('keeps the output as done when the signal aborts after the answer arrived', async () => {
+    const { db, userId, workId } = await setup()
+    const controller = new AbortController()
+    const client: AiClient = {
+      ...failingClient,
+      async generateObject() {
+        controller.abort()
+        return { object: { text: '답' } as never, usage, model: 'claude-haiku-5-5' }
+      },
+    }
+    const { output, runId } = await runAiTask(
+      db,
+      { userId, workId, signal: controller.signal },
+      task,
+      { q: '안녕' },
+      client,
+    )
+    expect(output).toEqual({ text: '답' })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
+    expect(row.status).toBe('done')
+  })
+
+  it('maps an abort raised by the client to CANCELLED when the signal is aborted', async () => {
+    const { db, userId, workId } = await setup()
+    const controller = new AbortController()
+    const client: AiClient = {
+      ...failingClient,
+      async generateObject() {
+        controller.abort()
+        throw new Error('This operation was aborted')
+      },
+    }
+    await expect(
+      runAiTask(db, { userId, workId, signal: controller.signal }, task, { q: '안녕' }, client),
+    ).rejects.toMatchObject({ code: 'CANCELLED' })
+  })
+
+  it('passes meta.timeoutMs, then task.timeoutMs, then the 120 second default to the client', async () => {
+    const { db, userId, workId } = await setup()
+    const seen: (number | undefined)[] = []
+    const client: AiClient = {
+      ...failingClient,
+      async generateObject(args) {
+        seen.push(args.timeoutMs)
+        return { object: { text: '답' } as never, usage, model: 'claude-haiku-5-5' }
+      },
+    }
+    await runAiTask(db, { userId, workId }, task, { q: '하나' }, client)
+    await runAiTask(db, { userId, workId }, { ...task, timeoutMs: 90_000 }, { q: '둘' }, client)
+    await runAiTask(
+      db,
+      { userId, workId, timeoutMs: 5_000 },
+      { ...task, timeoutMs: 90_000 },
+      { q: '셋' },
+      client,
+    )
+    expect(seen).toEqual([120_000, 90_000, 5_000])
+  })
+
+  it('marks a stream as error and rejects done with CANCELLED when the stream is aborted', async () => {
+    const { db, userId, workId } = await setup()
+    const controller = new AbortController()
+    const client: AiClient = {
+      ...failingClient,
+      streamText() {
+        return {
+          textStream: (async function* () {
+            yield '첫 줄'
+            await new Promise(() => {})
+          })(),
+          final: new Promise((_, reject) => {
+            controller.signal.addEventListener('abort', () => reject(new Error('aborted')))
+          }),
+        }
+      },
+    }
+    const { runId, done } = await startAiStream(
+      db,
+      { userId, workId, signal: controller.signal },
+      streamArgs,
+      client,
+    )
+    controller.abort()
+    await expect(done).rejects.toMatchObject({ code: 'CANCELLED', message: AI_CANCELLED_MESSAGE })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
+    expect(row.status).toBe('error')
+    expect(row.error).toBe(AI_CANCELLED_MESSAGE)
+  })
+
+  it('throws CANCELLED before streaming when the signal is already aborted', async () => {
+    const { db, userId, workId } = await setup()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      startAiStream(db, { userId, workId, signal: controller.signal }, streamArgs, taskClient()),
+    ).rejects.toMatchObject({ code: 'CANCELLED' })
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
+    expect(row.status).toBe('error')
   })
 })
 

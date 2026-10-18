@@ -30,6 +30,14 @@ describe('runAction', () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 
+  it('returns null without an error toast when the call was cancelled', async () => {
+    const data = await runAction(
+      Promise.resolve({ ok: false, error: { code: 'CANCELLED', message: '취소했습니다.' } }),
+    )
+    expect(data).toBeNull()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   it('returns null and shows a generic message when the request itself rejects', async () => {
     const data = await runAction(Promise.reject(new TypeError('network')))
     expect(data).toBeNull()

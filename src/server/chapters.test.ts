@@ -58,15 +58,23 @@ async function setup() {
 }
 
 describe('createChapter', () => {
-  it("defaults title '1화' and position 1, then '2화'", async () => {
+  it('stores an empty title without a title, with position 1, then 2', async () => {
     const { actor, work } = await setup()
     const first = await createChapter(db, actor, { workId: work.id })
     expect(first.position).toBe(1)
-    expect(first.title).toBe('1화')
+    expect(first.title).toBe('')
     expect(first.version).toBe(1)
     const second = await createChapter(db, actor, { workId: work.id })
     expect(second.position).toBe(2)
-    expect(second.title).toBe('2화')
+    expect(second.title).toBe('')
+  })
+
+  it('strips a repeated episode number from the given title', async () => {
+    const { actor, work } = await setup()
+    const chapter = await createChapter(db, actor, { workId: work.id, title: '2화 재회' })
+    expect(chapter.title).toBe('재회')
+    const [version] = await listVersions(db, actor, chapter.id)
+    expect(version.title).toBe('재회')
   })
 
   it('writes the first version row with the given source', async () => {
@@ -90,7 +98,7 @@ describe('createChapter', () => {
     expect(inserted.position).toBe(1)
     const list = await listChapters(db, actor, work.id)
     expect(list.map((c) => c.position)).toEqual([1, 2, 3])
-    expect(list.map((c) => c.title)).toEqual(['1화', '1화', '2화'])
+    expect(list.map((c) => c.title)).toEqual(['', '', ''])
   })
 
   it('rejects a viewer with FORBIDDEN', async () => {
@@ -113,7 +121,7 @@ describe('saveChapter', () => {
     expect(saved.version).toBe(2)
     expect(saved.charCount).toBe(4)
     expect(saved.charCountNoSpaces).toBe(3)
-    expect(saved.title).toBe('1화')
+    expect(saved.title).toBe('')
   })
 
   it('keeps fields that are not in the input', async () => {
@@ -126,6 +134,17 @@ describe('saveChapter', () => {
     })
     expect(saved.title).toBe('새 제목')
     expect(saved.body).toBe('원래 본문')
+  })
+
+  it('strips a repeated episode number from a saved title', async () => {
+    const { actor, work } = await setup()
+    const chapter = await createChapter(db, actor, { workId: work.id })
+    const saved = await saveChapter(db, actor, {
+      chapterId: chapter.id,
+      title: '5화 끝',
+      expectedVersion: 1,
+    })
+    expect(saved.title).toBe('끝')
   })
 
   it('with a stale expectedVersion throws CONFLICT carrying the current version', async () => {
@@ -498,7 +517,7 @@ describe('openNextChapter', () => {
     expect(result.created).toBe(true)
     const chapter = await getChapter(db, actor, result.chapterId)
     expect(chapter.position).toBe(2)
-    expect(chapter.title).toBe('2화')
+    expect(chapter.title).toBe('')
   })
 })
 
@@ -520,6 +539,20 @@ describe('createChaptersBulk', () => {
     expect(created.map((c) => c.title)).toEqual(['가져온 1', '가져온 2'])
     const versions = await listVersions(db, actor, created[0].id)
     expect(versions[0].source).toBe('import')
+  })
+
+  it('strips repeated episode numbers from imported titles', async () => {
+    const { actor, work } = await setup()
+    const created = await createChaptersBulk(db, actor, {
+      workId: work.id,
+      chapters: [
+        { title: '2화 재회', body: '하나' },
+        { title: '3화', body: '둘' },
+      ],
+      status: 'done',
+      versionSource: 'import',
+    })
+    expect(created.map((c) => c.title)).toEqual(['재회', ''])
   })
 })
 

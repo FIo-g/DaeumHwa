@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AiBadge } from '@/components/app/ai-badge'
+import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
+import { useAiRun } from '@/lib/client/use-ai-run'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
 import { EDITOR_ONLY_NOTE, canEditChapter, offerUndo, rangeOf } from './shared'
 
@@ -42,7 +44,8 @@ const KIND_LABEL: Record<ProofreadItem['kind'], string> = {
 export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
   const editable = canEditChapter(data)
   const [items, setItems] = useState<ProofreadItem[] | null>(null)
-  const [running, setRunning] = useState<'rule' | 'ai' | null>(null)
+  const [ruleRunning, setRuleRunning] = useState(false)
+  const ai = useAiRun()
 
   const highlights = useMemo<Highlight[]>(
     () =>
@@ -62,17 +65,32 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
     return () => api.setHighlights('proofread', [])
   }, [api])
 
-  async function run(useAi: boolean) {
-    setRunning(useAi ? 'ai' : 'rule')
-    // A route handler, not a Server Action: the AI pass can take a while, and Server Actions
-    // run one at a time, so autosave would wait behind it.
+  const proofreadUrl = `/api/works/${data.workId}/chapters/${data.chapter.id}/proofread`
+
+  async function runRules() {
+    setRuleRunning(true)
+    // A route handler, not a Server Action, so a long AI pass elsewhere cannot hold this queue.
     const result = await runAction(
-      postAction<{ suggestions: ProofreadItem[]; runId: string | null }>(
-        `/api/works/${data.workId}/chapters/${data.chapter.id}/proofread`,
-        { text: api.getText(), useAi },
+      postAction<{ suggestions: ProofreadItem[]; runId: string | null }>(proofreadUrl, {
+        text: api.getText(),
+        useAi: false,
+      }),
+    )
+    setRuleRunning(false)
+    if (result) setItems(result.suggestions)
+  }
+
+  async function runAi() {
+    // The AI pass can take a while, and the author may cancel it from the status line.
+    const result = await ai.run((signal) =>
+      runAction(
+        postAction<{ suggestions: ProofreadItem[]; runId: string | null }>(
+          proofreadUrl,
+          { text: api.getText(), useAi: true },
+          { signal },
+        ),
       ),
     )
-    setRunning(null)
     if (result) setItems(result.suggestions)
   }
 
@@ -114,14 +132,18 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
             <Button
               size="sm"
               variant="outline"
-              disabled={running !== null}
-              onClick={() => void run(false)}
+              disabled={ruleRunning || ai.running}
+              onClick={() => void runRules()}
             >
-              {running === 'rule' ? '검사 중…' : '규칙 검사'}
+              {ruleRunning ? '검사 중…' : '규칙 검사'}
             </Button>
-            <Button size="sm" disabled={running !== null} onClick={() => void run(true)}>
-              {running === 'ai' ? '교정 중… (AI)' : 'AI 교정'}
-            </Button>
+            {ai.running ? (
+              <AiRunStatus label="교정 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+            ) : (
+              <Button size="sm" disabled={ruleRunning} onClick={() => void runAi()}>
+                AI 교정
+              </Button>
+            )}
           </>
         ) : (
           <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>

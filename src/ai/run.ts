@@ -3,10 +3,19 @@ import type { Db } from '@/db/client'
 import { aiRuns } from '@/db/schema'
 import type { Actor, AiRunRow, AiTaskName } from '@/db/types'
 import { getAiClient } from '@/ai'
-import type { AiClient, AiEffort, AiTaskDef, AiUsage } from '@/ai/types'
+import {
+  AI_CANCELLED_MESSAGE,
+  AI_TIMEOUT_MESSAGE,
+  type AiClient,
+  type AiEffort,
+  type AiTaskDef,
+  type AiUsage,
+} from '@/ai/types'
 import { seoulDayStart } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
 import { requireWorkRole } from '@/server/access'
+
+export { AI_CANCELLED_MESSAGE, AI_TIMEOUT_MESSAGE }
 
 const DEFAULT_DAILY_TOKEN_LIMIT = 3_000_000
 const LIMIT_MESSAGE = '오늘 AI 사용량 한도를 넘었습니다. 내일 다시 시도해 주세요.'
@@ -15,8 +24,22 @@ const MAX_RUNNING_RUNS = 3
 /** Running rows older than this are treated as abandoned and do not count toward the cap. */
 const RUNNING_STALE_MS = 10 * 60 * 1000
 const CONCURRENCY_MESSAGE = '진행 중인 AI 작업이 너무 많습니다. 끝난 뒤 다시 시도해 주세요.'
+/** Time limit for a structured call when neither the meta nor the task sets one. */
+export const DEFAULT_AI_TIMEOUT_MS = 120_000
+/** Time limit for a streamed text call (drafts). */
+export const STREAM_AI_TIMEOUT_MS = 280_000
 
-export type AiRunMeta = { userId: string; workId: string | null; chapterId?: string | null }
+/**
+ * `signal` cancels the call (the run is recorded as `error` with 취소했습니다.). `timeoutMs`
+ * overrides the task's own limit.
+ */
+export type AiRunMeta = {
+  userId: string
+  workId: string | null
+  chapterId?: string | null
+  signal?: AbortSignal
+  timeoutMs?: number
+}
 
 export interface StreamRunArgs {
   task: AiTaskName
@@ -45,6 +68,7 @@ export async function runAiTask<I, O>(
   const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
   let usage: AiUsage | undefined
   try {
+    if (meta.signal?.aborted) throw cancelledError()
     const result = await client.generateObject({
       task: { name: task.name, input },
       system: task.system,
@@ -53,6 +77,8 @@ export async function runAiTask<I, O>(
       effort: task.effort,
       maxTokens: task.maxTokens,
       model: taskModel,
+      signal: meta.signal,
+      timeoutMs: meta.timeoutMs ?? task.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS,
     })
     usage = result.usage
     const output = task.postProcess ? task.postProcess(result.object, input) : result.object
@@ -64,7 +90,7 @@ export async function runAiTask<I, O>(
     })
     return { output, runId }
   } catch (error) {
-    const aiError = toRunError(error)
+    const aiError = toRunError(error, meta.signal)
     // Tokens billed before the failure still count toward the daily limit.
     await finishRun(db, runId, {
       status: 'error',
@@ -89,6 +115,7 @@ export async function startAiStream(
   const runId = await insertRun(db, meta, args.task, args.model ?? client.defaultModel)
   let stream: ReturnType<AiClient['streamText']>
   try {
+    if (meta.signal?.aborted) throw cancelledError()
     stream = client.streamText({
       task: { name: args.task, input: args.input },
       system: args.system,
@@ -96,9 +123,11 @@ export async function startAiStream(
       effort: args.effort,
       maxTokens: args.maxTokens,
       model: args.model,
+      signal: meta.signal,
+      timeoutMs: meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS,
     })
   } catch (error) {
-    const aiError = toRunError(error)
+    const aiError = toRunError(error, meta.signal)
     await finishRun(db, runId, {
       status: 'error',
       error: aiError.message,
@@ -117,7 +146,7 @@ export async function startAiStream(
       return result.text
     },
     async (error: unknown) => {
-      const aiError = toRunError(error)
+      const aiError = toRunError(error, meta.signal)
       await finishRun(db, runId, {
         status: 'error',
         error: aiError.message,
@@ -279,7 +308,13 @@ function isTokenCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
-function toRunError(error: unknown): AppError {
+function cancelledError(): AppError {
+  return new AppError('CANCELLED', AI_CANCELLED_MESSAGE)
+}
+
+function toRunError(error: unknown, signal?: AbortSignal): AppError {
+  // A cancel wins over whatever error the client raised while aborting.
+  if (signal?.aborted) return cancelledError()
   // Usage details stay on the server; actions forward AppError.details to the browser.
   if (error instanceof AppError) {
     return error.details === undefined ? error : new AppError(error.code, error.message)

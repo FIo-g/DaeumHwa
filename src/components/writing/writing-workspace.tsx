@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { CompleteConfirmDialog } from '@/components/chapters/complete-confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import type { ChapterStatus } from '@/db/types'
+import { lengthShortfall, shortfallMessage } from '@/lib/chapter-length'
 import { type AutosaveInput, type AutosaveResult, useAutosave } from '@/lib/client/use-autosave'
 import { runAction } from '@/lib/client/run-action'
+import { countChars } from '@/lib/korean/chars'
 import type { ActionResult } from '@/lib/result'
 import { restoreChapterAction, setChapterStatusAction } from '@/server/actions/chapters'
 import { saveChapterAction, saveResumePointAction } from '@/server/actions/manuscript'
@@ -160,9 +163,23 @@ export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorksp
     router.push(href)
   }
 
-  async function changeStatus(next: ChapterStatus) {
+  /** Confirmation text while a draft under the target length waits for "완료하기". */
+  const [completeMessage, setCompleteMessage] = useState<string | null>(null)
+
+  async function applyStatus(next: ChapterStatus) {
     const result = await runAction(setChapterStatusAction({ chapterId: chapter.id, status: next }))
     if (result) router.refresh()
+  }
+
+  async function changeStatus(next: ChapterStatus) {
+    if (next === 'done' && chapter.status === 'draft') {
+      const { withSpaces } = countChars(textRef.current)
+      if (lengthShortfall(withSpaces, data.targetChars)) {
+        setCompleteMessage(shortfallMessage(withSpaces, data.targetChars))
+        return
+      }
+    }
+    await applyStatus(next)
   }
 
   async function reopenChapter() {
@@ -292,6 +309,14 @@ export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorksp
           onOverwrite={() => void overwriteWithMine()}
         />
       )}
+      <CompleteConfirmDialog
+        open={completeMessage !== null}
+        message={completeMessage ?? ''}
+        onConfirm={() => void applyStatus('done')}
+        onOpenChange={(open) => {
+          if (!open) setCompleteMessage(null)
+        }}
+      />
     </div>
   )
 }

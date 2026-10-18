@@ -3,7 +3,8 @@ import type { ActionResult } from '@/lib/result'
 
 /**
  * Awaits a server action from a client component. Failures show a toast and resolve to null;
- * successes resolve to the data and optionally show a success toast.
+ * successes resolve to the data and optionally show a success toast. A cancelled call resolves
+ * to null without a toast, since the cancel control already said so.
  */
 export async function runAction<T>(
   promise: Promise<ActionResult<T>>,
@@ -17,7 +18,7 @@ export async function runAction<T>(
     return null
   }
   if (!result.ok) {
-    toast.error(result.error.message)
+    if (result.error.code !== 'CANCELLED') toast.error(result.error.message)
     return null
   }
   if (options?.success) toast.success(options.success)

@@ -267,7 +267,7 @@ describe('import jobs', () => {
       const sorted = rows.sort((a, b) => a.position - b.position)
       expect(sorted.map((c) => c.position)).toEqual([1, 2, 3])
       expect(sorted.map((c) => c.status)).toEqual(['done', 'done', 'done'])
-      expect(sorted.map((c) => c.title)).toEqual(['1화', '2화', '3화'])
+      expect(sorted.map((c) => c.title)).toEqual(['', '', ''])
       expect(job2.chapterIds).toEqual(sorted.map((c) => c.id))
     })
 
@@ -812,7 +812,7 @@ describe('import jobs', () => {
         {
           chapterId: skipped.chapterIds[1],
           position: 2,
-          title: '2화',
+          title: '',
           reason: '2화에서 멈췄습니다: AI 호출에 실패했습니다: refusal',
         },
       ])

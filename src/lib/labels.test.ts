@@ -11,6 +11,7 @@ import {
   THREAD_EVENT_LABEL,
   THREAD_STATUS_LABEL,
   chapterLabel,
+  stripEpisodePrefix,
 } from '@/lib/labels'
 
 describe('labels', () => {
@@ -35,5 +36,20 @@ describe('labels', () => {
     expect(chapterLabel(3, null)).toBe('3화')
     expect(chapterLabel(3, '  ')).toBe('3화')
     expect(chapterLabel(3, '재회')).toBe('3화 재회')
+  })
+
+  it('stripEpisodePrefix removes a leading episode number only at a boundary', () => {
+    expect(stripEpisodePrefix('1화')).toBe('')
+    expect(stripEpisodePrefix('1화 00:00 멈춘 종')).toBe('00:00 멈춘 종')
+    expect(stripEpisodePrefix('제3화: 재회')).toBe('재회')
+    expect(stripEpisodePrefix('12화살의 비밀')).toBe('12화살의 비밀')
+    expect(stripEpisodePrefix('재회')).toBe('재회')
+  })
+
+  it('chapterLabel does not repeat a number already in the title', () => {
+    expect(chapterLabel(1, '1화')).toBe('1화')
+    expect(chapterLabel(1, '1화 멈춘 종')).toBe('1화 멈춘 종')
+    expect(chapterLabel(3, '재회')).toBe('3화 재회')
+    expect(chapterLabel(2, '')).toBe('2화')
   })
 })

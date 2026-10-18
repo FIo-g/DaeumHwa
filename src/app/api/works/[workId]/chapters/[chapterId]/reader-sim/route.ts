@@ -16,7 +16,17 @@ export async function POST(
   { params }: { params: Promise<{ workId: string; chapterId: string }> },
 ): Promise<Response> {
   const { workId, chapterId } = await params
-  return runChapterRoute(request, { workId, chapterId }, ReaderSimBodySchema, (db, actor, input) =>
-    runReaderSimulation(db, actor, { chapterId, personaIds: input.personaIds }),
+  return runChapterRoute(
+    request,
+    { workId, chapterId },
+    ReaderSimBodySchema,
+    (db, actor, input, signal) =>
+      runReaderSimulation(
+        db,
+        actor,
+        { chapterId, personaIds: input.personaIds },
+        undefined,
+        signal,
+      ),
   )
 }

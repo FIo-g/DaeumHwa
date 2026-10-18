@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'VALIDATION'
   | 'AI_LIMIT'
   | 'AI_ERROR'
+  | 'CANCELLED'
   | 'BAD_STATE'
   | 'UNAUTHENTICATED'
 

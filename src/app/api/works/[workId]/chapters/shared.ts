@@ -24,20 +24,21 @@ export const ProofreadBodySchema = z.object({
 
 /**
  * Checks the session, parses the JSON body with `schema`, verifies that the chapter belongs to
- * the work in the path, runs `fn` and refreshes the work's cached pages.
+ * the work in the path, runs `fn` and refreshes the work's cached pages. `fn` gets the request's
+ * signal, which aborts when the browser cancels or drops the call.
  */
 export async function runChapterRoute<I, T>(
   request: Request,
   params: { workId: string; chapterId: string },
   schema: z.ZodType<I>,
-  fn: (db: Db, actor: Actor, input: I) => Promise<T>,
+  fn: (db: Db, actor: Actor, input: I, signal: AbortSignal) => Promise<T>,
 ): Promise<Response> {
   const { workId, chapterId } = params
   const result = await withAction(async (db, actor) => {
     const input = schema.parse(await request.json().catch(() => null))
     const rowWork = await requireRowWork(db, 'chapters', chapterId)
     if (rowWork !== workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
-    const out = await fn(db, actor, input)
+    const out = await fn(db, actor, input, request.signal)
     revalidateWork(workId)
     return out
   })

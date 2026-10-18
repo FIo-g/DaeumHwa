@@ -40,11 +40,19 @@ export async function POST(
     return Response.json({ error: '입력값이 올바르지 않습니다.' }, { status: 400 })
   }
 
+  // Aborted by the browser (request.signal) or by the body stream being cancelled.
+  const abort = new AbortController()
+  const stopOnRequestAbort = () => abort.abort()
+  request.signal.addEventListener('abort', stopOnRequestAbort, { once: true })
+  if (request.signal.aborted) abort.abort()
+
   try {
     const { runId, textStream, done } = await startDraft(
       getDb(),
       { userId: user.id },
       { workId, ...parsed.data },
+      undefined,
+      abort.signal,
     )
     const encoder = new TextEncoder()
     const body = new ReadableStream<Uint8Array>({
@@ -58,6 +66,9 @@ export async function POST(
         } catch (error) {
           controller.error(error)
         }
+      },
+      cancel() {
+        abort.abort()
       },
     })
     return new Response(body, {

@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { AiRunStatus } from '@/components/app/ai-run-status'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
+import { useAiRun } from '@/lib/client/use-ai-run'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
 import { EDITOR_ONLY_NOTE, canEditChapter, rangeOf } from './shared'
@@ -46,7 +48,8 @@ type Result = { runId: string; result: ReaderSimResult }
 export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
   const editable = canEditChapter(data)
   const [selected, setSelected] = useState<string[]>(PERSONAS.map((p) => p.id))
-  const [running, setRunning] = useState(false)
+  const ai = useAiRun()
+  const running = ai.running
   const [output, setOutput] = useState<Result | null>(null)
 
   useEffect(() => {
@@ -80,16 +83,18 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
 
   async function run() {
     if (selected.length === 0) return
-    setRunning(true)
-    await api.saveNow()
     // A route handler, not a Server Action: several personas can take minutes, and Server Actions
     // run one at a time, so autosave and navigation would wait behind it.
-    const result = await runAction(
-      postAction<Result>(`/api/works/${data.workId}/chapters/${data.chapter.id}/reader-sim`, {
-        personaIds: selected,
-      }),
-    )
-    setRunning(false)
+    const result = await ai.run(async (signal) => {
+      await api.saveNow()
+      return runAction(
+        postAction<Result>(
+          `/api/works/${data.workId}/chapters/${data.chapter.id}/reader-sim`,
+          { personaIds: selected },
+          { signal },
+        ),
+      )
+    })
     if (result) setOutput(result)
   }
 
@@ -124,9 +129,17 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
             })}
           </fieldset>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => void run()} disabled={running || selected.length === 0}>
-              {running ? '읽는 중… (AI)' : '독자 반응 보기'}
-            </Button>
+            {running ? (
+              <AiRunStatus
+                label="독자 반응 보는 중"
+                elapsedSec={ai.elapsedSec}
+                onCancel={ai.cancel}
+              />
+            ) : (
+              <Button onClick={() => void run()} disabled={selected.length === 0}>
+                독자 반응 보기
+              </Button>
+            )}
             <Link
               href={`/works/${data.workId}/reader-sim`}
               className={buttonVariants({ variant: 'ghost' })}

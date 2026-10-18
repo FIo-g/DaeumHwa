@@ -63,7 +63,7 @@ describe('chapter actions', () => {
     const result = await createChapterAction({ workId: work.id })
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.data.title).toBe('1화')
+    expect(result.data.title).toBe('')
     expect(mocks.revalidatePath).toHaveBeenCalledWith(`/works/${work.id}`, 'layout')
   })
 

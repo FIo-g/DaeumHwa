@@ -271,7 +271,7 @@ describe('draft', () => {
       title: '3화 초안',
     })
     expect(chapter.body).toBe(text)
-    expect(chapter.title).toBe('3화 초안')
+    expect(chapter.title).toBe('초안')
 
     const versions = await db
       .select()

@@ -11,7 +11,11 @@ export async function POST(
   { params }: { params: Promise<{ workId: string; chapterId: string }> },
 ): Promise<Response> {
   const { workId, chapterId } = await params
-  return runChapterRoute(request, { workId, chapterId }, ProofreadBodySchema, (db, actor, input) =>
-    runProofread(db, actor, { chapterId, ...input }),
+  return runChapterRoute(
+    request,
+    { workId, chapterId },
+    ProofreadBodySchema,
+    (db, actor, input, signal) =>
+      runProofread(db, actor, { chapterId, ...input }, undefined, signal),
   )
 }

@@ -13,7 +13,7 @@ import type {
 import { countChars } from '@/lib/korean/chars'
 import { isPlausibleIsoDate } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
-import { chapterLabel } from '@/lib/labels'
+import { chapterLabel, stripEpisodePrefix } from '@/lib/labels'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { recomputeAppearances } from '@/server/appearances'
 import { recordChange } from '@/server/changes'
@@ -223,7 +223,7 @@ export async function createChapter(
         )
     }
 
-    const title = input.title?.trim() || `${position}화`
+    const title = stripEpisodePrefix(input.title ?? '')
     const { withSpaces, withoutSpaces } = countChars(body)
     const now = new Date()
     const [chapter] = await tx
@@ -275,7 +275,7 @@ export async function createChaptersBulk(
     const created: ChapterRow[] = []
     for (const [index, item] of input.chapters.entries()) {
       const position = start + index
-      const title = item.title.trim() || `${position}화`
+      const title = stripEpisodePrefix(item.title)
       const { withSpaces, withoutSpaces } = countChars(item.body)
       const now = new Date()
       const [chapter] = await tx
@@ -328,7 +328,7 @@ export async function saveChapter(
     assertNotArchived(chapter)
 
     const source = input.source ?? 'save'
-    const title = input.title !== undefined ? input.title.trim() : chapter.title
+    const title = input.title !== undefined ? stripEpisodePrefix(input.title) : chapter.title
     const body = input.body ?? chapter.body
     const { withSpaces, withoutSpaces } = countChars(body)
     const now = new Date()

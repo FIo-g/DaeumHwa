@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { AI_TIMEOUT_MESSAGE } from '@/ai/types'
 import { AppError } from '@/lib/errors'
 import {
   ResponsesAiClient,
@@ -558,5 +559,67 @@ describe('ResponsesAiClient stream cleanup', () => {
     })
     await expect(result.final).rejects.toMatchObject({ code: 'AI_ERROR' })
     expect(hold.cancelled).toBe(true)
+  })
+})
+
+/** Fetch that never answers; it rejects with the signal's reason once the signal aborts. */
+function hangingFetch(): { fetchImpl: typeof fetch; signals: (AbortSignal | undefined)[] } {
+  const signals: (AbortSignal | undefined)[] = []
+  const fetchImpl = (_input: string | URL | Request, init?: RequestInit) => {
+    signals.push(init?.signal ?? undefined)
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+    })
+  }
+  return { fetchImpl: fetchImpl as unknown as typeof fetch, signals }
+}
+
+describe('ResponsesAiClient cancel and timeout', () => {
+  it('maps an abort from the caller to CANCELLED', async () => {
+    const { fetchImpl } = hangingFetch()
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), 5)
+    const error = await makeClient(fetchImpl)
+      .generateObject({ ...baseArgs, signal: controller.signal })
+      .catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+  })
+
+  it('applies the timeout when no signal is given', async () => {
+    const { fetchImpl } = hangingFetch()
+    const client = new ResponsesAiClient({
+      baseUrl: 'https://gateway.test/v1',
+      apiKey: 'oc-test-key',
+      fetch: fetchImpl,
+      defaultModel: MODEL,
+      retryBaseDelayMs: 0,
+      timeoutMs: 20,
+    })
+    const error = await client.generateObject(baseArgs).catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE })
+  })
+
+  it('uses the per-call timeout over the client timeout', async () => {
+    const { fetchImpl } = hangingFetch()
+    const client = makeClient(fetchImpl)
+    const error = await client
+      .generateObject({ ...baseArgs, timeoutMs: 10 })
+      .catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE })
+  })
+
+  it('maps a stream aborted by the caller to CANCELLED', async () => {
+    const { fetchImpl } = hangingFetch()
+    const controller = new AbortController()
+    const result = makeClient(fetchImpl).streamText({
+      system: '시스템',
+      prompt: '초안',
+      effort: 'low',
+      maxTokens: 500,
+      task: { name: 'proofread' as const, input: {} },
+      signal: controller.signal,
+    })
+    controller.abort()
+    await expect(result.final).rejects.toMatchObject({ code: 'CANCELLED' })
   })
 })

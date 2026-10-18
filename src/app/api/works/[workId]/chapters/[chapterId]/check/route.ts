@@ -14,7 +14,10 @@ export async function POST(
   { params }: { params: Promise<{ workId: string; chapterId: string }> },
 ): Promise<Response> {
   const { workId, chapterId } = await params
-  return runChapterRoute(request, { workId, chapterId }, CheckBodySchema, (db, actor) =>
-    runChapterCheck(db, actor, { chapterId }),
+  return runChapterRoute(
+    request,
+    { workId, chapterId },
+    CheckBodySchema,
+    (db, actor, _input, signal) => runChapterCheck(db, actor, { chapterId }, undefined, signal),
   )
 }

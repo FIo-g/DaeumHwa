@@ -281,7 +281,12 @@ export async function advanceImportJob(
   try {
     const result = await runAiTask(
       db,
-      { userId: o.userId ?? job.createdBy, workId: job.workId, chapterId: chapter.id },
+      {
+        userId: o.userId ?? job.createdBy,
+        workId: job.workId,
+        chapterId: chapter.id,
+        timeoutMs: 240_000,
+      },
       importExtractTask,
       {
         chapterText: chapter.body,

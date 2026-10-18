@@ -7,6 +7,7 @@ import { type KeyboardEvent, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
+import { CompleteConfirmDialog } from '@/components/chapters/complete-confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -20,6 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { ChapterStatus } from '@/db/types'
+import { lengthShortfall, shortfallMessage } from '@/lib/chapter-length'
 import { runAction } from '@/lib/client/run-action'
 import { formatKoreanDateTime, isPlausibleIsoDate } from '@/lib/dates'
 import { CHAPTER_STATUS_LABEL, chapterLabel } from '@/lib/labels'
@@ -49,6 +51,8 @@ type ChapterTableProps = {
   workId: string
   /** Every chapter of the work in manuscript order, archived ones included. */
   chapters: ChapterTableRow[]
+  /** Target length of the work in characters, with spaces. */
+  targetChars: number
   /** Editor role or higher. Viewers see the table read-only. */
   canEdit: boolean
 }
@@ -57,10 +61,12 @@ type ChapterTableProps = {
  * Chapter list for 회차 관리. Archived chapters are hidden until the toggle is on.
  * Status, publish date, order, archive and restore go through server actions, then refresh.
  */
-export function ChapterTable({ workId, chapters, canEdit }: ChapterTableProps) {
+export function ChapterTable({ workId, chapters, targetChars, canEdit }: ChapterTableProps) {
   const router = useRouter()
   const [showArchived, setShowArchived] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  /** A draft under the target length, waiting for the author to confirm completion. */
+  const [pendingComplete, setPendingComplete] = useState<ChapterTableRow | null>(null)
 
   const visible = chapters.filter((c) => c.archivedAt === null)
   const shown = showArchived ? chapters : visible
@@ -145,15 +151,22 @@ export function ChapterTable({ workId, chapters, canEdit }: ChapterTableProps) {
                         size="sm"
                         aria-label={`${chapter.position}화 상태 바꾸기`}
                         disabled={busy}
-                        onClick={() =>
-                          perform(
+                        onClick={() => {
+                          if (
+                            chapter.status === 'draft' &&
+                            lengthShortfall(chapter.charCount, targetChars)
+                          ) {
+                            setPendingComplete(chapter)
+                            return
+                          }
+                          void perform(
                             `status-${chapter.id}`,
                             setChapterStatusAction({
                               chapterId: chapter.id,
                               status: chapter.status === 'draft' ? 'done' : 'draft',
                             }),
                           )
-                        }
+                        }}
                       >
                         {CHAPTER_STATUS_LABEL[chapter.status]}
                       </Button>
@@ -261,6 +274,21 @@ export function ChapterTable({ workId, chapters, canEdit }: ChapterTableProps) {
           </TableBody>
         </Table>
       )}
+
+      <CompleteConfirmDialog
+        open={pendingComplete !== null}
+        message={pendingComplete ? shortfallMessage(pendingComplete.charCount, targetChars) : ''}
+        onConfirm={() => {
+          if (!pendingComplete) return
+          void perform(
+            `status-${pendingComplete.id}`,
+            setChapterStatusAction({ chapterId: pendingComplete.id, status: 'done' }),
+          )
+        }}
+        onOpenChange={(open) => {
+          if (!open) setPendingComplete(null)
+        }}
+      />
     </div>
   )
 }

@@ -45,6 +45,29 @@ describe('postAction', () => {
     if (!result.ok) expect(result.error.message).toBe('잠시 후 다시 시도해 주세요.')
   })
 
+  it('passes the signal to fetch and resolves to CANCELLED when the request is aborted', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          )
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const pending = postAction('/api/x', {}, { signal: controller.signal })
+    controller.abort()
+    const result = await pending
+
+    expect(fetchMock.mock.calls[0][1]?.signal).toBe(controller.signal)
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'CANCELLED', message: '취소했습니다.' },
+    })
+  })
+
   it('turns a non-JSON or foreign body into a failed result', async () => {
     vi.stubGlobal(
       'fetch',
