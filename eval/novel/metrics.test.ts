@@ -12,6 +12,14 @@ describe('chapterMetrics length check', () => {
     expect(chapterMetrics(text, 'ko', 5000).lengthOk).toBe(false)
   })
 
+  it('does not count line breaks toward the Korean length', () => {
+    // 4,999 Hangul chars plus a paragraph break: the editor count is 4,999, so it must fail.
+    const text = '가'.repeat(2500) + '\n\n' + '가'.repeat(2499)
+    const result = chapterMetrics(text, 'ko', 5000)
+    expect(result.chars).toBe(4999)
+    expect(result.lengthOk).toBe(false)
+  })
+
   it('rejects text above 1.3 times the target', () => {
     const text = '가'.repeat(6600)
     expect(chapterMetrics(text, 'ko', 5000).lengthOk).toBe(false)

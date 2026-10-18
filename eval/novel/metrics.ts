@@ -1,3 +1,5 @@
+import { countChars } from '@/lib/korean/chars'
+
 export type ChapterMetrics = {
   chars: number // with spaces, trimmed
   targetChars: number
@@ -30,9 +32,14 @@ const DIALOGUE_OPENERS = new Set(['"', '“', "'", '‘', '「', '『'])
 const LATIN_RUN = /[A-Za-z]{4,}/g
 const HANGUL_RUN = /[가-힣]+/g
 
-export function chapterMetrics(text: string, lang: 'ko' | 'en', targetChars: number): ChapterMetrics {
+export function chapterMetrics(
+  text: string,
+  lang: 'ko' | 'en',
+  targetChars: number,
+): ChapterMetrics {
   const trimmed = text.trim()
-  const chars = [...trimmed].length
+  // Same "공백 포함" definition the editor shows: line breaks are not counted.
+  const chars = countChars(trimmed).withSpaces
   const minChars = lang === 'ko' ? targetChars : targetChars * 0.8
   const lengthOk = chars >= minChars && chars <= targetChars * 1.3
 
