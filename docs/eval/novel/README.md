@@ -130,6 +130,13 @@ pnpm eval:novel resummarize --date 2026-10-18                               # �
      pnpm eval:novel init --model gpt-oss-20b --lang ko --helper-think low --chapters 1 --dir eval/results/novel/<새 날짜>/run-02-ko
      ```
 
+   - 출력 한도를 작업 자체의 값으로 재려면 `--product-limits`를 쓴다(초안 16,000 등). 하한 32,000을 적용하지 않는다. effort는 그대로 high다. 비교 실행에만 쓰고 새 폴더를 쓴다. 클라우드 모델용이다(로컬 모델은 생각이 길어 한도에 자주 걸리고, 작업 한도를 넘기기도 한다). 만들 때 정한 값은 바꿀 수 없다. `--product-limits off`는 받지만 이 옵션 없이 만든 실행과만 맞는다.
+
+     ```bash
+     pnpm eval:novel init --model haiku-5.5 --lang ko --product-limits --chapters 1 --dir eval/results/novel/2026-10-19-r2limits/run-04-ko
+     pnpm eval:novel init --model haiku-5.5 --lang en --product-limits --chapters 1 --dir eval/results/novel/2026-10-19-r2limits/run-04-en
+     ```
+
    - 그다음 스킬을 같은 `date`와 `chapters: 1`로 부른다. 스킬의 init은 그 폴더만 이어 쓴다. 폴더가 다르면 생각 설정이 없는 새 실행이 만들어진다.
    - 실행의 화 수는 만들 때 정해진다. `--chapters 1`을 빼면 5화로 만들어진다.
 
@@ -144,6 +151,7 @@ pnpm eval:novel resummarize --date 2026-10-18                               # �
 - **로컬 호출 시간의 내역.** 로컬 호출의 `calls/*.json`에는 `ollama` 항목이 있다. 시도(attempt)마다 `loadMs`, `promptEvalMs`, `evalMs`, `totalMs`, `otherMs`, 토큰 수, `doneReason`, 생각 길이(`thinkingChunks`, `thinkingChars`)를 적는다. 생각 길이는 개수와 글자 수뿐이고 내용은 없다. `unaccountedMs`는 호출 시간에서 Ollama의 `totalMs`를 뺀 값으로, Ollama 타이머 밖에서 쓴 시간이다. 시도가 끝나지 않았으면 `null`이다. 같은 프롬프트를 이 프로세스에서 이미 보냈거나 프롬프트 속도가 초당 5,000토큰을 넘으면 캐시로 보고 프롬프트 속도를 비운다(`null`, `promptCacheSuspected: true`). `run-summary.json`의 `speed.ollama`는 시간이 어디로 갔는지 합산한다(`timed.wallMs`는 적재, 프롬프트, 생성, 기타, 밖의 시간의 합). `speed.slow`는 출력 속도가 실행의 보통 속도(중앙값)의 70% 아래인 호출을 나열한다. 출력 50토큰 이상인 호출이 5개 이상 있어야 한다. 이 변경 전 실행에는 `ollama` 항목이 없고, `resummarize`는 그런 실행에 `speed.slow`만 채운다. 응답 스트림을 받기 전에 연결이 실패한 시도는 세지 않는다.
 - **전원과 에너지 모드 기록.** 로컬 모델 호출은 시작할 때 읽은 전원과 에너지 모드를 호출 기록의 `power`(`source`: `ac`, `battery`, `ups`, `unknown` / `mode`: `low`, `automatic`, `high`, `unknown` / `modeRaw`: `pmset`의 원래 줄)에 남긴다. 호출 도중에 바뀐 값은 잡지 못하고 다음 호출에서야 드러난다. `run-summary.json`의 `power`에는 모드별, 전원별 호출 수가 들어간다. 지금 저전력이거나 저전력으로 시작한 호출이 하나라도 있으면 `advance`와 `status`가 내는 JSON 한 줄에 `warning`이 붙는다. 실행은 멈추지 않는다. 클라우드 실행과 이 변경 전 실행에는 `power`가 없다. 검토자용 복사본에서는 `power`를 뺀다(로컬 실행임이 드러나기 때문이다).
 - **작가 에이전트의 시야.** 2026-10-19부터 작가는 대기 중인 항목, 설정집(bible), 지침 말고도 `author-context.json`을 읽는다. 이 파일에는 지금까지 승인된 위키, 앞서 내린 판단(거절한 항목 포함), 중복 힌트가 들어 있다. 힌트는 조언일 뿐이고 판단은 작가가 한다. 2026-10-18 이전 결과는 작가가 보는 것이 달라서 직접 비교할 수 없다. 새 실행에서 중복 승인은 `countDecisionMetrics`로 센다.
+- **호출 기록의 한도 값.** `effortRequested`와 `maxTokens`는 하네스가 모델에 보낸 값이다. `taskEffort`와 `taskMaxTokens`는 제품 작업이 정한 값이고, `maxTokensRule`이 `floor`면 보낸 `maxTokens`는 둘 중 큰 값, `product`면 작업 값이다. 이 변경 전 호출 기록에는 작업 값이 없다. 보낸 effort는 모든 호출에서 모델 프로필 값이라(클라우드는 high), 작업이 낮은 effort를 정한 호출(인터뷰 질문 등)도 high로 돈다. `run-summary.json`의 `outputCap`은 출력 한도에 걸려 끊긴 호출(`cutOff`)과 출력이 작업 한도를 넘은 호출(`overTaskCap`)을 작업별로 센다. 하한 32,000으로 돈 실행의 `overTaskCap`은 제품 한도였다면 끊겼을 호출 수다. 하한 실행에서는 끊긴 호출이 `cutOff`와 `overTaskCap`에 함께 들 수 있다. 제품 한도 실행에서 한도에 맞춰 끊긴 호출은 `cutOff`에만 든다.
 
 ## 5. 시험 운행 기록
 

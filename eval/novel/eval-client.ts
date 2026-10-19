@@ -54,8 +54,16 @@ export type CallRecord = {
   firstTokenMs: number | null
   speed: CallSpeed
   model: string
+  /** Effort the eval passed to the inner client (the profile's). A provider may ignore it; Ollama does. */
   effortRequested: AiEffort
+  /** Output cap the eval passed to the inner client: the larger of the task's value and the profile floor, or the task's value with `--product-limits`. */
   maxTokens: number
+  /** The task's own effort, as the product sends it. */
+  taskEffort?: AiEffort
+  /** The task's own maxTokens, as the product sends it. */
+  taskMaxTokens?: number
+  /** How `maxTokens` was chosen. */
+  maxTokensRule?: 'floor' | 'product'
   productTimeoutMs: number
   wouldTimeOut: boolean
   system: string
@@ -87,6 +95,8 @@ export interface EvalClientOptions {
   now?: () => number
   /** Think level for helper tasks in a compare run. See `thinkFor` in ./models. */
   helperThink?: HelperThink
+  /** Send the task's own maxTokens, without the profile floor (`--product-limits`). Effort is not affected. */
+  productLimits?: boolean
   /** Reads the machine power state. Used for local profiles only; see the constructor. */
   readPower?: PowerReader
 }
@@ -317,6 +327,9 @@ type Prepared = {
   system: string
   prompt: string
   maxTokens: number
+  taskEffort: AiEffort
+  taskMaxTokens: number
+  maxTokensRule: 'floor' | 'product'
   productTimeoutMs: number
   power?: PowerInfo
   /** Local calls only: a hash of task, system and prompt. Null on other providers. */
@@ -372,6 +385,7 @@ export class EvalClient implements AiClient {
   private readonly callsDir: string
   private readonly now: () => number
   private readonly helperThink: HelperThink | undefined
+  private readonly productLimits: boolean
   /** Set only for local profiles, so cloud and fake runs never read power. */
   private readonly readPower: PowerReader | undefined
 
@@ -385,6 +399,7 @@ export class EvalClient implements AiClient {
     this.provider = `eval:${o.inner.provider}`
     this.defaultModel = o.profile.model
     this.helperThink = o.helperThink
+    this.productLimits = o.productLimits === true
     this.readPower = o.profile.queue === 'local' ? o.readPower : undefined
   }
 
@@ -430,12 +445,26 @@ export class EvalClient implements AiClient {
       if (local) release = await this.acquire(args.signal)
     } catch (error) {
       // Cancelled while queued: recorded as a failed call that never started, then rethrown.
-      const call = this.prepare(args.task.name, 'object', args.system, args.prompt, args.maxTokens)
+      const call = this.prepare(
+        args.task.name,
+        'object',
+        args.system,
+        args.prompt,
+        args.maxTokens,
+        args.effort,
+      )
       this.settle(call, { ok: false, error }, null, call.startedMs - requestedMs)
       throw error
     }
     try {
-      const call = this.prepare(args.task.name, 'object', args.system, args.prompt, args.maxTokens)
+      const call = this.prepare(
+        args.task.name,
+        'object',
+        args.system,
+        args.prompt,
+        args.maxTokens,
+        args.effort,
+      )
       const queueMs = local ? call.startedMs - requestedMs : 0
       if (call.promptKey) this.sentPrompts.add(call.promptKey)
       // A synchronous throw from a non-async inner client becomes a rejection, so it is recorded too.
@@ -467,7 +496,14 @@ export class EvalClient implements AiClient {
   streamText(args: StreamTextArgs) {
     // Streams are not locked. The eval `draft` step awaits each stream's `done` before any other
     // AI call starts (eval/novel/steps/chapter.ts), so no helper call overlaps a stream.
-    const call = this.prepare(args.task.name, 'stream', args.system, args.prompt, args.maxTokens)
+    const call = this.prepare(
+      args.task.name,
+      'stream',
+      args.system,
+      args.prompt,
+      args.maxTokens,
+      args.effort,
+    )
     let inner: ReturnType<AiClient['streamText']>
     if (call.promptKey) this.sentPrompts.add(call.promptKey)
     try {
@@ -536,6 +572,7 @@ export class EvalClient implements AiClient {
     productSystem: string,
     productPrompt: string,
     productMaxTokens: number,
+    productEffort: AiEffort,
   ): Prepared {
     // First, so the read is not part of durationMs; it shows in queueMs, since the call is not running yet.
     const power = this.samplePower()
@@ -545,6 +582,10 @@ export class EvalClient implements AiClient {
     const prompt = this.lang === 'en' ? translateScaffold(productPrompt) : productPrompt
     const taskTimeout = TASK_DEFS.find((def) => def.name === task)?.timeoutMs
     const fallback = kind === 'stream' ? STREAM_AI_TIMEOUT_MS : DEFAULT_AI_TIMEOUT_MS
+    const maxTokensRule = this.productLimits ? 'product' : 'floor'
+    const maxTokens = this.productLimits
+      ? productMaxTokens
+      : Math.max(productMaxTokens, this.profile.maxTokensFloor)
     const promptKey =
       this.profile.provider === 'ollama'
         ? createHash('sha1').update(`${task}\u0000${system}\u0000${prompt}`).digest('hex')
@@ -558,7 +599,10 @@ export class EvalClient implements AiClient {
       startedAt: new Date(startedMs).toISOString(),
       system,
       prompt,
-      maxTokens: Math.max(productMaxTokens, this.profile.maxTokensFloor),
+      maxTokens,
+      taskEffort: productEffort,
+      taskMaxTokens: productMaxTokens,
+      maxTokensRule,
       productTimeoutMs: taskTimeout ?? fallback,
       power,
       promptKey,
@@ -637,6 +681,9 @@ export class EvalClient implements AiClient {
       model: this.profile.model,
       effortRequested: this.profile.effort,
       maxTokens: call.maxTokens,
+      taskEffort: call.taskEffort,
+      taskMaxTokens: call.taskMaxTokens,
+      maxTokensRule: call.maxTokensRule,
       productTimeoutMs: call.productTimeoutMs,
       wouldTimeOut: durationMs > call.productTimeoutMs,
       system: call.system,

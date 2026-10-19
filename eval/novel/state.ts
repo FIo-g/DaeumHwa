@@ -16,6 +16,8 @@ export type RunConfig = {
   commit: string
   /** Think level for helper tasks (compare runs only). Absent means the profile's own think. */
   helperThink?: HelperThink
+  /** Send the task's own maxTokens (compare runs only). Absent means the profile floor applies. */
+  productLimits?: boolean
 }
 
 export type RunStatus =

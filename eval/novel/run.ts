@@ -86,6 +86,7 @@ export type RunCreateOptions = {
   maxDraftAttempts: number
   commit: string
   helperThink?: HelperThink
+  productLimits?: boolean
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
@@ -101,6 +102,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     createdAt: new Date().toISOString(),
     commit: o.commit,
     ...(o.helperThink ? { helperThink: o.helperThink } : {}),
+    ...(o.productLimits ? { productLimits: true } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))
@@ -133,6 +135,7 @@ export async function openRun(
     callsDir: join(dir, 'calls'),
     startSeq: Math.max(1, state.nextSeq),
     helperThink: config.helperThink,
+    productLimits: config.productLimits,
     readPower: o.readPower,
   })
   setAiTimeoutOverride(profile.timeoutMs)

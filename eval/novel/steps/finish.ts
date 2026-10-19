@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
+import { MAX_TOKENS_MESSAGE } from '@/ai/anthropic'
 import { DEFAULT_AI_TIMEOUT_MS } from '@/ai/run'
 import { listFacts } from '@/server/facts'
 import { listNamingRules } from '@/server/naming'
@@ -400,6 +401,15 @@ const PowerBlockSchema = z.object({
   bySource: z.record(z.string(), CountSchema),
 })
 
+const TaskCountsSchema = z.object({ total: CountSchema, byTask: z.record(z.string(), CountSchema) })
+
+/** Output-cap counts (track M4). Absent on runs with no call that recorded its task limits. */
+const OutputCapSchema = z.object({
+  mode: z.enum(['floor', 'product']),
+  cutOff: TaskCountsSchema,
+  overTaskCap: TaskCountsSchema,
+})
+
 export const RunSummarySchema = z.object({
   calls: CallCountsSchema,
   speed: SpeedSchema,
@@ -426,6 +436,7 @@ export const RunSummarySchema = z.object({
   focusCounts: z.record(z.string(), z.number()),
   interview: InterviewSchema.optional(),
   timeouts: TimeoutsSchema.optional(),
+  outputCap: OutputCapSchema.optional(),
   power: PowerBlockSchema.optional(),
   extraction: ExtractionBlockSchema.optional(),
   proofread: ProofreadBlockSchema.optional(),
@@ -479,6 +490,34 @@ export function timeoutSummary(calls: CallRecord[]): {
     byTask[call.task] = (byTask[call.task] ?? 0) + 1
   }
   return { total, byTask }
+}
+
+/**
+ * Calls cut off by the output cap, and calls whose output went over the task's own cap, per task.
+ * Only calls that record their task limits count; older records are skipped. Null when none does.
+ */
+export function outputCapSummary(calls: CallRecord[]): {
+  mode: 'floor' | 'product'
+  cutOff: { total: number; byTask: Record<string, number> }
+  overTaskCap: { total: number; byTask: Record<string, number> }
+} | null {
+  const measured = calls.filter((call) => call.taskMaxTokens !== undefined)
+  if (measured.length === 0) return null
+  const cutOff = { total: 0, byTask: {} as Record<string, number> }
+  const overTaskCap = { total: 0, byTask: {} as Record<string, number> }
+  for (const call of measured) {
+    const taskCap = call.taskMaxTokens ?? 0
+    if (call.error?.message === MAX_TOKENS_MESSAGE) {
+      cutOff.total += 1
+      cutOff.byTask[call.task] = (cutOff.byTask[call.task] ?? 0) + 1
+    }
+    if (call.usage !== null && call.usage.outputTokens > taskCap) {
+      overTaskCap.total += 1
+      overTaskCap.byTask[call.task] = (overTaskCap.byTask[call.task] ?? 0) + 1
+    }
+  }
+  const mode = measured.some((call) => call.maxTokensRule === 'product') ? 'product' : 'floor'
+  return { mode, cutOff, overTaskCap }
 }
 
 /** Sums the four counters over the chapters. */
@@ -801,6 +840,8 @@ export function buildRunSummary(
   // Only calls that were sampled carry power (local runs), so a run with none has no block.
   const power = powerSummary(calls.flatMap((call) => (call.power ? [call.power] : [])))
   if (power) summary.power = power
+  const outputCap = outputCapSummary(calls)
+  if (outputCap) summary.outputCap = outputCap
   if (inputs.extraction && Object.keys(inputs.extraction).length > 0) {
     summary.extraction = sumExtraction(inputs.extraction)
   }

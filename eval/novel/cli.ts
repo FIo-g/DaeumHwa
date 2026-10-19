@@ -152,6 +152,7 @@ export type InitOptions = {
   questions?: number
   dir?: string
   helperThink?: string
+  productLimits?: boolean
 }
 
 /**
@@ -170,8 +171,10 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (refusal) throw new Error(refusal)
   }
   const helperSuffix = helperThink === undefined ? '' : `-helper-${helperThink}`
+  const limitsSuffix = o.productLimits ? '-product-limits' : ''
   const dir = path.resolve(
-    o.dir ?? path.join(RESULTS_DIR, `${seoulToday()}-${model}-${lang}${helperSuffix}`),
+    o.dir ??
+      path.join(RESULTS_DIR, `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}`),
   )
 
   if (existsSync(path.join(dir, 'config.json'))) {
@@ -182,6 +185,9 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (helperThink !== undefined && existing.helperThink !== helperThink) {
       throw new Error(`run exists with another helperThink: ${dir}`)
     }
+    if (o.productLimits !== undefined && (existing.productLimits ?? false) !== o.productLimits) {
+      throw new Error(`run exists with another productLimits: ${dir}`)
+    }
   } else {
     createRun(dir, {
       modelId: model,
@@ -191,9 +197,22 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       maxDraftAttempts: 3,
       commit: gitCommit(),
       helperThink,
+      productLimits: o.productLimits,
     })
   }
   return { dir, status: loadState(dir).status }
+}
+
+/**
+ * The --product-limits value, or undefined when the flag is absent. A bare flag or `on` turns the
+ * option on, `off` turns it off; anything else is an error.
+ */
+export function productLimitsFlag(flags: Flags): boolean | undefined {
+  const value = flags['product-limits']
+  if (value === undefined) return undefined
+  if (value === true || value === 'on') return true
+  if (value === 'off') return false
+  throw new Error(`unknown product-limits value: ${String(value)}`)
 }
 
 /** Runs the run to its next block in-process. The caller holds no lock; this takes it. */
@@ -646,6 +665,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         questions: optionalNumber(flags, 'questions'),
         dir: typeof flags.dir === 'string' ? flags.dir : undefined,
         helperThink: helperThinkFlag(flags),
+        productLimits: productLimitsFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {

@@ -29,6 +29,7 @@ export type ModelProfile = {
   provider: 'ollama' | 'opencode' | 'fake'
   model: string
   effort: AiEffort
+  /** Output-token floor the eval applies to every call. Skipped under `--product-limits`. */
   maxTokensFloor: number
   timeoutMs: number
   ollama?: Omit<OllamaOptions, 'model' | 'fetch' | 'baseUrl'>
