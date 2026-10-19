@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
-import { eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   createChapterFromDraft,
@@ -596,6 +596,7 @@ async function rewriteStage(
   const preFile = `chapters/${pad(n)}.pre-rewrite.md`
   const rewritesFile = `rewrites/${pad(n)}.json`
   let result: Awaited<ReturnType<typeof rewriteFlaggedScenes>> | null = null
+  let alreadySaved = false
   if (ids.length > 0) {
     // The copies are taken before the service call, and only once: a resumed call keeps them.
     if (!existsSync(path.join(ctx.dir, preFile))) {
@@ -610,12 +611,20 @@ async function rewriteStage(
     ) {
       copyFileSync(path.join(ctx.dir, metricsFile), path.join(ctx.dir, preMetrics))
     }
-    const outcome = await guarded(ctx, state, key, () =>
-      rewriteFlaggedScenes(ctx.db, ctx.actor, { chapterId, issueIds: ids }, ctx.client),
-    )
-    // A content error is already in `failed`: no rewrite files are written.
-    if (outcome === null) return
-    result = outcome
+    // A body that differs from the pre-rewrite copy was saved by an earlier call that crashed before
+    // its files were written. The service is not called again on it: the issues would be skipped as
+    // span-mismatch, or a second rewrite could follow.
+    const current = (await getChapter(ctx.db, ctx.actor, chapterId)).body
+    alreadySaved =
+      existsSync(path.join(ctx.dir, preFile)) && current !== readRunFile(ctx.dir, preFile)
+    if (!alreadySaved) {
+      const outcome = await guarded(ctx, state, key, () =>
+        rewriteFlaggedScenes(ctx.db, ctx.actor, { chapterId, issueIds: ids }, ctx.client),
+      )
+      // A content error is already in `failed`: no rewrite files are written.
+      if (outcome === null) return
+      result = outcome
+    }
   }
   if (!existsSync(path.join(ctx.dir, preFile))) return
 
@@ -643,6 +652,31 @@ async function rewriteStage(
       ctx.dir,
       rewritesFile,
       `${JSON.stringify({ rewritten: result.rewritten, skipped: result.skipped }, null, 2)}\n`,
+    )
+  }
+  // The save happened in a call that did not write its record. The rewrite is taken as applied to
+  // the issues of this stage; the run id is the latest finished scene rewrite of the chapter.
+  if (alreadySaved && !existsSync(path.join(ctx.dir, rewritesFile))) {
+    const [latest] = await ctx.db
+      .select({ id: aiRuns.id })
+      .from(aiRuns)
+      .where(
+        and(
+          eq(aiRuns.task, 'scene-rewrite'),
+          eq(aiRuns.chapterId, chapterId),
+          eq(aiRuns.status, 'done'),
+        ),
+      )
+      .orderBy(desc(aiRuns.createdAt))
+      .limit(1)
+    writeRunFile(
+      ctx.dir,
+      rewritesFile,
+      `${JSON.stringify(
+        { rewritten: [{ issueIds: ids, runId: latest?.id ?? null }], skipped: [], recovered: true },
+        null,
+        2,
+      )}\n`,
     )
   }
 }
