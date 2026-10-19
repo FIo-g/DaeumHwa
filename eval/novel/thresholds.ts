@@ -5,12 +5,25 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
+import { CONTINUITY_BUDGET_CHARS } from '@/ai/context'
 import { type Lang, isNearDuplicateFact, sampleCopies } from '@/ai/guards'
+import { FACT_DUPLICATE_DICE } from '@/ai/guards/fact-similarity'
 import { splitSentences } from '@/lib/korean/sentences'
-import { SAMPLE_COPY_THRESHOLD, countRepeatedWords } from '@/lib/korean/style-copy'
+import {
+  REPEATED_WORD_MIN_COUNT,
+  SAMPLE_COPY_THRESHOLD,
+  countRepeatedWords,
+} from '@/lib/korean/style-copy'
 import { loadBible } from './bible'
 import { bibleExempt } from './metrics'
-import type { CopyLabel, DupLabel, RepeatLabel } from './thresholds-labels'
+import {
+  COPY_LABELS,
+  DUP_LABELS,
+  REPEAT_LABELS,
+  type CopyLabel,
+  type DupLabel,
+  type RepeatLabel,
+} from './thresholds-labels'
 
 /** A change needs at least this many more labeled hits caught (spec section 4 rule). */
 export const MIN_GAIN = 3
@@ -426,4 +439,135 @@ export function packDecision(rows: readonly PackRow[]): {
     ? `확인이 필요하다: ${shown}자 맥락이 있어 예산에 가깝다.`
     : `유지한다: 저장된 맥락은 모두 ${shown}자 이하라 예산(12,000자)에 닿은 실행이 없다. 이 실행들로는 정할 수 없다.`
   return { max, touchesOldBudget, reason }
+}
+
+export type ReportInput = {
+  date: string
+  runNames: string[]
+  sweeps: Sweep[]
+  decisions: Decision[]
+  packs: PackRow[]
+  pack: ReturnType<typeof packDecision>
+}
+
+const SWEEP_TITLES: Record<SweepId, string> = {
+  repeat: '## 1. 반복어 최소 횟수',
+  'copy-dice': '## 2. 견본 유사도 (Dice)',
+  'copy-containment': '## 3. 견본 포함률',
+  dup: '## 4. 사실 유사도 (Dice)',
+}
+
+const SUMMARY_NAMES: Record<SweepId, string> = {
+  repeat: '반복어 최소 횟수',
+  'copy-dice': '견본 유사도 (Dice)',
+  'copy-containment': '견본 포함률',
+  dup: '사실 유사도 (Dice)',
+}
+
+const sameValue = (a: number, b: number): boolean => Math.abs(a - b) < EPSILON
+
+function decisionCell(decision: Decision | undefined): string {
+  return decision?.changed ? `${decision.chosen}로 변경` : '유지'
+}
+
+function sweepSection(sweep: Sweep, decision: Decision | undefined): string[] {
+  const rows = sweep.points.map((point) => {
+    const current = sameValue(point.value, sweep.current) ? ' (현재)' : ''
+    const chosen = decision?.changed && sameValue(point.value, decision.chosen) ? ' (선택)' : ''
+    return `| ${point.value}${current}${chosen} | ${point.caught} | ${point.wrong} | ${point.unlabeled} |`
+  })
+  return [
+    SWEEP_TITLES[sweep.id],
+    '',
+    `라벨: 맞혀야 할 ${sweep.positives}개, 표시하면 안 되는 ${sweep.negatives}개`,
+    '',
+    '| 값 | 맞힌 라벨 | 잘못 표시한 라벨 | 라벨 없는 표시 |',
+    '| --- | --- | --- | --- |',
+    ...rows,
+    '',
+  ]
+}
+
+/** Korean Markdown report. The summary table reads the decisions; H is shown but never changed. */
+export function renderReport(input: ReportInput): string {
+  const byId = new Map(input.decisions.map((d) => [d.id, d]))
+  const lines: string[] = [
+    '# 임계값 재계산 보고서',
+    '',
+    `기준: eval/results/novel/${input.date}의 실행 ${input.runNames.length}개 (${input.runNames.join(', ')}). 기록은 읽기만 했다.`,
+    '',
+    `바꾸는 기준은 설계서 4절이다. 저장된 실행이 검토서 판정과 더 잘 맞을 때만 바꾼다. 여기서는 맞힌 라벨이 ${MIN_GAIN}개 이상 늘고, 잘못 표시한 라벨과 라벨 없는 표시가 늘지 않는 값 중 현재 값과 가장 가까운 값을 고른다.`,
+    '',
+    '## 요약',
+    '',
+    '| 항목 | 현재 | 결정 | 이유 |',
+    '| --- | --- | --- | --- |',
+  ]
+  const summaryOrder: SweepId[] = ['repeat', 'copy-dice', 'copy-containment', 'dup']
+  for (const id of summaryOrder) {
+    const decision = byId.get(id)
+    const current = decision?.current ?? 0
+    lines.push(
+      `| ${SUMMARY_NAMES[id]} | ${current} | ${decisionCell(decision)} | ${decision?.reason ?? ''} |`,
+    )
+  }
+  lines.push(
+    `| 연속성 맥락 크기 (H) | ${CONTINUITY_BUDGET_CHARS.toLocaleString('en-US')} | 유지 | ${input.pack.reason} |`,
+    '',
+  )
+  for (const sweep of input.sweeps) {
+    lines.push(...sweepSection(sweep, byId.get(sweep.id)))
+  }
+  lines.push(
+    '## 5. 연속성 맥락 크기 (H)',
+    '',
+    '| 실행 | 단계 | 맥락 글자 수 | 카드 수 (맥락/위키) | 12,000 대비 | 16,000 대비 |',
+    '| --- | --- | --- | --- | --- | --- |',
+  )
+  for (const row of input.packs) {
+    const oldPct = Math.round((row.wikiChars / OLD_BUDGET_CHARS) * 100)
+    const newPct = Math.round((row.wikiChars / CONTINUITY_BUDGET_CHARS) * 100)
+    lines.push(
+      `| ${row.run} | ${row.step} | ${row.wikiChars.toLocaleString('en-US')} | ${row.cardsInPack}/${row.cardsInWiki} | ${oldPct}% | ${newPct}% |`,
+    )
+  }
+  lines.push('', input.pack.reason, '')
+  return lines.join('\n')
+}
+
+/** Loads the saved runs, runs the four sweeps and returns the report text and decisions. */
+export function buildReport(o: {
+  resultsDir: string
+  date: string
+  runs: readonly string[]
+  labels?: { repeat: readonly RepeatLabel[]; copy: readonly CopyLabel[]; dup: readonly DupLabel[] }
+}): { markdown: string; decisions: Decision[]; pack: ReturnType<typeof packDecision> } {
+  const runs = o.runs.map((name) => loadRunEvidence(path.join(o.resultsDir, o.date, name)))
+  const requested = new Set(o.runs)
+  const source = o.labels ?? { repeat: REPEAT_LABELS, copy: COPY_LABELS, dup: DUP_LABELS }
+  const repeatLabels = source.repeat.filter((l) => requested.has(l.run))
+  const copyLabels = source.copy.filter((l) => requested.has(l.run))
+  const dupLabels = source.dup.filter((l) => requested.has(l.run))
+
+  const grid = [5, 6, 7, 8, 9, 10, 12]
+  const diceGrid = [0.4, 0.45, 0.5, 0.55, 0.6, 0.7]
+  const dupGrid = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9]
+  const sweeps: Sweep[] = [
+    repeatSweep(runs, repeatLabels, grid, REPEATED_WORD_MIN_COUNT),
+    copySweep(runs, copyLabels, 'dice', diceGrid, SAMPLE_COPY_THRESHOLD),
+    copySweep(runs, copyLabels, 'containment', diceGrid, GUARD_MIN_CONTAINMENT),
+    dupSweep(runs, dupLabels, dupGrid, FACT_DUPLICATE_DICE),
+  ]
+  const decisions = sweeps.map((sweep) => decide(sweep))
+  const packs = packRows(runs)
+  const pack = packDecision(packs)
+  const markdown = renderReport({
+    date: o.date,
+    runNames: [...o.runs],
+    sweeps,
+    decisions,
+    packs,
+    pack,
+  })
+  return { markdown, decisions, pack }
 }

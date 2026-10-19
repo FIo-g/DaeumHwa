@@ -19,10 +19,13 @@ import {
   loadRunEvidence,
   MIN_GAIN,
   OLD_BUDGET_CHARS,
+  buildReport,
   packDecision,
   packRows,
   copySweep,
+  renderReport,
   repeatSweep,
+  type Decision,
   type RunEvidence,
   type Sweep,
 } from './thresholds'
@@ -476,5 +479,157 @@ describe('label tables', () => {
   it('has no duplicate fact pair rows', () => {
     const keys = DUP_LABELS.map((l) => `${l.run}|${l.a}|${l.b}`)
     expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+describe('report', () => {
+  const repeatSweepFixture: Sweep = {
+    id: 'repeat',
+    current: 8,
+    positives: 4,
+    negatives: 2,
+    points: [
+      { value: 7, caught: 4, wrong: 1, unlabeled: 5 },
+      { value: 8, caught: 4, wrong: 0, unlabeled: 3 },
+    ],
+  }
+  const copyDiceFixture: Sweep = {
+    id: 'copy-dice',
+    current: 0.5,
+    positives: 7,
+    negatives: 0,
+    points: [
+      { value: 0.5, caught: 5, wrong: 0, unlabeled: 25 },
+      { value: 0.6, caught: 5, wrong: 0, unlabeled: 15 },
+    ],
+  }
+  const copyContainmentFixture: Sweep = {
+    id: 'copy-containment',
+    current: 0.5,
+    positives: 7,
+    negatives: 0,
+    points: [{ value: 0.5, caught: 5, wrong: 0, unlabeled: 25 }],
+  }
+  const dupSweepFixture: Sweep = {
+    id: 'dup',
+    current: 0.8,
+    positives: 23,
+    negatives: 0,
+    points: [
+      { value: 0.7, caught: 8, wrong: 0, unlabeled: 0 },
+      { value: 0.8, caught: 4, wrong: 0, unlabeled: 0 },
+    ],
+  }
+  const decisions: Decision[] = [
+    { id: 'repeat', current: 8, chosen: 8, changed: false, reason: '유지한다: 이유' },
+    { id: 'copy-dice', current: 0.5, chosen: 0.5, changed: false, reason: '유지한다: 이유' },
+    { id: 'copy-containment', current: 0.5, chosen: 0.5, changed: false, reason: '유지한다: 이유' },
+    {
+      id: 'dup',
+      current: 0.8,
+      chosen: 0.7,
+      changed: true,
+      reason: '0.7로 바꾼다: 이유',
+    },
+  ]
+  const input = () => ({
+    date: '2026-10-18',
+    runNames: ['run-01-ko'],
+    sweeps: [repeatSweepFixture, copyDiceFixture, copyContainmentFixture, dupSweepFixture],
+    decisions,
+    packs: [],
+    pack: packDecision([]),
+  })
+
+  it('renderReport writes the summary rows', () => {
+    const text = renderReport(input())
+    expect(text).toContain('\n| 사실 유사도 (Dice) | 0.8 | 0.7로 변경 |')
+    expect(text).toContain('\n| 반복어 최소 횟수 | 8 | 유지 |')
+    for (const heading of [
+      '## 1. 반복어 최소 횟수',
+      '## 2. 견본 유사도 (Dice)',
+      '## 3. 견본 포함률',
+      '## 4. 사실 유사도 (Dice)',
+      '## 5. 연속성 맥락 크기 (H)',
+    ]) {
+      expect(text).toContain(heading)
+    }
+    expect(text).not.toContain('## 메모')
+  })
+
+  it('renderReport marks the current and chosen rows', () => {
+    const text = renderReport(input())
+    expect(text).toContain('| 8 (현재) |')
+    expect(text).toContain('| 0.7 (선택) |')
+  })
+
+  it('buildReport reads a results folder and leaves it unchanged', () => {
+    const date = '2026-10-18'
+    const dir = path.join(root, date, 'run-x-ko')
+    writeJson(path.join(dir, 'config.json'), { modelId: 'haiku-5.5', lang: 'ko' })
+    mkdirSync(path.join(dir, 'chapters'), { recursive: true })
+    writeFileSync(
+      path.join(dir, 'chapters', '01.md'),
+      `${REPEAT_TEXT} 안개가 계단을 반쯤 삼키고 있었다.`,
+      'utf8',
+    )
+    writeJson(path.join(dir, 'wiki-final.json'), {
+      entries: [
+        {
+          name: '서윤',
+          archivedAt: null,
+          facts: [
+            { content: '종루의 종은 밤마다 떨린다.', archivedAt: null },
+            { content: '종루의 종은 밤마다 떨린다고 한다.', archivedAt: null },
+          ],
+        },
+      ],
+      styleCards: [
+        { name: '문체', examples: '안개가 계단을 반쯤 삼키고 있었다.', archivedAt: null },
+      ],
+    })
+    writeJson(path.join(dir, 'calls', '001-continuity-check.json'), {
+      task: 'continuity-check',
+      step: 'ch1:check',
+      error: null,
+      prompt: 'x<wiki>\n[E1] 서윤 (인물)\n</wiki>y',
+    })
+    const before = snapshot(root)
+
+    const result = buildReport({
+      resultsDir: root,
+      date,
+      runs: ['run-x-ko'],
+      labels: {
+        repeat: [{ run: 'run-x-ko', words: ['구름'], expect: 'flag', source: 'test.md:1' }],
+        copy: [{ run: 'run-x-ko', sentence: '안개가 계단을 반쯤', source: 'test.md:2' }],
+        dup: [
+          {
+            run: 'run-x-ko',
+            a: '종루의 종은 밤마다 떨린다.',
+            b: '종루의 종은 밤마다 떨린다고',
+            kind: 'dup',
+            source: 'test.md:3',
+          },
+        ],
+      },
+    })
+
+    expect(result.decisions.map((d) => d.id)).toEqual([
+      'repeat',
+      'copy-dice',
+      'copy-containment',
+      'dup',
+    ])
+    expect(result.markdown).toContain('## 1. 반복어 최소 횟수')
+    expect(result.markdown).toContain('## 5. 연속성 맥락 크기 (H)')
+    expect(snapshot(root)).toEqual(before)
+  })
+
+  it('buildReport throws `not a run folder` for a run name that does not exist', () => {
+    mkdirSync(path.join(root, '2026-10-18'), { recursive: true })
+    expect(() =>
+      buildReport({ resultsDir: root, date: '2026-10-18', runs: ['run-missing-ko'] }),
+    ).toThrow('not a run folder')
   })
 })
