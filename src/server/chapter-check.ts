@@ -9,7 +9,7 @@ import {
 import { isNearDuplicateFact } from '@/ai/guards'
 import { DEFAULT_AI_TIMEOUT_MS, runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
-import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
+import { runChapterExtract } from '@/ai/chapter-extract-run'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
 import { type ProofreadKind, type ProofreadOutput, proofreadTask } from '@/ai/tasks/proofread'
 import type { Db } from '@/db/client'
@@ -282,10 +282,9 @@ export async function runChapterCheck(
       sibling.abort()
       throw error
     }),
-    runAiTask(
+    runChapterExtract(
       db,
       meta,
-      chapterExtractTask,
       {
         chapterText: text,
         chapterPosition: chapter.position,
@@ -435,7 +434,7 @@ export async function runChapterCheck(
   return {
     issues: issueRows,
     proposals: proposalRows,
-    runIds: [continuity.runId, extract.runId],
+    runIds: [continuity.runId, ...extract.runIds],
     namingIssueCount: namingIssues.length,
     extraction: {
       ...extracted.stats,
