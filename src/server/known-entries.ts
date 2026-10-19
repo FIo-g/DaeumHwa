@@ -7,10 +7,13 @@ import type { EntryKind, ThreadStatus } from '@/db/types'
 // are still waiting for approval. Read-only.
 
 export type KnownEntries = {
-  active: { id: string; name: string; aliases: string[]; kind: EntryKind }[]
+  /** `speech` is the card's 말투 field, or '' when it has none. */
+  active: { id: string; name: string; aliases: string[]; kind: EntryKind; speech: string }[]
   pending: { name: string; aliases: string[]; kind: EntryKind }[]
   threads: { id: string; title: string; status: ThreadStatus }[]
   pendingThreadTitles: string[]
+  /** Entries with a pending entry_update that sets a non-empty speech. */
+  pendingSpeechEntryIds: string[]
 }
 
 /** A fact the extraction must not repeat: a current wiki fact, or a pending fact_create. */
@@ -30,16 +33,21 @@ export async function loadKnownEntries(
   workId: string,
   opts: { excludePostChapterOf?: string } = {},
 ): Promise<KnownEntries> {
-  const active = await db
+  const activeRows = await db
     .select({
       id: wikiEntries.id,
       name: wikiEntries.name,
       aliases: wikiEntries.aliases,
       kind: wikiEntries.kind,
+      fields: wikiEntries.fields,
     })
     .from(wikiEntries)
     .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
     .orderBy(asc(wikiEntries.createdAt))
+  const active = activeRows.map(({ fields, ...entry }) => ({
+    ...entry,
+    speech: fields.speech ?? '',
+  }))
 
   const pendingRows = await db
     .select({
@@ -53,13 +61,14 @@ export async function loadKnownEntries(
       and(
         eq(proposals.workId, workId),
         eq(proposals.status, 'pending'),
-        inArray(proposals.type, ['entry_create', 'thread_create']),
+        inArray(proposals.type, ['entry_create', 'thread_create', 'entry_update']),
       ),
     )
     .orderBy(asc(proposals.createdAt))
 
   const pending: KnownEntries['pending'] = []
   const pendingThreadTitles: string[] = []
+  const pendingSpeechEntryIds: string[] = []
   for (const row of pendingRows) {
     if (
       opts.excludePostChapterOf !== undefined &&
@@ -71,9 +80,15 @@ export async function loadKnownEntries(
     if (row.type === 'entry_create') {
       const payload = row.payload as { name: string; aliases: string[]; kind: EntryKind }
       pending.push({ name: payload.name, aliases: payload.aliases, kind: payload.kind })
-    } else {
+    } else if (row.type === 'thread_create') {
       const payload = row.payload as { title: string }
       pendingThreadTitles.push(payload.title)
+    } else if (row.type === 'entry_update') {
+      const payload = row.payload as { entryId: string; patch: { fields?: Record<string, string> } }
+      const speech = payload.patch.fields?.speech
+      if (typeof speech === 'string' && speech.trim() !== '') {
+        pendingSpeechEntryIds.push(payload.entryId)
+      }
     }
   }
 
@@ -83,7 +98,7 @@ export async function loadKnownEntries(
     .where(and(eq(threads.workId, workId), isNull(threads.archivedAt)))
     .orderBy(asc(threads.createdAt))
 
-  return { active, pending, threads: threadRows, pendingThreadTitles }
+  return { active, pending, threads: threadRows, pendingThreadTitles, pendingSpeechEntryIds }
 }
 
 /**

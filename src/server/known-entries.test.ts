@@ -23,7 +23,7 @@ beforeEach(async () => {
 })
 
 type NewRow = {
-  type: 'entry_create' | 'thread_create' | 'fact_create'
+  type: 'entry_create' | 'entry_update' | 'thread_create' | 'fact_create'
   payload: unknown
   status?: 'pending' | 'approved' | 'rejected'
   source?: 'interview' | 'post_chapter'
@@ -129,6 +129,35 @@ describe('loadKnownEntries', () => {
 
     const known = await loadKnownEntries(db, workId, { excludePostChapterOf: chapter.id })
     expect(known.pending.map((p) => p.name)).toEqual(['회차 이호'])
+    expect(known.pendingThreadTitles).toEqual([])
+  })
+})
+
+describe('loadKnownEntries speech', () => {
+  it('returns the speech of active entries, empty when none', async () => {
+    await createTestEntry(db, workId, { name: '서윤', fields: { speech: '반말' } })
+    await createTestEntry(db, workId, { name: '민준' })
+
+    const known = await loadKnownEntries(db, workId)
+    const speech = Object.fromEntries(known.active.map((e) => [e.name, e.speech]))
+    expect(speech).toEqual({ 서윤: '반말', 민준: '' })
+  })
+
+  it('reports a pending speech update by entry id, and only that', async () => {
+    const seoyun = await createTestEntry(db, workId, { name: '서윤' })
+    await addProposal({
+      type: 'entry_update',
+      payload: { entryId: seoyun.id, entryName: '서윤', patch: { fields: { speech: '존댓말' } } },
+    })
+    await addProposal({
+      type: 'entry_update',
+      payload: { entryId: seoyun.id, entryName: '서윤', patch: { aliases: ['윤'] } },
+    })
+
+    const known = await loadKnownEntries(db, workId)
+    expect(known.pendingSpeechEntryIds).toEqual([seoyun.id])
+    expect(known.pending).toEqual([])
+    expect(known.pendingThreadTitles).not.toContain(undefined)
     expect(known.pendingThreadTitles).toEqual([])
   })
 })
