@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type ExpectedIssue, type FoundIssue, scoreIssues } from './score'
+import { type ExpectedIssue, type FoundIssue, scoreIssues, scoreNotDefects } from './score'
 
 const expectedRight: ExpectedIssue = {
   chapter: 4,
@@ -114,5 +114,28 @@ describe('scoreIssues', () => {
       recall: 0,
     })
     expect(scoreIssues([], [])).toMatchObject({ hits: 0, precision: 0, recall: 1 })
+  })
+})
+
+describe('scoreNotDefects', () => {
+  const trap = { chapter: 4, quoteIncludes: '윤서는 말없이 지도를 펼쳤다' }
+
+  it('returns the found issue that hits a trap in the same chapter', () => {
+    const found: FoundIssue[] = [
+      { chapter: 4, quote: '윤서는 말없이 지도를 펼쳤다.', kind: 'contradiction' },
+    ]
+    expect(scoreNotDefects([trap], found)).toEqual(found)
+  })
+
+  it('ignores a found issue in another chapter', () => {
+    const found: FoundIssue[] = [
+      { chapter: 3, quote: '윤서는 말없이 지도를 펼쳤다.', kind: 'contradiction' },
+    ]
+    expect(scoreNotDefects([trap], found)).toEqual([])
+  })
+
+  it('ignores a short found quote that is only a fragment of the trap', () => {
+    const found: FoundIssue[] = [{ chapter: 4, quote: '윤서는', kind: 'contradiction' }]
+    expect(scoreNotDefects([trap], found)).toEqual([])
   })
 })
