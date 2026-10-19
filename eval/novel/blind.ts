@@ -68,3 +68,46 @@ export function maskOperationalText(text: string): string {
 export function maskReferenceText(text: string): string {
   return maskOperationalText(text).replace(REFERENCE_PATTERN, REFERENCE_LABEL)
 }
+
+/** Deep-masks every string (values and keys) in a JSON-shaped value. Returns a new value. */
+function maskDeep(value: unknown): unknown {
+  if (typeof value === 'string') return maskOperationalText(value)
+  if (Array.isArray(value)) return value.map(maskDeep)
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [maskOperationalText(key), maskDeep(item)]),
+    )
+  }
+  return value
+}
+
+/**
+ * One call record for the reviewer. The model field is replaced by the label, the profile
+ * fingerprints (effort, token cap, timeout, speed) are dropped, and every string is masked.
+ * wouldTimeOut stays, because the operations score needs it. The input is not changed.
+ */
+export function blindCallRecord(call: CallRecord): BlindedCall {
+  const masked = maskDeep(call) as Record<string, unknown>
+  delete masked.effortRequested
+  delete masked.maxTokens
+  delete masked.productTimeoutMs
+  delete masked.speed
+  return { ...masked, model: BLIND_LABEL } as BlindedCall
+}
+
+/** Any state or log JSON: every string masked. */
+export function blindJson(value: unknown): unknown {
+  return maskDeep(value)
+}
+
+/** The run summary without its speed block (speed is the profile fingerprint the reviewer must not see). */
+export function blindRunSummary(summary: unknown): unknown {
+  const masked = maskDeep(summary) as Record<string, unknown>
+  delete masked.speed
+  return masked
+}
+
+/** Where the blinded copy of a run goes: the sibling blind/ folder with the same run name. */
+export function defaultBlindDir(runDir: string): string {
+  return path.join(path.dirname(runDir), 'blind', path.basename(runDir))
+}
