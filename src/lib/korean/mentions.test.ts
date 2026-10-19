@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findMentions } from '@/lib/korean/mentions'
+import { findMentions, findNamedAnywhere } from '@/lib/korean/mentions'
 
 const targets = [
   { id: 'a', names: ['이서윤', '서윤'] },
@@ -74,5 +74,28 @@ describe('findMentions with copula and quotative endings', () => {
   it('still rejects a lone 이 after a vowel-ending name and a longer word', () => {
     expect(countIn('지후이는 웃었다.', '지후')).toBe(0)
     expect(countIn('민준호는 왔다.', '민준')).toBe(0)
+  })
+})
+
+describe('findNamedAnywhere', () => {
+  it('finds a name inside a compound', () => {
+    const hits = findNamedAnywhere('종루지기가 웃었다.', [{ id: 'a', names: ['잿빛 종루', '종루'] }])
+    expect(hits).toEqual([{ entryId: 'a', firstIndex: 0 }])
+  })
+
+  it('orders by first index', () => {
+    const hits = findNamedAnywhere('민준이 서윤을 봤다.', [
+      { id: '서윤', names: ['서윤'] },
+      { id: '민준', names: ['민준'] },
+    ])
+    expect(hits.map((h) => h.entryId)).toEqual(['민준', '서윤'])
+  })
+
+  it('ignores 1-char names', () => {
+    const hits = findNamedAnywhere('강물이 민준이를 봤다.', [
+      { id: '강', names: ['강'] },
+      { id: '민준', names: ['민준'] },
+    ])
+    expect(hits.map((h) => h.entryId)).toEqual(['민준'])
   })
 })
