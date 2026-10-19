@@ -284,6 +284,40 @@ describe('runChapterCheck', () => {
     expect(result.issues.filter((i: IssueRow) => i.kind === 'contradiction')).toEqual([])
   })
 
+  it('runChapterCheck sends a compound-only place card to the continuity prompt', async () => {
+    const chapter = await createTestChapter(db, workId, {
+      position: 3,
+      body: '종루지기가 문 앞에 섰다.',
+    })
+    const place = await createTestEntry(db, workId, {
+      name: '잿빛 종루',
+      kind: 'place',
+      aliases: ['종루'],
+    })
+    await createTestFact(db, workId, { entryId: place.id, content: '잿빛 종루는 9층 높이다.' })
+
+    const prompts: string[] = []
+    const scripted = scriptedClient(() => undefined)
+    const recordingClient: AiClient = {
+      provider: 'fake',
+      defaultModel: 'fake',
+      async generateObject(args) {
+        if (args.task.name === 'continuity-check') prompts.push(args.prompt)
+        return scripted.generateObject(args)
+      },
+      streamText() {
+        throw new Error('not used')
+      },
+    }
+
+    await runChapterCheck(db, actor(owner.id), { chapterId: chapter.id }, recordingClient)
+
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toContain('[E1] 잿빛 종루 (장소)')
+    const wiki = prompts[0].slice(prompts[0].indexOf('<wiki>'), prompts[0].indexOf('</wiki>'))
+    expect(wiki).toContain('잿빛 종루는 9층 높이다.')
+  })
+
   it('drops an AI issue that has neither a wiki fact nor an entry', async () => {
     const chapter = await createTestChapter(db, workId, {
       position: 1,

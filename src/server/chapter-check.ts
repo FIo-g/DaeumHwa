@@ -1,5 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm'
-import { buildContextPack, resolveRefs } from '@/ai/context'
+import { buildContextPack, CONTINUITY_BUDGET_CHARS, resolveRefs } from '@/ai/context'
 import { extractionToProposals } from '@/ai/extraction'
 import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
@@ -141,7 +141,12 @@ export async function runChapterCheck(
     signal: signal ? AbortSignal.any([signal, sibling.signal]) : sibling.signal,
   }
 
-  const pack = await buildContextPack(db, workId, { text, position: chapter.position })
+  const pack = await buildContextPack(db, workId, {
+    text,
+    position: chapter.position,
+    keepNamed: true,
+    budgetChars: CONTINUITY_BUDGET_CHARS,
+  })
   const known = await loadKnownEntries(db, workId, { excludePostChapterOf: chapter.id })
   const rules = await listNamingRules(db, actor, workId)
   const relationRows = await db
