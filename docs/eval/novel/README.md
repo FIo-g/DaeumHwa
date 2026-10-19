@@ -121,7 +121,16 @@ pnpm eval:novel resummarize --date 2026-10-18                               # �
    ```
 
 2. 프롬프트를 고친 뒤 다시 잴 때는 새 `date`(예: `2026-10-25`)로 돌린다. 그래야 이번 결과와 섞이지 않는다.
-   - 보조 작업의 생각 설정만 바꿔 재려면 `--helper-think <off|low|medium|high>`를 쓴다. 비교 실행에만 쓰고 새 폴더를 쓴다. qwen은 `off`만, gpt-oss는 `low`, `medium`, `high`만 받는다(gpt-oss는 `off`를 무시한다). 클라우드 모델과 exaone은 거절한다. 초안, 이어 쓰기, 장면 고쳐 쓰기는 모델 설정을 그대로 쓴다. 스킬로 돌리려면 먼저 `pnpm eval:novel init --model qwen3.8-27b --lang ko --helper-think off --dir <실행 폴더>`로 실행을 만든다. 스킬이 하는 init은 그 실행을 이어 쓴다.
+   - 보조 작업의 생각 설정만 바꿔 재려면 `--helper-think <off|low|medium|high>`를 쓴다. 비교 실행에만 쓰고 새 폴더를 쓴다. qwen은 `off`만, gpt-oss는 `low`, `medium`, `high`만 받는다(gpt-oss는 `off`를 무시한다). 클라우드 모델과 exaone은 거절한다. 초안, 이어 쓰기, 장면 고쳐 쓰기는 모델 설정을 그대로 쓴다.
+   - 스킬로 돌리려면 스킬이 쓸 폴더에 먼저 실행을 만든다. 폴더는 `eval/results/novel/<새 날짜>/run-NN-<lang>`이고 NN은 1절의 모델 번호다.
+
+     ```bash
+     pnpm eval:novel init --model qwen3.8-27b --lang ko --helper-think off --chapters 1 --dir eval/results/novel/<새 날짜>/run-01-ko
+     pnpm eval:novel init --model gpt-oss-20b --lang ko --helper-think low --chapters 1 --dir eval/results/novel/<새 날짜>/run-02-ko
+     ```
+
+   - 그다음 스킬을 같은 `date`와 `chapters: 1`로 부른다. 스킬의 init은 그 폴더만 이어 쓴다. 폴더가 다르면 생각 설정이 없는 새 실행이 만들어진다.
+   - 실행의 화 수는 만들 때 정해진다. `--chapters 1`을 빼면 5화로 만들어진다.
 
 ## 4. 알아 둘 점
 
