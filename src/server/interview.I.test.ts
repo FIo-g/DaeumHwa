@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { normalizeQuestion as normalizeFromLib } from '@/lib/interview-plan'
 import { FakeAiClient } from '@/test/fake-ai'
 import type { Db } from '@/db/client'
 import { interviewTurns } from '@/db/schema'
@@ -7,7 +8,13 @@ import type { InterviewQuestionInput } from '@/ai/tasks/interview-question'
 import { fakeInterviewQuestion } from '@/test/ai-fakes/interview-question'
 import { createTestDb } from '@/test/db'
 import { addTestMember, createTestUser, createTestWork } from '@/test/factories'
-import { answerTurn, askNextQuestion, completeInterview, startInterview } from '@/server/interview'
+import {
+  answerTurn,
+  askNextQuestion,
+  completeInterview,
+  normalizeQuestion,
+  startInterview,
+} from '@/server/interview'
 
 // Brief I: the service reads the plan from every turn of the work, retries once on a plan
 // violation, and keeps the stored question either way.
@@ -174,5 +181,12 @@ describe('plan from the interview turns', () => {
     expect(inputs.at(-1)?.covered).toHaveLength(120)
     expect(plan?.closedTopics).toContain('주인공')
     expect(plan?.remainingCore).not.toContain('주인공')
+  })
+})
+
+describe('normalizeQuestion', () => {
+  it('is the lib function, re-exported from the service', () => {
+    expect(normalizeQuestion).toBe(normalizeFromLib)
+    expect(normalizeQuestion('주인공은 누구인가요?')).toBe('주인공은누구인가요')
   })
 })
