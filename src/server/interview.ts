@@ -24,6 +24,7 @@ import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { extractionToProposals, type ExtractionContext } from '@/ai/extraction'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
+import { isSpeechStyleEnabled } from '@/ai/voice'
 import {
   CORE_TOPICS,
   type InterviewQuestionInput,
@@ -241,6 +242,8 @@ export async function answerTurn(
         subjectName,
         content,
       })),
+      speechStyle: isSpeechStyleEnabled(),
+      pendingSpeechEntryIds: known.pendingSpeechEntryIds,
     }
     items = extractionToProposals(output, context).proposals
   }
@@ -393,12 +396,14 @@ async function buildQuestionInput(
   const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1)
   if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
 
+  const speech = isSpeechStyleEnabled()
   const entries = await db
     .select({
       id: wikiEntries.id,
       name: wikiEntries.name,
       kind: wikiEntries.kind,
       summary: wikiEntries.summary,
+      fields: wikiEntries.fields,
     })
     .from(wikiEntries)
     .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
@@ -538,6 +543,12 @@ async function buildQuestionInput(
         kind: e.kind,
         factCount: factCountByEntry.get(e.id) ?? 0,
         summary: cut(e.summary, ENTRY_SUMMARY_CHARS),
+        // Speech feature only: a character card without 말투 is marked in the question prompt.
+        ...(speech
+          ? {
+              hasSpeech: e.kind === 'character' ? (e.fields.speech ?? '').trim() !== '' : undefined,
+            }
+          : {}),
       })),
       openThreads: openThreads.map((t) => ({
         title: t.title,

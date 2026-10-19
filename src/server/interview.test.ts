@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import type { GenerateObjectArgs } from '@/ai/types'
+import { buildInterviewQuestionSystem } from '@/ai/tasks/interview-question'
+import { buildInterviewExtractSystem } from '@/ai/tasks/interview-extract'
 import type { Db } from '@/db/client'
 import {
   aiRuns,
@@ -773,5 +775,100 @@ describe('interview reliability', () => {
     expect(reactions[1].digest).toContain('CH3')
     expect(reactions[2].digest).toContain('NEW4')
     expect(reactions[2].digest).not.toContain('OLD4')
+  })
+})
+
+/** Answers the extraction with a fixed speech for 서윤, and the other tasks with the fakes. */
+class SpeechExtractClient extends RecordingAiClient {
+  systems: { task: string; system: string }[] = []
+
+  override async generateObject<T>(args: GenerateObjectArgs<T>) {
+    this.systems.push({ task: args.task.name, system: args.system })
+    if (args.task.name !== 'interview-extract') return super.generateObject(args)
+    const object = args.schema.parse({
+      summary: null,
+      entries: [
+        {
+          name: '서윤',
+          kind: 'character',
+          aliases: [],
+          summary: '',
+          fields: [{ key: 'speech', value: '존댓말' }],
+        },
+      ],
+      facts: [],
+      threads: [],
+      relations: [],
+    })
+    return { ...(await super.generateObject(args)), object }
+  }
+}
+
+describe('interview speech style (feature flag)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  async function seedSpeech() {
+    await createTestEntry(db, workId, { name: '서윤', kind: 'character' })
+    await createTestEntry(db, workId, {
+      name: '민준',
+      kind: 'character',
+      fields: { speech: '반말' },
+    })
+  }
+
+  it('marks a character card without speech in the question prompt when on', async () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    await seedSpeech()
+    const session = await startInterview(db, owner, workId)
+    const client = new RecordingAiClient()
+    await askNextQuestion(db, owner, session.id, client)
+    const prompt = client.prompts[0]
+    expect(prompt).toContain('서윤 (인물, 사실 0개, 말투 없음)')
+    expect(prompt).toContain('민준 (인물, 사실 0개)')
+    expect(prompt).not.toContain('민준 (인물, 사실 0개, 말투 없음)')
+  })
+
+  it('sends the pre-speech question and extract systems and no marker when off', async () => {
+    await seedSpeech()
+    const session = await startInterview(db, owner, workId)
+    const client = new SpeechExtractClient()
+    await askNextQuestion(db, owner, session.id, client)
+    expect(client.prompts[0]).not.toContain('말투 없음')
+    const question = client.systems.find((c) => c.task === 'interview-question')
+    expect(question?.system).toBe(buildInterviewQuestionSystem(false))
+    expect(question?.system).not.toContain('말투 없음')
+  })
+
+  it('writes the interview speech into an existing card that has none when on', async () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    await seedSpeech()
+    const session = await startInterview(db, owner, workId)
+    const turn = await askNextQuestion(db, owner, session.id, new FakeAiClient())
+    const client = new SpeechExtractClient()
+    await answerTurn(db, editor, { turnId: turn.id, answer: '서윤은 존댓말을 쓴다.' }, client)
+
+    const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+    const update = rows.find((r) => r.type === 'entry_update')
+    expect(update?.payload).toMatchObject({ patch: { fields: { speech: '존댓말' } } })
+    expect(rows.some((r) => r.type === 'entry_create')).toBe(false)
+    const extract = client.systems.find((c) => c.task === 'interview-extract')
+    expect(extract?.system).toBe(buildInterviewExtractSystem(true))
+  })
+
+  it('creates no speech update when off', async () => {
+    await seedSpeech()
+    const session = await startInterview(db, owner, workId)
+    const turn = await askNextQuestion(db, owner, session.id, new FakeAiClient())
+    await answerTurn(
+      db,
+      editor,
+      { turnId: turn.id, answer: '서윤은 존댓말을 쓴다.' },
+      new SpeechExtractClient(),
+    )
+
+    const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+    expect(rows.some((r) => r.type === 'entry_update')).toBe(false)
   })
 })
