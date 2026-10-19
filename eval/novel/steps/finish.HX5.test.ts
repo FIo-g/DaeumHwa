@@ -80,6 +80,7 @@ function roundTrip<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value)) as unknown
 }
 
+/** Exactly the keys buildRunSummary produced at cloud-w0-base: no interview, no later blocks. */
 const OLD_SUMMARY = {
   calls: { total: 1, byTask: { 'draft-chapter': { count: 1, tokens: 10, totalMs: 500 } } },
   speed: {
@@ -102,25 +103,12 @@ const OLD_SUMMARY = {
   pauses: {},
   drafts: {},
   focusCounts: {},
-  interview: {
-    asked: 0,
-    answered: 0,
-    undecided: 0,
-    undecidedShare: 0,
-    setting: 0,
-    story: 0,
-    storyShare: 0,
-    duplicateQuestions: 0,
-    sameTopicAfterUndecided: 0,
-    multiAsk: 0,
-    storyAfterCoreDone: 0,
-    undecidedShareInBank: 0,
-  },
 }
 
 describe('RunSummarySchema', () => {
   it('parses a summary saved before the new blocks existed', () => {
     const parsed = RunSummarySchema.parse(OLD_SUMMARY)
+    expect(parsed).not.toHaveProperty('interview')
     expect(parsed).not.toHaveProperty('extraction')
     expect(parsed).not.toHaveProperty('proofread')
     expect(parsed).not.toHaveProperty('continuity')

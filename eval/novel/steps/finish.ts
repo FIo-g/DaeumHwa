@@ -247,7 +247,7 @@ export const RunSummarySchema = z.object({
     ),
   ),
   focusCounts: z.record(z.string(), z.number()),
-  interview: InterviewSchema,
+  interview: InterviewSchema.optional(),
   timeouts: TimeoutsSchema.optional(),
   extraction: ExtractionBlockSchema.optional(),
   proofread: ProofreadBlockSchema.optional(),
@@ -255,6 +255,8 @@ export const RunSummarySchema = z.object({
   draft: DraftBlockSchema.optional(),
 })
 export type RunSummary = z.infer<typeof RunSummarySchema>
+/** What buildRunSummary produces today: always with the interview block, which old files lack. */
+export type BuiltRunSummary = RunSummary & Required<Pick<RunSummary, 'interview'>>
 
 // ---- Inputs that are not in the call records or the state ----
 
@@ -584,7 +586,7 @@ export function buildRunSummary(
   state: RunState,
   lang: 'ko' | 'en',
   inputs: SummaryInputs = {},
-): RunSummary {
+): BuiltRunSummary {
   const byTask: Record<string, { count: number; tokens: number; totalMs: number }> = {}
   for (const call of calls) {
     const row = byTask[call.task] ?? { count: 0, tokens: 0, totalMs: 0 }
@@ -593,7 +595,7 @@ export function buildRunSummary(
     row.totalMs += call.durationMs
     byTask[call.task] = row
   }
-  const summary: RunSummary = {
+  const summary: BuiltRunSummary = {
     calls: { total: calls.length, byTask },
     speed: speedSummary(calls),
     wouldTimeOut: calls.filter((call) => call.wouldTimeOut).length,
