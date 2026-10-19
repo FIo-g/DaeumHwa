@@ -172,10 +172,19 @@ describe('repairDraftForeignScript', () => {
   })
 
   it('rejects a run that is not done, and an unknown run', async () => {
-    const { runId, client } = await draftOf(db, actor, workId, HAN_TEXT)
-    await db.update(aiRuns).set({ status: 'error' }).where(eq(aiRuns.id, runId))
+    const [errorRun] = await db
+      .insert(aiRuns)
+      .values({
+        workId,
+        userId: actor.userId,
+        task: 'draft-chapter',
+        status: 'error',
+        output: { text: HAN_TEXT },
+      })
+      .returning()
+    const client = new FakeAiClient()
     const notDone = await captureError(
-      repairDraftForeignScript(db, actor, { workId, runId }, client),
+      repairDraftForeignScript(db, actor, { workId, runId: errorRun.id }, client),
     )
     expect(notDone).toMatchObject({ code: 'BAD_STATE' })
 
@@ -188,6 +197,36 @@ describe('repairDraftForeignScript', () => {
       ),
     )
     expect(unknown).toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('returns NOT_FOUND for a done run that is not a draft', async () => {
+    const [otherRun] = await db
+      .insert(aiRuns)
+      .values({
+        workId,
+        userId: actor.userId,
+        task: 'draft-repair',
+        status: 'done',
+        output: { text: HAN_TEXT },
+      })
+      .returning()
+    const error = await captureError(
+      repairDraftForeignScript(db, actor, { workId, runId: otherRun.id }, new FakeAiClient()),
+    )
+    expect(error).toBeInstanceOf(AppError)
+    expect(error).toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('returns NOT_FOUND to an editor who does not own the run', async () => {
+    const { runId, client } = await draftOf(db, actor, workId, HAN_TEXT)
+    const editor = await createTestUser(db, { email: 'editor@example.com' })
+    await addTestMember(db, workId, editor.id, 'editor')
+    const error = await captureError(
+      repairDraftForeignScript(db, { userId: editor.id }, { workId, runId }, client),
+    )
+    expect(error).toBeInstanceOf(AppError)
+    expect(error).toMatchObject({ code: 'NOT_FOUND' })
+    expect(await outputOf(db, runId)).toEqual({ text: HAN_TEXT })
   })
 
   it('repairing twice keeps the first raw draft', async () => {
