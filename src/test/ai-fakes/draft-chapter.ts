@@ -24,3 +24,8 @@ export function fakeDraft(input: { instructions: string }): string {
   }
   return `(데모 초안) ${paragraphs.join('\n\n')}`
 }
+
+/** PLACEHOLDER (Wave-0 seam): track A replaces the body. Stand-in continuation text for 'draft-continue'. */
+export function fakeDraftContinue(): string {
+  return ''
+}

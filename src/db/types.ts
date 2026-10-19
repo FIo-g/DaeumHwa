@@ -149,6 +149,9 @@ export const AI_TASKS = [
   'direction-advice',
   'draft-chapter',
   'style-suggest',
+  'draft-continue',
+  'paragraph-trim',
+  'draft-repair',
 ] as const
 export type AiTaskName = (typeof AI_TASKS)[number]
 

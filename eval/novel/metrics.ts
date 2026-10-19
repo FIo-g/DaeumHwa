@@ -1,5 +1,8 @@
 import { countChars } from '@/lib/korean/chars'
 
+export * from './metrics-interview'
+export * from './metrics-proofread'
+
 export type ChapterMetrics = {
   chars: number // with spaces, trimmed
   targetChars: number

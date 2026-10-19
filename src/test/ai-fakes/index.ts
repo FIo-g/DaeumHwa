@@ -2,9 +2,11 @@ import type { AiTaskName } from '@/db/types'
 import { fakeChapterExtraction } from '@/test/ai-fakes/chapter-extract'
 import { fakeContinuity } from '@/test/ai-fakes/continuity-check'
 import { fakeAdvice } from '@/test/ai-fakes/direction-advice'
-import { fakeDraft } from '@/test/ai-fakes/draft-chapter'
+import { fakeDraft, fakeDraftContinue } from '@/test/ai-fakes/draft-chapter'
+import { fakeDraftRepair } from '@/test/ai-fakes/draft-repair'
 import { fakeInterviewExtraction } from '@/test/ai-fakes/interview-extract'
 import { fakeInterviewQuestion } from '@/test/ai-fakes/interview-question'
+import { fakeParagraphTrim } from '@/test/ai-fakes/paragraph-trim'
 import { fakeProofread } from '@/test/ai-fakes/proofread'
 import { fakeReaderSim } from '@/test/ai-fakes/reader-sim'
 import { fakeStyle } from '@/test/ai-fakes/style-suggest'
@@ -20,10 +22,13 @@ export const FAKE_OUTPUTS: Partial<Record<AiTaskName, (input: any) => unknown>> 
   'reader-sim': fakeReaderSim,
   'direction-advice': fakeAdvice,
   'style-suggest': fakeStyle,
+  'paragraph-trim': fakeParagraphTrim,
+  'draft-repair': fakeDraftRepair,
 }
 
 /** Fixed streamed text per task, used by FakeAiClient. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const FAKE_TEXT: Partial<Record<AiTaskName, (input: any) => string>> = {
   'draft-chapter': fakeDraft,
+  'draft-continue': fakeDraftContinue,
 }
