@@ -46,6 +46,8 @@ export interface OllamaOptions {
   topK?: number
   minP?: number
   think?: OllamaThink
+  /** Per-task override of `think`. A task not listed uses `think`. */
+  thinkByTask?: Partial<Record<AiTaskName, OllamaThink>>
   /** How long Ollama keeps the model loaded after a call. Defaults to '30m'. */
   keepAlive?: string
   /** Injected in tests; defaults to ollamaTransport. */
@@ -251,6 +253,7 @@ export class OllamaAiClient implements AiClient {
     try {
       const response = await this.post(
         this.chatBody({
+          task: args.task.name,
           model,
           messages: [
             { role: 'system', content: args.system },
@@ -365,6 +368,7 @@ export class OllamaAiClient implements AiClient {
   }): Promise<ChatResult> {
     const response = await this.post(
       this.chatBody({
+        task: args.task,
         model: args.model,
         messages: args.messages,
         stream: true,
@@ -382,6 +386,7 @@ export class OllamaAiClient implements AiClient {
   }
 
   private chatBody(args: {
+    task: AiTaskName
     model: string
     messages: ChatMessage[]
     stream: boolean
@@ -389,12 +394,14 @@ export class OllamaAiClient implements AiClient {
     maxTokens: number
   }) {
     const o = this.settings
+    // `??` on the lookup only: a `false` override must win over a `true` default.
+    const think = o.thinkByTask?.[args.task] ?? o.think
     return {
       model: args.model,
       messages: args.messages,
       stream: args.stream,
       ...(args.format !== undefined ? { format: args.format } : {}),
-      ...(o.think !== undefined ? { think: o.think } : {}),
+      ...(think !== undefined ? { think } : {}),
       keep_alive: o.keepAlive ?? '30m',
       options: definedOnly({
         num_ctx: o.numCtx,
