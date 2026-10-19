@@ -86,7 +86,7 @@ describe('runChapterCheck: known facts (G1)', () => {
       body: '종루의 종은 밤마다 떨린다고 한다. 서윤은 그 소리를 들었다.',
     })
 
-    await runChapterCheck(
+    const result = await runChapterCheck(
       db,
       actor(owner.id),
       { chapterId: chapter.id },
@@ -98,6 +98,41 @@ describe('runChapterCheck: known facts (G1)', () => {
     )
 
     expect(await factProposals()).toHaveLength(0)
+    expect(result.extraction?.duplicateFacts).toBe(1)
+  })
+
+  it('keeps a state change that supersedes a near-identical wiki fact', async () => {
+    const serin = await createTestEntry(db, workId, { name: '세린' })
+    const old = await createTestFact(db, workId, {
+      content: '세린은 북쪽 성문 경비대 소속이다.',
+      entryId: serin.id,
+    })
+    const chapter = await createTestChapter(db, workId, {
+      position: 1,
+      body: '세린은 남쪽 성문 경비대 소속이다. 그녀는 아침마다 순찰을 돌았다.',
+    })
+
+    await runChapterCheck(
+      db,
+      actor(owner.id),
+      { chapterId: chapter.id },
+      extractionClient(
+        extraction([
+          {
+            ...fact(
+              '세린',
+              '세린은 남쪽 성문 경비대 소속이다.',
+              '세린은 남쪽 성문 경비대 소속이다.',
+            ),
+            supersedesFactRef: 'F1',
+          },
+        ]),
+      ),
+    )
+
+    const rows = await factProposals()
+    expect(rows).toHaveLength(1)
+    expect(rows[0].payload).toMatchObject({ supersedesFactId: old.id })
   })
 
   it('drops a fact whose evidence is altered from the chapter text', async () => {

@@ -20,7 +20,7 @@ import { ruleBasedSpellcheck } from '@/lib/korean/spelling-rules'
 import { locateAllQuotes, locateQuote, sentenceAt } from '@/lib/korean/sentences'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
-import { loadKnownEntries } from '@/server/known-entries'
+import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { listNamingRules } from '@/server/naming'
 import { deletePendingProposals, insertProposals } from '@/server/proposal-store'
 
@@ -80,15 +80,34 @@ export const ruleSpellChecker: SpellChecker = {
   },
 }
 
+/** Max occurrences one quote expands to. */
+const MAX_QUOTE_EXPANSION = 20
+
+const isWordChar = (ch: string | undefined): boolean => ch !== undefined && /[\p{L}\p{N}]/u.test(ch)
+
+/** Whether the characters around a range are word characters: [before, after]. */
+function boundaryOf(text: string, range: { start: number; end: number }): [boolean, boolean] {
+  return [isWordChar(text[range.start - 1]), isWordChar(text[range.end])]
+}
+
 /**
  * Ranges where a model quote occurs. A quote of 2+ characters applies at every exact occurrence
- * (up to the locateAllQuotes limit). A shorter quote, or one only found after whitespace is
- * collapsed, maps to its first occurrence.
+ * (up to MAX_QUOTE_EXPANSION) whose surroundings match the first one: a quote found as a whole word
+ * does not expand into a longer word ("할수" does not touch "할수록"). A shorter quote, or one only
+ * found after whitespace is collapsed, maps to its first occurrence.
  */
 function expandQuote(text: string, quote: string): { start: number; end: number }[] {
   if (quote.trim().length >= 2) {
-    const all = locateAllQuotes(text, quote)
-    if (all.length > 0) return all
+    const all = locateAllQuotes(text, quote, Number.MAX_SAFE_INTEGER)
+    if (all.length > 0) {
+      const [before, after] = boundaryOf(text, all[0])
+      return all
+        .filter((r) => {
+          const [b, a] = boundaryOf(text, r)
+          return b === before && a === after
+        })
+        .slice(0, MAX_QUOTE_EXPANSION)
+    }
   }
   const single = locateQuote(text, quote)
   return single ? [single] : []
@@ -269,7 +288,12 @@ export async function runChapterCheck(
     issues: [...namingIssues, ...aiIssues],
   })
 
+  // Current wiki facts (pending ones are checked in the transaction below, after this chapter's
+  // own old proposals are deleted).
+  const wikiFacts = (await loadKnownFactTexts(db, workId)).filter((f) => !f.pending)
+
   const extracted = extractionToProposals(extract.output, {
+    existingFacts: wikiFacts,
     source: 'post_chapter',
     sourceRef: extract.runId,
     chapterId: chapter.id,
@@ -293,6 +317,8 @@ export async function runChapterCheck(
   })
 
   const items = extracted.proposals
+  // Duplicates the transaction's race guard drops on top of the mapper's own count.
+  let raceDuplicates = 0
 
   throwIfCancelled(signal)
   const proposalRows = await db.transaction(async (tx) => {
@@ -333,16 +359,18 @@ export async function runChapterCheck(
       const p = payload as { entryId?: string | null; content?: string }
       if (p.entryId && p.content) addKnown(p.entryId, p.content)
     }
-    const fresh = items.filter(
-      (item) =>
-        !(
-          item.type === 'fact_create' &&
-          item.payload.entryId !== null &&
-          (knownByEntry.get(item.payload.entryId) ?? []).some((known) =>
-            isNearDuplicateFact(known, item.payload.content),
-          )
-        ),
-    )
+    // A state change (supersede) is never a duplicate of the fact it replaces.
+    const fresh = items.filter((item) => {
+      const duplicate =
+        item.type === 'fact_create' &&
+        item.payload.supersedesFactId === null &&
+        item.payload.entryId !== null &&
+        (knownByEntry.get(item.payload.entryId) ?? []).some((known) =>
+          isNearDuplicateFact(known, item.payload.content),
+        )
+      if (duplicate) raceDuplicates += 1
+      return !duplicate
+    })
     return insertProposals(tx, workId, fresh)
   })
 
@@ -351,7 +379,11 @@ export async function runChapterCheck(
     proposals: proposalRows,
     runIds: [continuity.runId, extract.runId],
     namingIssueCount: namingIssues.length,
-    extraction: { ...extracted.stats, ...extracted.dropped },
+    extraction: {
+      ...extracted.stats,
+      ...extracted.dropped,
+      duplicateFacts: extracted.dropped.duplicateFacts + raceDuplicates,
+    },
   }
 }
 

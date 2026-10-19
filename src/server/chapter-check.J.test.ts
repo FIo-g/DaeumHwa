@@ -85,6 +85,22 @@ describe('runProofread AI quote expansion', () => {
     expect(result.suggestions.filter((s) => s.source === 'ai')).toHaveLength(20)
   })
 
+  it('does not expand a quote into a longer word', async () => {
+    const chapter = await createTestChapter(db, workId, { position: 1, body: '' })
+    const text = '할수 있다. 할수록 좋다. 그도 할수 있다.'
+    const result = await runProofread(
+      db,
+      actor(owner.id),
+      { chapterId: chapter.id, text, useAi: true },
+      proofreadClient([
+        { quote: '할수', replacement: '할 수', kind: 'spacing', reason: '띄어쓰기' },
+      ]),
+    )
+    const ai = result.suggestions.filter((s) => s.source === 'ai')
+    expect(ai.map((s) => s.start)).toEqual([text.indexOf('할수'), text.lastIndexOf('할수')])
+    expect(ai.map((s) => text.slice(s.end, s.end + 2))).toEqual([' 있', ' 있'])
+  })
+
   it('a one-character quote stays on the first occurrence', async () => {
     const chapter = await createTestChapter(db, workId, { position: 1, body: '' })
     const result = await runProofread(
