@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import { READER_PERSONAS } from '@/ai/personas'
-import type { ReaderSimInput, ReaderSimResult } from '@/ai/tasks/reader-sim'
+import { type ReaderSimInput, type ReaderSimResult, readerSimTask } from '@/ai/tasks/reader-sim'
 import { fakeReaderSim } from '@/test/ai-fakes/reader-sim'
 import type { AiClient, GenerateObjectArgs } from '@/ai/types'
 import type { Db } from '@/db/client'
@@ -10,6 +10,8 @@ import { aiRuns } from '@/db/schema'
 import { createTestDb } from '@/test/db'
 import { createTestChapter, createTestUser, createTestWork } from '@/test/factories'
 import { listReaderSimRuns, runReaderSimulation } from '@/server/ai-features'
+import { getChapter } from '@/server/chapters'
+import { getWork } from '@/server/works'
 
 const CHAPTER_BODY = '서윤은 문을 열었다. "여기가 어디야?" 그녀가 물었다. 아무도 대답하지 않았다.'
 
@@ -54,7 +56,12 @@ async function waitUntil(condition: () => boolean): Promise<void> {
   }
 }
 
-type Recorded = { personaIds: string[]; signal?: AbortSignal; timeoutMs?: number }
+type Recorded = {
+  personaIds: string[]
+  prompt: string
+  signal?: AbortSignal
+  timeoutMs?: number
+}
 
 type RecordOptions = {
   /** Answers the calls. Defaults to the deterministic fake. */
@@ -85,7 +92,12 @@ class RecordingAiClient implements AiClient {
 
   async generateObject<T>(args: GenerateObjectArgs<T>) {
     const personaIds = (args.task.input as ReaderSimInput).personas.map((p) => p.id)
-    this.calls.push({ personaIds, signal: args.signal, timeoutMs: args.timeoutMs })
+    this.calls.push({
+      personaIds,
+      prompt: args.prompt,
+      signal: args.signal,
+      timeoutMs: args.timeoutMs,
+    })
     this.inFlight += 1
     this.maxInFlight = Math.max(this.maxInFlight, this.inFlight)
     try {
@@ -129,13 +141,13 @@ describe('reader simulation per persona', () => {
   }
 
   it('makes one model call per persona, in persona order', async () => {
-    const client = new RecordingAiClient('anthropic')
+    const client = new RecordingAiClient('ollama')
     await runReaderSimulation(db, actor, { chapterId }, client)
     expect(client.calls.map((c) => c.personaIds)).toEqual(READER_PERSONAS.map((p) => [p.id]))
   })
 
   it('makes one call per selected persona', async () => {
-    const client = new RecordingAiClient('anthropic')
+    const client = new RecordingAiClient('ollama')
     await runReaderSimulation(
       db,
       actor,
@@ -146,7 +158,7 @@ describe('reader simulation per persona', () => {
   })
 
   it('keeps the persona order when the calls finish out of order', async () => {
-    const client = new RecordingAiClient('anthropic', {
+    const client = new RecordingAiClient('ollama', {
       delayMs: {
         'reader-novice': 60,
         'reader-binge': 40,
@@ -163,7 +175,7 @@ describe('reader simulation per persona', () => {
       db,
       actor,
       { chapterId },
-      new RecordingAiClient('anthropic'),
+      new RecordingAiClient('ollama'),
     )
     const rows = await doneRows()
     expect(rows).toHaveLength(1)
@@ -189,29 +201,53 @@ describe('reader simulation per persona', () => {
       db,
       actor,
       { chapterId },
-      new RecordingAiClient('anthropic'),
+      new RecordingAiClient('ollama'),
     )
     expect(result.personas).toHaveLength(4)
   })
 
   it('gives every call the product time limit of 120 s', async () => {
-    const client = new RecordingAiClient('anthropic')
+    const client = new RecordingAiClient('ollama')
     await runReaderSimulation(db, actor, { chapterId }, client)
     expect(client.calls).toHaveLength(4)
     for (const call of client.calls) expect(call.timeoutMs).toBe(120_000)
   })
 
-  it('runs calls one at a time on a local provider and two at a time on a cloud provider', async () => {
+  it('runs the persona calls one at a time on a local provider', async () => {
     const local = new RecordingAiClient('ollama', { defaultDelayMs: 20 })
     await runReaderSimulation(db, actor, { chapterId }, local)
     expect(local.calls).toHaveLength(4)
     expect(local.maxInFlight).toBe(1)
-
-    const cloud = new RecordingAiClient('anthropic', { defaultDelayMs: 20 })
-    await runReaderSimulation(db, actor, { chapterId }, cloud)
-    expect(cloud.calls).toHaveLength(4)
-    expect(cloud.maxInFlight).toBe(2)
   })
+
+  it.each(['anthropic', 'test'])(
+    'makes exactly one call with all personas on the %s provider (spec 8)',
+    async (provider) => {
+      const client = new RecordingAiClient(provider, { defaultDelayMs: 5 })
+      const { runId, result } = await runReaderSimulation(db, actor, { chapterId }, client)
+
+      expect(client.calls).toHaveLength(1)
+      expect(client.calls[0].personaIds).toEqual(READER_PERSONAS.map((p) => p.id))
+      expect(client.maxInFlight).toBe(1)
+
+      const chapter = await getChapter(db, actor, chapterId)
+      const work = await getWork(db, actor, workId)
+      const fullInput: ReaderSimInput = {
+        chapterText: chapter.body,
+        chapterPosition: chapter.position,
+        chapterTitle: chapter.title,
+        previousSummaries: [],
+        work: { title: work.title, genre: work.genre, logline: work.logline },
+        personas: READER_PERSONAS,
+      }
+      expect(client.calls[0].prompt).toBe(readerSimTask.buildPrompt(fullInput))
+
+      const rows = await doneRows()
+      expect(rows).toHaveLength(1)
+      expect(rows[0].id).toBe(runId)
+      expect(result.personas).toHaveLength(4)
+    },
+  )
 
   it('returns a non-empty summary', async () => {
     const { result } = await runReaderSimulation(db, actor, { chapterId }, new FakeAiClient())
@@ -229,16 +265,16 @@ describe('reader simulation per persona', () => {
       },
     })
     await expect(
-      runReaderSimulation(db, actor, { chapterId }, new RecordingAiClient('anthropic', { inner })),
+      runReaderSimulation(db, actor, { chapterId }, new RecordingAiClient('ollama', { inner })),
     ).rejects.toMatchObject({ code: 'AI_ERROR' })
     expect(await doneRows()).toHaveLength(0)
   })
 
   it('cancels the whole run and stores no done row when the caller aborts', async () => {
-    const client = new RecordingAiClient('anthropic', { hold: true })
+    const client = new RecordingAiClient('ollama', { hold: true })
     const controller = new AbortController()
     const run = runReaderSimulation(db, actor, { chapterId }, client, controller.signal)
-    await waitUntil(() => client.calls.length >= 2)
+    await waitUntil(() => client.calls.length >= 1)
     controller.abort()
     await expect(run).rejects.toMatchObject({ code: 'CANCELLED' })
     expect(await doneRows()).toHaveLength(0)

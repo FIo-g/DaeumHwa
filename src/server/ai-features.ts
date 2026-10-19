@@ -1,7 +1,9 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
+import { getAiClient } from '@/ai'
 import { buildContextPack, renderContextPack } from '@/ai/context'
 import { READER_PERSONAS, type Persona } from '@/ai/personas'
 import {
+  isLocalProvider,
   listAiRuns,
   replaceRunOutput,
   runAiTask,
@@ -119,15 +121,26 @@ export async function runReaderSimulation(
     work: { title: work.title, genre: work.genre, logline: work.logline },
     personas: selectPersonas(input.personaIds),
   }
-  // One call per persona keeps each call inside the time limit; the result is still one run row.
-  const { output, runId } = await runAiTaskSplit(
-    db,
-    { userId: actor.userId, workId: chapterRow.workId, chapterId: chapterRow.id, signal },
-    readerSimTask,
-    splitReaderSimInput(readerInput),
-    mergeReaderSim,
-    client,
-  )
+  const meta = {
+    userId: actor.userId,
+    workId: chapterRow.workId,
+    chapterId: chapterRow.id,
+    signal,
+  }
+  const aiClient = client ?? getAiClient()
+  // Local servers answer slowly, so one call per persona keeps each call inside the time limit; the
+  // result is still one run row. Cloud providers keep one call (spec section 8: local-only behavior
+  // is gated by provider).
+  const { output, runId } = isLocalProvider(aiClient.provider)
+    ? await runAiTaskSplit(
+        db,
+        meta,
+        readerSimTask,
+        splitReaderSimInput(readerInput),
+        mergeReaderSim,
+        aiClient,
+      )
+    : await runAiTask(db, meta, readerSimTask, readerInput, aiClient)
   return { runId, result: output }
 }
 
