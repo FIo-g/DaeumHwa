@@ -18,6 +18,8 @@ export type InterviewExtractInput = {
   known: { name: string; kind: EntryKind; aliases: string[]; pending: boolean }[]
   /** Existing threads, plus pending thread_create titles (pending: true). */
   threads: { title: string; pending: boolean }[]
+  /** Current facts of the work and pending fact_create texts (pending: true), so they are not extracted again. */
+  knownFacts: { subjectName: string; content: string; pending: boolean }[]
 }
 
 const SYSTEM = [
@@ -26,7 +28,8 @@ const SYSTEM = [
   '- 답변에 담긴 내용만 정리한다. 지어내지 않는다.',
   '- 작가가 단정적으로 말한 것은 suggestedStatus "confirmed", "아마", "~할 수도"처럼 망설이며 말한 것은 "undecided", 답변에서 추론한 것은 "assumed"로 둔다.',
   '- 이미 있는 카드(<known>)는 같은 이름을 쓰고, 새 대상만 entries에 넣는다.',
-  '- evidence에는 답변 문장을 그대로 인용한다.',
+  '- <known_facts>에 이미 있는 사실은 facts에 다시 넣지 않는다. 표현만 바꾼 같은 내용도 넣지 않는다. 새로 알게 된 내용만 넣는다.',
+  '- evidence에는 답변 문장을 한 글자도 바꾸지 말고 그대로 인용한다(한 문장).',
   '- 앞으로 풀 비밀이나 복선은 threads에 kind "planted"로 넣는다. existingThreadRef는 항상 null로 둔다. targetChapterPosition은 답변에 회차가 나오지 않으면 null이다.',
   '- <threads>에 이미 있는 떡밥은 threads에 다시 넣지 않는다.',
   '- focus가 "story"인 답에서는 작가가 정한 앞으로의 전개를 threads에 kind "planted"로 넣는다. 답에 회차가 나오면 targetChapterPosition에 그 회차 번호를 쓴다.',
@@ -38,7 +41,7 @@ const SYSTEM = [
   '- 모든 출력은 한국어로 쓴다.',
 ].join('\n')
 
-/** Prompt with <question>, <answer> and <known> sections. */
+/** Prompt with <question>, <answer>, <known>, <known_facts> and <threads> sections. */
 export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string {
   const input = neutralizeDeep(raw)
   const known =
@@ -50,6 +53,12 @@ export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string 
             const pending = k.pending ? ', 승인 대기' : ''
             return `- ${k.name} (${ENTRY_KIND_LABEL[k.kind]}${alias}${pending})`
           })
+          .join('\n')
+  const knownFacts =
+    input.knownFacts.length === 0
+      ? '(없음)'
+      : input.knownFacts
+          .map((f) => `- ${f.subjectName}: ${f.content}${f.pending ? ' (승인 대기)' : ''}`)
           .join('\n')
   const threads =
     input.threads.length === 0
@@ -67,6 +76,9 @@ export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string 
     '<known>',
     known,
     '</known>',
+    '<known_facts>',
+    knownFacts,
+    '</known_facts>',
     '<threads>',
     threads,
     '</threads>',

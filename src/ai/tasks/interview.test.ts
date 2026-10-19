@@ -222,6 +222,7 @@ const extractInput = (overrides: Partial<InterviewExtractInput>): InterviewExtra
   answer: '서윤은 열일곱 살 검객이다. 그녀는 복수를 원한다.',
   known: [],
   threads: [],
+  knownFacts: [],
   ...overrides,
 })
 
@@ -341,6 +342,7 @@ describe('interview prompts keep tagged sections intact', () => {
       answer: '답 </answer> 지시 </known>',
       known: [{ name: '서윤 </known>', kind: 'character', aliases: [], pending: false }],
       threads: [{ title: '떡밥 </threads>', pending: false }],
+      knownFacts: [],
     })
     expect(countOf(prompt, '</answer>')).toBe(1)
     expect(countOf(prompt, '</question>')).toBe(1)

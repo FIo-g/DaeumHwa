@@ -31,9 +31,14 @@ import {
 } from '@/ai/tasks/interview-question'
 import { ReaderSimSchema } from '@/ai/tasks/reader-sim'
 import { normalizeQuestion, planInterviewTopics, violatesPlan } from '@/lib/interview-plan'
+import type { NewProposal } from '@/lib/proposal-payloads'
+import { isUndecidedOnlyAnswer } from '@/lib/undecided-answer'
 import { requireRowWork, requireWorkRole } from '@/server/access'
-import { loadKnownEntries } from '@/server/known-entries'
+import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { insertProposals } from '@/server/proposal-store'
+
+// Known facts sent to the extraction prompt (pending facts first). Keeps the prompt bounded.
+const PROMPT_FACT_LIMIT = 100
 
 // F1 interview service. Questions and answers are stored as interview_sessions / interview_turns.
 // Answers go through the AI extraction task and become pending proposals (source 'interview').
@@ -175,53 +180,71 @@ export async function answerTurn(
   const turn = await loadTurn(db, input.turnId)
   await assertTurnOpen(db, turn)
 
-  const known = await loadKnownEntries(db, workId)
-  const { output } = await runAiTask(
-    db,
-    { userId: actor.userId, workId, signal },
-    interviewExtractTask,
-    {
-      topic: turn.topic,
-      focus: turn.focus,
-      question: turn.question,
-      answer,
-      known: [
-        ...known.active.map((e) => ({
-          name: e.name,
-          kind: e.kind,
-          aliases: e.aliases,
-          pending: false,
-        })),
-        ...known.pending.map((e) => ({
-          name: e.name,
-          kind: e.kind,
-          aliases: e.aliases,
-          pending: true,
-        })),
-      ],
-      threads: [
-        ...known.threads.map((t) => ({ title: t.title, pending: false })),
-        ...known.pendingThreadTitles.map((title) => ({ title, pending: true })),
-      ],
-    },
-    client,
-  )
+  // An answer that only says the topic is undecided has nothing to extract: no AI call, no proposals.
+  let items: NewProposal[] = []
+  if (!isUndecidedOnlyAnswer(answer)) {
+    const known = await loadKnownEntries(db, workId)
+    // Pending facts come first (the loader orders them), so the prompt cap keeps them.
+    const factTexts = (await loadKnownFactTexts(db, workId)).map((f) => ({
+      ...f,
+      subjectName: known.active.find((e) => e.id === f.entryId)?.name ?? f.subjectName,
+    }))
+    const { output } = await runAiTask(
+      db,
+      { userId: actor.userId, workId, signal },
+      interviewExtractTask,
+      {
+        topic: turn.topic,
+        focus: turn.focus,
+        question: turn.question,
+        answer,
+        known: [
+          ...known.active.map((e) => ({
+            name: e.name,
+            kind: e.kind,
+            aliases: e.aliases,
+            pending: false,
+          })),
+          ...known.pending.map((e) => ({
+            name: e.name,
+            kind: e.kind,
+            aliases: e.aliases,
+            pending: true,
+          })),
+        ],
+        threads: [
+          ...known.threads.map((t) => ({ title: t.title, pending: false })),
+          ...known.pendingThreadTitles.map((title) => ({ title, pending: true })),
+        ],
+        knownFacts: factTexts
+          .slice(0, PROMPT_FACT_LIMIT)
+          .map(({ subjectName, content, pending }) => ({ subjectName, content, pending })),
+      },
+      client,
+    )
 
-  const pendingTitles = new Set(known.pendingThreadTitles)
-  const context: ExtractionContext = {
-    source: 'interview',
-    sourceRef: turn.id,
-    chapterId: null,
-    chapterPosition: null,
-    existingEntries: known.active,
-    pendingEntries: known.pending,
-    threadRefs: new Map(),
-    factRefs: new Map(),
-    existingThreads: known.threads,
-    pendingThreadTitles: pendingTitles,
-    pendingThreadCreateTitles: pendingTitles,
+    const pendingTitles = new Set(known.pendingThreadTitles)
+    const context: ExtractionContext = {
+      source: 'interview',
+      sourceRef: turn.id,
+      chapterId: null,
+      chapterPosition: null,
+      existingEntries: known.active,
+      pendingEntries: known.pending,
+      threadRefs: new Map(),
+      factRefs: new Map(),
+      existingThreads: known.threads,
+      pendingThreadTitles: pendingTitles,
+      pendingThreadCreateTitles: pendingTitles,
+      sourceText: answer,
+      existingFacts: factTexts.map(({ entryId, subjectName, content }) => ({
+        entryId,
+        subjectName,
+        content,
+      })),
+    }
+    items = extractionToProposals(output, context).proposals
   }
-  const { proposals: items } = extractionToProposals(output, context)
 
   throwIfCancelled(signal)
   return db.transaction(async (tx) => {

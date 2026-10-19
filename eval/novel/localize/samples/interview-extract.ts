@@ -13,4 +13,5 @@ export const interviewExtractSample = interviewExtractTask.buildPrompt({
     { title: 'Locked drawer', pending: false },
     { title: 'Old debt', pending: true },
   ],
+  knownFacts: [{ subjectName: 'Mina Park', content: 'Mina is a courier.', pending: true }],
 })

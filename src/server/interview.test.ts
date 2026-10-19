@@ -412,7 +412,8 @@ describe('answerTurn naming and thread dedup across answers', () => {
         title: '멈춘 종의 비밀',
         description: '',
         kind: 'planted',
-        evidence: '',
+        // Quoted from both answers, so the verbatim evidence check keeps the thread.
+        evidence: '노은하',
         existingThreadRef: null,
         targetChapterPosition: null,
       },
