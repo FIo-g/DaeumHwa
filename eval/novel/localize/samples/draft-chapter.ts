@@ -18,5 +18,5 @@ export const draftSample = buildDraftPrompt({
   packText: renderContextPack(pack),
   previousSummary: null,
   previousTail: 'The door closed.',
-  chapterLabel: 'Chapter 4',
+  chapterLabel: '4화 (새 회차)',
 })
