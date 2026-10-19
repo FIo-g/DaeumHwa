@@ -17,6 +17,7 @@ import { readPending } from './author-io'
 import { loadBible } from './bible'
 import { publishReview, writeBlindCopy } from './blind'
 import { bibleExempt, chapterMetrics } from './metrics'
+import { type PowerInfo, type PowerReader, lowPowerWarning, readPowerInfo } from './power'
 import {
   checkHelperThink,
   HELPER_THINKS,
@@ -55,22 +56,57 @@ export type StatusJson = {
   step: string | null
   pendingKind: string | null
   message: string | null
+  /** Low Power warning for a local run; a view computed on demand, never saved. */
+  warning?: string
 }
 
 /** The documented status shape for one run. */
-export function formatStatus(state: RunState, pendingKind: string | null = null): StatusJson {
-  return {
+export function formatStatus(
+  state: RunState,
+  pendingKind: string | null = null,
+  warning: string | null = null,
+): StatusJson {
+  const status: StatusJson = {
     status: state.status,
     step: state.plan[state.cursor] ?? null,
     pendingKind,
     message: state.message,
   }
+  if (warning) status.warning = warning
+  return status
 }
 
-function summarize(dir: string, state: RunState = loadState(dir)): StatusJson {
+/**
+ * The power warning for a local run, or null. Fake and cloud runs return before any read. A
+ * finished run ignores the live reading; a missing config or a bad call file counts as no sample.
+ */
+function powerWarningFor(dir: string, state: RunState, readPower: PowerReader): string | null {
+  let modelId: ModelId
+  try {
+    modelId = loadConfig(dir).modelId
+  } catch {
+    return null
+  }
+  if (MODEL_PROFILES[modelId].queue !== 'local') return null
+  let samples: PowerInfo[] = []
+  try {
+    samples = readCallRecords(dir).flatMap((call) => (call.power ? [call.power] : []))
+  } catch {
+    samples = []
+  }
+  const live = state.status === 'done' ? null : readPower()
+  return lowPowerWarning({ live, samples })
+}
+
+function summarize(
+  dir: string,
+  state: RunState = loadState(dir),
+  readPower?: PowerReader,
+): StatusJson {
   let pendingKind: string | null = null
   if (state.status === 'pending') pendingKind = readPending(dir)?.kind ?? null
-  return formatStatus(state, pendingKind)
+  const warning = readPower ? powerWarningFor(dir, state, readPower) : null
+  return formatStatus(state, pendingKind, warning)
 }
 
 function gitCommit(): string {
@@ -160,10 +196,16 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
 }
 
 /** Runs the run to its next block in-process. The caller holds no lock; this takes it. */
-export async function runWorker(dir: string, o: { fakeAuthor: boolean }): Promise<StatusJson> {
+export async function runWorker(
+  dir: string,
+  o: { fakeAuthor: boolean; readPower?: PowerReader },
+): Promise<StatusJson> {
   if (!acquireLock(dir)) throw new Error(`worker already running: ${dir}`)
   try {
-    const ctx = await openRun(dir, { autoAuthor: o.fakeAuthor })
+    const ctx = await openRun(dir, {
+      autoAuthor: o.fakeAuthor,
+      readPower: o.readPower ?? readPowerInfo,
+    })
     try {
       const state = await runUntilBlocked(ctx)
       return summarize(dir, state)
@@ -222,10 +264,15 @@ function logTail(dir: string): string | null {
 }
 
 /** Marks the run paused-error with the reason a worker failed without saving a result. */
-function pausedError(dir: string, state: RunState, message: string): StatusJson {
+function pausedError(
+  dir: string,
+  state: RunState,
+  message: string,
+  readPower: PowerReader,
+): StatusJson {
   const next: RunState = { ...state, status: 'paused-error', message }
   saveState(dir, next)
-  return summarize(dir, next)
+  return summarize(dir, next, readPower)
 }
 
 export type AdvanceOptions = {
@@ -233,6 +280,7 @@ export type AdvanceOptions = {
   fakeAuthor?: boolean
   spawnWorker?: SpawnWorker
   pollMs?: number
+  readPower?: PowerReader
 }
 
 /** Starts a worker if none is alive, then waits up to maxSeconds for it to finish or block. */
@@ -240,6 +288,7 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
   const maxMs = (o.maxSeconds ?? 540) * 1000
   const pollMs = o.pollMs ?? 2000
   const fakeAuthor = o.fakeAuthor ?? false
+  const readPower = o.readPower ?? readPowerInfo
   const started = Date.now()
 
   // Settles when the spawned worker exits (ok) or fails to start (error). Kept on an object so
@@ -272,7 +321,7 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
   // A spawned child that has not exited yet may not hold the lock yet (startup gap), so it counts as live.
   const live = (spawned && !spawn.settled) || workerAlive(dir)
   if (live) {
-    const summary = summarize(dir, state)
+    const summary = summarize(dir, state, readPower)
     if (state.status === 'new' || state.status === 'running')
       return { ...summary, status: 'running' }
     return summary
@@ -280,12 +329,13 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
   // No live worker. A run still new or running, or a spawn failure, means the worker died
   // before it saved a result. Report it as paused-error so the caller stops retrying.
   if (spawn.error === null && state.status !== 'new' && state.status !== 'running') {
-    return summarize(dir, state)
+    return summarize(dir, state, readPower)
   }
   return pausedError(
     dir,
     state,
     spawn.error ?? logTail(dir) ?? 'worker exited without saving a result',
+    readPower,
   )
 }
 
@@ -293,7 +343,9 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
 export function runStatus(o: {
   dir?: string
   all?: boolean
+  readPower?: PowerReader
 }): StatusJson | (StatusJson & { dir: string })[] {
+  const readPower = o.readPower ?? readPowerInfo
   if (o.all) {
     const root = path.resolve(RESULTS_DIR)
     if (!existsSync(root)) return []
@@ -303,11 +355,11 @@ export function runStatus(o: {
       )
       .map((entry) => {
         const dir = path.join(root, entry.name)
-        return { dir, ...summarize(dir) }
+        return { dir, ...summarize(dir, loadState(dir), readPower) }
       })
   }
   if (!o.dir) throw new Error('status needs --dir or --all')
-  return summarize(path.resolve(o.dir))
+  return summarize(path.resolve(o.dir), loadState(path.resolve(o.dir)), readPower)
 }
 
 type FetchFn = typeof fetch
