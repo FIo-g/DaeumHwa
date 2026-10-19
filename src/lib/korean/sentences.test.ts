@@ -5,7 +5,12 @@ describe('splitSentences', () => {
   it('splits on terminators, closing quotes and line breaks, with trimmed positions', () => {
     // '"' opens the quote at index 8; trimmed sentence starts are reported.
     const parts = splitSentences('그가 말했다. "정말?" 그녀는 웃었다…\n다음 줄')
-    expect(parts.map((p) => p.text)).toEqual(['그가 말했다.', '"정말?"', '그녀는 웃었다…', '다음 줄'])
+    expect(parts.map((p) => p.text)).toEqual([
+      '그가 말했다.',
+      '"정말?"',
+      '그녀는 웃었다…',
+      '다음 줄',
+    ])
     expect(parts.map((p) => p.start)).toEqual([0, 8, 14, 23])
     expect(parts.map((p) => p.end)).toEqual([7, 13, 22, 27])
   })

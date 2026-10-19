@@ -123,6 +123,8 @@ describe('runProofread AI quote expansion', () => {
       proofreadClient([]),
     )
     expect(result.runId).not.toBeNull()
-    expect(result.suggestions.map((s) => [s.source, s.quote, s.start])).toEqual([['rule', '되요', 2]])
+    expect(result.suggestions.map((s) => [s.source, s.quote, s.start])).toEqual([
+      ['rule', '되요', 2],
+    ])
   })
 })
