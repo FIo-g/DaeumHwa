@@ -15,7 +15,7 @@ import { ollamaTransport } from '@/ai/ollama'
 import { seoulToday } from '@/lib/dates'
 import { readPending } from './author-io'
 import { loadBible } from './bible'
-import { publishReview, writeBlindCopy } from './blind'
+import { publishReview, secondBlindDir, writeBlindCopy } from './blind'
 import { bibleExempt, chapterMetrics } from './metrics'
 import { type PowerInfo, type PowerReader, lowPowerWarning, readPowerInfo } from './power'
 import {
@@ -27,6 +27,7 @@ import {
   type ModelId,
 } from './models'
 import { publishFile } from './publish'
+import { reviewGate } from './review-verdict'
 import { buildRunSummary, readSummaryInputs } from './steps/finish'
 import { readCallRecords } from './steps/util'
 import {
@@ -42,7 +43,7 @@ import { acquireLock, releaseLock, workerAlive } from './worker-lock'
 
 // Command line for the novel eval. Every command prints exactly one JSON line on stdout. Long
 // steps run in a detached worker so they outlive the agent's command timeout.
-//   init | advance | worker | status | probe-ctx | resummarize | blind | publish-review | publish
+//   init | advance | worker | status | probe-ctx | resummarize | blind | publish-review | publish | review-gate
 
 const RESULTS_DIR = 'eval/results/novel'
 const LANGS = ['ko', 'en'] as const
@@ -593,6 +594,17 @@ function parseFlags(args: string[]): Flags {
   return flags
 }
 
+/**
+ * Whether --second is set. A bare flag is true; a value is refused, so a stray value never routes a
+ * second review into the first review's slot.
+ */
+export function secondFlag(flags: Flags): boolean {
+  const value = flags.second
+  if (value === undefined) return false
+  if (value !== true) throw new Error('--second takes no value')
+  return true
+}
+
 function stringFlag(flags: Flags, name: string): string {
   const value = flags[name]
   if (typeof value !== 'string') throw new Error(`missing --${name}`)
@@ -664,16 +676,25 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
       }
       return resummarizeRun(path.resolve(stringFlag(flags, 'dir')))
     }
-    case 'blind':
-      // The reviewer's copy of a run, with model names masked. --out overrides blind/<run name>.
-      return writeBlindCopy(path.resolve(stringFlag(flags, 'dir')), {
-        out: flags.out === undefined ? undefined : path.resolve(stringFlag(flags, 'out')),
-      })
+    case 'blind': {
+      // The reviewer's copy of a run, with model names masked. --out overrides blind/<run name>;
+      // --second uses blind-2/<run name> instead, so the first copy is kept.
+      const run = path.resolve(stringFlag(flags, 'dir'))
+      const second = secondFlag(flags)
+      let out: string | undefined
+      if (flags.out !== undefined) out = path.resolve(stringFlag(flags, 'out'))
+      else if (second) out = secondBlindDir(run)
+      return writeBlindCopy(run, { out })
+    }
     case 'publish-review':
       return publishReview(
         path.resolve(stringFlag(flags, 'dir')),
         path.resolve(stringFlag(flags, 'to')),
+        { second: secondFlag(flags) },
       )
+    case 'review-gate':
+      // Reads the first review's verdict block and says whether a second review is needed.
+      return reviewGate(path.resolve(stringFlag(flags, 'dir')))
     case 'publish':
       // Copies a run-side file into docs. A guard error exits 1; a copy failure is in the JSON status.
       return publishFile({
@@ -684,7 +705,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
       })
     default:
       throw new Error(
-        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize|blind|publish-review|publish (got ${command ?? 'nothing'})`,
+        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize|blind|publish-review|publish|review-gate (got ${command ?? 'nothing'})`,
       )
   }
 }

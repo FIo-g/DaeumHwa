@@ -11,6 +11,7 @@ import path from 'node:path'
 import type { CallRecord } from './eval-client'
 import { MODEL_PROFILES } from './models'
 import { loadConfig } from './state'
+import { SECOND_REVIEW_FILE } from './review-verdict'
 
 // Blinded copy of one finished run, for the reviewer. The reviewer must not learn which model
 // produced the run, so every model name, provider word and profile fingerprint is masked or dropped
@@ -137,6 +138,14 @@ export function blindRunSummary(summary: unknown): unknown {
 /** Where the blinded copy of a run goes: the sibling blind/ folder with the same run name. */
 export function defaultBlindDir(runDir: string): string {
   return path.join(path.dirname(runDir), 'blind', path.basename(runDir))
+}
+
+/**
+ * Where the second reviewer's blinded copy goes: blind-2/ beside blind/, same run name. It is a
+ * separate folder so building it never removes the first reviewer's copy and review.md.
+ */
+export function secondBlindDir(runDir: string): string {
+  return path.join(path.dirname(runDir), 'blind-2', path.basename(runDir))
 }
 
 const CRITERIA_DOC = 'docs/eval/novel-quality-criteria.md'
@@ -267,14 +276,18 @@ export function findLeaks(blindDir: string): string[] {
  * Writes the review to docs (header line first), then to the run dir. The model id is read from the
  * real run's config.json; the blind dir has none. The docs file is written first, so a failed docs
  * write leaves no run-dir review that would make the next invocation skip the review.
+ * With second, the blind dir is blind-2/, the run-side file is review-2.md, and the header gets a
+ * "검토: 2" part, so the second review is never mistaken for the first.
  */
 export function publishReview(
   runDir: string,
   docsPath: string,
-  opts: { blindDir?: string } = {},
+  opts: { blindDir?: string; second?: boolean } = {},
 ): { docsPath: string; runReviewPath: string } {
   const run = path.resolve(runDir)
-  const blindReview = path.join(path.resolve(opts.blindDir ?? defaultBlindDir(run)), 'review.md')
+  const second = opts.second === true
+  const defaultDir = second ? secondBlindDir(run) : defaultBlindDir(run)
+  const blindReview = path.join(path.resolve(opts.blindDir ?? defaultDir), 'review.md')
   if (!existsSync(blindReview)) {
     throw new Error(`review.md missing in blind dir: ${path.dirname(blindReview)}`)
   }
@@ -283,12 +296,13 @@ export function publishReview(
     config.lang === 'ko'
       ? `모델: ${config.modelId} | 언어: ${config.lang}`
       : `Model: ${config.modelId} | Language: ${config.lang}`
-  const text = `${header}\n\n${readFileSync(blindReview, 'utf8')}`
+  const reviewPart = second ? (config.lang === 'ko' ? ' | 검토: 2' : ' | Review: 2') : ''
+  const text = `${header}${reviewPart}\n\n${readFileSync(blindReview, 'utf8')}`
 
   const docs = path.resolve(docsPath)
   mkdirSync(path.dirname(docs), { recursive: true })
   writeFileSync(docs, text)
-  const runReviewPath = path.join(run, 'review.md')
+  const runReviewPath = path.join(run, second ? SECOND_REVIEW_FILE : 'review.md')
   writeFileSync(runReviewPath, text)
   return { docsPath: docs, runReviewPath }
 }
