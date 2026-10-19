@@ -10,6 +10,7 @@ export const EN_ENTITY_NAME_RULES = [
   '- Role words and pronouns such as "protagonist", "male lead", "female lead", "male protagonist", "female protagonist", "villain", "supporting character", "narrator", "I", "he", "she", "they" are not names. Do not write them in the name of entries, the subjectName of facts, or either end of relations. Write that character\'s name instead.',
   '- If the answer has no name, do not create a card.',
   '- A name marked "(pending approval)" in <known> is already a card waiting for approval. If it is the same subject, use that name as is and do not create a new card.',
+  '- Use the full name of a card listed in <known> as is. Do not shorten it by dropping the family name or the modifier of a place name. Example: do not write "Serin" for "Han Serin", or "Bell Tower" for "Ashen Bell Tower".',
 ].join('\n')
 
 /** Topics the interview covers, in order (English form of INTERVIEW_TOPICS). */
