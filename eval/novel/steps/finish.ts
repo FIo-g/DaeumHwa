@@ -507,6 +507,8 @@ export function readSummaryInputs(dir: string): SummaryInputs {
   const extraction: Record<string, ExtractionCounts> = {}
   const suggestions: Record<string, SuggestionInput[]> = {}
   const chapterTexts: Record<string, string> = {}
+  // The chapter text before a scene rewrite, which is the text the continuity check saw.
+  const preRewriteTexts: Record<string, string> = {}
   const continueFailures: ContinueFailure[] = []
   for (const name of names) {
     const file = path.join(chaptersDir, name)
@@ -519,6 +521,11 @@ export function readSummaryInputs(dir: string): SummaryInputs {
     match = /^(\d{2})\.md$/.exec(name)
     if (match) {
       chapterTexts[String(Number(match[1]))] = readFileSync(file, 'utf8')
+      continue
+    }
+    match = /^(\d{2})\.pre-rewrite\.md$/.exec(name)
+    if (match) {
+      preRewriteTexts[String(Number(match[1]))] = readFileSync(file, 'utf8')
       continue
     }
     match = /^(\d{2})\.proofread\.json$/.exec(name)
@@ -563,9 +570,14 @@ export function readSummaryInputs(dir: string): SummaryInputs {
   }
   if (Object.keys(proofread).length > 0) inputs.proofread = proofread
 
+  // Each chapter's context hit is measured on the pre-rewrite text when the scene rewrite ran.
+  const contextTexts: Record<string, string> = {}
+  for (const chapter of new Set([...Object.keys(chapterTexts), ...Object.keys(preRewriteTexts)])) {
+    contextTexts[chapter] = preRewriteTexts[chapter] ?? chapterTexts[chapter] ?? ''
+  }
   const wiki = WikiFinalSchema.safeParse(readJsonFile(path.join(dir, 'wiki-final.json')))
-  if (wiki.success && Object.keys(chapterTexts).length > 0) {
-    inputs.contextHit = { cards: wiki.data.entries, chapterTexts }
+  if (wiki.success && Object.keys(contextTexts).length > 0) {
+    inputs.contextHit = { cards: wiki.data.entries, chapterTexts: contextTexts }
   }
 
   const fixture = parseContinuityResults(readJsonFile(path.join(dir, 'continuity-eval.json')))
