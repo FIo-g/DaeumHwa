@@ -72,6 +72,8 @@ const MAX_DIALOGUE_SAMPLES = 40
 const DRAFT_TAIL_CHARS = 1500
 /** The first draft and its continuation share one budget, under the route's 300 s maxDuration. */
 const DRAFT_TOTAL_BUDGET_MS = 290_000
+/** The first stream is never given less than this, even when context building ate the budget. */
+const MIN_FIRST_STREAM_MS = 10_000
 /** A continuation is not started with less time left than this. */
 const MIN_CONTINUATION_MS = 30_000
 /** A line of dialogue: straight double quotes, curly double quotes, or Korean corner brackets. */
@@ -370,9 +372,14 @@ export async function startDraft(
     voices: voices?.map((v) => ({ name: v.name, speech: v.speech })),
   }
 
+  // The budget runs from the first line of startDraft, so the first stream gets what is left.
+  const firstTimeoutMs = Math.max(
+    MIN_FIRST_STREAM_MS,
+    Math.min(STREAM_AI_TIMEOUT_MS, DRAFT_TOTAL_BUDGET_MS - (Date.now() - startedAt)),
+  )
   const first = await startAiStream(
     db,
-    { userId: actor.userId, workId, chapterId, signal },
+    { userId: actor.userId, workId, chapterId, signal, timeoutMs: firstTimeoutMs },
     {
       task: 'draft-chapter',
       input: { instructions },

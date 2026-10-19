@@ -655,6 +655,40 @@ describe('draft continuation', () => {
   })
 })
 
+describe('first draft stream budget', () => {
+  it('shortens the first stream timeout by the time already spent before it starts', async () => {
+    const { db, actor, workId } = await setup()
+    const base = Date.now()
+    let calls = 0
+    // The first read is startedAt; every later read is 30 s on (slow context building).
+    vi.spyOn(Date, 'now').mockImplementation(() => base + (calls++ === 0 ? 0 : 30_000))
+    const spy = vi.spyOn(run, 'startAiStream')
+    const { done } = await startDraft(
+      db,
+      actor,
+      { workId, instructions: '민준이 웃는다.', entryIds: [], targetChars: 500 },
+      new FakeAiClient(),
+    )
+    await done
+    const firstMeta = spy.mock.calls[0][1]
+    expect(firstMeta.timeoutMs).toBe(290_000 - 30_000)
+    expect(firstMeta.timeoutMs).toBeLessThan(run.STREAM_AI_TIMEOUT_MS)
+  })
+
+  it('keeps the full stream timeout when little time has passed', async () => {
+    const { db, actor, workId } = await setup()
+    const spy = vi.spyOn(run, 'startAiStream')
+    const { done } = await startDraft(
+      db,
+      actor,
+      { workId, instructions: '민준이 웃는다.', entryIds: [], targetChars: 500 },
+      new FakeAiClient(),
+    )
+    await done
+    expect(spy.mock.calls[0][1].timeoutMs).toBe(run.STREAM_AI_TIMEOUT_MS)
+  })
+})
+
 describe('draft voices (speech feature)', () => {
   const voicesOf = (prompt: string) => prompt.slice(prompt.indexOf('<voices>'))
 
