@@ -16,7 +16,7 @@ import { seoulToday } from '@/lib/dates'
 import { readPending } from './author-io'
 import { loadBible } from './bible'
 import { publishReview, writeBlindCopy } from './blind'
-import { chapterMetrics } from './metrics'
+import { bibleExempt, chapterMetrics } from './metrics'
 import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
 import { publishFile } from './publish'
 import { buildRunSummary, readSummaryInputs } from './steps/finish'
@@ -439,7 +439,13 @@ export function resummarizeRun(dir: string): ResummarizeResult {
   for (const file of chapterFiles) {
     const text = readFileSync(path.join(chaptersDir, file), 'utf8')
     // The same style examples as the draft step (steps/chapter.ts), so the numbers agree.
-    const metrics = chapterMetrics(text, config.lang, bible.targetChars, [bible.workStyle.examples])
+    const metrics = chapterMetrics(
+      text,
+      config.lang,
+      bible.targetChars,
+      [bible.workStyle.examples],
+      bibleExempt(bible),
+    )
     const name = `${file.slice(0, 2)}.json`
     writeFileSync(path.join(dir, 'metrics', name), `${JSON.stringify(metrics, null, 2)}\n`)
   }

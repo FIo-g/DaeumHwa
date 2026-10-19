@@ -2,6 +2,7 @@ import { countChars } from '@/lib/korean/chars'
 import { foreignScriptRuns } from '@/ai/guards'
 import { countRepeatedWords, findSampleCopies } from '@/lib/korean/style-copy'
 import { overlongParagraphs } from '@/lib/korean/paragraphs'
+import type { Bible } from './bible'
 
 export * from './metrics-interview'
 export * from './metrics-proofread'
@@ -44,11 +45,23 @@ export const META_PATTERNS: RegExp[] = [
 const CLEAN_ENDINGS = new Set([...'.!?…"”\'’」』)~', ...'다요까네지죠'])
 const DIALOGUE_OPENERS = new Set(['"', '“', "'", '‘', '「', '『'])
 
+/**
+ * Names and aliases of the bible's characters, places and items. repairDraft exempts every wiki
+ * entry name and alias from its repeated-word flags, so the metric exempts the same words.
+ */
+export function bibleExempt(bible: Bible): string[] {
+  return [...bible.characters, ...bible.places, ...bible.items].flatMap((entry) => [
+    entry.name,
+    ...entry.aliases,
+  ])
+}
+
 export function chapterMetrics(
   text: string,
   lang: 'ko' | 'en',
   targetChars: number,
   styleExamples: readonly string[] = [],
+  exempt: readonly string[] = [],
 ): ChapterMetrics {
   const trimmed = text.trim()
   // Same "공백 포함" definition the editor shows: line breaks are not counted.
@@ -80,7 +93,7 @@ export function chapterMetrics(
   const dialogueLineRatio = paragraphs === 0 ? 0 : dialogueLines / paragraphs
 
   const sampleCopyHits = findSampleCopies(trimmed, styleExamples.filter(Boolean), { lang }).length
-  const repeatedWords = countRepeatedWords(trimmed, { lang })
+  const repeatedWords = countRepeatedWords(trimmed, { lang, exempt })
   const overlong = overlongParagraphs(trimmed).length
 
   return {

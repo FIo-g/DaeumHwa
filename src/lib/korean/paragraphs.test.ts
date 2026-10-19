@@ -84,11 +84,11 @@ describe('dialogue and non-terminator dots', () => {
 
 describe('large inputs', () => {
   it('handles a single 5,000-character paragraph without throwing', () => {
-    const text = '가. '.repeat(1250).trimEnd()
-    expect(text.length).toBeGreaterThanOrEqual(3700)
+    const text = '가. '.repeat(1667).trimEnd()
+    expect(text).toHaveLength(5000)
     const result = overlongParagraphs(text)
     expect(result).toHaveLength(1)
-    expect(result[0].sentences).toBe(1250)
+    expect(result[0].sentences).toBe(1667)
     expect(hasOverlongSpan(text, 3)).toBe(false)
   })
 
