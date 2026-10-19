@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { type ContextPack, renderContextPack, resolveRefs } from '@/ai/context'
+import { findNumericFactMismatches } from '@/ai/numeric-facts'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import { ISSUE_KINDS, type IssueKind, SEVERITIES, type Severity } from '@/db/types'
@@ -69,6 +70,29 @@ function usableSuggestion(issue: ContinuityIssue): string {
   if (issue.kind === 'thread' || issue.kind === 'timeline') return ''
   if (issue.suggestion.trim() === issue.quote.trim()) return ''
   return issue.suggestion
+}
+
+/**
+ * Age mismatches found in code (numeric-facts), as contradiction issues. They do not depend on the
+ * model answer. A bug here must not fail the whole check, so any error gives no numeric issues.
+ */
+function numericIssues(input: ContinuityInput): ContinuityIssue[] {
+  try {
+    return findNumericFactMismatches({ chapterText: input.chapterText, pack: input.pack }).map(
+      (hit) => ({
+        quote: hit.quote,
+        kind: 'contradiction',
+        severity: 'medium',
+        factRef: hit.factRef,
+        entryRef: hit.entryRef,
+        wikiExcerpt: hit.wikiExcerpt,
+        explanation: hit.explanation,
+        suggestion: hit.suggestion,
+      }),
+    )
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -152,8 +176,10 @@ export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> =
   },
   schema: ContinuitySchema,
   postProcess(output, input) {
+    // Numeric issues go first, so they win the same-range dedupe over a model issue.
+    const combined = { issues: [...numericIssues(input), ...output.issues] }
     return {
-      issues: locateIssues(output, input).map((l) => ({
+      issues: locateIssues(combined, input).map((l) => ({
         ...l.issue,
         factRef: l.issue.factRef,
         entryRef: l.issue.entryRef,
