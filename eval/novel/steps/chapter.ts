@@ -13,7 +13,7 @@ import {
 import { aiRuns } from '@/db/schema'
 import { replaceRunOutput } from '@/ai/run'
 import { repairableForeignSpans } from '@/ai/tasks/draft-repair'
-import { MODEL_PROFILES } from '../models'
+import { MODEL_PROFILES, twoStepEnabled } from '../models'
 import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
 import {
@@ -289,9 +289,9 @@ export const draft: StepFn = async (ctx, key, state) => {
             instructions: spec.instructions,
             targetChars: ctx.bible.targetChars,
             entryIds,
-            // Local profiles only (brief D, spec 7): the scene beat list is made first and goes into
-            // the prose. The cloud profiles keep the one-step draft, so their baseline stays comparable.
-            twoStep: isLocalProfile(ctx),
+            // The scene beat list is made first and goes into the prose. Local profiles always do it;
+            // cloud profiles only with --two-step on, so their default baseline stays comparable.
+            twoStep: twoStepOn(ctx),
           },
           ctx.client,
         )
@@ -574,9 +574,14 @@ export const check: StepFn = async (ctx, key, state) => {
   return 'done'
 }
 
-/** The local queue profiles run D's beat step and scene rewrite (and C's repair); cloud ones do not. */
+/** The local queue profiles run C's foreign-script repair; cloud ones do not. */
 function isLocalProfile(ctx: RunContext): boolean {
   return MODEL_PROFILES[ctx.config.modelId].queue === 'local'
+}
+
+/** Two-step draft (beat list) and scene rewrite: on for local profiles, opt-in (--two-step on) otherwise. */
+function twoStepOn(ctx: RunContext): boolean {
+  return twoStepEnabled(MODEL_PROFILES[ctx.config.modelId], ctx.config.twoStep)
 }
 
 /**
@@ -729,8 +734,9 @@ export const continuity: StepFn = async (ctx, key, state) => {
   // After the resolve loop, since the service rewrites only accepted issues. An issue accepted on
   // an earlier attempt stays eligible; a dismissed one is never picked.
   const rewrittenKey = `${key}:rewritten`
-  // Local profiles only (spec 7): a cloud run records the accepted issue and leaves the body alone.
-  if (isLocalProfile(ctx) && !isMarked(state, rewrittenKey)) {
+  // Local profiles always rewrite; other profiles only with --two-step on. Without it a cloud run
+  // records the accepted issue and leaves the body alone.
+  if (twoStepOn(ctx) && !isMarked(state, rewrittenKey)) {
     const ids = pickRewriteIssueIds(review.items, answer.decisions)
     await rewriteStage(ctx, state, key, n, chapterId, ids)
     mark(ctx, state, rewrittenKey)

@@ -95,6 +95,7 @@ export type RunCreateOptions = {
   helperThink?: HelperThink
   productLimits?: boolean
   speech?: boolean
+  twoStep?: boolean
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
@@ -114,6 +115,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     ...(o.helperThink ? { helperThink: o.helperThink } : {}),
     ...(o.productLimits ? { productLimits: true } : {}),
     ...(o.speech ? { speech: true } : {}),
+    ...(o.twoStep ? { twoStep: true } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))

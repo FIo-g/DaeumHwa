@@ -20,6 +20,7 @@ import { bibleExempt, chapterMetrics } from './metrics'
 import { type PowerInfo, type PowerReader, lowPowerWarning, readPowerInfo } from './power'
 import {
   checkHelperThink,
+  checkTwoStep,
   HELPER_THINKS,
   type HelperThink,
   MODEL_IDS,
@@ -154,6 +155,7 @@ export type InitOptions = {
   helperThink?: string
   productLimits?: boolean
   speech?: string
+  twoStep?: string
 }
 
 /**
@@ -175,11 +177,17 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
   const helperSuffix = helperThink === undefined ? '' : `-helper-${helperThink}`
   const limitsSuffix = o.productLimits ? '-product-limits' : ''
   const speechSuffix = speech ? '-speech' : ''
+  const twoStep = o.twoStep === undefined ? false : parseTwoStep(o.twoStep)
+  if (twoStep) {
+    const refusal = checkTwoStep(MODEL_PROFILES[model])
+    if (refusal) throw new Error(refusal)
+  }
+  const twoStepSuffix = twoStep ? '-twostep' : ''
   const dir = path.resolve(
     o.dir ??
       path.join(
         RESULTS_DIR,
-        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}`,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}`,
       ),
   )
 
@@ -197,6 +205,9 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (speech && existing.speech !== true) {
       throw new Error(`run exists with another speech setting: ${dir}`)
     }
+    if (twoStep && existing.twoStep !== true) {
+      throw new Error(`run exists with another two-step setting: ${dir}`)
+    }
   } else {
     createRun(dir, {
       modelId: model,
@@ -208,6 +219,7 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       helperThink,
       productLimits: o.productLimits,
       speech: speech || undefined,
+      twoStep: twoStep || undefined,
     })
   }
   return { dir, status: loadState(dir).status }
@@ -217,6 +229,22 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
 function parseSpeech(value: string): true {
   if (value !== 'on') throw new Error(`unknown speech value: ${value}`)
   return true
+}
+
+/** The --two-step value. Only `on` is accepted; the default run keeps the profile's own setting. */
+function parseTwoStep(value: string): true {
+  if (value !== 'on') throw new Error(`unknown two-step value: ${value}`)
+  return true
+}
+
+/**
+ * The --two-step value, or undefined when the flag is absent. A bare flag is refused, so a compare
+ * run is never created silently without its setting.
+ */
+export function twoStepFlag(flags: Flags): string | undefined {
+  const value = flags['two-step']
+  if (value === true) throw new Error('unknown two-step value: true')
+  return value
 }
 
 /**
@@ -693,6 +721,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         helperThink: helperThinkFlag(flags),
         productLimits: productLimitsFlag(flags),
         speech: speechFlag(flags),
+        twoStep: twoStepFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {

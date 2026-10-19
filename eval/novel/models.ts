@@ -180,6 +180,21 @@ export function checkHelperThink(profile: ModelProfile, h: HelperThink): string 
     : null
 }
 
+/**
+ * Whether a run on this profile runs the two-step draft (beat list) and the scene rewrite. Local
+ * profiles always do; other profiles only when the run was created with `--two-step on`.
+ */
+export function twoStepEnabled(profile: ModelProfile, twoStep?: boolean): boolean {
+  return profile.queue === 'local' || twoStep === true
+}
+
+/** Why `--two-step on` cannot change anything on this profile, or null when it can. */
+export function checkTwoStep(profile: ModelProfile): string | null {
+  return profile.queue === 'local'
+    ? `${profile.id}: local profiles already run the two-step draft`
+    : null
+}
+
 /** Builds the AI client a profile runs on. `fetch` is injected in tests. */
 export function createModelClient(
   profile: ModelProfile,

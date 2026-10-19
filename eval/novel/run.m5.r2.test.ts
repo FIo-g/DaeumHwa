@@ -4,12 +4,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AiClient, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import { FakeAiClient } from '@/test/fake-ai'
+import type { ContinuityInput, ContinuityOutput } from '@/ai/tasks/continuity-check'
 import { loadBible, RUN_BIBLE_FILE } from './bible'
+import { fakeAnswer } from './fake-author'
 import { blindCallRecord, writeBlindCopy } from './blind'
 import { readCallRecords } from './steps/util'
 import { createRun, openRun, runUntilBlocked } from './run'
 
-// Round 2 track M5 part a: --speech on run behaviour (env flag, interview rules, bible copy).
+// Round 2 track M5 parts a and b: --speech on run behaviour (env flag, interview rules, bible copy)
+// and --two-step on for cloud profiles (beat list, scene rewrite, no foreign-script repair).
 
 const dirs: string[] = []
 let saved: string | undefined
@@ -178,5 +181,137 @@ describe('blind copy of a speech run (M5)', () => {
     for (const record of copied) {
       expect(record).not.toHaveProperty('speech')
     }
+  }, 120_000)
+})
+
+// Round 2 track M5 part b: --two-step on. Helpers copied from run.D.test.ts and run.C.test.ts.
+
+// Clean Korean, 600+ characters, no paragraph over three sentences, no foreign script.
+const QUOTE = '비가 그친 아침, 한세린은 오래된 기숙사의 계단을 천천히 내려갔다.'
+const FIX = '비가 그친 아침, 한세린은 오래된 기숙사의 계단을 조용히 내려갔다.'
+const LONG_KO = [
+  `${QUOTE} 난간에는 아직 물기가 남아 있었다. 그녀는 손끝으로 녹슨 쇠를 쓸어 보았다.`,
+  '복도 끝 창문으로 젖은 나뭇잎이 보였다. 누군가 밤사이 다녀간 흔적이었다. 바닥의 진흙에는 작은 발자국이 찍혀 있었다.',
+  '한세린은 편지를 다시 꺼내 날짜를 확인했다. 지난주에 받은 것과 같은 필체였다. 종이 가장자리는 이미 누렇게 변해 있었다.',
+  '문득 아래층에서 문이 열리는 소리가 들렸다. 그녀는 숨을 죽이고 귀를 기울였다. 발소리는 곧 멀어졌다.',
+  '한세린은 오래된 일기장을 떠올렸다. 그 안에는 기숙사에 살던 사람들의 이름이 적혀 있었다. 이번 편지의 필체는 그 가운데 한 사람과 닮아 있었다.',
+  '계단을 다 내려왔을 때 현관 유리에 그녀의 얼굴이 비쳤다. 표정은 생각보다 침착했다. 한세린은 가방을 고쳐 메고 밖으로 걸음을 옮겼다.',
+].join('\n\n')
+
+// The Han sentence of run.C.test.ts, inside otherwise clean Korean.
+const LONG_WITH_HAN = `${LONG_KO}\n\n그는 三楼 계단에 앉아 있었다.`
+
+/** One high issue on the quote, with a complete suggestion. Empty while chapter 1 is checked. */
+function highIssue(input: unknown): ContinuityOutput {
+  const { pack } = input as ContinuityInput
+  if (pack.entries.length === 0) return { issues: [] }
+  const entry = pack.entries.find((e) => e.name === '한세린') ?? pack.entries[0]
+  return {
+    issues: [
+      {
+        quote: QUOTE,
+        kind: 'contradiction',
+        severity: 'high',
+        factRef: entry.facts[0]?.ref ?? null,
+        entryRef: entry.ref,
+        wikiExcerpt: entry.facts[0]?.content ?? entry.summary,
+        explanation: '위키와 어긋납니다.',
+        suggestion: FIX,
+      },
+    ],
+  }
+}
+
+function makeCloudRun(dir: string, o: { twoStep?: boolean; chapters?: number } = {}): void {
+  createRun(dir, {
+    modelId: 'haiku-5.5',
+    lang: 'ko',
+    chapters: o.chapters ?? 1,
+    questions: 2,
+    maxDraftAttempts: 2,
+    commit: 'test',
+    ...(o.twoStep ? { twoStep: true } : {}),
+  })
+}
+
+const stepsOf = (dir: string) => readCallRecords(dir).map((record) => record.step)
+
+describe('--two-step on for a cloud profile (M5)', () => {
+  it('makes the beat list before the prose', async () => {
+    const dir = newDir()
+    makeCloudRun(dir, { twoStep: true })
+    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_KO } })
+    const ctx = await openRun(dir, { inner, autoAuthor: true })
+    ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
+    try {
+      const state = await runUntilBlocked(ctx)
+      expect(state.status).toBe('done')
+    } finally {
+      await ctx.close()
+    }
+    expect(readCallRecords(dir).map((record) => record.task)).toContain('draft-beats')
+    const beats = JSON.parse(
+      readFileSync(join(dir, 'chapters/01.attempt-1.beats.json'), 'utf8'),
+    ) as {
+      scenes: unknown[]
+    }
+    expect(beats.scenes.length).toBeGreaterThan(0)
+  }, 120_000)
+
+  it('rewrites the scene of an accepted high issue', async () => {
+    const dir = newDir()
+    makeCloudRun(dir, { twoStep: true, chapters: 2 })
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => LONG_KO, 'continuity-check': highIssue },
+    })
+    const ctx = await openRun(dir, { inner, autoAuthor: true })
+    ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
+    let state
+    try {
+      state = await runUntilBlocked(ctx)
+    } finally {
+      await ctx.close()
+    }
+    expect(state.status).toBe('done')
+    expect(readCallRecords(dir).map((record) => record.task)).toContain('scene-rewrite')
+    expect(readFileSync(join(dir, 'chapters/02.pre-rewrite.md'), 'utf8')).toContain(QUOTE)
+    expect(readFileSync(join(dir, 'chapters/02.md'), 'utf8')).toContain(FIX)
+    expect(existsSync(join(dir, 'rewrites/02.json'))).toBe(true)
+    expect(state.data.marks['ch2:continuity:rewritten']).toBe(true)
+  }, 120_000)
+
+  it('leaves the foreign-script repair off', async () => {
+    const dir = newDir()
+    makeCloudRun(dir, { twoStep: true })
+    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_WITH_HAN } })
+    const ctx = await openRun(dir, { inner, autoAuthor: true })
+    ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
+    let state
+    try {
+      state = await runUntilBlocked(ctx)
+    } finally {
+      await ctx.close()
+    }
+    expect(stepsOf(dir).some((step) => String(step).endsWith(':foreign-repair'))).toBe(false)
+    expect(state.data.drafts[1][0]).not.toHaveProperty('foreign')
+    expect(readFileSync(join(dir, 'chapters/01.attempt-1.md'), 'utf8')).toContain('三楼')
+  }, 120_000)
+
+  it('makes no beat list or rewrite without the option', async () => {
+    const dir = newDir()
+    makeCloudRun(dir)
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => LONG_KO, 'continuity-check': highIssue },
+    })
+    const ctx = await openRun(dir, { inner, autoAuthor: true })
+    ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
+    try {
+      await runUntilBlocked(ctx)
+    } finally {
+      await ctx.close()
+    }
+    const tasks = readCallRecords(dir).map((record) => record.task)
+    expect(tasks).not.toContain('draft-beats')
+    expect(tasks).not.toContain('scene-rewrite')
   }, 120_000)
 })

@@ -20,6 +20,8 @@ export type RunConfig = {
   productLimits?: boolean
   /** Speech feature on for this run, with its bible copy (compare runs only). Absent means off. */
   speech?: boolean
+  /** Two-step draft and scene rewrite also on a cloud profile (compare runs only). Absent means the profile's default. */
+  twoStep?: boolean
 }
 
 export type RunStatus =
