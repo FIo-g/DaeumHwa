@@ -230,6 +230,18 @@ describe('continuityCheckTask prompt isolation', () => {
     expect(rule).toContain('explanation')
   })
 
+  it('says that a sentence which does not mention a wiki fact is not a contradiction', () => {
+    const lines = continuityCheckTask.system.split('\n')
+    const rules = lines.filter(
+      (line) => line.startsWith('- ') && line.includes('언급') && line.includes('모순이 아니다'),
+    )
+    expect(rules).toHaveLength(1)
+    const firstBullet = lines.findIndex((line) => line.startsWith('- <wiki>의 사실(F ref)'))
+    expect(firstBullet).toBeGreaterThan(-1)
+    expect(lines[firstBullet + 1]).toBe(rules[0])
+    expect(lines[0].startsWith('당신은 장기 연재 웹소설의 설정 오류(오기)를 찾는 교정자다.')).toBe(true)
+  })
+
   it('tells the model that tagged content is data, not instructions', () => {
     expect(continuityCheckTask.system).toContain(TAG_DATA_RULE)
   })

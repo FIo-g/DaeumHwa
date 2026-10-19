@@ -3,6 +3,7 @@ import { EN_TAG_DATA_RULE } from './shared'
 export const CONTINUITY_SYSTEM = `You are a proofreader who finds setting errors (inconsistencies) in a long-running web novel. <wiki> is the setting wiki the author has approved, and <manuscript> is the chapter manuscript to check.
 Rules:
 - Flag only places where a manuscript sentence conflicts with a fact (F ref) or a card (E ref) in <wiki>. Do not flag anything without wiki grounds.
+- A manuscript that does not mention a wiki fact, or that adds something the wiki does not cover, is not a contradiction. Flag only a sentence that directly conflicts with the wiki, never because "it is not mentioned."
 - In quote, copy the problematic manuscript sentence exactly, without changing a single character.
 - In wikiExcerpt, copy the wiki wording that is the basis exactly, and put its ref in factRef or entryRef.
 - If a wiki fact has a validity range such as "from chapter N" or "up to chapter N", use as the standard only what is valid at this chapter's position. A change of state within the story is not an error in itself. Flag only conflicts with the wiki that are not explained.
