@@ -19,7 +19,7 @@
 - Implementers run only `pnpm vitest run <own paths> --maxWorkers=2` and `pnpm exec tsc --noEmit` (no typegen) filtered to own files. Never `git add -A`, `pnpm format` over whole files, or installs. Tests never call a real AI API.
 - A track edits only the files in its brief's `writes`/`creates`, as amended in Task 0.2. Check with `git diff --name-only <wave-base>`.
 - Provisional defaults (spec 8): EN min ratio 0.8, max 1.3; paragraph = one non-empty line (`---`, `***`, `* * *` excluded); E1 limit 3 sentences; G1 near-duplicate Dice 0.8; H continuity budget 16,000 chars; repeated word 8; G2 pinned tests 736/848 unchanged.
-- B's speech feature is off by default and off in the eval; `eval/novel/bible.json` is not edited (spec 8).
+- B's speech feature is off by default and off in the eval; `eval/fixtures/novel/{ko,en}/bible.json` is not edited (spec 8).
 - A's continuation failure keeps the first text and records a warning; only a user abort rejects (spec 7).
 - Nothing merges to `main`; end state is two PRs (cloud, then local).
 

@@ -101,7 +101,7 @@ opus 점검의 가장 큰 위험은 같은 탐지기를 여러 트랙이 따로 
 - `ChapterMetrics`의 새 필드는 모두 선택 또는 기본값이 있어 저장된 실행이 계속 읽힌다. `foreignRuns`(GUARDS), `sampleCopyHits`·`repeatedWords`(E2), `overlongParagraphs`(E1), 외래 문자 수리 필드(C).
 - `scaffold.ts` 작성 순서: A → I → HX2 → B → D. 규칙은 추가만 한다. `cli.ts`: HX1 → E2 → HX4 → F4. `novel-eval.js`는 HX1, HX4가 각자 구역만 쓴다. `README.md`: HX3 → HX4.
 - 로컬 전용 동작은 제공자·프로필로 막고 `FakeAiClient`와 `@/test/ai-fakes`로만 시험한다. `runAiTaskSplit`(F3)은 `runAiTask` 동작을 바꾸지 않는다. F2는 자체 `shouldSplitChapterExtract(provider)`와 `AI_EXTRACT_SPLIT`을 쓴다.
-- **B 말투 기능(사용자 결정)**: 말투 질문·추출·초안 맥락은 제품에 추가한다. 평가 하네스는 이 기능을 끄고 돌린다(`eval/novel/bible.json`의 답 은행은 수정하지 않는다, 인터뷰 핵심 주제에 말투를 넣지 않는다). 그래서 2026-10-18 기준선과 계속 비교할 수 있다. B의 평가 지표(Q5, 말투 모순 수)는 이번에 재지 않고, 나중에 말투를 켠 별도 실행에서 잰다. 구현은 선택 필드(`hasSpeech`, `voices`, `speech`, `pendingSpeechEntryIds`)와 기능 꺼짐 기본값으로 하고, 꺼진 상태의 출력이 B 이전과 같다는 테스트를 둔다.
+- **B 말투 기능(사용자 결정)**: 말투 질문·추출·초안 맥락은 제품에 추가한다. 평가 하네스는 이 기능을 끄고 돌린다(`eval/fixtures/novel/{ko,en}/bible.json`의 답 은행은 수정하지 않는다, 인터뷰 핵심 주제에 말투를 넣지 않는다). 그래서 2026-10-18 기준선과 계속 비교할 수 있다. B의 평가 지표(Q5, 말투 모순 수)는 이번에 재지 않고, 나중에 말투를 켠 별도 실행에서 잰다. 구현은 선택 필드(`hasSpeech`, `voices`, `speech`, `pendingSpeechEntryIds`)와 기능 꺼짐 기본값으로 하고, 꺼진 상태의 출력이 B 이전과 같다는 테스트를 둔다.
 - 기본값(웨이브 0에 기록, 사용자가 바꿀 수 있음): 영어 최소 비율 0.8·최대 1.3, 문단은 비어 있지 않은 한 줄(`---`, `***`, `* * *` 제외), E1 한도 3문장, G1 근접 중복 Dice 0.8, H 연속성 예산 16,000자, 반복어 8회, G2 고정 테스트 736/848은 그대로.
 
 ## 9. 위험

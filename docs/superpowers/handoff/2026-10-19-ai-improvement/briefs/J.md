@@ -2,11 +2,13 @@
 
 Read this whole file before editing. Work in an isolated worktree, TDD: write the failing test, see it fail, then implement. Do not add or upgrade packages. Identifiers and comments in English; prompt text and user-facing copy in Korean (the eval English mirror in English).
 
+Wave 2 track, built on the wave-0 seam (spec 5) and wave 1 (GUARDS, A, H, HX3, HX1 merged). Spec sections 5-6 win over this brief: J keeps its own `locateAllQuotes` (GUARDS has no quote API), and the proofread metric goes to `eval/novel/metrics-proofread.ts`, never `metrics.ts`. Line numbers are from b4d49a9; find code by name.
+
 ## Goal
 
 1. The proofread prompt says "표준어 규범 위반만 고친다", forbids taste edits, and explicitly allows an empty list.
 2. A quote the model returns once is applied at EVERY place it occurs in the manuscript (one `ProofreadSuggestion` per occurrence, each with its own `start`/`end`). Duplicate quotes from the model are merged first.
-3. A pure eval metric computes the proofread acceptance ratio (no wiring into the runner).
+3. A pure eval metric (`proofreadStats` in `eval/novel/metrics-proofread.ts`) computes the proofread acceptance ratio (no wiring into the runner; HX5 wires it later).
 
 The wire shape (`ProofreadSuggestion`, the route JSON, `ProofreadItem` in the panel) does NOT change. The `awkward` kind stays in the enum (spec F14 lists it); only the prompt narrows it.
 
@@ -25,17 +27,17 @@ The wire shape (`ProofreadSuggestion`, the route JSON, `ProofreadItem` in the pa
 
 Write (existing, verified):
 - `src/ai/tasks/proofread.ts` (prompt, `postProcess`)
-- `src/ai/tasks/proofread.test.ts`
+- `src/ai/tasks/proofread.test.ts` (J's own cases; existing ones stay unedited)
 - `src/lib/korean/sentences.ts` (add `locateAllQuotes`)
 - `src/lib/korean/sentences.test.ts`
-- `src/server/chapter-check.ts` (`aiSpellChecker.check`)
-- `src/server/chapter-check.test.ts` (inside `describe('runProofread')`, after the test at line 360)
-- `eval/novel/localize/en-systems.ts` (`PROOFREAD_SYSTEM`, lines 31-39)
-- `eval/novel/eval-client.test.ts` (add one assertion test near line 152)
-- `eval/novel/metrics.ts` (add `proofreadStats`)
-- `eval/novel/metrics.test.ts`
+- `src/server/chapter-check.ts` (`aiSpellChecker.check`; H's merged changes stay)
+- `eval/novel/localize/en/proofread.ts` (`PROOFREAD_SYSTEM`; after the seam `en-systems.ts` is only an assembler and is not edited)
+- `eval/novel/metrics-proofread.ts` (created empty by the seam and already re-exported from `metrics.ts`; add `ProofreadStats` and `proofreadStats`). Do NOT edit `eval/novel/metrics.ts`.
 
-Create: none.
+Create (new test files, spec 5: new tests of shared test files live in `<name>.<ID>.test.ts`):
+- `src/server/chapter-check.J.test.ts` (tests 10-14; copy the small `scriptedClient` helper from `chapter-check.test.ts:60`, it is not exported; existing cases stay unedited)
+- `eval/novel/eval-client.J.test.ts` (test 16)
+- `eval/novel/metrics-proofread.test.ts` (tests 17-21)
 
 Read-only (do not edit):
 - `src/components/writing/panels/proofread-panel.tsx` (apply at 97-107 uses `replaceQuote(quote, replacement, item.start)`; `applyAllRules` 110-123 rules only)
@@ -45,7 +47,7 @@ Read-only (do not edit):
 
 ## Design (ordered)
 
-1. `src/lib/korean/sentences.ts`: add exported `locateAllQuotes(text, quote, limit = 20)`. Exact match only, non-overlapping (advance by `quote.length`), original-text offsets, stops at `limit`, returns `[]` for an empty quote or no exact hit. Do not touch `locateQuote`. Put it right after `locateQuote`. Decision: this track keeps its own `locateAllQuotes` and does NOT import `findQuoteOccurrences` from `@/ai/guards` (GUARDS section 8 lists J as a consumer; this is a deliberate deviation, see Dependencies). Reason: the two differ on purpose. `findQuoteOccurrences` allows overlaps and falls back to a whitespace-collapsed match; here overlapping ranges would only be dropped again by the overlap guard in step 4, and the whitespace fallback is already handled by `expandQuote` through `locateQuote`. Keeping it local also keeps J independent of the foundation track.
+1. `src/lib/korean/sentences.ts`: add exported `locateAllQuotes(text, quote, limit = 20)`. Exact match only, non-overlapping (advance by `quote.length`), original-text offsets, stops at `limit`, returns `[]` for an empty quote or no exact hit. Do not touch `locateQuote`. Put it right after `locateQuote`. Decision (spec 6): J owns `locateAllQuotes`; `@/ai/guards` has no quote API and J imports nothing from it. It is non-overlapping and exact-only: overlapping ranges would only be dropped again by the overlap guard in step 4, and the whitespace fallback is already handled by `expandQuote` through `locateQuote`.
 2. `src/ai/tasks/proofread.ts`, `PROOFREAD_SYSTEM`: keep the first line, line 27, 28 and the line 29 sentence "대사 속 구어체, 사투리, 인물 말투, 의도된 비문은 고치지 않는다. 문체를 바꾸는 제안은 하지 않는다." VERBATIM (existing test asserts the first sentence). Insert after line 29 these exact lines:
    - `- 표준어 규범 위반만 고친다. 취향에 따라 표현을 다듬는 제안은 하지 않는다.`
    - `- 고칠 곳이 없으면 suggestions를 빈 배열로 낸다. 억지로 채우지 않는다.`
@@ -57,8 +59,8 @@ Read-only (do not edit):
    - Otherwise (1-char quote, or no exact hit such as a whitespace-normalized quote) return `[locateQuote(text, quote)]` filtered to non-null (old behavior).
    Matching is substring-based (not word-aware), like `locateQuote` and the panel's `replaceQuoteText`: a quote `그는` also matches inside `그는커녕`. This is a known over-fix kept for now (open decision, see Risks); test 22 records it and may be replaced when a boundary rule is chosen. The 20-occurrence cap is silent: occurrences 21 and later stay unfixed and nothing is reported on the wire (no new field); test 11 pins it, and the re-eval reviewer checks long repeats by hand.
    Then for each model suggestion emit one `ProofreadSuggestion` per range, same `quote/replacement/kind/reason`, `source: 'ai'`. Keep `quote` as the model's `s.quote` when the range came from an exact match; use `text.slice(start, end)` when it came from the `locateQuote` fallback. Skip any range that overlaps a range already emitted by an earlier AI suggestion, where "earlier" means model output order (the order of `output.suggestions`), not text position (`start < kept.end && kept.start < end`), so ranges never collide. The result therefore depends on the order the model returns; that is accepted, and `runProofread` sorts by start afterwards. Import `locateAllQuotes`. `runProofread` is unchanged (rule-overlap filter and sort stay).
-5. `eval/novel/localize/en-systems.ts` `PROOFREAD_SYSTEM`: mirror step 2 in English, no Hangul. Insert after the "Do not fix colloquial speech..." line: `- Fix only violations of standard language norms. Do not suggest taste-based rewording.`, `- If there is nothing to fix, return an empty suggestions array. Do not pad the list.`, `- If the same expression appears in several places, give one item only. The app finds and fixes every place.` Replace the existing kind line (line 36 of `eval/novel/localize/en-systems.ts`) with this full line: `- kind is one of spelling (spelling error), spacing (spacing error), grammar (grammar error) or awkward (awkward phrasing). Use awkward only when the sentence is ungrammatical.` Keep the `${EN_TAG_DATA_RULE}` and final "Write all output in English." lines.
-6. `eval/novel/metrics.ts`: add pure `proofreadStats` (signature below). No change to `chapterMetrics`, `finish.ts` or the runner. Document in a comment the caller contract: `chapters/NN.proofread.json` holds the raw `ProofreadSuggestion[]` (quote, replacement, kind, reason, source, start, end) with NO `id`, and the decision ids are array indexes (`eval/novel/steps/chapter.ts` maps `Number(d.id)` into that array). So the caller builds `items = suggestions.map((s, i) => ({ id: String(i), quote: s.quote, replacement: s.replacement, kind: s.kind }))` from ALL suggestions (rule items included, so ids line up with `decisions` from `author-decisions.jsonl`). To measure AI quality only, filter to `source === 'ai'` while keeping the original index as the id, and pass only the matching decisions (or leave the rest; unknown ids are ignored). `acceptanceRatio` therefore counts rule items unless the caller filters. 'Invalid' in this brief means `accept: false` in the author decisions.
+5. `eval/novel/localize/en/proofread.ts` `PROOFREAD_SYSTEM` (not `en-systems.ts`): mirror step 2 in English, no Hangul. Insert after the "Do not fix colloquial speech..." line: `- Fix only violations of standard language norms. Do not suggest taste-based rewording.`, `- If there is nothing to fix, return an empty suggestions array. Do not pad the list.`, `- If the same expression appears in several places, give one item only. The app finds and fixes every place.` Replace the existing kind line (the kind line of `PROOFREAD_SYSTEM`) with this full line: `- kind is one of spelling (spelling error), spacing (spacing error), grammar (grammar error) or awkward (awkward phrasing). Use awkward only when the sentence is ungrammatical.` Keep the `${EN_TAG_DATA_RULE}` and final "Write all output in English." lines.
+6. `eval/novel/metrics-proofread.ts`: add pure `proofreadStats` (signature below). No change to `metrics.ts`, `chapterMetrics`, `finish.ts` or the runner. Document in a comment the caller contract: `chapters/NN.proofread.json` holds the raw `ProofreadSuggestion[]` (quote, replacement, kind, reason, source, start, end) with NO `id`, and the decision ids are array indexes (`eval/novel/steps/chapter.ts` maps `Number(d.id)` into that array). So the caller builds `items = suggestions.map((s, i) => ({ id: String(i), quote: s.quote, replacement: s.replacement, kind: s.kind }))` from ALL suggestions (rule items included, so ids line up with `decisions` from `author-decisions.jsonl`). To measure AI quality only, filter to `source === 'ai'` while keeping the original index as the id, and pass only the matching decisions (or leave the rest; unknown ids are ignored). `acceptanceRatio` therefore counts rule items unless the caller filters. 'Invalid' in this brief means `accept: false` in the author decisions.
 7. Run the Definition of done commands.
 
 ## Interface
@@ -71,7 +73,7 @@ export function locateAllQuotes(
   limit?: number, // default 20
 ): { start: number; end: number }[]
 
-// eval/novel/metrics.ts
+// eval/novel/metrics-proofread.ts (re-exported by metrics.ts)
 export type ProofreadStats = {
   total: number            // items
   accepted: number
@@ -108,7 +110,7 @@ export function proofreadStats(
 8. `postProcess merges the same quote` | text `'그건 어색해요. 저것도 어색해요.'`, output two items quote `'어색해요'` (replacements `'어색합니다'`, `'어색하군요'`) | one item, replacement `'어색합니다'`.
 9. Existing tests at lines 29-51 must stay green unchanged.
 
-`src/server/chapter-check.test.ts` (in `describe('runProofread')`, use `scriptedClient` as in the test at line 360, `useAi: true`):
+`src/server/chapter-check.J.test.ts` (own `scriptedClient` copy as in `chapter-check.test.ts:360`, `useAi: true`, same `runProofread` setup):
 10. `applies one AI quote to every occurrence` | text `'그건 어색해요. 저것도 어색해요.'`, AI returns one `어색해요` item | two `ai` suggestions, starts `[text.indexOf('어색해요'), text.lastIndexOf('어색해요')]`, ends `start + 4`, sorted.
 11. `expansion stops at 20 occurrences per quote` | text `'어색해요. '.repeat(21)`, AI returns one `어색해요` item | exactly 20 `ai` suggestions (the 21st occurrence is not expanded; pins the silent cap).
 12. `a one-character quote stays on the first occurrence` | text `'나는 나를 본다.'`, AI quote `'나'` replacement `'내'` | exactly one suggestion, start 0.
@@ -118,10 +120,10 @@ export function proofreadStats(
 The merge of duplicate model items is proven by test 8 (postProcess). There is no chapter-check test for it, because the overlap guard would drop the repeated ranges even without the dedupe, so such a test would pass either way.
 15. Existing test at line 360 must stay green unchanged.
 
-`eval/novel/eval-client.test.ts` (near line 152, reuse its setup):
+`eval/novel/eval-client.J.test.ts` (import `EN_SYSTEMS` from the assembled `eval/novel/localize/en-systems.ts`):
 16. `English proofread system carries the scope rules` | `EN_SYSTEMS.proofread` | contains `Fix only violations of standard language norms.` and `return an empty suggestions array`, and has no Hangul (`/[가-힣]/` false).
 
-`eval/novel/metrics.test.ts` (new `describe('proofreadStats')`):
+`eval/novel/metrics-proofread.test.ts` (imports from `./metrics-proofread`; one extra case checks that `./metrics` re-exports `proofreadStats`):
 17. ratio | 4 items (ids `'0'..'3'`), decisions accept `0,1` true and `2,3` false | `total 4, accepted 2, acceptanceRatio 0.5`.
 18. empty | `[]`, `[]` | `acceptanceRatio` null, all counts 0.
 19. awkward and same-quote items | items: two with identical quote+replacement, one `kind:'awkward'` | `sameQuoteItems 1`, `awkward 1`.
@@ -151,10 +153,12 @@ Prompt effect on model quality is only verified by the later eval re-run; unit t
 
 ## Dependencies on other tracks
 
-- F1 (proofread split in three chunks): same functions. Expansion and dedupe must run on the WHOLE text after chunk offsets are remapped. If F1 lands first, keep `expandQuote` where the whole-text offsets are known; do not run it per chunk. Merge conflicts in `aiSpellChecker` are likely: resolve by keeping both behaviors.
-- HX2 (English substitution table): does not edit `en-systems.ts` (its brief says no change there), so no conflict on `PROOFREAD_SYSTEM`. Its `eval-client.test.ts` edit is a different test; keep both.
-- GUARDS (`briefs/GUARDS.md`): no code dependency. GUARDS section 8 exports `findQuoteOccurrences` (overlapping, whitespace-collapsed fallback) and names J as a consumer; J deliberately keeps its own `locateAllQuotes` (non-overlapping, exact only, in `sentences.ts`), see design step 1. Ask the orchestrator to correct the GUARDS consumer list. Merge order for `eval/novel/metrics.ts`: GUARDS step 10 changes only the top of the file (regex constants and the `foreignRuns` line); J only appends `ProofreadStats` and `proofreadStats` at the end. The hunks do not overlap, so either order works; on conflict keep both.
-- G1 (quote verification): uses the GUARDS `verifyQuote`; it does not touch `locateAllQuotes`. If G1 or another track has already added an exported all-occurrence locator to `sentences.ts` with the same signature as `locateAllQuotes`, reuse it instead of adding a second one.
+- F1 (local branch, after the cloud gate): same functions. Expansion and dedupe must run on the WHOLE text after chunk offsets are remapped; F1 keeps `expandQuote` where whole-text offsets are known and does not run it per chunk. F1 re-points at J's merged `chapter-check.ts` (plan L0).
+- HX2 (wave 3, English substitution table): edits `scaffold.ts` only, so no conflict on `en/proofread.ts`. Any `eval-client.test.ts` edit by HX2 is separate from J's `eval-client.J.test.ts`.
+- GUARDS (wave 1, merged): no code dependency; spec 6 gives GUARDS five functions and no quote API, so J imports nothing from `@/ai/guards`. GUARDS only changed the `foreignRuns` line of `eval/novel/metrics.ts`; J does not edit that file.
+- H (wave 1, merged): also edited `src/server/chapter-check.ts`; keep its changes and make J's edit only inside `aiSpellChecker.check`.
+- G1 (wave 3): verifies evidence with its own `src/lib/evidence-quote.ts` and never touches `locateAllQuotes`; `locateAllQuotes` is J's alone.
+- HX5 (wave 4): reads `proofreadStats` from `eval/novel/metrics-proofread.ts` into the run summary; keep the exported names and signature exactly as in the Interface.
 - E1/E2/C: if they add rule kinds or proofread passes, they must go through the same expansion; the `kind` enum stays unchanged here.
 - HX3 (author sees wiki) changes author decisions and shifts the acceptance baseline; no code dependency.
 
@@ -175,15 +179,15 @@ Prompt effect on model quality is only verified by the later eval re-run; unit t
 2. Metric unit: `acceptanceRatio` is per item (chosen), but expansion changes the denominator, so `proofreadStats` also returns `quoteAcceptanceRatio` (per distinct quote); compare both before and after.
 3. Does gray/grey consistency count as a real error? Not decided; the author rule (`eval/novel/agents/author.md:54`) is untouched.
 4. Should the panel group same-quote items ("2곳") or offer "apply everywhere"? Out of scope.
-5. Wire `proofreadStats` into `buildRunSummary` (`eval/novel/steps/finish.ts`)? Not now; it needs file reads (`chapters/NN.proofread.json`, `author-decisions.jsonl`). Orchestrator decides.
+5. Decided: HX5 wires `proofreadStats` into `buildRunSummary` (`eval/novel/steps/finish.ts`, it needs file reads of `chapters/NN.proofread.json` and `author-decisions.jsonl`). J does not.
 
 ## Definition of done
 
 Run from the worktree root:
 ```
-pnpm vitest run src/ai/tasks/proofread.test.ts src/lib/korean/sentences.test.ts src/server/chapter-check.test.ts src/server/actions/checks.test.ts "src/app/api/works/[workId]/chapters/[chapterId]/proofread/route.test.ts" src/components/writing/panels/proofread-panel.test.tsx eval/novel/metrics.test.ts eval/novel/eval-client.test.ts eval/novel/localize/localize.test.ts eval/novel/run.test.ts e2e/ai-stub/stub.test.ts --maxWorkers=2
+pnpm vitest run src/ai/tasks/proofread.test.ts src/lib/korean/sentences.test.ts src/server/chapter-check.test.ts src/server/chapter-check.J.test.ts src/server/actions/checks.test.ts "src/app/api/works/[workId]/chapters/[chapterId]/proofread/route.test.ts" src/components/writing/panels/proofread-panel.test.tsx eval/novel/metrics.test.ts eval/novel/metrics-proofread.test.ts eval/novel/eval-client.test.ts eval/novel/eval-client.J.test.ts eval/novel/localize/localize.test.ts eval/novel/run.test.ts e2e/ai-stub/stub.test.ts --maxWorkers=2
 pnpm exec tsc --noEmit   # filter output to the files in this brief
-pnpm eslint src/ai/tasks/proofread.ts src/lib/korean/sentences.ts src/server/chapter-check.ts eval/novel/metrics.ts eval/novel/localize/en-systems.ts
+pnpm eslint src/ai/tasks/proofread.ts src/lib/korean/sentences.ts src/server/chapter-check.ts src/server/chapter-check.J.test.ts eval/novel/metrics-proofread.ts eval/novel/metrics-proofread.test.ts eval/novel/eval-client.J.test.ts eval/novel/localize/en/proofread.ts
 pnpm exec prettier --check <every file under Files (write)>   # never run `pnpm format` on the whole repo; it must not reformat untouched files
 ```
-All listed tests pass, no new type or lint errors in touched files, prettier check is clean on the touched files, and `git status` shows only the files under Files (write). Commit by file name, never `git add -A`.
+All listed tests pass, no new type or lint errors in touched files, prettier check is clean on the touched files, and `git status` shows only the files under Write and Create. Commit by file name, never `git add -A`.
