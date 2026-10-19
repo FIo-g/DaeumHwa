@@ -37,6 +37,14 @@ const MetricsSchema: z.ZodType<ChapterMetrics, unknown> = z.object({
   repeatedWords: z.array(z.object({ word: z.string(), count: z.number() })).default([]),
   // Saved runs from before E1 lack this key.
   overlongParagraphs: z.number().default(0),
+  // Saved runs from before P8 lack this key.
+  paragraphOpeners: z
+    .object({
+      counted: z.number(),
+      repeated: z.number(),
+      top: z.array(z.object({ word: z.string(), count: z.number() })),
+    })
+    .default({ counted: 0, repeated: 0, top: [] }),
 })
 
 const ProposalItemSchema = z.object({

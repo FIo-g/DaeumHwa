@@ -3,8 +3,10 @@ import { foreignScriptRuns } from '@/ai/guards'
 import { countRepeatedWords, findSampleCopies } from '@/lib/korean/style-copy'
 import { overlongParagraphs } from '@/lib/korean/paragraphs'
 import type { Bible } from './bible'
+import { countParagraphOpeners, type ParagraphOpeners } from './metrics-openers'
 
 export * from './metrics-interview'
+export * from './metrics-openers'
 export * from './metrics-proofread'
 
 export type ChapterMetrics = {
@@ -25,6 +27,8 @@ export type ChapterMetrics = {
   repeatedWords: { word: string; count: number }[]
   // E1: paragraphs over PARAGRAPH_MAX_SENTENCES sentences. Informational for Q6, not a T threshold.
   overlongParagraphs: number
+  // P8: first words of the non-dialogue paragraphs. Informational for Q7, not a T threshold.
+  paragraphOpeners: ParagraphOpeners
 }
 
 export const META_PATTERNS: RegExp[] = [
@@ -91,6 +95,7 @@ export function chapterMetrics(
 
   const dialogueLines = lines.filter((line) => DIALOGUE_OPENERS.has(line.charAt(0))).length
   const dialogueLineRatio = paragraphs === 0 ? 0 : dialogueLines / paragraphs
+  const narrationLines = lines.filter((line) => !DIALOGUE_OPENERS.has(line.charAt(0)))
 
   const sampleCopyHits = findSampleCopies(trimmed, styleExamples.filter(Boolean), { lang }).length
   const repeatedWords = countRepeatedWords(trimmed, { lang, exempt })
@@ -109,5 +114,6 @@ export function chapterMetrics(
     sampleCopyHits,
     repeatedWords,
     overlongParagraphs: overlong,
+    paragraphOpeners: countParagraphOpeners(narrationLines),
   }
 }
