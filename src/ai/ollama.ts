@@ -36,6 +36,32 @@ export type OllamaCallStats = {
   totalMs: number
 }
 
+/**
+ * Ollama's record of one HTTP attempt that got a response stream, with the thinking length.
+ * Attempts that failed before a response (connect error, HTTP error) are not reported, so the
+ * attempt count of a call is the number of reported attempts. Times are ms; null when there is no
+ * done chunk or the server left the field out. Only lengths of thinking are kept, never the text.
+ */
+export type OllamaAttempt = {
+  task: AiTaskName
+  model: string
+  /** 1 = first request of a call, 2 = the plain JSON retry. A stream is always 1. */
+  attempt: number
+  /** True when a done chunk arrived. */
+  done: boolean
+  doneReason: string | null
+  loadMs: number | null
+  promptEvalMs: number | null
+  evalMs: number | null
+  totalMs: number | null
+  /** totalMs minus load, prompt eval and eval. Not clamped, so a negative value is kept. */
+  otherMs: number | null
+  promptEvalCount: number | null
+  evalCount: number | null
+  thinkingChunks: number
+  thinkingChars: number
+}
+
 export interface OllamaOptions {
   model: string
   numCtx: number
@@ -54,6 +80,11 @@ export interface OllamaOptions {
   fetch?: typeof fetch
   /** Called once per successful HTTP attempt with Ollama's timings. The app does not set it. */
   onStats?: (s: OllamaCallStats) => void
+  /**
+   * Called once per HTTP attempt that got a response stream, also when the stream failed or was
+   * cut. The app does not set it.
+   */
+  onAttempt?: (a: OllamaAttempt) => void
 }
 
 /** Non-2xx answer from the Ollama server. Passed through unchanged, not wrapped as AppError. */
@@ -76,10 +107,12 @@ type ChatMessage = { role: 'system' | 'user'; content: string }
 /** The fields of an /api/chat answer (one object, or one NDJSON line when streaming). */
 type ChatResponse = {
   model?: string
-  message?: { content?: string }
+  message?: { content?: string; thinking?: string }
   done?: boolean
   done_reason?: string
   prompt_eval_count?: number
+  /** Nanoseconds. */
+  load_duration?: number
   /** Nanoseconds. */
   prompt_eval_duration?: number
   eval_count?: number
@@ -205,6 +238,7 @@ export class OllamaAiClient implements AiClient {
         maxTokens: args.maxTokens,
         call,
         billed,
+        attempt: 1,
       })
       billed = first.usage
       assertComplete(first.doneReason, billed)
@@ -221,6 +255,7 @@ export class OllamaAiClient implements AiClient {
         maxTokens: args.maxTokens,
         call,
         billed,
+        attempt: 2,
       })
       const usage = addUsage(billed, retry.usage)
       billed = usage
@@ -276,6 +311,7 @@ export class OllamaAiClient implements AiClient {
         model,
         response,
         billed: NO_USAGE,
+        attempt: 1,
         onContent: (raw) => pushVisible(visibleText(raw)),
       })
       assertComplete(answer.doneReason, answer.usage)
@@ -303,6 +339,8 @@ export class OllamaAiClient implements AiClient {
     model: string
     response: Response
     billed: AiUsage
+    /** 1 for the first request of a call, 2 for the JSON retry. */
+    attempt: number
     onContent?: (raw: string) => void
   }): Promise<ChatResult> {
     if (!args.response.body) throw new Error('Ollama stream had no body')
@@ -311,6 +349,25 @@ export class OllamaAiClient implements AiClient {
     let doneReason: string | undefined
     let sawDone = false
     let resultModel = args.model
+    let doneChunk: ChatResponse | undefined
+    let thinkingChunks = 0
+    let thinkingChars = 0
+    let reported = false
+    // Reports this attempt once, whether it finished, failed or was cut.
+    const report = () => {
+      if (reported) return
+      reported = true
+      this.settings.onAttempt?.(
+        attemptOf({
+          task: args.task,
+          model: args.model,
+          attempt: args.attempt,
+          done: doneChunk,
+          thinkingChunks,
+          thinkingChars,
+        }),
+      )
+    }
     const handleLine = (line: string) => {
       if (!line.trim()) return
       const chunk = JSON.parse(line) as ChatResponse
@@ -319,8 +376,14 @@ export class OllamaAiClient implements AiClient {
       }
       if (chunk.model) resultModel = chunk.model
       raw += chunk.message?.content ?? ''
+      const thinking = chunk.message?.thinking
+      if (typeof thinking === 'string' && thinking.length > 0) {
+        thinkingChunks += 1
+        thinkingChars += thinking.length
+      }
       if (chunk.done) {
         sawDone = true
+        doneChunk = chunk
         usage = usageOf(chunk)
         doneReason = chunk.done_reason
         this.settings.onStats?.(statsOf(args.task, args.model, chunk))
@@ -346,11 +409,14 @@ export class OllamaAiClient implements AiClient {
       buffered += decoder.decode()
       handleLine(buffered)
     } catch (error) {
+      // Report before cancelling, so the record exists even if the cancel is slow.
+      report()
       // Stop the body so Ollama does not keep generating into a reader nobody reads.
       await reader.cancel().catch(() => undefined)
       throw withCauseCode(error)
     }
 
+    report()
     // Without a done chunk the answer was cut short; it must not be scored as complete.
     if (!sawDone) throw streamFailure(STREAM_INCOMPLETE_MESSAGE, args.billed)
     return { content: raw, usage, model: resultModel, doneReason }
@@ -365,6 +431,7 @@ export class OllamaAiClient implements AiClient {
     maxTokens: number
     call: CallLimits
     billed: AiUsage
+    attempt: number
   }): Promise<ChatResult> {
     const response = await this.post(
       this.chatBody({
@@ -382,6 +449,7 @@ export class OllamaAiClient implements AiClient {
       model: args.model,
       response,
       billed: args.billed,
+      attempt: args.attempt,
     })
   }
 
@@ -500,6 +568,40 @@ function statsOf(task: AiTaskName, model: string, data: ChatResponse): OllamaCal
     outputTokens: data.eval_count ?? 0,
     evalMs: (data.eval_duration ?? 0) / NS_PER_MS,
     totalMs: (data.total_duration ?? 0) / NS_PER_MS,
+  }
+}
+
+/** One attempt's record. Without a done chunk every Ollama field is null. */
+function attemptOf(args: {
+  task: AiTaskName
+  model: string
+  attempt: number
+  done: ChatResponse | undefined
+  thinkingChunks: number
+  thinkingChars: number
+}): OllamaAttempt {
+  const data = args.done
+  const ms = (ns: number | undefined): number | null => (ns === undefined ? null : ns / NS_PER_MS)
+  const loadMs = ms(data?.load_duration)
+  const promptEvalMs = ms(data?.prompt_eval_duration)
+  const evalMs = ms(data?.eval_duration)
+  const totalMs = ms(data?.total_duration)
+  return {
+    task: args.task,
+    model: data?.model ?? args.model,
+    attempt: args.attempt,
+    done: data !== undefined,
+    doneReason: data?.done_reason ?? null,
+    loadMs,
+    promptEvalMs,
+    evalMs,
+    totalMs,
+    otherMs:
+      totalMs === null ? null : totalMs - (loadMs ?? 0) - (promptEvalMs ?? 0) - (evalMs ?? 0),
+    promptEvalCount: data?.prompt_eval_count ?? null,
+    evalCount: data?.eval_count ?? null,
+    thinkingChunks: args.thinkingChunks,
+    thinkingChars: args.thinkingChars,
   }
 }
 
