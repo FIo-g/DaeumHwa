@@ -15,6 +15,7 @@ import { OLLAMA_STREAM_FAILURE, type OllamaCallStats, type OllamaThink } from '@
 import type { AiTaskName } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { type HelperThink, type ModelProfile, thinkFor } from './models'
+import { type PowerInfo, type PowerReader, UNKNOWN_POWER } from './power'
 import { EN_SYSTEMS } from './localize/en-systems'
 import { countHangul, translateScaffold } from './localize/scaffold'
 
@@ -64,6 +65,8 @@ export type CallRecord = {
   waitInclusiveMs?: number
   /** The Ollama `think` value the call asked for; null when the profile has no Ollama settings. */
   thinkRequested?: OllamaThink | null
+  /** Machine power state when the call started. Local profiles only; absent on cloud runs and on records written before M1. */
+  power?: PowerInfo
 }
 
 export interface EvalClientOptions {
@@ -75,6 +78,8 @@ export interface EvalClientOptions {
   now?: () => number
   /** Think level for helper tasks in a compare run. See `thinkFor` in ./models. */
   helperThink?: HelperThink
+  /** Reads the machine power state. Used for local profiles only; see the constructor. */
+  readPower?: PowerReader
 }
 
 type CallError = NonNullable<CallRecord['error']>
@@ -300,6 +305,7 @@ type Prepared = {
   prompt: string
   maxTokens: number
   productTimeoutMs: number
+  power?: PowerInfo
 }
 
 type Outcome = { ok: true; output: unknown; usage: AiUsage } | { ok: false; error: unknown }
@@ -345,6 +351,8 @@ export class EvalClient implements AiClient {
   private readonly callsDir: string
   private readonly now: () => number
   private readonly helperThink: HelperThink | undefined
+  /** Set only for local profiles, so cloud and fake runs never read power. */
+  private readonly readPower: PowerReader | undefined
 
   constructor(o: EvalClientOptions) {
     this.inner = o.inner
@@ -356,6 +364,7 @@ export class EvalClient implements AiClient {
     this.provider = `eval:${o.inner.provider}`
     this.defaultModel = o.profile.model
     this.helperThink = o.helperThink
+    this.readPower = o.profile.queue === 'local' ? o.readPower : undefined
   }
 
   get nextSeq(): number {
@@ -481,6 +490,16 @@ export class EvalClient implements AiClient {
     return { textStream: relay.iterate(), final }
   }
 
+  /** Power state now, or undefined without a reader. A broken reader gives unknown, never a throw. */
+  private samplePower(): PowerInfo | undefined {
+    if (!this.readPower) return undefined
+    try {
+      return this.readPower()
+    } catch {
+      return { ...UNKNOWN_POWER }
+    }
+  }
+
   private prepare(
     task: AiTaskName,
     kind: 'object' | 'stream',
@@ -488,6 +507,8 @@ export class EvalClient implements AiClient {
     productPrompt: string,
     productMaxTokens: number,
   ): Prepared {
+    // First, so the read is not part of durationMs; it shows in queueMs, since the call is not running yet.
+    const power = this.samplePower()
     const seq = this.seq++
     const startedMs = this.now()
     const system = this.lang === 'en' ? EN_SYSTEMS[task] : productSystem
@@ -505,6 +526,7 @@ export class EvalClient implements AiClient {
       prompt,
       maxTokens: Math.max(productMaxTokens, this.profile.maxTokensFloor),
       productTimeoutMs: taskTimeout ?? fallback,
+      power,
     }
   }
 
@@ -585,6 +607,7 @@ export class EvalClient implements AiClient {
       queueMs,
       waitInclusiveMs: queueMs + durationMs,
       thinkRequested: thinkFor(this.profile, call.task, this.helperThink),
+      ...(call.power ? { power: call.power } : {}),
     }
     this.records.push(record)
     if (

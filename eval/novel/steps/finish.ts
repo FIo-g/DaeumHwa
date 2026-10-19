@@ -12,6 +12,7 @@ import { packCoverage } from '../../coverage'
 import type { CallRecord, CallSpeed, FailureKind } from '../eval-client'
 import { interviewMetrics } from '../metrics-interview'
 import { type ProofreadStats, proofreadStats } from '../metrics-proofread'
+import { powerSummary } from '../power'
 import type { StepFn } from '../run'
 import type { RunState } from '../state'
 import { readCallRecords, requireWorkId, writeRunFile } from './util'
@@ -231,6 +232,15 @@ const DraftBlockSchema = z.object({
   }),
 })
 
+/** Machine power over the sampled calls of a local run (track M1). Absent when nothing was sampled. */
+const PowerBlockSchema = z.object({
+  sampled: CountSchema,
+  lowPower: CountSchema,
+  onBattery: CountSchema,
+  byMode: z.record(z.string(), CountSchema),
+  bySource: z.record(z.string(), CountSchema),
+})
+
 export const RunSummarySchema = z.object({
   calls: CallCountsSchema,
   speed: SpeedSchema,
@@ -257,6 +267,7 @@ export const RunSummarySchema = z.object({
   focusCounts: z.record(z.string(), z.number()),
   interview: InterviewSchema.optional(),
   timeouts: TimeoutsSchema.optional(),
+  power: PowerBlockSchema.optional(),
   extraction: ExtractionBlockSchema.optional(),
   proofread: ProofreadBlockSchema.optional(),
   continuity: ContinuityBlockSchema.optional(),
@@ -628,6 +639,9 @@ export function buildRunSummary(
     interview: interviewMetrics(state.data.interviewTurns ?? []),
     timeouts: timeoutSummary(calls),
   }
+  // Only calls that were sampled carry power (local runs), so a run with none has no block.
+  const power = powerSummary(calls.flatMap((call) => (call.power ? [call.power] : [])))
+  if (power) summary.power = power
   if (inputs.extraction && Object.keys(inputs.extraction).length > 0) {
     summary.extraction = sumExtraction(inputs.extraction)
   }

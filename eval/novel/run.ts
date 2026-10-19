@@ -14,6 +14,7 @@ import { type Answer, type Pending, readPending } from './author-io'
 import { type Bible, loadBible } from './bible'
 import { EvalClient } from './eval-client'
 import { fakeAnswer } from './fake-author'
+import type { PowerReader } from './power'
 import { type HelperThink, type ModelId, MODEL_PROFILES, createModelClient } from './models'
 import {
   type RunConfig,
@@ -109,7 +110,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
 /** Opens the run's file-backed database and AI client. The caller must call `close`. */
 export async function openRun(
   dir: string,
-  o: { inner?: AiClient; autoAuthor?: boolean } = {},
+  o: { inner?: AiClient; autoAuthor?: boolean; readPower?: PowerReader } = {},
 ): Promise<RunContext & { close(): Promise<void> }> {
   const config = loadConfig(dir)
   const state = loadState(dir)
@@ -131,6 +132,7 @@ export async function openRun(
     callsDir: join(dir, 'calls'),
     startSeq: Math.max(1, state.nextSeq),
     helperThink: config.helperThink,
+    readPower: o.readPower,
   })
   setAiTimeoutOverride(profile.timeoutMs)
   // 0 disables the product's daily token limit for eval runs. close() puts the previous value back.

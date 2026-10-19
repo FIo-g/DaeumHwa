@@ -20,7 +20,13 @@ export const BLIND_LABEL = '[masked]' as const
 
 export type BlindedCall = Omit<
   CallRecord,
-  'model' | 'effortRequested' | 'maxTokens' | 'productTimeoutMs' | 'speed' | 'thinkRequested'
+  | 'model'
+  | 'effortRequested'
+  | 'maxTokens'
+  | 'productTimeoutMs'
+  | 'speed'
+  | 'thinkRequested'
+  | 'power'
 > & { model: typeof BLIND_LABEL }
 
 const VARIANT_SUFFIX = /-(mlx|gguf)$/
@@ -92,7 +98,8 @@ function maskDeep(value: unknown): unknown {
 
 /**
  * One call record for the reviewer. The model field is replaced by the label, the profile
- * fingerprints (effort, think, token cap, timeout, speed) are dropped, and every string is masked.
+ * fingerprints (effort, think, token cap, timeout, speed) and the machine power state are dropped,
+ * and every string is masked.
  * wouldTimeOut stays, because the operations score needs it. The input is not changed.
  */
 export function blindCallRecord(call: CallRecord): BlindedCall {
@@ -102,6 +109,7 @@ export function blindCallRecord(call: CallRecord): BlindedCall {
   delete masked.maxTokens
   delete masked.productTimeoutMs
   delete masked.speed
+  delete masked.power
   return { ...masked, model: BLIND_LABEL } as BlindedCall
 }
 
@@ -110,10 +118,14 @@ export function blindJson(value: unknown): unknown {
   return maskDeep(value)
 }
 
-/** The run summary without its speed block (speed is the profile fingerprint the reviewer must not see). */
+/**
+ * The run summary without its speed and power blocks (speed is the profile fingerprint the reviewer
+ * must not see; power only exists on local runs).
+ */
 export function blindRunSummary(summary: unknown): unknown {
   const masked = maskDeep(summary) as Record<string, unknown>
   delete masked.speed
+  delete masked.power
   return masked
 }
 
