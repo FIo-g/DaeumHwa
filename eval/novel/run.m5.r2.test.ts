@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AiClient, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import { FakeAiClient } from '@/test/fake-ai'
 import { loadBible, RUN_BIBLE_FILE } from './bible'
+import { blindCallRecord, writeBlindCopy } from './blind'
+import { readCallRecords } from './steps/util'
 import { createRun, openRun, runUntilBlocked } from './run'
 
 // Round 2 track M5 part a: --speech on run behaviour (env flag, interview rules, bible copy).
@@ -147,5 +149,34 @@ describe('speech run content (M5)', () => {
     await expect(openRun(dir, { inner: new FakeAiClient() })).rejects.toThrow(/bible\.json/)
     expect(existsSync(join(dir, RUN_BIBLE_FILE))).toBe(false)
     expect(readFileSync(join(dir, 'config.json'), 'utf8')).toContain('"speech": true')
+  }, 120_000)
+})
+
+describe('blind copy of a speech run (M5)', () => {
+  it('keeps the speech key out of the blinded call records and the copy', async () => {
+    const dir = newDir()
+    makeRun(dir, { speech: true })
+    const ctx = await openRun(dir, { inner: recordingClient([], []), autoAuthor: true })
+    try {
+      await runUntilBlocked(ctx)
+    } finally {
+      await ctx.close()
+    }
+
+    const records = readCallRecords(dir)
+    expect(records.length).toBeGreaterThan(0)
+    for (const record of records) {
+      expect(blindCallRecord(record)).not.toHaveProperty('speech')
+    }
+
+    const blindDir = newDir()
+    const out = join(blindDir, 'blind')
+    writeBlindCopy(dir, { out, repoRoot: process.cwd() })
+    expect(existsSync(join(out, 'config.json'))).toBe(false)
+    const copied = readCallRecords(out) as Array<Record<string, unknown>>
+    expect(copied.length).toBe(records.length)
+    for (const record of copied) {
+      expect(record).not.toHaveProperty('speech')
+    }
   }, 120_000)
 })
