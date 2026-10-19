@@ -10,7 +10,7 @@ import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
-import { type ProofreadKind, proofreadTask } from '@/ai/tasks/proofread'
+import { type ProofreadKind, type ProofreadOutput, proofreadTask } from '@/ai/tasks/proofread'
 import type { Db } from '@/db/client'
 import { chapters, facts, proposals, relations } from '@/db/schema'
 import type { Actor, ChapterRow, IssueRow, ProposalRow } from '@/db/types'
@@ -113,6 +113,36 @@ function expandQuote(text: string, quote: string): { start: number; end: number 
   return single ? [single] : []
 }
 
+/**
+ * Locates the model's quotes in `text`. A range that overlaps an earlier range is dropped, so the
+ * result follows model output order, not text position.
+ */
+function locateAiSuggestions(
+  text: string,
+  suggestions: ProofreadOutput['suggestions'],
+): ProofreadSuggestion[] {
+  const result: ProofreadSuggestion[] = []
+  // Ranges already emitted. A later model item that overlaps one is dropped.
+  const emitted: { start: number; end: number }[] = []
+  for (const s of suggestions) {
+    for (const range of expandQuote(text, s.quote)) {
+      if (emitted.some((e) => range.start < e.end && e.start < range.end)) continue
+      emitted.push(range)
+      result.push({
+        source: 'ai',
+        // Equals the model quote for exact matches; the manuscript text otherwise.
+        quote: text.slice(range.start, range.end),
+        replacement: s.replacement,
+        kind: s.kind,
+        reason: s.reason,
+        start: range.start,
+        end: range.end,
+      })
+    }
+  }
+  return result
+}
+
 /** Wraps the proofread task. `lastRunId` is the run of the most recent check call. */
 function aiSpellChecker(
   db: Db,
@@ -126,27 +156,7 @@ function aiSpellChecker(
     async check(text) {
       const result = await runAiTask(db, meta, proofreadTask, { text }, client)
       runId = result.runId
-      const suggestions: ProofreadSuggestion[] = []
-      // Ranges already emitted. A later model item that overlaps one is dropped, so the
-      // result follows model output order, not text position.
-      const emitted: { start: number; end: number }[] = []
-      for (const s of result.output.suggestions) {
-        for (const range of expandQuote(text, s.quote)) {
-          if (emitted.some((e) => range.start < e.end && e.start < range.end)) continue
-          emitted.push(range)
-          suggestions.push({
-            source: 'ai',
-            // Equals the model quote for exact matches; the manuscript text otherwise.
-            quote: text.slice(range.start, range.end),
-            replacement: s.replacement,
-            kind: s.kind,
-            reason: s.reason,
-            start: range.start,
-            end: range.end,
-          })
-        }
-      }
-      return suggestions
+      return locateAiSuggestions(text, result.output.suggestions)
     },
   }
 }
