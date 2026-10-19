@@ -1,2 +1,13 @@
-// PLACEHOLDER (Wave-0 seam): track E1 replaces this with paragraphTrimTask.buildPrompt(...).
-export const paragraphTrimSample = '<target>\nShe go to the tower.\n</target>'
+import { paragraphTrimTask } from '@/ai/tasks/paragraph-trim'
+
+export const paragraphTrimSample = paragraphTrimTask.buildPrompt({
+  maxSentences: 3,
+  items: [
+    {
+      index: 2,
+      text: 'Mina ran. She stopped. She listened. The tower rang.',
+      before: 'The door closed.',
+      after: null,
+    },
+  ],
+})
