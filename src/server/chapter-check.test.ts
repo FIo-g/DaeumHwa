@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import { FAKE_OUTPUTS } from '@/test/ai-fakes'
@@ -562,5 +562,46 @@ describe('runProofread: input length', () => {
       new FakeAiClient(),
     )
     expect(result.runId).not.toBeNull()
+  })
+})
+
+describe('runChapterCheck: speech is interview-only', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('never proposes a speech update from a chapter, even with the speech feature on', async () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    const chapter = await createTestChapter(db, workId, {
+      position: 2,
+      body: '서윤은 문을 열었다.',
+    })
+    await createTestEntry(db, workId, { name: '서윤', kind: 'character' })
+    const extraction = {
+      summary: null,
+      entries: [
+        {
+          name: '서윤',
+          kind: 'character' as const,
+          aliases: [],
+          summary: '',
+          fields: [{ key: 'speech', value: '존댓말' }],
+        },
+      ],
+      facts: [],
+      threads: [],
+      relations: [],
+    }
+    const client = scriptedClient((system) =>
+      system === CHAPTER_EXTRACT_SYSTEM ? extraction : undefined,
+    )
+
+    await runChapterCheck(db, actor(owner.id), { chapterId: chapter.id }, client)
+
+    const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+    const speechUpdates = rows.filter(
+      (row) => row.type === 'entry_update' && JSON.stringify(row.payload).includes('"speech"'),
+    )
+    expect(speechUpdates).toEqual([])
   })
 })
