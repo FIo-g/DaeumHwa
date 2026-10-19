@@ -6,7 +6,7 @@ import { type Lang, repeatedWords, sampleCopies } from '@/ai/guards'
 import { stripJosa } from '@/lib/korean/josa'
 import { sentenceIn, splitSentences } from '@/lib/korean/sentences'
 
-export type DraftFlagKind = 'sample-copy' | 'repeated-word'
+export type DraftFlagKind = 'sample-copy' | 'repeated-word' | 'foreign-script'
 
 /** A draft sentence the repair may rewrite. Offsets are UTF-16 indices into the draft text. */
 export type DraftFlag = {
