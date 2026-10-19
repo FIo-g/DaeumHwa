@@ -13,7 +13,7 @@ You write `<dir>/review.md`. A separate step adds the model header and copies it
 
 Read these first:
 
-1. `<dir>/reference/criteria.md` (the copy of `docs/eval/novel-quality-criteria.md`). Use sections 3.1 (thresholds T1 to T7), 3.2 (quality items Q1 to Q9 and their scoring anchors), 3.3 (publishable and excellent criteria) and 3.4 (TTCW pass rate). Read section 4 for the scoring method and its limits.
+1. `<dir>/reference/criteria.md` (the copy of `docs/eval/novel-quality-criteria.md`). Use sections 3.1 (thresholds T1 to T7), 3.2 (quality items Q1 to Q9 and their scoring anchors), 3.3 (publishable and excellent criteria), 3.4 (TTCW pass rate) and 3.5 (what T2 counts). Read section 4 for the scoring method and its limits.
 2. `<dir>/reference/spec-section-9.md` (the copy of section 9 of the lightweight-model eval spec, review criteria). Its table says what to judge for each feature. Section 9 also says that extraction is scored against the source text the extraction read (the interview answers and the saved chapter text), not against the full bible.
 3. The run directory. Run `ls -R <dir>` first and find the files yourself. Do not guess file names. Look for the chapter texts, the per-chapter metrics, the `calls/` records, `author-decisions.jsonl`, `state.json`, and `worker.log`.
 
@@ -27,7 +27,7 @@ Read these first:
 
 1. Score the chapters first, from the chapter texts, the metrics and the author decisions.
 2. Score the run as a whole (per-feature scores, operations, TTCW, weakness list).
-3. Write the blinding note last (see below).
+3. Write the blinding note, then the verdict data block (see below).
 
 Read nothing outside `dir`. Do not open `config.json`, any `docs/` file, any other run folder or any `eval/results/novel/<date>/run-*` folder. Do not try to identify the model. Model fields, effort, token caps and speed are removed on purpose; do not look for them elsewhere.
 
@@ -40,7 +40,7 @@ Use this structure. Headings in the document's language.
 - T1 to T7: pass or fail for each, with the harness metric that decides it (for example `chars`, `targetChars`, `lengthOk`, `foreignRuns`, `metaHits`, `endsCleanly`, `hangulLeft`, `proofread` errors per 1,000 characters, `overlongParagraphs`). For the three-sentence paragraph rule, use the `overlongParagraphs` metric, not a hand count.
 - Q1 to Q9: a score from 1 to 5 for each, with at least one quote from the chapter text for each score. Quotes are mandatory. A score without a quote is not accepted. Quote the Korean or English exactly.
 - Verdict: publishable (출판 가능 / publishable), excellent (우수 / excellent), or not publishable, using the section 3.3 rules.
-- Continuity count for the chapter: each contradiction with the bible, classified with the ConStory five-way categories described in the criteria file.
+- Continuity count for the chapter: each contradiction with the bible or the approved wiki, classified with the four ConStory categories in criteria section 3.5 (not Narrative & Style). Mark speech-register contradictions `Characterization (voice)`. Under the table, list apart: style-card violations (say how they were scored in Q6 to Q8), in-chapter inconsistencies (scored in Q2), and uncounted items with one line of reason each. These lists are not part of T2.
 
 **Whole run**
 
@@ -53,14 +53,37 @@ Use this structure. Headings in the document's language.
   - style proposal (captured the sample's style)
 - Operations: failures, retries, `wouldTimeOut`, `contextOverflow`, `hangulLeft`, tokens per step, time per step.
 - TTCW pass count (of 14 checks, as the criteria file describes), labeled as reference only.
-- Five-chapter totals: mean Q score, publishable chapters count, and the continuity error count per 10,000 characters (Korean: characters; English: words, as section 3.3 says).
+- Five-chapter totals: mean Q score, publishable chapters count, and the continuity error count per 10,000 characters (Korean: characters; English: words, as section 3.3 says) (the T2 scope of criteria section 3.5 only).
 - Weakness list with improvement candidates, each with the expected effect.
 
 **Blinding note** (last section, one sentence): say whether anything in `dir` identified the model or the provider; if yes, say what it was. Write "none found" when nothing did.
 
+**Verdict data** (the final block of the file): end `review.md` with one fenced json block under a heading "Verdict data" (Korean: "판정 데이터"). Keys stay in English. One object per chapter.
+
+```json
+{
+  "schema": "review-verdict-1",
+  "chapters": [
+    {
+      "chapter": 1,
+      "thresholdsFailed": ["T2", "T3"],
+      "qScores": [4, 3, 4, 3, 3, 4, 4, 4, 4],
+      "verdict": "not-publishable"
+    }
+  ]
+}
+```
+
+- `thresholdsFailed`: the T ids you marked fail, from T1 to T7 only. Use `[]` when none failed.
+- `qScores`: nine integers, Q1 to Q9 in order, identical to your Q scores in the chapter section.
+- `verdict`: `"publishable"`, `"excellent"` or `"not-publishable"`, identical to your prose verdict.
+- No comments or other text inside the block. Write exactly one such block per review.
+- A workflow step reads this block to decide whether the run needs a second review, so keep the keys and values exact.
+
 ## Rules
 
 - Write only `<dir>/review.md`. Do not edit any other file.
+- You may be the first or the second reviewer of this run, and you are not told which. Never open any other review: no `review.md` or `review-2.md` outside `dir`, nothing under `docs/eval/novel/`, and no other blind folder.
 - Every score needs its evidence. Say so when evidence is missing instead of guessing.
 - Keep it plain. No emojis.
 - Your final reply is one line: `reviewed: <number of chapters> chapters`. Do not name the model in the reply.
