@@ -56,17 +56,21 @@ export function speedSummary(calls: CallRecord[]) {
   }
 
   // Chapter n is the calls whose step key starts with 'chN:'. The wall time merges their intervals,
-  // so calls that overlap (continuity and extract run in parallel) count once, and the gaps between
-  // them (the author's wait) count zero. The model time is the plain sum of the call durations.
+  // so calls that overlap count once, and the gaps between them (the author's wait) count zero.
+  // Calls on a local server run one at a time, while cloud calls can still overlap. A call's
+  // interval starts when it was requested, so its lane wait (queueMs) counts. The model time is the
+  // plain sum of the call durations, which leaves the lane wait out.
   const chapterIntervals: Record<string, [number, number][]> = {}
   const perChapterModelMs: Record<string, number> = {}
   for (const call of calls) {
     const chapter = /^ch(\d+):/.exec(call.step ?? '')?.[1]
     if (chapter === undefined) continue
     perChapterModelMs[chapter] = (perChapterModelMs[chapter] ?? 0) + call.durationMs
-    const start = Date.parse(call.startedAt)
+    const startedMs = Date.parse(call.startedAt)
     chapterIntervals[chapter] ??= []
-    if (Number.isFinite(start)) chapterIntervals[chapter].push([start, start + call.durationMs])
+    if (Number.isFinite(startedMs)) {
+      chapterIntervals[chapter].push([startedMs - (call.queueMs ?? 0), startedMs + call.durationMs])
+    }
   }
   const perChapterMs: Record<string, number> = {}
   for (const [chapter, intervals] of Object.entries(chapterIntervals)) {
