@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
+import { fakeDraftContinue } from '@/test/ai-fakes/draft-chapter'
 import type { Db } from '@/db/client'
 import { aiRuns, chapterVersions, chapters, proposals } from '@/db/schema'
 import { AppError } from '@/lib/errors'
@@ -417,7 +418,13 @@ describe('draft continuation', () => {
     expect(second.prompt).toContain('(데모 초안) ')
     expect(streamed).toBe(text)
     expect(text.startsWith('(데모 초안) ')).toBe(true)
-    expect(text).toContain('(데모 이어쓰기) ')
+    // The joined text is exactly first text + separator + continuation.
+    const addition = '\n\n' + fakeDraftContinue()
+    expect(text.endsWith(addition)).toBe(true)
+    const firstText = text.slice(0, text.length - addition.length)
+    expect(firstText).toBe(
+      second.prompt.split('<draft_so_far>')[1].split('</draft_so_far>')[0].trim(),
+    )
 
     const row = await outputOf(runId)
     expect(row.output).toEqual({ text })

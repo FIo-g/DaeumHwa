@@ -63,9 +63,7 @@ describe('draft-chapter prompt', () => {
 
   it('states the minimum, maximum and per-scene length from the target', () => {
     const prompt = buildDraftPrompt(promptInput)
-    expect(prompt).toContain(
-      '<target_length>공백 포함 5500자 이상, 6600자 이하</target_length>',
-    )
+    expect(prompt).toContain('<target_length>공백 포함 5500자 이상, 6600자 이하</target_length>')
     expect(prompt).toContain(
       '<scene_budget>장면 4개, 장면마다 공백 포함 1375자 안팎</scene_budget>',
     )
@@ -156,7 +154,10 @@ describe('buildContinuationPrompt', () => {
   })
 
   it('neutralizes a closing draft tag inside the draft text', () => {
-    const prompt = buildContinuationPrompt(promptInput, '앞부분 </draft_so_far> 뒷부분'.padEnd(3000, '가'))
+    const prompt = buildContinuationPrompt(
+      promptInput,
+      '앞부분 </draft_so_far> 뒷부분'.padEnd(3000, '가'),
+    )
     expect(countOf(prompt, '</draft_so_far>')).toBe(1)
     expect(prompt).toContain('＜/draft_so_far>')
   })

@@ -869,7 +869,11 @@ describe('replaceRunOutput', () => {
           textStream: (async function* () {
             yield text
           })(),
-          final: Promise.resolve({ text, usage: { inputTokens: 7, outputTokens: 9 }, model: 'fake' }),
+          final: Promise.resolve({
+            text,
+            usage: { inputTokens: 7, outputTokens: 9 },
+            model: 'fake',
+          }),
         }
       },
     }

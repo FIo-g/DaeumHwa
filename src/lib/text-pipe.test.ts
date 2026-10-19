@@ -49,6 +49,12 @@ describe('createTextPipe', () => {
     pipe.push('a')
     pipe.fail(new Error('unread'))
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(true).toBe(true)
+    const chunks: string[] = []
+    await expect(
+      (async () => {
+        for await (const chunk of pipe.iterable) chunks.push(chunk)
+      })(),
+    ).rejects.toThrow('unread')
+    expect(chunks).toEqual(['a'])
   })
 })
