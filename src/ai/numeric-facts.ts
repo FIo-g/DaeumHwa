@@ -33,7 +33,9 @@ function namesOf(entry: PackEntry): string[] {
  * The single confirmed age of an entry, taken from confirmed facts whose content has "나이" and
  * exactly one "N살". Two different ages make the entry unusable (the wiki is itself unclear).
  */
-function confirmedAge(entry: PackEntry): { value: number; factRef: string; excerpt: string } | null {
+function confirmedAge(
+  entry: PackEntry,
+): { value: number; factRef: string; excerpt: string } | null {
   const ages = new Map<number, { factRef: string; excerpt: string }>()
   for (const fact of entry.facts) {
     if (fact.status !== 'confirmed' || !fact.content.includes('나이')) continue

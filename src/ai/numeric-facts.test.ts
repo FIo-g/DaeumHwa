@@ -4,7 +4,11 @@ import { findNumericFactMismatches } from '@/ai/numeric-facts'
 
 // Builds a pack from compact entry descriptions. Fact refs and entry refs are assigned in order.
 function makePack(
-  entries: { name: string; aliases?: string[]; facts: { content: string; status?: PackFact['status'] }[] }[],
+  entries: {
+    name: string
+    aliases?: string[]
+    facts: { content: string; status?: PackFact['status'] }[]
+  }[],
 ): ContextPack {
   let factCount = 0
   const packEntries: PackEntry[] = entries.map((e, index) => ({
@@ -37,7 +41,11 @@ function makePack(
     relations: [],
     previousSummaries: [],
     namingRules: [],
-    stats: { totalEntries: packEntries.length, selectedEntries: packEntries.length, approxChars: 0 },
+    stats: {
+      totalEntries: packEntries.length,
+      selectedEntries: packEntries.length,
+      approxChars: 0,
+    },
   }
 }
 
@@ -97,7 +105,10 @@ describe('findNumericFactMismatches', () => {
 
   it('skips a flashback', () => {
     expect(
-      findNumericFactMismatches({ chapterText: '도윤서는 25살 때 마을을 떠났다.', pack: yoonseo() }),
+      findNumericFactMismatches({
+        chapterText: '도윤서는 25살 때 마을을 떠났다.',
+        pack: yoonseo(),
+      }),
     ).toEqual([])
   })
 
@@ -141,7 +152,11 @@ describe('findNumericFactMismatches', () => {
 
   it('ignores a fact without 나이', () => {
     const pack = makePack([
-      { name: '도윤서', aliases: ['윤서'], facts: [{ content: '도윤서는 27살에 검을 처음 쥐었다.' }] },
+      {
+        name: '도윤서',
+        aliases: ['윤서'],
+        facts: [{ content: '도윤서는 27살에 검을 처음 쥐었다.' }],
+      },
     ])
     expect(findNumericFactMismatches({ chapterText: '도윤서는 25살이다.', pack })).toEqual([])
   })

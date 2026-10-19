@@ -79,7 +79,9 @@ describe('findMentions with copula and quotative endings', () => {
 
 describe('findNamedAnywhere', () => {
   it('finds a name inside a compound', () => {
-    const hits = findNamedAnywhere('종루지기가 웃었다.', [{ id: 'a', names: ['잿빛 종루', '종루'] }])
+    const hits = findNamedAnywhere('종루지기가 웃었다.', [
+      { id: 'a', names: ['잿빛 종루', '종루'] },
+    ])
     expect(hits).toEqual([{ entryId: 'a', firstIndex: 0 }])
   })
 

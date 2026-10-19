@@ -134,7 +134,8 @@ function parseBudget(): number {
   const raw = argValue('--budget')
   if (raw === undefined) return CONTINUITY_BUDGET_CHARS
   const value = Number(raw)
-  if (!Number.isInteger(value) || value <= 0) throw new Error(`--budget 값이 올바르지 않습니다: ${raw}`)
+  if (!Number.isInteger(value) || value <= 0)
+    throw new Error(`--budget 값이 올바르지 않습니다: ${raw}`)
   return value
 }
 

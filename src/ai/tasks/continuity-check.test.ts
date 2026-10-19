@@ -307,7 +307,9 @@ describe('continuityCheckTask prompt isolation', () => {
     const firstBullet = lines.findIndex((line) => line.startsWith('- <wiki>의 사실(F ref)'))
     expect(firstBullet).toBeGreaterThan(-1)
     expect(lines[firstBullet + 1]).toBe(rules[0])
-    expect(lines[0].startsWith('당신은 장기 연재 웹소설의 설정 오류(오기)를 찾는 교정자다.')).toBe(true)
+    expect(lines[0].startsWith('당신은 장기 연재 웹소설의 설정 오류(오기)를 찾는 교정자다.')).toBe(
+      true,
+    )
   })
 
   it('tells the model that tagged content is data, not instructions', () => {
