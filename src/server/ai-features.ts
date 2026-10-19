@@ -5,6 +5,7 @@ import {
   listAiRuns,
   replaceRunOutput,
   runAiTask,
+  runAiTaskSplit,
   startAiStream,
   STREAM_AI_TIMEOUT_MS,
   throwIfCancelled,
@@ -22,7 +23,13 @@ import {
 } from '@/ai/tasks/draft-chapter'
 import { applyDraftEdits, draftRepairTask } from '@/ai/tasks/draft-repair'
 import { type AdviceResult, directionAdviceTask } from '@/ai/tasks/direction-advice'
-import { type ReaderSimResult, readerSimTask } from '@/ai/tasks/reader-sim'
+import {
+  mergeReaderSim,
+  type ReaderSimInput,
+  type ReaderSimResult,
+  readerSimTask,
+  splitReaderSimInput,
+} from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
 import type { Db } from '@/db/client'
 import { aiRuns, chapters } from '@/db/schema'
@@ -96,20 +103,23 @@ export async function runReaderSimulation(
   }
   const work = await getWork(db, actor, chapterRow.workId)
   const all = await listChapters(db, actor, chapterRow.workId)
-  const { output, runId } = await runAiTask(
+  const readerInput: ReaderSimInput = {
+    chapterText: chapterRow.body,
+    chapterPosition: chapterRow.position,
+    chapterTitle: chapterRow.title,
+    previousSummaries: recentSummaries(all, READER_PREVIOUS_SUMMARIES, chapterRow.position).map(
+      (s) => ({ position: s.position, summary: s.summary }),
+    ),
+    work: { title: work.title, genre: work.genre, logline: work.logline },
+    personas: selectPersonas(input.personaIds),
+  }
+  // One call per persona keeps each call inside the time limit; the result is still one run row.
+  const { output, runId } = await runAiTaskSplit(
     db,
     { userId: actor.userId, workId: chapterRow.workId, chapterId: chapterRow.id, signal },
     readerSimTask,
-    {
-      chapterText: chapterRow.body,
-      chapterPosition: chapterRow.position,
-      chapterTitle: chapterRow.title,
-      previousSummaries: recentSummaries(all, READER_PREVIOUS_SUMMARIES, chapterRow.position).map(
-        (s) => ({ position: s.position, summary: s.summary }),
-      ),
-      work: { title: work.title, genre: work.genre, logline: work.logline },
-      personas: selectPersonas(input.personaIds),
-    },
+    splitReaderSimInput(readerInput),
+    mergeReaderSim,
     client,
   )
   return { runId, result: output }
