@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
+import type { AiClient, GenerateObjectArgs } from '@/ai/types'
 import type { Db } from '@/db/client'
 import { aiRuns } from '@/db/schema'
 import { createTestDb } from '@/test/db'
@@ -125,7 +126,22 @@ describe('startDraft with twoStep (track D)', () => {
   })
 
   it('rejects with AI_ERROR and the Korean message when the beat list is empty', async () => {
-    const client = new FakeAiClient({ overrides: { 'draft-beats': () => ({ scenes: [] }) } })
+    // Returns the raw empty list without schema parsing, so the startDraft guard is what rejects.
+    const client: AiClient = {
+      provider: 'fake',
+      defaultModel: 'fake',
+      async generateObject<T>(args: GenerateObjectArgs<T>) {
+        const object = args.task.name === 'draft-beats' ? { scenes: [] } : null
+        return {
+          object: object as unknown as T,
+          usage: { inputTokens: 0, outputTokens: 0 },
+          model: 'scripted',
+        }
+      },
+      streamText() {
+        throw new Error('not used')
+      },
+    }
     const stream = vi.spyOn(client, 'streamText')
 
     await expect(
@@ -143,6 +159,23 @@ describe('startDraft with twoStep (track D)', () => {
     expect(stream).not.toHaveBeenCalled()
     const rows = await rowsOf(db, workId)
     expect(rows.map((r) => r.task)).toEqual(['draft-beats'])
+  })
+
+  it('rejects the beat call itself when the fake returns an empty list', async () => {
+    // FakeAiClient parses with the schema first, so the Zod error fires before the startDraft guard.
+    const client = new FakeAiClient({ overrides: { 'draft-beats': () => ({ scenes: [] }) } })
+    const stream = vi.spyOn(client, 'streamText')
+
+    await expect(
+      startDraft(
+        db,
+        actor,
+        { workId, instructions: INSTRUCTIONS, targetChars: 10, entryIds: [], twoStep: true },
+        client,
+      ),
+    ).rejects.toThrow()
+
+    expect(stream).not.toHaveBeenCalled()
   })
 
   it('passes the same beats into the continuation prompt of a short draft', async () => {
