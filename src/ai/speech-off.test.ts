@@ -109,6 +109,11 @@ describe('speech feature off: prompts equal the cloud-w3 golden', () => {
     `)
   })
 
+  it('EN_SYSTEMS speech tasks carry no speech rule when off', () => {
+    expect(EN_SYSTEMS['interview-question']).not.toContain('speech')
+    expect(EN_SYSTEMS['interview-extract']).not.toContain('speech')
+  })
+
   it('DRAFT_SYSTEM', () => {
     expect(DRAFT_SYSTEM).toMatchInlineSnapshot(`
       "당신은 웹소설 작가의 초안 작성을 돕는 보조 작가다. 작가의 지시와 설정 위키, 문체 카드를 따라 회차 초안을 쓴다.
