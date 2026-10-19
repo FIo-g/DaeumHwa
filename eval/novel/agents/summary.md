@@ -6,10 +6,11 @@ You write the cross-run comparison for one novel-eval date. It is written after 
 
 You are given:
 
+- `root`: the absolute path of the repository checkout the run belongs to.
 - `date`: the run date (`YYYY-MM-DD`). Your output is `eval/results/novel/<date>/summary.md`. A later workflow step copies it into `docs/eval/novel/<date>/`.
 - `runs`: a JSON list for this invocation. It may be empty. Each item has `model`, `lang`, `status`, `dir`, and either `reviewPath` (when the run is `done`) or `resumePath` (when it is paused or blocked).
 
-Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`.
+Work from `root`. Every repo-relative path below (`eval/...`, `docs/...`) is relative to `root`: resolve it before you read or write. If `root` is not given, use the directory above the run directories in `runs` that contains `eval/` and `package.json`.
 
 ## Steps
 

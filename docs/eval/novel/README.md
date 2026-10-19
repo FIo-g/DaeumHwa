@@ -68,6 +68,7 @@ Workflow({
   args: {
     date: '2026-10-18',
     chapters: 1,
+    // repo: '/절대/경로/DaeumHwa-r2a', // 선택. 빼면 메인 체크아웃
     runs: [
       { model: 'gpt-oss-20b', lang: 'ko' },
       { model: 'gpt-oss-20b', lang: 'en' },
@@ -84,6 +85,10 @@ Workflow({
 - 요약은 `eval/results/novel/<날짜>/summary.md`에 쓰고, 워크플로가 그것을 `docs/eval/novel/<날짜>/summary.md`로 복사한다. 에이전트는 `docs/`에 직접 쓰지 않는다.
 - 검토와 요약의 복사는 `pnpm eval:novel publish --src <실행 쪽 파일> --dest <docs 파일> [--attempts N] [--if-missing]`로 한다. `--src`는 `eval/results/novel/` 아래, `--dest`는 `docs/eval/novel/` 아래여야 한다. 실패하면 최대 3번 다시 복사하고, 결과를 `status`(`copied`, `skipped`, `failed`)가 든 JSON 한 줄로 낸다. `--if-missing`은 목적지가 있으면 건너뛴다. 이 플래그는 맨 뒤에 붙인다.
 - **주의:** `chapters`를 빼면 기본값 5화로 돈다. 비교를 맞추려면 반드시 `chapters: 1`을 넘긴다.
+- `repo`(선택)는 실행할 체크아웃의 절대 경로다. 별도 worktree에서 돌릴 때 쓴다. 영문, 숫자, `_`, `.`, `-`, `/`만 쓸 수 있다(공백과 `..`는 안 된다). 빼면 워크플로의 `DEFAULT_REPO`(메인 체크아웃)를 쓴다.
+- worktree에는 `node_modules`가 있어야 하고, `.env.local`과 `eval/results`는 메인 체크아웃을 가리키는 링크여야 한다. 그러면 실행 결과는 메인 체크아웃의 `eval/results/novel/<날짜>/`에 쌓인다.
+- 검토서와 요약의 docs 복사본은 그 worktree의 `docs/eval/novel/<날짜>/`에 생긴다. 메인 체크아웃에 커밋하려면 그 파일을 옮긴다.
+- 멈춘 실행의 `RESUME.md`에는 `repo`가 들어간 재시작 명령이 적힌다.
 
 ### 멈춘 실행 이어하기
 

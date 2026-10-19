@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Run the novel quality eval per model and language: advance each run, let author agents answer pending items, then write reviews and (optionally) a summary',
   whenToUse:
-    'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. A run whose review.md already exists is not reviewed again unless args.rereview is true. Pass summary: true on a final invocation with runs: [] to write the cross-run summary. A run near the pass line (Q mean 3.65 to 3.85, or one failed threshold) also gets an independent second review; pass secondReview: false to turn that off.',
+    'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. A run whose review.md already exists is not reviewed again unless args.rereview is true. Pass summary: true on a final invocation with runs: [] to write the cross-run summary. A run near the pass line (Q mean 3.65 to 3.85, or one failed threshold) also gets an independent second review; pass secondReview: false to turn that off. Optional args.repo is the absolute path of the checkout to run in, for example a worktree; the default is the main checkout.',
   phases: [
     { title: 'Run', detail: 'init and advance each run; author agents answer pending items' },
     {
@@ -15,7 +15,22 @@ export const meta = {
   ],
 }
 
-const REPO = '/Users/taehyeong/Documents/GitHub/DaeumHwa'
+// The checkout the eval runs in when args.repo is not given.
+const DEFAULT_REPO = '/Users/taehyeong/Documents/GitHub/DaeumHwa'
+
+// The checkout root for every command and agent input. args.repo may name another checkout, such as
+// a worktree. The value goes into shell commands that runner agents execute, so only plain path
+// characters are accepted; this script has no Node API, so the check is a regex.
+function resolveRepo(raw) {
+  if (raw === undefined || raw === null) return DEFAULT_REPO
+  const bad =
+    'args.repo must be an absolute path made of letters, digits, _ . - and / (no spaces, no ..)'
+  if (typeof raw !== 'string') throw new Error(bad)
+  const repo = raw.replace(/\/+$/, '')
+  if (!/^\/[\w./-]+$/.test(repo) || /(^|\/)\.\.(\/|$)/.test(repo)) throw new Error(bad)
+  return repo
+}
+
 const ALL_MODELS = ['qwen3.8-27b', 'gpt-oss-20b', 'exaone3.5-32b', 'haiku-5.5', 'luna-6']
 // Canonical order for opaque run dir numbers. Never reorder: NN must stay stable across invocations.
 const CANONICAL_MODELS = [
@@ -57,6 +72,7 @@ if (!args || typeof args.date !== 'string' || !/^\d{4}-\d{2}-\d{2}(-[a-z0-9]+)?$
   throw new Error('args.date (YYYY-MM-DD or YYYY-MM-DD-suffix) is required')
 }
 const date = args.date
+const REPO = resolveRepo(args.repo)
 const chapters = args.chapters || 5
 const withSummary = args.summary === true
 const rereview = args.rereview === true
@@ -66,6 +82,7 @@ const runs = Array.isArray(args.runs)
   ? args.runs
   : ALL_MODELS.flatMap((model) => LANGS.map((lang) => ({ model, lang })))
 
+log(`repo root: ${REPO}`)
 if (runs.length > 4) {
   log(
     `warning: ${runs.length} runs in this invocation; invoke once per model; each invocation is capped at 1000 agents`,
@@ -180,7 +197,7 @@ function blindPrompt(dir, second) {
 function authorPrompt(dir, lang) {
   return [
     `Follow the instructions in ${REPO}/eval/novel/agents/author.md.`,
-    `Inputs: dir = ${REPO}/${dir}, lang = ${lang}.`,
+    `Inputs: root = ${REPO}, dir = ${REPO}/${dir}, lang = ${lang}.`,
     'Answer the pending item in dir and write answer.json as the instructions say.',
   ].join('\n')
 }
@@ -235,7 +252,7 @@ function publishPrompt(src, dest, ifMissing) {
 function resumePrompt(run, dir, status, detail) {
   return [
     `Follow the instructions in ${REPO}/eval/novel/agents/resume-note.md.`,
-    `Inputs: dir = ${REPO}/${dir}, status = ${status}, detail = ${detail}, date = ${date}, runs = ${JSON.stringify(runs)}, chapters = ${chapters}.`,
+    `Inputs: root = ${REPO}, dir = ${REPO}/${dir}, status = ${status}, detail = ${detail}, date = ${date}, runs = ${JSON.stringify(runs)}, chapters = ${chapters}.`,
     'Write RESUME.md in dir as the instructions say.',
   ].join('\n')
 }
@@ -250,9 +267,9 @@ function summaryPrompt(results) {
   })
   return [
     `Follow the instructions in ${REPO}/eval/novel/agents/summary.md.`,
-    `Inputs: date = ${date}, runs = ${JSON.stringify(list)}.`,
-    'Also read every review document in docs/eval/novel/<date>/ named <model>-<lang>.md, including runs from earlier invocations that are not listed in runs.',
-    'Also read every second review in docs/eval/novel/<date>/second/ named <model>-<lang>.md, if any.',
+    `Inputs: root = ${REPO}, date = ${date}, runs = ${JSON.stringify(list)}.`,
+    `Also read every review document in ${REPO}/docs/eval/novel/${date}/ named <model>-<lang>.md, including runs from earlier invocations that are not listed in runs.`,
+    `Also read every second review in ${REPO}/docs/eval/novel/${date}/second/ named <model>-<lang>.md, if any.`,
     `Write ${REPO}/${summaryResultPath()} as the instructions say. Do not write under docs/.`,
   ].join('\n')
 }

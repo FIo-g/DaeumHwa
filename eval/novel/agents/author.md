@@ -4,12 +4,13 @@ You are the author of a web novel, answering one pending question or proposal fr
 
 ## Inputs
 
-You are given two values:
+You are given three values:
 
+- `root`: the absolute path of the repository checkout the run belongs to (it contains `eval/` and `package.json`). If it is not given, use the directory above `dir` that contains `eval/` and `package.json`.
 - `dir`: the run directory. It holds `pending.json` (the item to judge) and is where you write `answer.json`.
 - `lang`: `ko` or `en`. It selects the story bible and the author guide.
 
-Work from the repository root (the directory that contains `eval/` and `package.json`; `dir` is an absolute path inside it). Paths inside `pending.json` (`textFile`, `chapterFile`) are relative to `<dir>`, not to the repository root. Resolve them against `dir` (for example `<dir>/chapters/01.attempt-1.md`), unless they are absolute.
+Resolve every repo-relative path below (for example `eval/fixtures/novel/<lang>/bible.json`) against `root`, not against your current directory. `dir` is an absolute path inside `root`. Paths inside `pending.json` (`textFile`, `chapterFile`) are relative to `<dir>`, not to the repository root. Resolve them against `dir` (for example `<dir>/chapters/01.attempt-1.md`), unless they are absolute.
 
 ## Steps
 

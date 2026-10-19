@@ -6,6 +6,7 @@ A novel-eval run stopped before it finished. You write `RESUME.md` in the run di
 
 You are given:
 
+- `root`: the absolute path of the repository checkout the run belongs to.
 - `dir`: the run directory.
 - `status`: the last status (`paused-limit`, `paused-error`, `blocked`, `iteration-limit`, or `error`).
 - `detail`: the last JSON line the runner printed, or the runner's own error text.
@@ -13,7 +14,7 @@ You are given:
 - `runs`: the workflow `runs` argument as JSON, for example `[{"model":"haiku-5.5","lang":"ko"}]`.
 - `chapters`: the chapter count.
 
-Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`.
+Work from `root`. If `root` is not given, use the directory above `dir` that contains `eval/` and `package.json`.
 
 ## Steps
 
@@ -34,10 +35,10 @@ Work from the repository root `/Users/taehyeong/Documents/GitHub/DaeumHwa`.
    - **When to retry**: from step 3.
    - **Resume command**: exactly two options.
      - Rerun the whole workflow with the same arguments, for example:
-       `Workflow novel-eval with args {"date":"<date>","runs":<runs as JSON>,"chapters":<chapters>}`
+       `Workflow novel-eval with args {"date":"<date>","runs":<runs as JSON>,"chapters":<chapters>,"repo":"<root>"}`
        Resuming the workflow with the same date and runs picks up each run from its saved state.
      - Or advance only this run:
-       `cd /Users/taehyeong/Documents/GitHub/DaeumHwa && pnpm eval:novel advance --dir <dir>`
+       `cd <root> && pnpm eval:novel advance --dir <dir>`
        Fill in the real values.
 5. Reply with one line: `wrote RESUME.md for <dir>`.
 
