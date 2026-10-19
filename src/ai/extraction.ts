@@ -92,6 +92,21 @@ export type PendingThreadEvent = {
   evidence: string
 }
 
+/** Counters of what the mapper changed. Always present; zero until a rule counts into them. */
+export type ExtractionStats = {
+  /** Names rewritten from a tail fragment to a full card name (counts entries, fact subjects and relation ends). */
+  fragmentNamesFixed: number
+  /** relation_create candidates dropped because an end matched no card. */
+  relationsDropped: number
+}
+
+export type ExtractionDropped = {
+  /** Always 0 in G2. G1 counts near-duplicate facts dropped. */
+  duplicateFacts: number
+  /** Always 0 in G2. G1 counts items dropped for evidence not found in the source. */
+  unverifiedEvidence: number
+}
+
 type ExistingEntry = ExtractionContext['existingEntries'][number]
 type ThreadTarget = { id: string; title: string; status?: ThreadStatus }
 
@@ -140,6 +155,31 @@ const ROLE_SET: ReadonlySet<string> = new Set(ROLE_WORDS)
 /** True for a role word or pronoun (주인공, 주인공은). Such a word is never a name. */
 function isRoleName(name: string): boolean {
   return nameCandidates(name).some((form) => ROLE_SET.has(form))
+}
+
+/**
+ * The full character card name a tail fragment stands for ("세린" -> "한세린"). Only a character
+ * or unknown kind matches, only a single-word card name ending with the fragment, with a one or
+ * two syllable surname in front. Prefixes and middle matches do not count. Returns undefined when
+ * no card or more than one card qualifies, or when a form is already a card name.
+ */
+export function findFragmentCanonical(
+  name: string,
+  kind: EntryKind | undefined,
+  cardNames: readonly string[],
+): string | undefined {
+  if (kind !== undefined && kind !== 'character') return undefined
+  const forms = nameCandidates(name)
+  if (forms.some((form) => cardNames.includes(form))) return undefined
+  for (const form of forms) {
+    if (/\s/.test(form) || form.length < 2) continue
+    const matches = cardNames.filter((card) => {
+      const extra = card.length - form.length
+      return !/\s/.test(card) && card.endsWith(form) && extra >= 1 && extra <= 2
+    })
+    if (matches.length > 0) return matches.length === 1 ? matches[0] : undefined
+  }
+  return undefined
 }
 
 /**
@@ -248,9 +288,16 @@ function makeProposal<K extends NewProposal['type']>(
 export function extractionToProposals(
   x: Extraction,
   ctx: ExtractionContext,
-): { proposals: NewProposal[]; pendingThreadEvents: PendingThreadEvent[] } {
+): {
+  proposals: NewProposal[]
+  pendingThreadEvents: PendingThreadEvent[]
+  stats: ExtractionStats
+  dropped: ExtractionDropped
+} {
   const proposals: NewProposal[] = []
   const pendingThreadEvents: PendingThreadEvent[] = []
+  const stats: ExtractionStats = { fragmentNamesFixed: 0, relationsDropped: 0 }
+  const dropped: ExtractionDropped = { duplicateFacts: 0, unverifiedEvidence: 0 }
 
   // Cards a name can refer to, searched in this order: wiki cards, pending entry_create
   // proposals, then names created earlier in this extraction.
@@ -300,11 +347,39 @@ export function extractionToProposals(
     return undefined
   }
 
+  // Character card names a tail fragment may complete: wiki and pending cards, then character
+  // entries of this extraction. A name's own entry is left out of its candidates, so an entry
+  // "세린" beside "한세린" can still be rewritten.
+  const dbNames = [
+    ...new Set(
+      [
+        ...ctx.existingEntries.filter((e) => e.kind === 'character').map((e) => e.name),
+        ...(ctx.pendingEntries ?? []).filter((p) => p.kind === 'character').map((p) => p.name),
+      ].map((n) => n.trim()),
+    ),
+  ]
+  const extractionNames = x.entries
+    .filter((e) => e.kind === 'character' && e.name.trim() && !isRoleName(e.name))
+    .map((e) => e.name.trim())
+  // The full card name for a tail fragment, or the name as given. A name that already matches a
+  // card is kept as is.
+  const resolveFragment = (raw: string, kind: EntryKind | undefined): string => {
+    const name = raw.trim()
+    if (locate(name, kind)) return name
+    const cardNames = [...new Set([...dbNames, ...extractionNames.filter((n) => n !== name)])]
+    const full = findFragmentCanonical(name, kind, cardNames)
+    if (full === undefined) return name
+    stats.fragmentNamesFixed += 1
+    return full
+  }
+
   // Entries: a name that matches a card is skipped; an alias that matches a wiki card adds the
   // new name to that card; anything else becomes entry_create (deduped by name).
   for (const e of x.entries) {
     const name = e.name.trim()
     if (!name || isRoleName(name)) continue
+    // A tail fragment ("세린" for "한세린") is not a card of its own: the full card is elsewhere.
+    if (resolveFragment(name, e.kind) !== name) continue
 
     const aliases: string[] = []
     for (const raw of e.aliases) {
@@ -366,9 +441,10 @@ export function extractionToProposals(
   for (const f of x.facts) {
     const content = collapse(f.content)
     if (!content) continue
-    const subjectName = f.subjectName.trim()
-    if (isRoleName(subjectName)) continue
-    const kind = kindOfEntry(subjectName)
+    const rawSubject = f.subjectName.trim()
+    if (isRoleName(rawSubject)) continue
+    const kind = kindOfEntry(rawSubject)
+    const subjectName = resolveFragment(rawSubject, kind)
     const hit = locate(subjectName, kind)
     const key = `${identityOf(subjectName, hit)}|${content}`
     if (seenFacts.has(key)) continue
@@ -391,6 +467,8 @@ export function extractionToProposals(
   // title. Planted into an interview-planned thread -> one planted event. Other planted threads
   // -> thread_create, unless the wiki or a pending proposal already has them. developed/resolved
   // -> thread_event, or pending when the target is a not-yet-approved thread; anything else is dropped.
+  // A chapter (not an interview) plants the threads an interview planned.
+  const plantsPlanned = ctx.source !== 'interview' && Boolean(ctx.chapterId)
   const threadTargetOf = (
     ref: string | null,
     title: string,
@@ -403,8 +481,11 @@ export function extractionToProposals(
         status: byRef.status ?? ctx.existingThreads?.find((th) => th.id === byRef.id)?.status,
       }
     }
-    if (kind !== 'planted') return undefined
-    return ctx.existingThreads?.find((th) => collapse(th.title) === collapse(title))
+    const match = ctx.existingThreads?.find((th) => collapse(th.title) === collapse(title))
+    if (kind === 'planted') return match
+    // A developed or resolved mention without a usable ref still records the planting of a
+    // planned thread that a chapter now plants.
+    return match?.status === 'planned' && plantsPlanned ? match : undefined
   }
 
   const seenCreates = new Set<string>()
@@ -417,7 +498,7 @@ export function extractionToProposals(
 
     const target = threadTargetOf(t.existingThreadRef, title, t.kind)
     if (target) {
-      if (target.status === 'planned' && ctx.source !== 'interview' && ctx.chapterId) {
+      if (target.status === 'planned' && plantsPlanned) {
         // A chapter plants a thread that an interview already planned: record the planting.
         const key = `${target.id}|planted`
         if (!seenEvents.has(key)) {
@@ -488,15 +569,22 @@ export function extractionToProposals(
   // Relations: undirected, starting at the chapter position. A role word at either end is dropped.
   const seenRelations = new Set<string>()
   for (const r of x.relations) {
-    const sourceName = r.sourceName.trim()
-    const targetName = r.targetName.trim()
-    if (!sourceName || !targetName) continue
-    if (isRoleName(sourceName) || isRoleName(targetName)) continue
+    const rawSource = r.sourceName.trim()
+    const rawTarget = r.targetName.trim()
+    if (!rawSource || !rawTarget) continue
+    if (isRoleName(rawSource) || isRoleName(rawTarget)) continue
     const kind = collapse(r.kind)
-    const sourceKind = kindOfEntry(sourceName)
-    const targetKind = kindOfEntry(targetName)
+    const sourceKind = kindOfEntry(rawSource)
+    const targetKind = kindOfEntry(rawTarget)
+    const sourceName = resolveFragment(rawSource, sourceKind)
+    const targetName = resolveFragment(rawTarget, targetKind)
     const sourceHit = locate(sourceName, sourceKind)
     const targetHit = locate(targetName, targetKind)
+    // An end that matches no card anywhere would fail at approval, so the relation is not proposed.
+    if (!sourceHit || !targetHit) {
+      stats.relationsDropped += 1
+      continue
+    }
     // Relation ends are written as the card's own name, so they resolve at approval.
     if (
       sourceHit?.source === 'wiki' &&
@@ -529,5 +617,5 @@ export function extractionToProposals(
     proposals.push(makeProposal(ctx, 'chapter_summary', { chapterId: ctx.chapterId, summary }))
   }
 
-  return { proposals, pendingThreadEvents }
+  return { proposals, pendingThreadEvents, stats, dropped }
 }

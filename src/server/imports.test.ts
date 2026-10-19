@@ -565,7 +565,11 @@ describe('import jobs', () => {
         description: '같은 학교',
         evidence: '만났다.',
       }
-      const first = emptyExtraction({ facts: [fact], relations: [relation] })
+      const first = emptyExtraction({
+        entries: [entryNamed('서윤'), entryNamed('지후')],
+        facts: [fact],
+        relations: [relation],
+      })
       // Same fact with extra spacing, and the same pair reversed with the same kind.
       const second = emptyExtraction({
         facts: [{ ...fact, content: '서윤은  고아다.' }],

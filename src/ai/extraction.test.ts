@@ -272,7 +272,13 @@ describe('extraction: extractionToProposals', () => {
         },
       ],
     }
-    const { proposals } = extractionToProposals(x, makeCtx())
+    const ctx = makeCtx({
+      existingEntries: [
+        { id: 'e-seoyun', name: '서윤', aliases: ['윤'], kind: 'character' },
+        { id: 'e-minjun', name: '민준', aliases: [], kind: 'character' },
+      ],
+    })
+    const { proposals } = extractionToProposals(x, ctx)
     const rels = byType(proposals, 'relation_create')
     expect(rels).toHaveLength(1)
     expect(rels[0].payload).toEqual({
@@ -603,6 +609,7 @@ describe('extraction: planted threads, name matching and existing relations', ()
   it('two different new relations of the same kind are both proposed', () => {
     const x: Extraction = {
       ...emptyExtraction,
+      entries: [{ name: '김서은', kind: 'character', aliases: [], summary: '', fields: [] }],
       relations: [relationOf('김서아', '민준'), relationOf('김서은', '민준')],
     }
     const { proposals } = extractionToProposals(x, makeCtx({ existingEntries: wiki }))
@@ -861,7 +868,10 @@ describe('extraction: dedup and naming rules', () => {
       relations: [relationOf('전직 시계탑 수리공 노은하', '한시우')],
     }
     const ctx = makeCtx({
-      existingEntries: [{ id: 'e-eunha', name: '노은하', aliases: [], kind: 'character' }],
+      existingEntries: [
+        { id: 'e-eunha', name: '노은하', aliases: [], kind: 'character' },
+        { id: 'e-siwoo', name: '한시우', aliases: [], kind: 'character' },
+      ],
     })
     const relations = byType(extractionToProposals(x, ctx).proposals, 'relation_create')
     expect(relations).toHaveLength(1)
@@ -872,7 +882,7 @@ describe('extraction: dedup and naming rules', () => {
   it('a relation with a particle-marked name on a pending card names the pending card', () => {
     const x: Extraction = { ...emptyExtraction, relations: [relationOf('노은하에게는', '한시우')] }
     const ctx = makeCtx({
-      existingEntries: [],
+      existingEntries: [{ id: 'e-siwoo', name: '한시우', aliases: [], kind: 'character' }],
       pendingEntries: [{ name: '전직 시계탑 수리공 노은하', aliases: [], kind: 'character' }],
     })
     const relations = byType(extractionToProposals(x, ctx).proposals, 'relation_create')
