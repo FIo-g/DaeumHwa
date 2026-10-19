@@ -231,3 +231,8 @@ pnpm eslint src/ai/tasks src/lib/scene.ts src/lib/scene.test.ts src/server/scene
 pnpm format   # only if the repo formats on commit; do not reformat unrelated files
 ```
 Also confirm `git diff --stat` shows no change to A's `DRAFT_SYSTEM` text or its test, `e2e/ai-stub/responders.ts`, `eval/novel/state.ts`, `eval/novel/steps/finish.ts`, `eval/novel/blind.ts`, the draft route, `src/db/types.ts`, `src/test/ai-fakes/index.ts`, `eval/novel/localize/en-systems.ts`, `eval/novel/localize/localize.test.ts`, the MVP spec, and that `src/app/api/works/[workId]/draft/route.ts` still passes no `twoStep`. Final report lists what was skipped (for example the optional `run.D.test.ts` case).
+
+## Decision (local review)
+D gates on the local queue profile (`MODEL_PROFILES[modelId].queue === 'local'`, same rule as C's decision). In the eval, the two-step draft (`twoStep`, the beat list in the prose and continuation prompts) and the scene rewrite after an accepted high-severity issue run for local profiles only. Cloud profiles (haiku, luna) keep the one-step draft and never rewrite the body, so the cloud baseline stays comparable and A's 290 s draft budget is not spent on beats. `eval/novel/run.D.test.ts` pins this (cloud run: no `draft-beats` or `scene-rewrite` call, no `beats.json`, no `pre-rewrite` or `rewrites/` files). The product route and the `startDraft` default path are unchanged.
+
+D overwrites `chapters/NN.md` (written by proofread) and `metrics/NN.json` (written by check) by design, keeping `chapters/NN.pre-rewrite.md` and `metrics/NN.pre-rewrite.json` as backups. This departs from spec 7 "no overwriting of other stages' files" and is accepted.

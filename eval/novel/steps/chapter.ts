@@ -289,8 +289,9 @@ export const draft: StepFn = async (ctx, key, state) => {
             instructions: spec.instructions,
             targetChars: ctx.bible.targetChars,
             entryIds,
-            // Local eval only (brief D): the scene beat list is made first and goes into the prose.
-            twoStep: true,
+            // Local profiles only (brief D, spec 7): the scene beat list is made first and goes into
+            // the prose. The cloud profiles keep the one-step draft, so their baseline stays comparable.
+            twoStep: isLocalProfile(ctx),
           },
           ctx.client,
         )
@@ -340,8 +341,7 @@ export const draft: StepFn = async (ctx, key, state) => {
       // carry the step `${key}:foreign-repair`; the step is set back to `key` afterwards. The cloud
       // profiles had no foreign script, so their runs stay as they were.
       let stageText = trimmedText
-      const foreignRepairOn =
-        ctx.config.lang === 'ko' && MODEL_PROFILES[ctx.config.modelId].queue === 'local'
+      const foreignRepairOn = ctx.config.lang === 'ko' && isLocalProfile(ctx)
       const foreignFound = foreignRepairOn ? repairableForeignSpans(trimmedText).length : 0
       const foreignRepair = { replaced: 0 }
       if (foreignFound > 0) {
@@ -574,6 +574,11 @@ export const check: StepFn = async (ctx, key, state) => {
   return 'done'
 }
 
+/** The local queue profiles run D's beat step and scene rewrite (and C's repair); cloud ones do not. */
+function isLocalProfile(ctx: RunContext): boolean {
+  return MODEL_PROFILES[ctx.config.modelId].queue === 'local'
+}
+
 /**
  * Scene rewrite for one chapter (brief D, local eval). The service saves the body before the files
  * are written, so whenever the pre-rewrite copy exists the chapter and metrics files are rewritten
@@ -687,7 +692,8 @@ export const continuity: StepFn = async (ctx, key, state) => {
   // After the resolve loop, since the service rewrites only accepted issues. An issue accepted on
   // an earlier attempt stays eligible; a dismissed one is never picked.
   const rewrittenKey = `${key}:rewritten`
-  if (!isMarked(state, rewrittenKey)) {
+  // Local profiles only (spec 7): a cloud run records the accepted issue and leaves the body alone.
+  if (isLocalProfile(ctx) && !isMarked(state, rewrittenKey)) {
     const ids = pickRewriteIssueIds(review.items, answer.decisions)
     await rewriteStage(ctx, state, key, n, chapterId, ids)
     mark(ctx, state, rewrittenKey)
