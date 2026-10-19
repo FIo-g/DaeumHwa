@@ -3,10 +3,12 @@ import {
   OllamaAiClient,
   type OllamaCallStats,
   type OllamaOptions,
+  type OllamaThink,
   ollamaTransport,
 } from '@/ai/ollama'
 import { OpencodeAiClient } from '@/ai/opencode'
 import type { AiClient, AiEffort } from '@/ai/types'
+import { AI_TASKS, type AiTaskName } from '@/db/types'
 
 export const MODEL_IDS = [
   'qwen3.8-27b',
@@ -105,20 +107,83 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
   },
 }
 
+/** Think level for helper tasks in a compare run. 'off' is Ollama's `think: false`. */
+export type HelperThink = 'off' | 'low' | 'medium' | 'high'
+export const HELPER_THINKS: readonly HelperThink[] = ['off', 'low', 'medium', 'high']
+
+/** Tasks that write manuscript prose. They keep the profile's own think in a helper compare. */
+export const PROSE_TASKS: readonly AiTaskName[] = [
+  'draft-chapter',
+  'draft-continue',
+  'scene-rewrite',
+]
+/** Every other AI task: the object calls and the prose-editing helpers. */
+export const HELPER_TASKS: readonly AiTaskName[] = AI_TASKS.filter(
+  (task) => !PROSE_TASKS.includes(task),
+)
+
+/** Maps a helper setting to Ollama's `think` value. */
+export function helperThinkValue(h: HelperThink): OllamaThink {
+  return h === 'off' ? false : h
+}
+
+/**
+ * The `think` value a call of this task sends on this profile, or null when the profile has no
+ * Ollama settings. A helper setting applies to helper tasks only.
+ */
+export function thinkFor(
+  profile: ModelProfile,
+  task: AiTaskName,
+  helper?: HelperThink,
+): OllamaThink | null {
+  if (!profile.ollama) return null
+  if (helper && HELPER_TASKS.includes(task)) return helperThinkValue(helper)
+  return profile.ollama.think ?? null
+}
+
+/**
+ * Why a helper setting cannot take effect on this profile, or null when it can. Ollama takes
+ * boolean think on qwen, levels on gpt-oss and ignores `think: false` on gpt-oss, so `off` is only
+ * accepted where the profile's own think is boolean `true`.
+ */
+export function checkHelperThink(profile: ModelProfile, h: HelperThink): string | null {
+  if (!profile.ollama) return `${profile.id}: --helper-think needs a local Ollama profile`
+  const think = profile.ollama.think
+  if (think === undefined) return `${profile.id}: this profile has no think setting`
+  if (think === false) return `${profile.id}: thinking is off in this profile, nothing to lower`
+  if (think === true) {
+    return h === 'off' ? null : `${profile.id}: think is on or off only; use --helper-think off`
+  }
+  return h === 'off'
+    ? `${profile.id}: ${think} takes low, medium or high; Ollama ignores think off here`
+    : null
+}
+
 /** Builds the AI client a profile runs on. `fetch` is injected in tests. */
 export function createModelClient(
   profile: ModelProfile,
-  o: { fetch?: typeof fetch; onStats?: (s: OllamaCallStats) => void } = {},
+  o: {
+    fetch?: typeof fetch
+    onStats?: (s: OllamaCallStats) => void
+    helperThink?: HelperThink
+  } = {},
 ): AiClient {
   switch (profile.provider) {
-    case 'ollama':
+    case 'ollama': {
       if (!profile.ollama) throw new Error(`${profile.id}: ollama settings are missing`)
+      const helper = o.helperThink
+      const thinkByTask =
+        helper === undefined
+          ? undefined
+          : Object.fromEntries(HELPER_TASKS.map((task) => [task, helperThinkValue(helper)]))
       return new OllamaAiClient({
         ...profile.ollama,
         model: profile.model,
         fetch: o.fetch ?? ollamaTransport,
         onStats: o.onStats,
+        ...(thinkByTask ? { thinkByTask } : {}),
       })
+    }
     case 'opencode':
       return new OpencodeAiClient(undefined, profile.model)
     case 'fake':
