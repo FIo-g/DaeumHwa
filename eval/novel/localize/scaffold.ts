@@ -32,6 +32,15 @@ const RULES: readonly Rule[] = [
   [/현재 회차: (\d+)화/g, 'Current chapter: $1'],
   ['현재까지 연재된 회차: ', 'Chapters published so far: '],
   [/생략한 이전 질문: (\d+)개/g, 'Earlier questions left out: $1'],
+  // Interview plan block (src/ai/tasks/interview-question.ts), longest first.
+  [/미정 연속: (\d+)회/g, 'Consecutive undecided answers: $1'],
+  [
+    '다음 질문 방향: 남은 핵심 설정 또는 story로 전환',
+    'Next question direction: another core setting or a story question',
+  ],
+  ['다음 질문 방향: 이야기(story)로 전환', 'Next question direction: switch to a story question'],
+  ['닫은 주제(다시 묻지 않음): ', 'Closed topics (do not ask again): '],
+  ['남은 핵심 설정: ', 'Remaining core settings: '],
   [/열린 회차 점검 지적: (\d+)건/g, 'Open continuity issues: $1'],
   [/사실 (\d+)개/g, '$1 facts'],
   [/최근 등장 (\d+)화/g, 'last seen Chapter $1'],
@@ -97,6 +106,16 @@ const RULES: readonly Rule[] = [
   ['예시:', 'Examples:'],
   ['규칙: ', 'Rules: '],
   ['말투: ', 'Speech: '],
+  // Core interview topic names (INTERVIEW_TOPICS). After the section headers that contain them
+  // (such as "열린 떡밥: "), and before the labels they contain (인물, 규칙, 장소).
+  ['주요 인물', 'main characters'],
+  ['세계관 규칙', 'world rules'],
+  ['주요 장소', 'main places'],
+  ['주인공', 'protagonist'],
+  ['중심 갈등', 'central conflict'],
+  ['떡밥', 'threads'],
+  ['결말 방향', 'ending direction'],
+  ['문체', 'style'],
   // Labels: thread status, importance, fact status, entry kind, character and place fields.
   ['계획됨', 'planned'],
   ['심음', 'planted'],
