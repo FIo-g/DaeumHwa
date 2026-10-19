@@ -13,6 +13,7 @@ import {
 import { aiRuns } from '@/db/schema'
 import { replaceRunOutput } from '@/ai/run'
 import { repairableForeignSpans } from '@/ai/tasks/draft-repair'
+import { MODEL_PROFILES } from '../models'
 import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
 import {
@@ -334,11 +335,14 @@ export const draft: StepFn = async (ctx, key, state) => {
         attemptNo,
         generated.runId,
       )
-      // C (ko only): the sentences with foreign script (Han, kana, Cyrillic, U+FFFD) are repaired
-      // once on the trimmed text, before E2. Best effort, see repairBestEffort. Its calls carry the
-      // step `${key}:foreign-repair`; the step is set back to `key` afterwards.
+      // C (ko, local profiles only): the sentences with foreign script (Han, kana, Cyrillic, U+FFFD)
+      // are repaired once on the trimmed text, before E2. Best effort, see repairBestEffort. Its calls
+      // carry the step `${key}:foreign-repair`; the step is set back to `key` afterwards. The cloud
+      // profiles had no foreign script, so their runs stay as they were.
       let stageText = trimmedText
-      const foreignFound = ctx.config.lang === 'ko' ? repairableForeignSpans(trimmedText).length : 0
+      const foreignRepairOn =
+        ctx.config.lang === 'ko' && MODEL_PROFILES[ctx.config.modelId].queue === 'local'
+      const foreignFound = foreignRepairOn ? repairableForeignSpans(trimmedText).length : 0
       const foreignRepair = { replaced: 0 }
       if (foreignFound > 0) {
         ctx.client.setStep(`${key}:foreign-repair`)

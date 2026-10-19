@@ -28,9 +28,14 @@ function newDir(): string {
   return dir
 }
 
-function makeRun(dir: string, lang: 'ko' | 'en' = 'ko'): void {
+// The repair is for the local profiles, so these runs use one (the client is still FakeAiClient).
+function makeRun(
+  dir: string,
+  lang: 'ko' | 'en' = 'ko',
+  modelId: 'qwen3.8-27b' | 'haiku-5.5' = 'qwen3.8-27b',
+): void {
   createRun(dir, {
-    modelId: 'fake',
+    modelId,
     lang,
     chapters: 1,
     questions: 2,
@@ -196,6 +201,23 @@ describe('draft step: foreign-script repair (ko)', () => {
     const done = await runUntilBlocked(ctx2)
     expect(done.status).toBe('done')
     expect(existsSync(join(dir, 'chapters/01.attempt-1.draft.foreign-repaired.txt'))).toBe(false)
+  }, 120_000)
+})
+
+describe('draft step: foreign-script repair (cloud profile)', () => {
+  it('is not run for a cloud profile', async () => {
+    const dir = newDir()
+    makeRun(dir, 'ko', 'haiku-5.5')
+    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_KO } })
+    const ctx = await open(dir, { inner, autoAuthor: true })
+    ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
+    const state = await runUntilBlocked(ctx)
+
+    expect(state.status).toBe('done')
+    const steps = readCallRecords(dir).map((record) => record.step ?? '')
+    expect(steps.some((step) => step.endsWith(':foreign-repair'))).toBe(false)
+    expect(state.data.drafts[1][0]).not.toHaveProperty('foreign')
+    expect(read(dir, 'chapters/01.attempt-1.md')).toContain('三楼')
   }, 120_000)
 })
 
