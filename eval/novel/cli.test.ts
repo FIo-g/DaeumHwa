@@ -122,6 +122,41 @@ describe('resummarize', () => {
       calls: { total: 0 },
     })
   })
+
+  it('skips a run whose worker is alive and rebuilds the others', () => {
+    const folder = join(tempDir(), '2026-10-18')
+    const live = join(folder, 'run-01-ko')
+    const idle = join(folder, 'run-02-en')
+    initRun({ model: 'fake', lang: 'ko', dir: live })
+    initRun({ model: 'fake', lang: 'en', dir: idle })
+    rmSync(join(idle, 'run-summary.json'), { force: true })
+    // A rebuilt live run would overwrite this sentinel.
+    writeFileSync(join(live, 'run-summary.json'), 'SENTINEL')
+    expect(acquireLock(live)).toBe(true)
+    try {
+      const results = resummarizeDate(folder)
+
+      expect(results).toEqual([
+        { dir: live, skipped: 'worker-running' },
+        { dir: idle, chapters: 0, calls: 0 },
+      ])
+      expect(readFileSync(join(live, 'run-summary.json'), 'utf8')).toBe('SENTINEL')
+      expect(existsSync(join(idle, 'run-summary.json'))).toBe(true)
+    } finally {
+      releaseLock(live)
+    }
+  })
+
+  it('still refuses a single run whose worker is alive', () => {
+    const dir = join(tempDir(), 'run-01-ko')
+    initRun({ model: 'fake', lang: 'ko', dir })
+    expect(acquireLock(dir)).toBe(true)
+    try {
+      expect(() => resummarizeRun(dir)).toThrow(/a worker is running/)
+    } finally {
+      releaseLock(dir)
+    }
+  })
 })
 
 describe('init', () => {

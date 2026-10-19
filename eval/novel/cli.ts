@@ -18,6 +18,7 @@ import { loadBible } from './bible'
 import { publishReview, writeBlindCopy } from './blind'
 import { chapterMetrics } from './metrics'
 import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
+import { publishFile } from './publish'
 import { buildRunSummary } from './steps/finish'
 import { readCallRecords } from './steps/util'
 import {
@@ -33,7 +34,7 @@ import { acquireLock, releaseLock, workerAlive } from './worker-lock'
 
 // Command line for the novel eval. Every command prints exactly one JSON line on stdout. Long
 // steps run in a detached worker so they outlive the agent's command timeout.
-//   init | advance | worker | status | probe-ctx | resummarize | blind | publish-review
+//   init | advance | worker | status | probe-ctx | resummarize | blind | publish-review | publish
 
 const RESULTS_DIR = 'eval/results/novel'
 const LANGS = ['ko', 'en'] as const
@@ -449,15 +450,26 @@ export function resummarizeRun(dir: string): ResummarizeResult {
   return { dir, chapters: chapterFiles.length, calls: calls.length }
 }
 
-/** Resummarizes every run directory directly under a date folder, in name order. */
-export function resummarizeDate(folder: string): ResummarizeResult[] {
+/** A run the date pass left alone because a worker still holds it. */
+export type ResummarizeSkip = { dir: string; skipped: 'worker-running' }
+export type ResummarizeOutcome = ResummarizeResult | ResummarizeSkip
+
+/**
+ * Resummarizes every run directory directly under a date folder, in name order. A run whose worker
+ * is alive is skipped and listed as skipped, so one live run does not stop the rest of the date.
+ */
+export function resummarizeDate(folder: string): ResummarizeOutcome[] {
   return readdirSync(folder, { withFileTypes: true })
     .filter(
       (entry) => entry.isDirectory() && existsSync(path.join(folder, entry.name, 'config.json')),
     )
     .map((entry) => entry.name)
     .sort()
-    .map((name) => resummarizeRun(path.join(folder, name)))
+    .map((name): ResummarizeOutcome => {
+      const dir = path.join(folder, name)
+      if (workerAlive(dir)) return { dir, skipped: 'worker-running' }
+      return resummarizeRun(dir)
+    })
 }
 
 type Flags = Record<string, string | true>
@@ -549,9 +561,17 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         path.resolve(stringFlag(flags, 'dir')),
         path.resolve(stringFlag(flags, 'to')),
       )
+    case 'publish':
+      // Copies a run-side file into docs. A guard error exits 1; a copy failure is in the JSON status.
+      return publishFile({
+        src: stringFlag(flags, 'src'),
+        dest: stringFlag(flags, 'dest'),
+        ifMissing: flags['if-missing'] === true,
+        attempts: optionalNumber(flags, 'attempts'),
+      })
     default:
       throw new Error(
-        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize|blind|publish-review (got ${command ?? 'nothing'})`,
+        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize|blind|publish-review|publish (got ${command ?? 'nothing'})`,
       )
   }
 }
