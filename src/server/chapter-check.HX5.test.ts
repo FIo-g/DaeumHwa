@@ -126,6 +126,9 @@ describe('runChapterCheck: extraction counters (HX5)', () => {
     const result = await runChapterCheck(db, actor(owner.id), { chapterId: chapter.id }, client)
 
     expect(result.proposals.map((p) => p.type)).toEqual(['fact_create'])
-    expect(result.proposals[0]?.payload).toMatchObject({ entryId: expect.any(String), content: SENTENCE })
+    expect(result.proposals[0]?.payload).toMatchObject({
+      entryId: expect.any(String),
+      content: SENTENCE,
+    })
   })
 })
