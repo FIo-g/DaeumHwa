@@ -27,6 +27,7 @@ export type BlindedCall = Omit<
   | 'speed'
   | 'thinkRequested'
   | 'power'
+  | 'ollama'
 > & { model: typeof BLIND_LABEL }
 
 const VARIANT_SUFFIX = /-(mlx|gguf)$/
@@ -98,12 +99,16 @@ function maskDeep(value: unknown): unknown {
 
 /**
  * One call record for the reviewer. The model field is replaced by the label, the profile
- * fingerprints (effort, think, token cap, timeout, speed) and the machine power state are dropped,
- * and every string is masked.
+ * fingerprints (effort, think, token cap, timeout, speed), the machine power state and the Ollama
+ * attempt block are dropped, and every string is masked.
  * wouldTimeOut stays, because the operations score needs it. The input is not changed.
  */
 export function blindCallRecord(call: CallRecord): BlindedCall {
-  const masked = maskDeep(call) as Record<string, unknown>
+  // The ollama key is removed before masking: maskDeep masks keys too, so "ollama" would become
+  // "[masked]" and its attempt timings would stay in the copy.
+  const copy: Partial<CallRecord> = { ...call }
+  delete copy.ollama
+  const masked = maskDeep(copy) as Record<string, unknown>
   delete masked.effortRequested
   delete masked.thinkRequested
   delete masked.maxTokens

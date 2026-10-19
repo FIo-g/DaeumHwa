@@ -36,6 +36,125 @@ function median(values: (number | null | undefined)[]): number | null {
   return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
 }
 
+/** A call counts as slow when its output rate is below this share of the run's usual rate. */
+const SLOW_RATIO = 0.7
+/** Fewer qualifying calls than this and there is no usual rate to compare with. */
+const SLOW_MIN_CALLS = 5
+/** Shorter outputs give a noisy rate, so they are left out of the baseline. */
+const SLOW_MIN_OUTPUT_TOKENS = 50
+
+export type SlowCall = {
+  seq: number
+  task: string
+  step: string | null
+  outputTokensPerSec: number
+  /** The call's rate divided by the usual rate. */
+  ratio: number
+}
+
+/**
+ * Local calls whose output rate is under 70% of the run's usual rate (the median of the qualifying
+ * calls). Null when fewer than five calls qualify. Works on records written before M2.
+ */
+export function slowSummary(calls: CallRecord[]): {
+  thresholdRatio: number
+  usualOutputTokensPerSec: number
+  calls: SlowCall[]
+} | null {
+  const qualifying = [...calls]
+    .sort((a, b) => a.seq - b.seq)
+    .filter(
+      (c) =>
+        !c.error &&
+        recordSpeed(c).source === 'ollama' &&
+        typeof recordSpeed(c).outputTokensPerSec === 'number' &&
+        (c.usage?.outputTokens ?? 0) >= SLOW_MIN_OUTPUT_TOKENS,
+    )
+  if (qualifying.length < SLOW_MIN_CALLS) return null
+  const usual = median(qualifying.map((c) => recordSpeed(c).outputTokensPerSec))
+  if (usual === null || usual <= 0) return null
+
+  const slow: SlowCall[] = []
+  for (const call of qualifying) {
+    const rate = recordSpeed(call).outputTokensPerSec ?? 0
+    const ratio = rate / usual
+    if (ratio < SLOW_RATIO) {
+      slow.push({
+        seq: call.seq,
+        task: call.task,
+        step: call.step,
+        outputTokensPerSec: rate,
+        ratio,
+      })
+    }
+  }
+  return { thresholdRatio: SLOW_RATIO, usualOutputTokensPerSec: usual, calls: slow }
+}
+
+/**
+ * Where the time of the local calls went: Ollama's load, prompt, generation and other time, and
+ * the time outside Ollama's timer. Null when no call has an ollama block. The parts add up to
+ * wallMs for the timed calls.
+ */
+export function ollamaSummary(calls: CallRecord[]): {
+  calls: number
+  attempts: number
+  retried: number
+  lengthCut: number
+  cacheSuspected: number
+  thinking: { chunks: number; chars: number }
+  timed: {
+    calls: number
+    wallMs: number
+    loadMs: number
+    promptEvalMs: number
+    evalMs: number
+    otherMs: number
+    unaccountedMs: number
+    unaccountedShare: number | null
+    unaccountedByTask: Record<string, number>
+  }
+} | null {
+  const rows = calls.filter((c) => c.ollama && c.ollama.attempts.length > 0)
+  if (rows.length === 0) return null
+
+  const allAttempts = rows.flatMap((c) => c.ollama?.attempts ?? [])
+  const timedRows = rows.filter((c) => typeof c.ollama?.unaccountedMs === 'number')
+  const timedAttempts = timedRows.flatMap((c) => c.ollama?.attempts ?? [])
+  const sum = (values: (number | null)[]) => values.reduce<number>((t, v) => t + (v ?? 0), 0)
+
+  const unaccountedByTask: Record<string, number> = {}
+  for (const call of timedRows) {
+    const unaccounted = call.ollama?.unaccountedMs ?? 0
+    unaccountedByTask[call.task] = (unaccountedByTask[call.task] ?? 0) + unaccounted
+  }
+  const wallMs = sum(timedRows.map((c) => c.durationMs))
+  const unaccountedMs = sum(timedRows.map((c) => c.ollama?.unaccountedMs ?? 0))
+
+  return {
+    calls: rows.length,
+    attempts: allAttempts.length,
+    retried: rows.filter((c) => (c.ollama?.attempts.length ?? 0) > 1).length,
+    lengthCut: allAttempts.filter((a) => a.doneReason === 'length').length,
+    cacheSuspected: rows.filter((c) => c.ollama?.promptCacheSuspected === true).length,
+    thinking: {
+      chunks: sum(allAttempts.map((a) => a.thinkingChunks)),
+      chars: sum(allAttempts.map((a) => a.thinkingChars)),
+    },
+    timed: {
+      calls: timedRows.length,
+      wallMs,
+      loadMs: sum(timedAttempts.map((a) => a.loadMs)),
+      promptEvalMs: sum(timedAttempts.map((a) => a.promptEvalMs)),
+      evalMs: sum(timedAttempts.map((a) => a.evalMs)),
+      otherMs: sum(timedAttempts.map((a) => a.otherMs)),
+      unaccountedMs,
+      unaccountedShare: wallMs === 0 ? null : unaccountedMs / wallMs,
+      unaccountedByTask,
+    },
+  }
+}
+
 /** Speed medians per task and for the whole run, and the total call time of each chapter. */
 export function speedSummary(calls: CallRecord[]) {
   const medians = (rows: CallRecord[]) => ({
@@ -81,11 +200,15 @@ export function speedSummary(calls: CallRecord[]) {
   const source: CallSpeed['source'] = calls.some((c) => recordSpeed(c).source === 'ollama')
     ? 'ollama'
     : 'wall'
+  const slow = slowSummary(calls)
+  const ollama = ollamaSummary(calls)
   return {
     byTask,
     overall: { ...medians(calls), source },
     perChapterMs,
     perChapterModelMs,
+    ...(slow ? { slow } : {}),
+    ...(ollama ? { ollama } : {}),
   }
 }
 
@@ -176,6 +299,42 @@ const SpeedSchema = z.object({
   }),
   perChapterMs: z.record(z.string(), z.number()),
   perChapterModelMs: z.record(z.string(), z.number()),
+  slow: z
+    .object({
+      thresholdRatio: z.number(),
+      usualOutputTokensPerSec: z.number(),
+      calls: z.array(
+        z.object({
+          seq: CountSchema,
+          task: z.string(),
+          step: z.string().nullable(),
+          outputTokensPerSec: z.number(),
+          ratio: z.number(),
+        }),
+      ),
+    })
+    .optional(),
+  ollama: z
+    .object({
+      calls: CountSchema,
+      attempts: CountSchema,
+      retried: CountSchema,
+      lengthCut: CountSchema,
+      cacheSuspected: CountSchema,
+      thinking: z.object({ chunks: CountSchema, chars: CountSchema }),
+      timed: z.object({
+        calls: CountSchema,
+        wallMs: z.number(),
+        loadMs: z.number(),
+        promptEvalMs: z.number(),
+        evalMs: z.number(),
+        otherMs: z.number(),
+        unaccountedMs: z.number(),
+        unaccountedShare: NullableNumberSchema,
+        unaccountedByTask: z.record(z.string(), z.number()),
+      }),
+    })
+    .optional(),
 })
 
 const InterviewSchema = z.object({
