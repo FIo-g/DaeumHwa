@@ -24,7 +24,7 @@ const AGE = /(\d{1,3})\s*살/g
 // Words right after "N살" that make it a relative age or a rough guess ("5살 어린 동생",
 // "20살이 넘은", "5살짜리"), not the age of the named entry.
 const RELATIVE_AFTER_AGE =
-  /^\s*(어린|많은|위|아래|차이|터울|연상|연하|배기|짜리|남짓|쯤|정도|이 넘|가 넘)/
+  /^\s*(?:더\s*)?(어리|어린|어려|많|위|아래|차이|터울|연상|연하|배기|짜리|남짓|쯤|정도|이 넘|가 넘)/
 const TIME_FRAME = /(때|시절|무렵|전에|이었|였던|예전|과거|년 전|년 뒤|년 후|이후|뒤에|후에|나중)/
 
 /** Names and aliases that can identify an entry in a sentence (at least 2 characters). */

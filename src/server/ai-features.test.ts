@@ -656,6 +656,10 @@ describe('draft continuation', () => {
 })
 
 describe('first draft stream budget', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('shortens the first stream timeout by the time already spent before it starts', async () => {
     const { db, actor, workId } = await setup()
     const base = Date.now()

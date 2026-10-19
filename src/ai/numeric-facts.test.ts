@@ -174,6 +174,10 @@ describe('findNumericFactMismatches', () => {
       '세린은 20살 정도의 청년을 바라보았다.',
       '세린은 윤서보다 25살이 많았다고 했다.',
       '세린은 오빠보다 5살이었다.',
+      '세린은 그 아이와 5살 어리다.',
+      '세린이 5살 더 많다.',
+      '세린은 5살 어려 보이는 아이였다.',
+      '세린은 5살 많아 보이는 사람이었다.',
     ])('skips "%s"', (chapterText) => {
       expect(findNumericFactMismatches({ chapterText, pack: serin() })).toEqual([])
     })
