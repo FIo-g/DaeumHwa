@@ -1,5 +1,6 @@
 import { countChars } from '@/lib/korean/chars'
 import { foreignScriptRuns } from '@/ai/guards'
+import { countRepeatedWords, findSampleCopies } from '@/lib/korean/style-copy'
 
 export * from './metrics-interview'
 export * from './metrics-proofread'
@@ -16,6 +17,10 @@ export type ChapterMetrics = {
   paragraphs: number
   avgParagraphChars: number
   dialogueLineRatio: number // informational for Q6
+  // E2: draft sentences that copy a style-card example. Counts the work card only (see cli.ts).
+  sampleCopyHits: number
+  // E2: words or pairs repeated at least 8 times, from countRepeatedWords.
+  repeatedWords: { word: string; count: number }[]
 }
 
 export const META_PATTERNS: RegExp[] = [
@@ -40,6 +45,7 @@ export function chapterMetrics(
   text: string,
   lang: 'ko' | 'en',
   targetChars: number,
+  styleExamples: readonly string[] = [],
 ): ChapterMetrics {
   const trimmed = text.trim()
   // Same "공백 포함" definition the editor shows: line breaks are not counted.
@@ -70,6 +76,9 @@ export function chapterMetrics(
   const dialogueLines = lines.filter((line) => DIALOGUE_OPENERS.has(line.charAt(0))).length
   const dialogueLineRatio = paragraphs === 0 ? 0 : dialogueLines / paragraphs
 
+  const sampleCopyHits = findSampleCopies(trimmed, styleExamples.filter(Boolean), { lang }).length
+  const repeatedWords = countRepeatedWords(trimmed, { lang })
+
   return {
     chars,
     targetChars,
@@ -80,5 +89,7 @@ export function chapterMetrics(
     paragraphs,
     avgParagraphChars,
     dialogueLineRatio,
+    sampleCopyHits,
+    repeatedWords,
   }
 }

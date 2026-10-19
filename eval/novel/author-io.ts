@@ -32,6 +32,9 @@ const MetricsSchema: z.ZodType<ChapterMetrics> = z.object({
   paragraphs: z.number(),
   avgParagraphChars: z.number(),
   dialogueLineRatio: z.number(),
+  // Saved runs from before E2 lack these two keys; the defaults keep them readable.
+  sampleCopyHits: z.number().default(0),
+  repeatedWords: z.array(z.object({ word: z.string(), count: z.number() })).default([]),
 })
 
 const ProposalItemSchema = z.object({

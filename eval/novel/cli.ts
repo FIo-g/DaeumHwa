@@ -426,7 +426,7 @@ export function resummarizeRun(dir: string): ResummarizeResult {
   if (workerAlive(dir)) throw new Error(`a worker is running in ${dir}; resummarize after it stops`)
   const config = loadConfig(dir)
   const state = loadState(dir)
-  const targetChars = loadBible(config.lang).targetChars
+  const bible = loadBible(config.lang)
 
   const chaptersDir = path.join(dir, 'chapters')
   const chapterFiles = existsSync(chaptersDir)
@@ -437,7 +437,8 @@ export function resummarizeRun(dir: string): ResummarizeResult {
   mkdirSync(path.join(dir, 'metrics'), { recursive: true })
   for (const file of chapterFiles) {
     const text = readFileSync(path.join(chaptersDir, file), 'utf8')
-    const metrics = chapterMetrics(text, config.lang, targetChars)
+    // The same style examples as the draft step (steps/chapter.ts), so the numbers agree.
+    const metrics = chapterMetrics(text, config.lang, bible.targetChars, [bible.workStyle.examples])
     const name = `${file.slice(0, 2)}.json`
     writeFileSync(path.join(dir, 'metrics', name), `${JSON.stringify(metrics, null, 2)}\n`)
   }
