@@ -468,18 +468,30 @@ export function resummarizeRun(dir: string): ResummarizeResult {
         .sort()
     : []
   mkdirSync(path.join(dir, 'metrics'), { recursive: true })
-  for (const file of chapterFiles) {
-    const text = readFileSync(path.join(chaptersDir, file), 'utf8')
-    // The same style examples as the draft step (steps/chapter.ts), so the numbers agree.
-    const metrics = chapterMetrics(
+  // The same metric arguments for every copy, so the before and after numbers come from one code version.
+  const measure = (text: string) =>
+    chapterMetrics(
       text,
       config.lang,
       bible.targetChars,
       [bible.workStyle.examples],
       bibleExempt(bible),
     )
-    const name = `${file.slice(0, 2)}.json`
-    writeFileSync(path.join(dir, 'metrics', name), `${JSON.stringify(metrics, null, 2)}\n`)
+  for (const file of chapterFiles) {
+    const chapterNo = file.slice(0, 2)
+    const text = readFileSync(path.join(chaptersDir, file), 'utf8')
+    writeFileSync(
+      path.join(dir, 'metrics', `${chapterNo}.json`),
+      `${JSON.stringify(measure(text), null, 2)}\n`,
+    )
+    // The copy the D scene rewrite saved before it ran; its metrics are recomputed too.
+    const preFile = path.join(chaptersDir, `${chapterNo}.pre-rewrite.md`)
+    if (existsSync(preFile)) {
+      writeFileSync(
+        path.join(dir, 'metrics', `${chapterNo}.pre-rewrite.json`),
+        `${JSON.stringify(measure(readFileSync(preFile, 'utf8')), null, 2)}\n`,
+      )
+    }
   }
 
   const calls = readCallRecords(dir)
