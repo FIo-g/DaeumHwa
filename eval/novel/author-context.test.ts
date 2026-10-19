@@ -246,6 +246,29 @@ describe('buildAuthorContext hints', () => {
     expect(hints.a?.previouslyRejected).toEqual({ step: 'ch1:proposals', reason: 'no' })
   })
 
+  it('gives duplicateOf for a relation approved earlier and logged with other spacing', async () => {
+    logDecision(
+      dir,
+      proposalsPending([
+        {
+          id: 'r',
+          type: 'relation_create',
+          payload: { sourceName: 'A', targetName: 'B', kind: '동료' },
+        },
+      ]),
+      { kind: 'proposals', decisions: [{ id: 'r', approve: true, reason: 'ok' }] },
+    )
+    const pending = proposalsPending([
+      {
+        id: 'a',
+        type: 'relation_create',
+        payload: { sourceName: 'A ', targetName: ' B', kind: '동료' },
+      },
+    ])
+    const { hints } = await buildAuthorContext(db, actor, workId, dir, pending)
+    expect(hints.a?.duplicateOf).toBeDefined()
+  })
+
   it('gives endpointRejected for a relation to a card rejected earlier', async () => {
     logDecision(
       dir,
