@@ -181,3 +181,6 @@ pnpm exec prettier --write <each touched or created file listed under Files>
 ```
 Do not run `pnpm format`: it is `prettier --write .` and rewrites the whole repository, including other tracks' files and the untracked handoff folder. Run prettier only on the files in the Files lists.
 All tests green, no new tsc or eslint errors in touched files, no package changes, `git diff --name-only` lists only files from Files, no edit to `src/ai/ollama.ts`, `DRAFT_SYSTEM`, `src/db/types.ts`, `metrics.ts`, the draft route or the draft panel, and no new Han/kana/Cyrillic regex in non-test code. Create the worktree and local branch first: `git worktree add ../DaeumHwa-track-c -b track/local/C feat/ai-improvement-local` (run in /home/xogud/documents/github/DaeumHwa, after D is merged into the local branch; the path is the sibling directory `/home/xogud/documents/github/DaeumHwa-track-c`). The branch is local only: do not push. Commit on that branch with a message starting `feat(ai):`.
+
+## Decision (L3 review)
+The foreign-script repair block in the eval draft step runs only when `lang` is `ko` AND the model profile's `queue` is `local` (e.g. qwen3.8-27b). Cloud ko runs (haiku, luna) are not repaired, so the cloud eval baseline stays comparable; the repair is measured later with local models. Design step 6 and the Goal apply to local profiles only.
