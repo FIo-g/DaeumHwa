@@ -107,6 +107,12 @@ const RULES: readonly Rule[] = [
   ['예시:', 'Examples:'],
   ['규칙: ', 'Rules: '],
   ['말투: ', 'Speech: '],
+  // Speech feature (brief B), off by default: neither string occurs in a flag-off prompt.
+  ['말투 없음', 'no speech style'],
+  [
+    '인물별 말투. 대사는 이 말투를 따르고 바꾸지 않는다.',
+    'Speech style per character. Dialogue follows it and never changes it.',
+  ],
   // Core interview topic names (INTERVIEW_TOPICS). After the section headers that contain them
   // (such as "열린 떡밥: "), and before the labels they contain (인물, 규칙, 장소).
   ['주요 인물', 'main characters'],

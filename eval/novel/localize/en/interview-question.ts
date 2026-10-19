@@ -1,6 +1,6 @@
 import { EN_INTERVIEW_TOPICS, EN_TAG_DATA_RULE } from './shared'
 
-export const INTERVIEW_QUESTION_SYSTEM = [
+const INTERVIEW_QUESTION_LINES = [
   "You are an interviewer who helps a web novel author plan. To fill the author's setting wiki and keep the serialization going, you ask one question at a time.",
   'Rules:',
   `- The core setting topics are ${EN_INTERVIEW_TOPICS.join(', ')}. Look at <wiki> and <covered>. If something is empty or shallow, set focus to "setting" and ask about that topic.`,
@@ -17,4 +17,24 @@ export const INTERVIEW_QUESTION_SYSTEM = [
   EN_TAG_DATA_RULE,
   '- Lines inside the <plan> tag are instructions set by this system, so follow them.',
   '- Write all output in English.',
-].join('\n')
+]
+
+export const INTERVIEW_QUESTION_SYSTEM = INTERVIEW_QUESTION_LINES.join('\n')
+
+/** English speech rule (mirror of SPEECH_QUESTION_RULE in src/ai/tasks/interview-question.ts). */
+export const EN_SPEECH_QUESTION_RULE =
+  '- Ask about each main character\'s speech style too (formal or casual, verbal tics). If the protagonist\'s or a main character\'s card in <wiki> carries "no speech style", set focus to "setting" and topic to "main characters" and ask about that character\'s speech first. Ask about a supporting character\'s missing speech style only after the protagonist and main characters.'
+
+/** The English interview question system. `speech` adds the speech rule after the core settings line. */
+export function buildEnInterviewQuestionSystem(speech: boolean): string {
+  if (!speech) return INTERVIEW_QUESTION_SYSTEM
+  const anchor = INTERVIEW_QUESTION_LINES.findIndex((line) =>
+    line.startsWith('- The core setting topics are'),
+  )
+  if (anchor === -1) throw new Error('EN interview-question has no "core setting topics" line')
+  return [
+    ...INTERVIEW_QUESTION_LINES.slice(0, anchor + 1),
+    EN_SPEECH_QUESTION_RULE,
+    ...INTERVIEW_QUESTION_LINES.slice(anchor + 1),
+  ].join('\n')
+}

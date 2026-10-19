@@ -1,6 +1,6 @@
 import { EN_ENTITY_NAME_RULES, EN_TAG_DATA_RULE } from './shared'
 
-export const INTERVIEW_EXTRACT_SYSTEM = [
+const INTERVIEW_EXTRACT_LINES = [
   "You organize an author's interview answer into setting wiki candidates.",
   'Rules:',
   '- Organize only what the answer contains. Do not make anything up.',
@@ -17,4 +17,25 @@ export const INTERVIEW_EXTRACT_SYSTEM = [
   EN_ENTITY_NAME_RULES,
   EN_TAG_DATA_RULE,
   '- Write all output in English.',
-].join('\n')
+]
+
+export const INTERVIEW_EXTRACT_SYSTEM = INTERVIEW_EXTRACT_LINES.join('\n')
+
+/** English speech rules (mirrors of the Korean ones in src/ai/tasks/interview-extract.ts). */
+export const EN_SPEECH_EXTRACT_APPEND =
+  ' However, if the answer states a character\'s speech style (formal or casual speech, verbal tics), put that character in entries even if the card already exists, and write the speech style in one sentence under the key "speech" in fields.'
+export const EN_SPEECH_EXTRACT_RULE =
+  '- Always write a character card\'s speech style under the key "speech" in fields. Do not use any other key (for example "speech style", "tone" or "voice").'
+
+/** The English interview extraction system. `speech` appends the speech rules at their anchors. */
+export function buildEnInterviewExtractSystem(speech: boolean): string {
+  if (!speech) return INTERVIEW_EXTRACT_SYSTEM
+  const lines = [...INTERVIEW_EXTRACT_LINES]
+  const known = lines.findIndex((line) => line.startsWith('- Existing cards (<known>)'))
+  if (known === -1) throw new Error('EN interview-extract has no "Existing cards" line')
+  lines[known] += EN_SPEECH_EXTRACT_APPEND
+  const names = lines.indexOf(EN_ENTITY_NAME_RULES)
+  if (names === -1) throw new Error('EN interview-extract has no EN_ENTITY_NAME_RULES line')
+  lines.splice(names, 0, EN_SPEECH_EXTRACT_RULE)
+  return lines.join('\n')
+}
