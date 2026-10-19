@@ -25,7 +25,7 @@ import { EvalClient, classifyError, type CallRecord } from './eval-client'
 import { EN_SYSTEMS } from './localize/en-systems'
 import { translateScaffold } from './localize/scaffold'
 import { proofreadTask } from '@/ai/tasks/proofread'
-import { DRAFT_SYSTEM } from '@/ai/tasks/draft-chapter'
+import { DRAFT_SYSTEM, buildDraftPrompt } from '@/ai/tasks/draft-chapter'
 
 // Inner client that records what it was asked and answers with fixed usage or an error.
 function spyClient(options: { usage?: AiUsage; error?: unknown; chunks?: string[] } = {}) {
@@ -217,6 +217,31 @@ describe('EvalClient call records', () => {
     const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'en', callsDir })
     await client.generateObject(objectArgs({ prompt: '회차 메모' }))
     expect(readRecord('001-proofread.json').hangulLeft).toBe(4)
+  })
+
+  it('en mode streamed draft with the new-chapter label reports hangulLeft 0', async () => {
+    const spy = spyClient()
+    const client = new EvalClient({ inner: spy.client, profile: QWEN, lang: 'en', callsDir })
+    // Built with the real draft builder, so the test measures product output, not a hand-typed prompt.
+    const prompt = buildDraftPrompt({
+      instructions: 'Mina finds the letter.',
+      targetChars: 3000,
+      styleCards: [],
+      packText: 'Pack.',
+      previousSummary: null,
+      previousTail: null,
+      chapterLabel: '3화 (새 회차)',
+    })
+    const { final } = client.streamText({
+      task: { name: 'draft-chapter', input: {} },
+      system: DRAFT_SYSTEM,
+      prompt,
+      effort: 'high',
+      maxTokens: 16000,
+    })
+    await final
+    expect((spy.calls[0].args as StreamTextArgs).prompt).toContain('Chapter 3 (new chapter)')
+    expect(readRecord('001-draft-chapter.json').hangulLeft).toBe(0)
   })
 
   it('flags context overflow when the local context window is full', async () => {

@@ -82,6 +82,7 @@ const RULES: readonly Rule[] = [
   ['등장 기록 없음', 'no appearance record'],
   ['한 줄 소개: ', 'One-line pitch: '],
   ['현재 회차', 'Current chapter'],
+  ['(새 회차)', '(new chapter)'],
   ['로그라인: ', 'Logline: '],
   ['시놉시스: ', 'Synopsis: '],
   ['제목: ', 'Title: '],

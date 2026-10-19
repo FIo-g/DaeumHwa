@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { AI_TASKS, type AiTaskName } from '@/db/types'
 import { EN_INTERVIEW_TOPICS, EN_SYSTEMS } from './en-systems'
@@ -13,7 +15,7 @@ import { paragraphTrimSample } from './samples/paragraph-trim'
 import { proofreadSample } from './samples/proofread'
 import { readerSimSample } from './samples/reader-sim'
 import { styleSuggestSample } from './samples/style-suggest'
-import { findHangul, translateScaffold } from './scaffold'
+import { countHangul, findHangul, translateScaffold } from './scaffold'
 
 // English-content sample inputs for every task (one module per task in ./samples). Together they
 // exercise every branch of the product prompt builders, so a Korean fragment left in a builder
@@ -72,5 +74,37 @@ describe('translateScaffold', () => {
   it('translates chapter numbers and status labels', () => {
     expect(translateScaffold('현재 회차: 3화')).toBe('Current chapter: 3')
     expect(translateScaffold('- 요약: 3화')).toBe('- Summary: Chapter 3')
+  })
+
+  it('translates the new-chapter draft label', () => {
+    expect(translateScaffold('3화 (새 회차)')).toBe('Chapter 3 (new chapter)')
+  })
+
+  it('leaves no Hangul in a draft prompt built with the product label', () => {
+    const result = translateScaffold(PROMPTS['draft-chapter'])
+    expect(findHangul(result)).toEqual([])
+    expect(result).toContain('<chapter>Chapter 4 (new chapter)</chapter>')
+  })
+
+  it('leaves a bare Korean word that is not in the table alone', () => {
+    expect(translateScaffold('회차 메모')).toBe('회차 메모')
+  })
+
+  it('keeps the generic chapter-number rule for other labels', () => {
+    expect(translateScaffold('3화')).toBe('Chapter 3')
+  })
+
+  it('countHangul is 0 after translating the draft label', () => {
+    expect(countHangul(translateScaffold('3화 (새 회차)'))).toBe(0)
+  })
+
+  it('product draft label still matches the fixture and the rule', () => {
+    // Drift check: the product builds this label in src/server/ai-features.ts. If its wording
+    // changes, update the rule, the draft sample and the tests above together.
+    const source = readFileSync(
+      fileURLToPath(new URL('../../../src/server/ai-features.ts', import.meta.url)),
+      'utf8',
+    )
+    expect(source).toContain('화 (새 회차)')
   })
 })
