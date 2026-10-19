@@ -3,6 +3,7 @@
 
 import { neutralizeDeep, neutralizeTags, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { continuationPlan, draftCharCount, draftLengthPlan } from '@/lib/draft-length'
+import { renderVoiceLines, type VoiceLine } from '@/ai/voice'
 
 export const DRAFT_SYSTEM = `당신은 웹소설 작가의 초안 작성을 돕는 보조 작가다. 작가의 지시와 설정 위키, 문체 카드를 따라 회차 초안을 쓴다.
 규칙:
@@ -37,6 +38,8 @@ export type DraftPromptInput = {
   previousSummary: string | null
   previousTail: string | null
   chapterLabel: string
+  /** Speech of each main character. Undefined (the speech feature is off) means no <voices> block. */
+  voices?: Pick<VoiceLine, 'name' | 'speech'>[]
 }
 
 export function buildDraftPrompt(raw: DraftPromptInput): string {
@@ -52,6 +55,7 @@ export function buildDraftPrompt(raw: DraftPromptInput): string {
     input.instructions,
     '</instructions>',
     '',
+    ...voicesSection(input.voices),
     '<style_cards>',
     cards,
     '</style_cards>',
@@ -86,6 +90,18 @@ export function buildContinuationPrompt(raw: DraftPromptInput, draftSoFar: strin
     '</draft_so_far>',
     `<continue_length>지금까지 ${plan.count}자를 썼다. 이어서 공백 포함 ${plan.askMin}자 이상, ${plan.askMax}자 이하로 쓴다.</continue_length>`,
   ].join('\n')
+}
+
+/** The <voices> block, with its trailing blank line; empty when voices are not given. */
+function voicesSection(voices: DraftPromptInput['voices']): string[] {
+  if (voices === undefined) return []
+  return [
+    '<voices>',
+    '인물별 말투. 대사는 이 말투를 따르고 바꾸지 않는다.',
+    renderVoiceLines(voices),
+    '</voices>',
+    '',
+  ]
 }
 
 function renderCard(card: DraftPromptInput['styleCards'][number]): string {
