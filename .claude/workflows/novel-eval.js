@@ -3,10 +3,14 @@ export const meta = {
   description:
     'Run the novel quality eval per model and language: advance each run, let author agents answer pending items, then write reviews and (optionally) a summary',
   whenToUse:
-    'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. A run whose review.md already exists is not reviewed again unless args.rereview is true. Pass summary: true on a final invocation with runs: [] to write the cross-run summary.',
+    'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. A run whose review.md already exists is not reviewed again unless args.rereview is true. Pass summary: true on a final invocation with runs: [] to write the cross-run summary. A run near the pass line (Q mean 3.65 to 3.85, or one failed threshold) also gets an independent second review; pass secondReview: false to turn that off.',
   phases: [
     { title: 'Run', detail: 'init and advance each run; author agents answer pending items' },
-    { title: 'Review', detail: 'Sonnet reviewer per finished run, then a copy into docs' },
+    {
+      title: 'Review',
+      detail:
+        'Sonnet reviewer per finished run, an independent second reviewer near the pass line, then a copy into docs',
+    },
     { title: 'Summary', detail: 'cross-run summary, only when args.summary is true' },
   ],
 }
@@ -56,6 +60,8 @@ const date = args.date
 const chapters = args.chapters || 5
 const withSummary = args.summary === true
 const rereview = args.rereview === true
+// On by default; only an explicit false turns it off. It runs only after a first review exists.
+const secondReview = args.secondReview !== false
 const runs = Array.isArray(args.runs)
   ? args.runs
   : ALL_MODELS.flatMap((model) => LANGS.map((lang) => ({ model, lang })))
@@ -77,7 +83,10 @@ const runName = (run) => {
 const runDir = (run) => 'eval/results/novel/' + date + '/' + runName(run)
 // The reviewer reads only this blinded copy of a run (built by `eval:novel blind`), never the run.
 const blindDir = (run) => 'eval/results/novel/' + date + '/blind/' + runName(run)
+// The second reviewer reads its own blinded copy, which never holds the first review.
+const blindDir2 = (run) => 'eval/results/novel/' + date + '/blind-2/' + runName(run)
 const docsReviewPath = (run) => `docs/eval/novel/${date}/${run.model}-${run.lang}.md`
+const docsSecondReviewPath = (run) => `docs/eval/novel/${date}/second/${run.model}-${run.lang}.md`
 // The summary agent writes on the run side; the workflow copies it into docs after the agent returns.
 const summaryResultPath = () => `eval/results/novel/${date}/summary.md`
 const docsSummaryPath = () => `docs/eval/novel/${date}/summary.md`
@@ -157,12 +166,12 @@ function reviewExistsPrompt(dir) {
 }
 
 // Builds the blinded copy the reviewer reads. The command prints one JSON line.
-function blindPrompt(dir) {
+function blindPrompt(dir, second) {
   return [
     'You are a runner. Use only the Bash tool. Do not edit any file. Do not read any file.',
     '',
     'Run this command from the repository root, with the Bash timeout set to 600000 ms:',
-    `  cd ${REPO} && pnpm eval:novel blind --dir ${dir}`,
+    `  cd ${REPO} && pnpm eval:novel blind --dir ${dir}${second ? ' --second' : ''}`,
     'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail, and stop.',
     'Otherwise return status "blinded" and detail = the "dir" value from that JSON line.',
   ].join('\n')
@@ -186,14 +195,28 @@ function reviewerPrompt(dir, lang) {
 
 // Adds the model header to the blind review as <dir>/review.md and writes the docs copy. The
 // command prints one JSON line.
-function reviewHeaderPrompt(run, dir) {
+function reviewHeaderPrompt(run, dir, second) {
+  const to = second ? docsSecondReviewPath(run) : docsReviewPath(run)
   return [
     'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself; run only the commands below.',
     '',
     'Run this command from the repository root:',
-    `  cd ${REPO} && pnpm eval:novel publish-review --dir ${dir} --to ${docsReviewPath(run)}`,
+    `  cd ${REPO} && pnpm eval:novel publish-review --dir ${dir} --to ${to}${second ? ' --second' : ''}`,
     'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail.',
     'Otherwise return status "copied" and detail = the "docsPath" value from that JSON line.',
+  ].join('\n')
+}
+
+// Asks the gate whether the run needs a second review. The command prints one JSON line with a
+// decision. Only the decision and that line matter; the runner never opens a file.
+function gatePrompt(dir) {
+  return [
+    'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself; run only the command below.',
+    '',
+    'Run this command from the repository root:',
+    `  cd ${REPO} && pnpm eval:novel review-gate --dir ${dir}`,
+    'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail.',
+    'Otherwise return status = the "decision" value from that JSON line ("needed", "not-needed" or "already-done"), and detail = the JSON line verbatim.',
   ].join('\n')
 }
 
@@ -229,6 +252,7 @@ function summaryPrompt(results) {
     `Follow the instructions in ${REPO}/eval/novel/agents/summary.md.`,
     `Inputs: date = ${date}, runs = ${JSON.stringify(list)}.`,
     'Also read every review document in docs/eval/novel/<date>/ named <model>-<lang>.md, including runs from earlier invocations that are not listed in runs.',
+    'Also read every second review in docs/eval/novel/<date>/second/ named <model>-<lang>.md, if any.',
     `Write ${REPO}/${summaryResultPath()} as the instructions say. Do not write under docs/.`,
   ].join('\n')
 }
@@ -270,11 +294,17 @@ async function publish(src, dest, ifMissing, label) {
 
 // Copies a finished run's review into docs. The header step adds the model line to <dir>/review.md
 // and writes the docs copy; the copy then puts that run-side file into docs with the retried publish.
-async function copyReview(run, dir, label) {
-  const header = await copyCommand(reviewHeaderPrompt(run, dir), `review header ${label}`, [
-    'copied',
-  ])
+// With second, the same steps write the second review: review-2.md on the run side and docs/second.
+async function copyReview(run, dir, label, second) {
+  const header = await copyCommand(
+    reviewHeaderPrompt(run, dir, second),
+    `review header ${label}${second ? ' second' : ''}`,
+    ['copied'],
+  )
   if (header === null) return null
+  if (second) {
+    return publish(`${dir}/review-2.md`, docsSecondReviewPath(run), false, `${label} second`)
+  }
   return publish(`${dir}/review.md`, docsReviewPath(run), false, label)
 }
 
@@ -327,6 +357,83 @@ async function reviewRun(run, dir, label) {
     return null
   }
   return copied.detail
+}
+
+// Asks the gate whether a finished run sits near the pass line. When it does, a second reviewer
+// scores it from its own blinded copy (blind-2) and writes review-2.md. Returns 'off', 'not-needed',
+// 'already-done' or 'reviewed', or null when the second review did not finish. The caller does not
+// let a failure here fail the run.
+async function secondReviewRun(run, dir, label) {
+  if (!secondReview) return 'off'
+  const gate = await agentLogged(gatePrompt(dir), {
+    label: `gate ${label}`,
+    phase: 'Review',
+    model: 'haiku',
+    schema: RUNNER_SCHEMA,
+  })
+  const decision = runnerStatus(gate)
+  const detail = gate && typeof gate.detail === 'string' ? gate.detail : 'no result'
+
+  if (decision === 'not-needed') {
+    log(`${label}: second review not needed`)
+    return 'not-needed'
+  }
+  if (decision === 'already-done') {
+    const copied = await publish(
+      `${dir}/review-2.md`,
+      docsSecondReviewPath(run),
+      true,
+      `${label} second`,
+    )
+    if (copied === null) return null
+    log(`${label}: review-2.md exists, second reviewer skipped`)
+    return 'already-done'
+  }
+  if (decision !== 'needed') {
+    log(`${label}: review gate did not decide, second review skipped: ${detail}`)
+    return null
+  }
+
+  log(`${label}: near the pass line, second review: ${detail}`)
+  const blinded = await agentLogged(blindPrompt(dir, true), {
+    label: `blind 2 ${label}`,
+    phase: 'Review',
+    model: 'haiku',
+    schema: RUNNER_SCHEMA,
+  })
+  if (runnerStatus(blinded) !== 'blinded') {
+    log(`${label}: second blind copy did not succeed: ${blinded ? blinded.detail : 'no result'}`)
+    return null
+  }
+  // Same prompt text as the first reviewer: the second reviewer is not told it is second.
+  const reviewed = await agentLogged(reviewerPrompt(blindDir2(run), run.lang), {
+    label: `review 2 ${label}`,
+    phase: 'Review',
+    model: 'sonnet',
+  })
+  if (reviewed === null) {
+    log(`${label}: second review returned no result, copy skipped`)
+    return null
+  }
+  const copied = await copyReview(run, dir, label, true)
+  if (copied === null) {
+    log(`${label}: second review copy did not succeed`)
+    return null
+  }
+  return 'reviewed'
+}
+
+// The first review, then the near-the-line check. A second review failure is logged and ignored, so
+// the run keeps its first review. Returns the first review's result (null when it failed).
+async function reviewAndGate(run, dir, label) {
+  const first = await reviewRun(run, dir, label)
+  if (first === null) return null
+  try {
+    await secondReviewRun(run, dir, label)
+  } catch (err) {
+    log(`${label}: second review error: ${errorText(err)}`)
+  }
+  return first
 }
 
 // Returns the run's final status. Throws only for errors the caller must record.
@@ -390,7 +497,7 @@ async function executeRun(run) {
 
     if (status === 'done') {
       reviews.push(
-        reviewRun(run, dir, label).catch((err) => {
+        reviewAndGate(run, dir, label).catch((err) => {
           log(`${label}: review error: ${errorText(err)}`)
           return null
         }),
