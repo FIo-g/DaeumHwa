@@ -324,6 +324,12 @@ export async function advanceImportJob(
     sourceRef: job.id,
     chapterId: chapter.id,
     chapterPosition: chapter.position,
+    sourceText: chapter.body,
+    existingFacts: factRows.map((f) => ({
+      entryId: f.entryId,
+      subjectName: f.subjectName,
+      content: f.content,
+    })),
     existingEntries: entries.map((e) => ({
       id: e.id,
       name: e.name,
@@ -633,7 +639,12 @@ async function loadRelations(db: Db, workId: string) {
 /** Current facts that have not been superseded, most recent first. */
 async function loadKnownFacts(db: Db, workId: string) {
   return db
-    .select({ id: facts.id, subjectName: facts.subjectName, content: facts.content })
+    .select({
+      id: facts.id,
+      entryId: facts.entryId,
+      subjectName: facts.subjectName,
+      content: facts.content,
+    })
     .from(facts)
     .where(
       and(eq(facts.workId, workId), isNull(facts.archivedAt), isNull(facts.supersededByFactId)),
