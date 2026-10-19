@@ -330,7 +330,9 @@ describe('writeBlindCopy', () => {
 
     expect(readFileSync(path.join(dir, 'reader/01.json'), 'utf8')).toContain(BLIND_LABEL)
     expect(readFileSync(path.join(dir, 'reader/01.json'), 'utf8')).not.toContain('gpt-oss')
+    expect(readFileSync(path.join(dir, 'wiki-final.json'), 'utf8')).toContain(BLIND_LABEL)
     expect(readFileSync(path.join(dir, 'wiki-final.json'), 'utf8')).not.toContain('exaone')
+    expect(readFileSync(path.join(dir, 'author-decisions.jsonl'), 'utf8')).toContain(BLIND_LABEL)
     expect(readFileSync(path.join(dir, 'author-decisions.jsonl'), 'utf8')).not.toContain('exaone')
     expect(readFileSync(path.join(dir, 'chapters/01.md'), 'utf8')).toContain('Luna')
   })
