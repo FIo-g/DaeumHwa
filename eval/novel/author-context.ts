@@ -2,11 +2,11 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { Db } from '@/db/client'
-import type { Actor } from '@/db/types'
+import type { Actor, EntryRow } from '@/db/types'
 import { listFacts, type FactView } from '@/server/facts'
 import { listRelations, type RelationView } from '@/server/relations'
 import { listThreads, type ThreadView } from '@/server/threads'
-import { listEntries, type EntryRow } from '@/server/wiki'
+import { listEntries } from '@/server/wiki'
 import { DECISIONS_FILE, type Pending, proposalLabel } from './author-io'
 import { pendingKey } from './steps/util'
 

@@ -9,6 +9,7 @@ import type { Db } from '@/db/client'
 import { migrateDb } from '@/db/migrate'
 import * as schema from '@/db/schema'
 import type { Actor } from '@/db/types'
+import { buildAuthorContext, removeAuthorContext, writeAuthorContext } from './author-context'
 import { type Answer, type Pending, readPending } from './author-io'
 import { type Bible, loadBible } from './bible'
 import { EvalClient } from './eval-client'
@@ -145,6 +146,29 @@ export async function openRun(
   }
 }
 
+/**
+ * Writes author-context.json for the item the author is about to judge (the approved wiki, the
+ * author's earlier decisions and hints). Any other wait, or a run with no work yet, gets no file, so
+ * a stale one cannot reach the author. A failed build never stops the run.
+ */
+async function refreshAuthorContext(ctx: RunContext, workId: string | null | undefined) {
+  try {
+    const pending = readPending(ctx.dir)
+    if (
+      !pending ||
+      !workId ||
+      (pending.kind !== 'interview_answer' && pending.kind !== 'proposals')
+    ) {
+      removeAuthorContext(ctx.dir)
+      return
+    }
+    const context = await buildAuthorContext(ctx.db, ctx.actor, workId, ctx.dir, pending)
+    writeAuthorContext(ctx.dir, context)
+  } catch {
+    removeAuthorContext(ctx.dir)
+  }
+}
+
 /** Runs steps from the cursor until the run is done, waiting for the author, or paused. */
 export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
   const state = loadState(ctx.dir)
@@ -155,6 +179,7 @@ export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
     if (state.cursor >= state.plan.length) {
       state.status = 'done'
       state.message = null
+      removeAuthorContext(ctx.dir)
       persist(ctx, state)
       return state
     }
@@ -177,6 +202,7 @@ export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
       persist(ctx, state)
       continue
     }
+    await refreshAuthorContext(ctx, state.data.workId)
     if (!ctx.autoAuthor) {
       state.status = 'pending'
       state.message = null
