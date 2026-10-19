@@ -4,11 +4,13 @@ import {
   DRAFT_REPAIR_SYSTEM,
   draftRepairTask,
   type DraftRepairInput,
+  FOREIGN_SCRIPT_RULE,
   repairableForeignSpans,
 } from '@/ai/tasks/draft-repair'
 import { DRAFT_ERROR_MARK } from '@/lib/draft-stream'
 import type { DraftFlag } from '@/lib/korean/style-copy'
 import { fakeDraftRepair } from '@/test/ai-fakes/draft-repair'
+import { DRAFT_REPAIR_SYSTEM as EN_DRAFT_REPAIR_SYSTEM } from '../../../eval/novel/localize/en/draft-repair'
 
 // Track C: the foreign-script flags of the draft repair (spec 6). E2's draft-repair.test.ts covers
 // the other flag kinds.
@@ -54,10 +56,34 @@ describe('repairableForeignSpans', () => {
 })
 
 describe('draft-repair foreign-script rules', () => {
-  it('adds the foreign-script rule and keeps the E2 rules', () => {
-    expect(DRAFT_REPAIR_SYSTEM).toContain('- foreign-script는 한글이 아닌 글자')
+  it('keeps the foreign-script rule out of the shared system prompt', () => {
+    expect(DRAFT_REPAIR_SYSTEM).not.toContain('foreign-script')
     expect(DRAFT_REPAIR_SYSTEM).toContain(TAG_DATA_RULE)
     expect(DRAFT_REPAIR_SYSTEM.endsWith('- 원고와 같은 언어로 쓴다.')).toBe(true)
+  })
+
+  it('prefixes the prompt with the foreign-script rule when a flag is foreign-script', () => {
+    const text = '그는 以上是 말했다.'
+    const prompt = draftRepairTask.buildPrompt({
+      text,
+      flags: [foreignFlagOf(text, text)],
+    })
+    expect(prompt.startsWith(`${FOREIGN_SCRIPT_RULE}\n\n<manuscript>`)).toBe(true)
+  })
+
+  it('leaves the prompt without the foreign-script rule for other flag kinds', () => {
+    const text = '그녀는 문을 닫았다. 그녀는 웃었다.'
+    const flags: DraftFlag[] = [
+      { kind: 'sample-copy', start: 0, end: 10, quote: '그녀는 문을 닫았다.', reason: 'x' },
+      { kind: 'repeated-word', start: 11, end: text.length, quote: '그녀는 웃었다.', reason: 'x' },
+    ]
+    const prompt = draftRepairTask.buildPrompt({ text, flags })
+    expect(prompt.startsWith('<manuscript>')).toBe(true)
+    expect(prompt).not.toContain('추가 규칙')
+  })
+
+  it('keeps the English system prompt free of the foreign-script rule', () => {
+    expect(EN_DRAFT_REPAIR_SYSTEM).not.toContain('foreign-script')
   })
 
   it('neutralizes tags in a foreign-script flag quote', () => {

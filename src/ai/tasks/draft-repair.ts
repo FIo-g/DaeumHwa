@@ -21,12 +21,19 @@ export const DraftRepairSchema: z.ZodType<DraftRepairOutput> = z.object({
 export const DRAFT_REPAIR_SYSTEM = `당신은 웹소설 퇴고를 돕는 보조 작가다. 원고에서 표시된 문장(<flags>)만 다시 쓴다.
 규칙:
 - flags의 각 줄은 [종류] 뒤에 원고 문장을 그대로 옮긴 것이다. sample-copy는 문체 카드 견본과 거의 같은 문장이므로, 사건과 뜻은 두고 표현과 이미지를 새로 쓴다. repeated-word는 같은 말이 너무 많이 나오는 문장이므로, 그 말을 다른 표현이나 대명사로 바꾸거나 줄인다.
-- foreign-script는 한글이 아닌 글자(한자, 일본어 가나, 키릴 문자)가 섞인 문장이다. 섞인 부분만 같은 뜻의 자연스러운 한글 표현으로 바꾸고, 바꾼 부분에는 한글과 문장부호만 쓴다. 섞인 부분 밖의 숫자와 영문은 그대로 두고, 줄바꿈은 넣지 않는다.
 - edits의 quote에는 flags의 문장을 원고 그대로 옮기고, replacement에는 다시 쓴 문장만 쓴다.
 - 사건, 사실, 인물 말투, 시점, 시제는 바꾸지 않고 길이는 비슷하게 유지한다.
 - flags에 없는 문장은 고치지 않는다.
 ${TAG_DATA_RULE}
 - 원고와 같은 언어로 쓴다.`
+
+/**
+ * Sent only with foreign-script flags, which only the local foreign-script repair produces. Keeping
+ * it out of DRAFT_REPAIR_SYSTEM keeps the cloud system prompt unchanged. It is plain text, not in a
+ * tag, since TAG_DATA_RULE treats tag content as data.
+ */
+export const FOREIGN_SCRIPT_RULE = `추가 규칙:
+- foreign-script는 한글이 아닌 글자(한자, 일본어 가나, 키릴 문자)가 섞인 문장이다. 섞인 부분만 같은 뜻의 자연스러운 한글 표현으로 바꾸고, 바꾼 부분에는 한글과 문장부호만 쓴다. 섞인 부분 밖의 숫자와 영문은 그대로 두고, 줄바꿈은 넣지 않는다.`
 
 /**
  * The foreign-script spans a Korean draft must not keep: Han, kana, Cyrillic and U+FFFD. Latin runs
@@ -56,10 +63,14 @@ export const draftRepairTask: AiTaskDef<DraftRepairInput, DraftRepairOutput> = {
   // The product default (120 s) is too short for a repair on a slow model.
   timeoutMs: 180_000,
   system: DRAFT_REPAIR_SYSTEM,
-  buildPrompt: ({ text, flags }) =>
-    `<manuscript>\n${neutralizeTags(text)}\n</manuscript>\n\n<flags>\n${flags
+  buildPrompt: ({ text, flags }) => {
+    const prompt = `<manuscript>\n${neutralizeTags(text)}\n</manuscript>\n\n<flags>\n${flags
       .map((flag, i) => `${i + 1}. [${flag.kind}] ${neutralizeTags(flag.quote)}`)
-      .join('\n')}\n</flags>`,
+      .join('\n')}\n</flags>`
+    return flags.some((flag) => flag.kind === 'foreign-script')
+      ? `${FOREIGN_SCRIPT_RULE}\n\n${prompt}`
+      : prompt
+  },
   schema: DraftRepairSchema,
   postProcess(output, input) {
     const edits: DraftEdit[] = []
