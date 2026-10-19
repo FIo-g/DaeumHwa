@@ -614,6 +614,9 @@ async function rewriteStage(
     // A body that differs from the pre-rewrite copy was saved by an earlier call that crashed before
     // its files were written. The service is not called again on it: the issues would be skipped as
     // span-mismatch, or a second rewrite could follow.
+    // The premise: in the eval nothing but the rewrite service writes the chapter body after the
+    // pre-rewrite copy is taken, so a different body means that save happened. The recovered record
+    // takes its runId from the latest done scene-rewrite row of the chapter, which may be null.
     const current = (await getChapter(ctx.db, ctx.actor, chapterId)).body
     alreadySaved =
       existsSync(path.join(ctx.dir, preFile)) && current !== readRunFile(ctx.dir, preFile)
