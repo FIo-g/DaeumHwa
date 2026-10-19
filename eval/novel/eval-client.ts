@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { continuityCheckTask } from '@/ai/tasks/continuity-check'
 import { directionAdviceTask } from '@/ai/tasks/direction-advice'
+import { draftRepairTask } from '@/ai/tasks/draft-repair'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
 import { interviewQuestionTask } from '@/ai/tasks/interview-question'
 import { proofreadTask } from '@/ai/tasks/proofread'
@@ -110,6 +111,7 @@ const TASK_DEFS: readonly { name: AiTaskName; timeoutMs?: number }[] = [
   chapterExtractTask,
   continuityCheckTask,
   directionAdviceTask,
+  draftRepairTask,
   interviewExtractTask,
   interviewQuestionTask,
   proofreadTask,

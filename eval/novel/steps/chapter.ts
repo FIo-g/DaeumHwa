@@ -1,5 +1,6 @@
 import {
   createChapterFromDraft,
+  repairDraft,
   runDirectionAdvice,
   runReaderSimulation,
   startDraft,
@@ -12,11 +13,13 @@ import { listProposals } from '@/server/proposals'
 import { chapterMetrics } from '../metrics'
 import type { Answer, Pending } from '../author-io'
 import type { RunContext, StepFn } from '../run'
+import type { RunState } from '../state'
 import {
   applyProposalDecisions,
   applySuggestions,
   chapterOf,
   consult,
+  ExternalFailureError,
   guarded,
   isMarked,
   mark,
@@ -77,6 +80,31 @@ export const advice: StepFn = async (ctx, key, state) => {
   return 'done'
 }
 
+/**
+ * Runs a draft repair that must never fail the draft (spec 7). A model failure, or an error with no
+ * failure recorded, keeps `fallback` (the unrepaired text) and lists the repair in `failed`, so the
+ * report shows that it did not run. An external limit or network failure still pauses the run.
+ */
+export async function repairBestEffort(
+  ctx: RunContext,
+  state: RunState,
+  label: string,
+  repair: () => Promise<{ text: string }>,
+  fallback: string,
+): Promise<string> {
+  try {
+    return (await repair()).text
+  } catch (error) {
+    // Always take the recorded failure, so a swallowed one cannot be misread by a later call.
+    const failure = ctx.client.takeLastFailure()
+    if (failure && failure.kind !== 'model') throw new ExternalFailureError(failure)
+    const message = failure?.message ?? (error instanceof Error ? error.message : String(error))
+    state.failed.push({ step: label, message })
+    persist(ctx, state)
+    return fallback
+  }
+}
+
 export const draft: StepFn = async (ctx, key, state) => {
   const n = chapterOf(key)
   const created = `ch${n}:chapter-created`
@@ -132,7 +160,24 @@ export const draft: StepFn = async (ctx, key, state) => {
         }
         break
       }
-      writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.md`, generated.text)
+      // E2: one repair on the final text (after A's continuation). Best effort, see repairBestEffort.
+      const repairedText = await repairBestEffort(
+        ctx,
+        state,
+        `${key}:repair`,
+        () =>
+          repairDraft(
+            ctx.db,
+            ctx.actor,
+            { workId, runId: generated.runId, lang: ctx.config.lang },
+            ctx.client,
+          ),
+        generated.text,
+      )
+      if (repairedText !== generated.text) {
+        writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.repaired.txt`, repairedText)
+      }
+      writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.md`, repairedText)
       attempts.push({ runId: generated.runId, usable: null, quality: null, reason: '' })
       persist(ctx, state)
       current = attempts.at(-1)
