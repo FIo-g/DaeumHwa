@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import { eq } from 'drizzle-orm'
 import {
   createChapterFromDraft,
   repairDraft,
@@ -7,6 +8,8 @@ import {
   runReaderSimulation,
   startDraft,
 } from '@/server/ai-features'
+import { aiRuns } from '@/db/schema'
+import { replaceRunOutput } from '@/ai/run'
 import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
 import {
@@ -126,6 +129,7 @@ async function trimStage(
   workId: string,
   text: string,
   attemptNo: number,
+  runId: string,
 ): Promise<string> {
   const n = chapterOf(key)
   const preOffenders = overlongParagraphs(text)
@@ -171,6 +175,12 @@ async function trimStage(
   const rawFile = `chapters/${pad(n)}.attempt-${attemptNo}.draft.raw.txt`
   if (!existsSync(path.join(ctx.dir, rawFile))) writeRunFile(ctx.dir, rawFile, text)
   writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.draft.trimmed.txt`, trimmed.text)
+  // The run record holds the trimmed text too, so a repair that fails still leaves it in place.
+  // The other output fields (continuation warnings) are kept.
+  const [run] = await ctx.db.select().from(aiRuns).where(eq(aiRuns.id, runId)).limit(1)
+  const output =
+    typeof run?.output === 'object' && run.output !== null ? (run.output as object) : {}
+  await replaceRunOutput(ctx.db, runId, { ...output, text: trimmed.text })
   return trimmed.text
 }
 
@@ -230,7 +240,15 @@ export const draft: StepFn = async (ctx, key, state) => {
         break
       }
       // E1 then E2, each stage on the text the previous one returned (spec 7).
-      const trimmedText = await trimStage(ctx, state, key, workId, generated.text, attemptNo)
+      const trimmedText = await trimStage(
+        ctx,
+        state,
+        key,
+        workId,
+        generated.text,
+        attemptNo,
+        generated.runId,
+      )
       // E2: one repair on the final text (after A's continuation). Best effort, see repairBestEffort.
       // It starts from the trimmed text, which is also what repairDraft stores when it runs.
       const repairedText = await repairBestEffort(

@@ -1,11 +1,12 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FORMAT_MESSAGE } from '@/ai/anthropic'
 import type { AiClient, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import type { AiTaskName } from '@/db/types'
-import { chapters } from '@/db/schema'
+import { aiRuns, chapters } from '@/db/schema'
 import { overlongParagraphs } from '@/lib/korean/paragraphs'
 import { AppError } from '@/lib/errors'
 import { FakeAiClient } from '@/test/fake-ai'
@@ -156,5 +157,27 @@ describe('eval draft paragraph trim (track E1)', () => {
     expect(existsSync(join(dir, 'chapters/01.attempt-1.trim.json'))).toBe(false)
     expect(existsSync(join(dir, 'chapters/01.attempt-1.draft.raw.txt'))).toBe(false)
     expect(readCallRecords(dir).some((record) => record.task === 'paragraph-trim')).toBe(false)
+  }, 120_000)
+
+  it('stores the trimmed text in the draft run record even when the repair call fails', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const bible = loadBible('ko')
+    const ctx = await open(dir, {
+      inner: faultyClient({
+        task: 'draft-repair',
+        error: () => new AppError('AI_ERROR', FORMAT_MESSAGE),
+      }),
+      autoAuthor: true,
+    })
+    ctx.autoAuthor = (p) => fakeAnswer(p, bible)
+
+    const state = await runUntilBlocked(ctx)
+    expect(state.status).toBe('done')
+
+    const trimmed = readRun(dir, 'chapters/01.attempt-1.draft.trimmed.txt')
+    expect(readRun(dir, 'chapters/01.attempt-1.md')).toBe(trimmed)
+    const [draftRun] = await ctx.db.select().from(aiRuns).where(eq(aiRuns.task, 'draft-chapter'))
+    expect((draftRun?.output as { text: string }).text).toBe(trimmed)
   }, 120_000)
 })

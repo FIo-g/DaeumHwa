@@ -199,6 +199,36 @@ describe('trimOverlongParagraphs', () => {
       ),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
+
+  it('finishes on a single 5,000-character paragraph and on text without breaks', async () => {
+    const long = '그녀는 문을 열었다. '.repeat(400).trim()
+    expect(long.length).toBeGreaterThan(3000)
+    const result = await trimOverlongParagraphs(
+      db,
+      actor,
+      { workId, text: long },
+      new FakeAiClient(),
+    )
+    expect(result.before).toBe(1)
+    expect(result.rounds).toBeLessThanOrEqual(MAX_TRIM_ROUNDS)
+    expect(result.text.length).toBeGreaterThan(0)
+
+    const flat = '가'.repeat(5000)
+    const flatResult = await trimOverlongParagraphs(
+      db,
+      actor,
+      { workId, text: flat },
+      new FakeAiClient(),
+    )
+    expect(flatResult).toEqual({
+      text: flat,
+      changed: false,
+      before: 0,
+      after: 0,
+      rounds: 0,
+      runIds: [],
+    })
+  })
 })
 
 /**

@@ -81,3 +81,26 @@ describe('dialogue and non-terminator dots', () => {
     expect(hasOverlongSpan('"가자." 그가 말했다.', 3)).toBe(false)
   })
 })
+
+describe('large inputs', () => {
+  it('handles a single 5,000-character paragraph without throwing', () => {
+    const text = '가. '.repeat(1250).trimEnd()
+    expect(text.length).toBeGreaterThanOrEqual(3700)
+    const result = overlongParagraphs(text)
+    expect(result).toHaveLength(1)
+    expect(result[0].sentences).toBe(1250)
+    expect(hasOverlongSpan(text, 3)).toBe(false)
+  })
+
+  it('handles 5,000 characters without a terminator or a line break as one sentence', () => {
+    const text = '가'.repeat(5000)
+    expect(splitParagraphs(text)).toHaveLength(1)
+    expect(countSentences(text)).toBe(1)
+    expect(overlongParagraphs(text)).toEqual([])
+  })
+
+  it('handles a long run of terminators and a long quoted span', () => {
+    expect(() => overlongParagraphs('.'.repeat(5000))).not.toThrow()
+    expect(dialogueSpans(`"${'가. '.repeat(1600)}"`)).toHaveLength(1)
+  })
+})
