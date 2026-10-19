@@ -87,6 +87,27 @@ export function locateQuote(
   return { start: map[normStart], end: map[normEnd - 1] + 1 }
 }
 
+/**
+ * Every exact, non-overlapping occurrence of `quote` in text, in text order, at most `limit`.
+ * Returns original-text offsets. Whitespace-normalized matches are left to `locateQuote`.
+ */
+export function locateAllQuotes(
+  text: string,
+  quote: string,
+  limit = 20,
+): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = []
+  if (quote === '') return ranges
+  for (
+    let idx = text.indexOf(quote);
+    idx !== -1 && ranges.length < limit;
+    idx = text.indexOf(quote, idx + quote.length)
+  ) {
+    ranges.push({ start: idx, end: idx + quote.length })
+  }
+  return ranges
+}
+
 /** Collapses whitespace runs to one space, remembering each output char's original index. */
 function collapseWhitespace(text: string): { norm: string; map: number[] } {
   let norm = ''

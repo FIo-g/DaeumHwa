@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { locateQuote, sentenceAt, splitSentences } from '@/lib/korean/sentences'
+import { locateAllQuotes, locateQuote, sentenceAt, splitSentences } from '@/lib/korean/sentences'
 
 describe('splitSentences', () => {
   it('splits on terminators, closing quotes and line breaks, with trimmed positions', () => {
@@ -38,5 +38,34 @@ describe('locateQuote', () => {
 
   it('prefers the occurrence nearest the hint', () => {
     expect(locateQuote('가 나 가 나', '가', 4)).toEqual({ start: 4, end: 5 })
+  })
+})
+
+describe('locateAllQuotes', () => {
+  it('returns every occurrence of the quote', () => {
+    const text = '4층이상은 안 된다. 그러나 4층이상은 된다.'
+    const ranges = locateAllQuotes(text, '4층이상은')
+    expect(ranges.map((r) => r.start)).toEqual([0, text.indexOf('4층이상은', 1)])
+    expect(ranges.map((r) => r.end)).toEqual(ranges.map((r) => r.start + 5))
+  })
+
+  it('does not return overlapping occurrences', () => {
+    expect(locateAllQuotes('aaa', 'aa')).toEqual([{ start: 0, end: 2 }])
+  })
+
+  it('returns an empty list for an empty or absent quote', () => {
+    expect(locateAllQuotes('가나다', '')).toEqual([])
+    expect(locateAllQuotes('가나다', '없음')).toEqual([])
+  })
+
+  it('stops at the limit', () => {
+    expect(locateAllQuotes('가나 '.repeat(30), '가나', 5)).toHaveLength(5)
+  })
+
+  // Known behavior, not an endorsement: a substring hit inside a longer word is expanded too.
+  // Replace this case when a word-boundary rule is decided.
+  it('expands a substring hit inside a longer word (known)', () => {
+    const text = '그는커녕 그는 갔다.'
+    expect(locateAllQuotes(text, '그는').map((r) => r.start)).toEqual([0, text.indexOf('그는', 1)])
   })
 })
