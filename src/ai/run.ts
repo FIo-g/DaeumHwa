@@ -128,6 +128,157 @@ export async function runAiTask<I, O>(
   }
 }
 
+/** Parts of a split run that cloud providers keep in flight at once (both clients retry 429 once). */
+export const DEFAULT_CLOUD_SPLIT_CONCURRENCY = 2
+
+/**
+ * Runs one task as several calls, one per part, and stores them as ONE `ai_runs` row. Parts run in
+ * a small pool. The first failure aborts the running siblings and fails the whole run. `runAiTask`
+ * is not changed: use this only when the parts can be merged back into one output.
+ */
+export async function runAiTaskSplit<I, O>(
+  db: Db,
+  meta: AiRunMeta,
+  task: AiTaskDef<I, O>,
+  parts: I[],
+  merge: (outputs: O[], parts: I[]) => O,
+  client: AiClient = getAiClient(),
+  options?: {
+    concurrency?: number
+    onPart?: (info: { index: number; elapsedMs: number; ok: boolean }) => void
+  },
+): Promise<{ output: O; runId: string }> {
+  if (parts.length === 0) throw new AppError('VALIDATION', '실행할 항목이 없습니다.')
+  await assertCanStartRun(db, meta.userId)
+  const taskModel = task.model?.()
+  const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
+  const timeoutMs = resolveSplitTimeoutMs(meta, task)
+  const requested =
+    options?.concurrency ??
+    splitConcurrencyFromEnv() ??
+    (isLocalProvider(client.provider) ? 1 : DEFAULT_CLOUD_SPLIT_CONCURRENCY)
+  const concurrency = Math.max(1, Math.min(requested, parts.length))
+  const abortSiblings = new AbortController()
+  const outputs: O[] = []
+  // An object, not loose lets: the pool writes these from closures.
+  const state: { usage: AiUsage; model?: string; failure?: AppError } = {
+    usage: { inputTokens: 0, outputTokens: 0 },
+  }
+
+  const reportPart = (index: number, elapsedMs: number, ok: boolean) => {
+    try {
+      options?.onPart?.({ index, elapsedMs, ok })
+    } catch {
+      // A hook must not change the run.
+    }
+  }
+
+  const runPart = async (index: number): Promise<void> => {
+    if (state.failure || meta.signal?.aborted) return
+    const part = parts[index]
+    let deadline: AbortSignal | undefined
+    try {
+      const prompt = task.buildPrompt(part)
+      const partSignal = meta.signal
+        ? AbortSignal.any([meta.signal, abortSiblings.signal])
+        : abortSiblings.signal
+      const callTime = callSignals({ ...meta, signal: partSignal }, timeoutMs)
+      deadline = callTime.deadline
+      const startedAt = Date.now()
+      let result: { object: O; usage: AiUsage; model: string } | undefined
+      try {
+        result = await client.generateObject({
+          task: { name: task.name, input: part },
+          system: task.system,
+          prompt,
+          schema: task.schema,
+          effort: task.effort,
+          maxTokens: task.maxTokens,
+          model: taskModel,
+          signal: callTime.signal,
+          timeoutMs,
+        })
+      } finally {
+        reportPart(index, Date.now() - startedAt, result !== undefined)
+      }
+      state.usage = addUsage(state.usage, result.usage)
+      if (index === 0) state.model = result.model
+      outputs[index] = task.postProcess ? task.postProcess(result.object, part) : result.object
+    } catch (error) {
+      state.usage = addUsage(state.usage, usageFromError(error))
+      if (!state.failure) {
+        // The first failure is the one reported. A sibling abort caused by it is not.
+        state.failure = toRunError(error, meta.signal, deadline)
+        abortSiblings.abort()
+      }
+    }
+  }
+
+  let nextIndex = 0
+  const worker = async (): Promise<void> => {
+    while (nextIndex < parts.length) {
+      const index = nextIndex
+      nextIndex += 1
+      await runPart(index)
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, () => worker()))
+
+  if (meta.signal?.aborted && !state.failure) state.failure = cancelledError()
+  if (state.failure) {
+    await finishRun(db, runId, {
+      status: 'error',
+      error: state.failure.message,
+      usage: state.usage,
+    })
+    throw state.failure
+  }
+
+  let output: O
+  try {
+    output = merge(outputs, parts)
+    // A cancel that landed while the parts were merging wins, as in runAiTask.
+    if (meta.signal?.aborted) throw cancelledError()
+  } catch (error) {
+    const aiError = toRunError(error, meta.signal)
+    await finishRun(db, runId, { status: 'error', error: aiError.message, usage: state.usage })
+    throw aiError
+  }
+  await finishRun(db, runId, {
+    status: 'done',
+    usage: state.usage,
+    model: state.model ?? client.defaultModel,
+    output,
+  })
+  return { output, runId }
+}
+
+/** Time limit for each part of a split run: same precedence as runAiTask. */
+function resolveSplitTimeoutMs(meta: AiRunMeta, task: { timeoutMs?: number }): number {
+  return timeoutOverrideMs ?? meta.timeoutMs ?? task.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS
+}
+
+/** Local providers serve one request at a time, so their parts run in order by default. */
+function isLocalProvider(provider: string): boolean {
+  return provider === 'ollama' || provider === 'eval:ollama'
+}
+
+/** `AI_SPLIT_CONCURRENCY` when it is a positive integer, otherwise undefined. */
+function splitConcurrencyFromEnv(): number | undefined {
+  const raw = process.env.AI_SPLIT_CONCURRENCY?.trim()
+  if (!raw || !/^\d+$/.test(raw)) return undefined
+  const parsed = Number(raw)
+  return parsed > 0 ? parsed : undefined
+}
+
+function addUsage(total: AiUsage, usage: AiUsage | undefined): AiUsage {
+  if (!usage) return total
+  return {
+    inputTokens: total.inputTokens + usage.inputTokens,
+    outputTokens: total.outputTokens + usage.outputTokens,
+  }
+}
+
 /**
  * Starts a streaming text task. The caller reads `textStream` for live text; `done` resolves
  * with the full text once the stream completes and the run is stored with `output: { text }`.
