@@ -11,10 +11,10 @@ import { readerSimTask } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
 import { DEFAULT_AI_TIMEOUT_MS, STREAM_AI_TIMEOUT_MS } from '@/ai/run'
 import type { AiClient, AiEffort, AiUsage, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
-import { OLLAMA_STREAM_FAILURE, type OllamaCallStats } from '@/ai/ollama'
+import { OLLAMA_STREAM_FAILURE, type OllamaCallStats, type OllamaThink } from '@/ai/ollama'
 import type { AiTaskName } from '@/db/types'
 import { AppError } from '@/lib/errors'
-import type { ModelProfile } from './models'
+import { type HelperThink, type ModelProfile, thinkFor } from './models'
 import { EN_SYSTEMS } from './localize/en-systems'
 import { countHangul, translateScaffold } from './localize/scaffold'
 
@@ -58,6 +58,12 @@ export type CallRecord = {
   hangulLeft: number | null
   contextOverflow: boolean
   error: { kind: FailureKind; message: string; status?: number } | null
+  /** ms the call waited for the local lane; 0 when it did not wait or the profile is not local. */
+  queueMs?: number
+  /** queueMs + durationMs: the wait-inclusive time that durationMs used to hold. */
+  waitInclusiveMs?: number
+  /** The Ollama `think` value the call asked for; null when the profile has no Ollama settings. */
+  thinkRequested?: OllamaThink | null
 }
 
 export interface EvalClientOptions {
@@ -67,6 +73,8 @@ export interface EvalClientOptions {
   callsDir: string
   startSeq?: number
   now?: () => number
+  /** Think level for helper tasks in a compare run. See `thinkFor` in ./models. */
+  helperThink?: HelperThink
 }
 
 type CallError = NonNullable<CallRecord['error']>
@@ -296,6 +304,28 @@ type Prepared = {
 
 type Outcome = { ok: true; output: unknown; usage: AiUsage } | { ok: false; error: unknown }
 
+/** The error a waiter gets when its signal aborts, as ollamaTransport makes it. */
+function abortErrorOf(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException('This operation was aborted', 'AbortError')
+}
+
+/**
+ * Resolves when `prev` resolves, or rejects as soon as `signal` aborts. The listener is removed
+ * once `prev` resolves, so a finished wait leaves nothing on the signal.
+ */
+function waitTurn(prev: Promise<void>, signal?: AbortSignal): Promise<void> {
+  if (!signal) return prev
+  if (signal.aborted) return Promise.reject(abortErrorOf(signal))
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => reject(abortErrorOf(signal))
+    signal.addEventListener('abort', onAbort, { once: true })
+    prev.then(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    })
+  })
+}
+
 export class EvalClient implements AiClient {
   readonly provider: string
   readonly defaultModel: string
@@ -307,11 +337,14 @@ export class EvalClient implements AiClient {
   /** Ollama timings reported by the inner client, waiting for their call to settle. */
   private readonly ollamaStats = new Map<AiTaskName, OllamaCallStats[]>()
   private step: string | null = null
+  /** Tail of the local lane: resolves when the last call that took a turn has released it. */
+  private lane: Promise<void> = Promise.resolve()
   private readonly inner: AiClient
   private readonly profile: ModelProfile
   private readonly lang: 'ko' | 'en'
   private readonly callsDir: string
   private readonly now: () => number
+  private readonly helperThink: HelperThink | undefined
 
   constructor(o: EvalClientOptions) {
     this.inner = o.inner
@@ -322,6 +355,7 @@ export class EvalClient implements AiClient {
     this.seq = o.startSeq ?? 1
     this.provider = `eval:${o.inner.provider}`
     this.defaultModel = o.profile.model
+    this.helperThink = o.helperThink
   }
 
   get nextSeq(): number {
@@ -351,31 +385,50 @@ export class EvalClient implements AiClient {
   }
 
   async generateObject<T>(args: GenerateObjectArgs<T>) {
-    const call = this.prepare(args.task.name, 'object', args.system, args.prompt, args.maxTokens)
-    // A synchronous throw from a non-async inner client becomes a rejection, so it is recorded too.
-    const pending = (() => {
-      try {
-        return this.inner.generateObject<T>({
-          ...args,
-          system: call.system,
-          prompt: call.prompt,
-          effort: this.profile.effort,
-          maxTokens: call.maxTokens,
-          model: this.profile.model,
-        })
-      } catch (error) {
-        return Promise.reject(error)
-      }
-    })()
-    const result = await pending.catch((error: unknown): never => {
-      this.settle(call, { ok: false, error })
+    const requestedMs = this.now()
+    const local = this.profile.queue === 'local'
+    // Takes its turn before the first await, so local calls run in the order they were made.
+    let release: () => void = () => {}
+    try {
+      if (local) release = await this.acquire(args.signal)
+    } catch (error) {
+      // Cancelled while queued: recorded as a failed call that never started, then rethrown.
+      const call = this.prepare(args.task.name, 'object', args.system, args.prompt, args.maxTokens)
+      this.settle(call, { ok: false, error }, null, call.startedMs - requestedMs)
       throw error
-    })
-    this.settle(call, { ok: true, output: result.object, usage: result.usage })
-    return result
+    }
+    try {
+      const call = this.prepare(args.task.name, 'object', args.system, args.prompt, args.maxTokens)
+      const queueMs = local ? call.startedMs - requestedMs : 0
+      // A synchronous throw from a non-async inner client becomes a rejection, so it is recorded too.
+      const pending = (() => {
+        try {
+          return this.inner.generateObject<T>({
+            ...args,
+            system: call.system,
+            prompt: call.prompt,
+            effort: this.profile.effort,
+            maxTokens: call.maxTokens,
+            model: this.profile.model,
+          })
+        } catch (error) {
+          return Promise.reject(error)
+        }
+      })()
+      const result = await pending.catch((error: unknown): never => {
+        this.settle(call, { ok: false, error }, null, queueMs)
+        throw error
+      })
+      this.settle(call, { ok: true, output: result.object, usage: result.usage }, null, queueMs)
+      return result
+    } finally {
+      release()
+    }
   }
 
   streamText(args: StreamTextArgs) {
+    // Streams are not locked. The eval `draft` step awaits each stream's `done` before any other
+    // AI call starts (eval/novel/steps/chapter.ts), so no helper call overlaps a stream.
     const call = this.prepare(args.task.name, 'stream', args.system, args.prompt, args.maxTokens)
     let inner: ReturnType<AiClient['streamText']>
     try {
@@ -455,7 +508,38 @@ export class EvalClient implements AiClient {
     }
   }
 
-  private settle(call: Prepared, outcome: Outcome, firstTokenMs: number | null = null): void {
+  /**
+   * Takes the next turn on the local lane. The returned function gives the turn up; calling it
+   * twice is harmless. If `signal` aborts while waiting, this rejects at once, and the waiter's
+   * slot still passes on after the call ahead of it, so later calls are not stuck.
+   */
+  private async acquire(signal?: AbortSignal): Promise<() => void> {
+    const prev = this.lane
+    let releaseSlot!: () => void
+    this.lane = new Promise<void>((resolve) => {
+      releaseSlot = resolve
+    })
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
+      releaseSlot()
+    }
+    try {
+      await waitTurn(prev, signal)
+    } catch (error) {
+      prev.then(release)
+      throw error
+    }
+    return release
+  }
+
+  private settle(
+    call: Prepared,
+    outcome: Outcome,
+    firstTokenMs: number | null = null,
+    queueMs = 0,
+  ): void {
     const durationMs = this.now() - call.startedMs
     const usage = outcome.ok ? outcome.usage : billedUsageOf(outcome.error)
     const ollama = this.ollamaStats.get(call.task) ?? []
@@ -498,6 +582,9 @@ export class EvalClient implements AiClient {
       contextOverflow:
         numCtx !== undefined && usage !== null && usage.inputTokens + usage.outputTokens >= numCtx,
       error,
+      queueMs,
+      waitInclusiveMs: queueMs + durationMs,
+      thinkRequested: thinkFor(this.profile, call.task, this.helperThink),
     }
     this.records.push(record)
     if (
