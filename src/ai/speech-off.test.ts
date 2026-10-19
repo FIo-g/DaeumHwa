@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { INTERVIEW_EXTRACT_SYSTEM } from '../../eval/novel/localize/en/interview-extract'
+import { INTERVIEW_QUESTION_SYSTEM } from '../../eval/novel/localize/en/interview-question'
 import { EN_SYSTEMS } from '../../eval/novel/localize/en-systems'
 import { buildDraftPrompt, DRAFT_SYSTEM, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
@@ -110,6 +112,9 @@ describe('speech feature off: prompts equal the cloud-w3 golden', () => {
   })
 
   it('EN_SYSTEMS speech tasks carry no speech rule when off', () => {
+    // Exact equality with the unchanged English texts (the literal snapshot below pins them too).
+    expect(EN_SYSTEMS['interview-question']).toBe(INTERVIEW_QUESTION_SYSTEM)
+    expect(EN_SYSTEMS['interview-extract']).toBe(INTERVIEW_EXTRACT_SYSTEM)
     expect(EN_SYSTEMS['interview-question']).not.toContain('speech')
     expect(EN_SYSTEMS['interview-extract']).not.toContain('speech')
   })

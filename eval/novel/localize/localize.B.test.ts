@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { EN_SYSTEMS } from './en-systems'
 import {
   buildEnInterviewExtractSystem,
   EN_SPEECH_EXTRACT_APPEND,
@@ -11,6 +12,10 @@ import {
   INTERVIEW_QUESTION_SYSTEM,
 } from './en/interview-question'
 import { findHangul, translateScaffold } from './scaffold'
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 // Brief B: English mirrors of the speech feature (off by default, off in the eval). The English
 // text must carry no Hangul, and the flag-off English prompts stay as they were.
@@ -64,5 +69,26 @@ describe('speech feature: English systems', () => {
     expect(findHangul(EN_SPEECH_QUESTION_RULE)).toEqual([])
     expect(findHangul(EN_SPEECH_EXTRACT_APPEND)).toEqual([])
     expect(findHangul(EN_SPEECH_EXTRACT_RULE)).toEqual([])
+  })
+})
+
+describe('speech feature: EN_SYSTEMS assembler (test 27)', () => {
+  it('carries no speech rule when the flag is unset', () => {
+    vi.stubEnv('AI_SPEECH_STYLE', '')
+    expect(EN_SYSTEMS['interview-question']).toBe(INTERVIEW_QUESTION_SYSTEM)
+    expect(EN_SYSTEMS['interview-extract']).toBe(INTERVIEW_EXTRACT_SYSTEM)
+    expect(EN_SYSTEMS['interview-question']).not.toContain('no speech style')
+  })
+
+  it('adds the English speech rules when the flag is on, read per access', () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    expect(EN_SYSTEMS['interview-question']).toBe(buildEnInterviewQuestionSystem(true))
+    expect(EN_SYSTEMS['interview-question']).toContain('no speech style')
+    expect(EN_SYSTEMS['interview-extract']).toBe(buildEnInterviewExtractSystem(true))
+    expect(EN_SYSTEMS['interview-extract']).toContain(EN_SPEECH_EXTRACT_RULE)
+    expect(findHangul(EN_SYSTEMS['interview-question'])).toEqual([])
+    expect(findHangul(EN_SYSTEMS['interview-extract'])).toEqual([])
+    vi.stubEnv('AI_SPEECH_STYLE', 'off')
+    expect(EN_SYSTEMS['interview-question']).not.toContain('no speech style')
   })
 })
