@@ -321,6 +321,14 @@ async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<vo
     .where(eq(aiRuns.id, runId))
 }
 
+/**
+ * Replaces the stored output of a finished run, keeping its status and tokens. Used when a draft
+ * gains a continuation or a warning after its stream has already been stored.
+ */
+export async function replaceRunOutput(db: Db, runId: string, output: unknown): Promise<void> {
+  await db.update(aiRuns).set({ output }).where(eq(aiRuns.id, runId))
+}
+
 /** Token usage the AI client attached to an error after the API call was billed, if any. */
 function usageFromError(error: unknown): AiUsage | undefined {
   if (!(error instanceof AppError)) return undefined
