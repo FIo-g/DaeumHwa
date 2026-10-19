@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs'
+import { copyFileSync, existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -21,6 +21,7 @@ import {
 import { type ProofreadSuggestion, runChapterCheck, runProofread } from '@/server/chapter-check'
 import { getChapter, listChapters, saveChapter, setChapterStatus } from '@/server/chapters'
 import { listIssues, resolveIssue } from '@/server/issues'
+import { rewriteFlaggedScenes } from '@/server/scene-rewrite'
 import { listProposals } from '@/server/proposals'
 import { classifyError, type FailureKind } from '../eval-client'
 import { bibleExempt, chapterMetrics } from '../metrics'
@@ -40,6 +41,7 @@ import {
   pendingFor,
   persist,
   pickAttempt,
+  pickRewriteIssueIds,
   readRunFile,
   requireWorkId,
   selectDraftEntries,
@@ -518,12 +520,81 @@ export const check: StepFn = async (ctx, key, state) => {
   return 'done'
 }
 
+/**
+ * Scene rewrite for one chapter (brief D, local eval). The service saves the body before the files
+ * are written, so whenever the pre-rewrite copy exists the chapter and metrics files are rewritten
+ * from the saved body. Every write is idempotent. A content error is recorded by guarded, and the
+ * rewrite is not retried on resume.
+ */
+async function rewriteStage(
+  ctx: RunContext,
+  state: RunState,
+  key: string,
+  n: number,
+  chapterId: string,
+  ids: string[],
+): Promise<void> {
+  const preFile = `chapters/${pad(n)}.pre-rewrite.md`
+  const rewritesFile = `rewrites/${pad(n)}.json`
+  let result: Awaited<ReturnType<typeof rewriteFlaggedScenes>> | null = null
+  if (ids.length > 0) {
+    // The copies are taken before the service call, and only once: a resumed call keeps them.
+    if (!existsSync(path.join(ctx.dir, preFile))) {
+      const before = (await getChapter(ctx.db, ctx.actor, chapterId)).body
+      writeRunFile(ctx.dir, preFile, before)
+    }
+    const metricsFile = `metrics/${pad(n)}.json`
+    const preMetrics = `metrics/${pad(n)}.pre-rewrite.json`
+    if (
+      existsSync(path.join(ctx.dir, metricsFile)) &&
+      !existsSync(path.join(ctx.dir, preMetrics))
+    ) {
+      copyFileSync(path.join(ctx.dir, metricsFile), path.join(ctx.dir, preMetrics))
+    }
+    const outcome = await guarded(ctx, state, key, () =>
+      rewriteFlaggedScenes(ctx.db, ctx.actor, { chapterId, issueIds: ids }, ctx.client),
+    )
+    // A content error is already in `failed`: no rewrite files are written.
+    if (outcome === null) return
+    result = outcome
+  }
+  if (!existsSync(path.join(ctx.dir, preFile))) return
+
+  const body = (await getChapter(ctx.db, ctx.actor, chapterId)).body
+  writeRunFile(ctx.dir, `chapters/${pad(n)}.md`, body)
+  writeRunFile(
+    ctx.dir,
+    `metrics/${pad(n)}.json`,
+    `${JSON.stringify(
+      chapterMetrics(
+        body,
+        ctx.config.lang,
+        ctx.bible.targetChars,
+        [ctx.bible.workStyle.examples],
+        bibleExempt(ctx.bible),
+      ),
+      null,
+      2,
+    )}\n`,
+  )
+  // A resumed call finds the scene already rewritten and records nothing, so it must not replace
+  // the record of the first call.
+  if (result && (result.rewritten.length > 0 || !existsSync(path.join(ctx.dir, rewritesFile)))) {
+    writeRunFile(
+      ctx.dir,
+      rewritesFile,
+      `${JSON.stringify({ rewritten: result.rewritten, skipped: result.skipped }, null, 2)}\n`,
+    )
+  }
+}
+
 export const continuity: StepFn = async (ctx, key, state) => {
   const n = chapterOf(key)
   const chapterId = state.data.chapterIds[n]
   if (!chapterId || isMarked(state, key)) return 'done'
   const open = await listIssues(ctx.db, ctx.actor, chapterId, { statuses: ['open'] })
-  if (open.length === 0) {
+  // A pending review stays until settle, so a rerun after a crash still reaches the rewrite stage.
+  if (open.length === 0 && !pendingFor(ctx.dir, key, 'continuity')) {
     mark(ctx, state, key)
     return 'done'
   }
@@ -558,6 +629,14 @@ export const continuity: StepFn = async (ctx, key, state) => {
       issueId: decision.id,
       status: decision.valid ? 'accepted' : 'dismissed',
     })
+  }
+  // After the resolve loop, since the service rewrites only accepted issues. An issue accepted on
+  // an earlier attempt stays eligible; a dismissed one is never picked.
+  const rewrittenKey = `${key}:rewritten`
+  if (!isMarked(state, rewrittenKey)) {
+    const ids = pickRewriteIssueIds(review.items, answer.decisions)
+    await rewriteStage(ctx, state, key, n, chapterId, ids)
+    mark(ctx, state, rewrittenKey)
   }
   mark(ctx, state, key)
   settle(ctx, review, answer)

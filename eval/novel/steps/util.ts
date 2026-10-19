@@ -313,3 +313,17 @@ export function pickAttempt(attempts: DraftAttempt[]): DraftAttempt {
     (attempt.quality ?? 0) >= (best.quality ?? 0) ? attempt : best,
   )
 }
+
+/**
+ * Issue ids that the scene rewrite may use: high severity and marked valid by the author. A
+ * dismissed issue is never returned, so it is never rewritten.
+ */
+export function pickRewriteIssueIds(
+  items: { id: string; severity: string }[],
+  decisions: { id: string; valid: boolean }[],
+): string[] {
+  const valid = new Set(decisions.filter((decision) => decision.valid).map((d) => d.id))
+  return items
+    .filter((item) => item.severity === 'high' && valid.has(item.id))
+    .map((item) => item.id)
+}

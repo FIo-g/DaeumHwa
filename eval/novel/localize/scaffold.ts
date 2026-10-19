@@ -149,6 +149,11 @@ const RULES: readonly Rule[] = [
   ['물건: ', 'Objects: '],
   ['장소: ', 'Place: '],
   ['순서:', 'Sequence:'],
+  // Scene rewrite findings (brief D, scene-rewrite), in the same block.
+  ['문제 문장: ', 'Problem sentence: '],
+  ['이유: ', 'Reason: '],
+  ['위키: ', 'Wiki: '],
+  ['제안: ', 'Suggestion: '],
   ['인물', 'character'],
   ['장소', 'place'],
   ['조직', 'organization'],
