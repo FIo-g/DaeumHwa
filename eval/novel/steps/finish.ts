@@ -247,6 +247,10 @@ export const RunSummarySchema = z.object({
         usable: z.boolean().nullable(),
         quality: z.number().nullable(),
         reason: z.string(),
+        /** Foreign-script repair of the attempt's draft (track C); absent when the text had none. */
+        foreign: z
+          .object({ found: CountSchema, replaced: CountSchema, unresolved: CountSchema })
+          .optional(),
       }),
     ),
   ),

@@ -26,6 +26,8 @@ export type DraftAttempt = {
   usable: boolean | null
   quality: number | null
   reason: string
+  /** Foreign-script repair of the attempt's draft (track C). Optional, so older state files load. */
+  foreign?: { found: number; replaced: number; unresolved: number }
 }
 
 export type RunData = {
