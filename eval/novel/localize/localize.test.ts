@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { buildDraftPrompt } from '@/ai/tasks/draft-chapter'
 import { AI_TASKS, type AiTaskName } from '@/db/types'
 import { EN_INTERVIEW_TOPICS, EN_SYSTEMS } from './en-systems'
 import { chapterExtractSample } from './samples/chapter-extract'
@@ -81,7 +82,18 @@ describe('translateScaffold', () => {
   })
 
   it('leaves no Hangul in a draft prompt built with the product label', () => {
-    const result = translateScaffold(PROMPTS['draft-chapter'])
+    // Own input instead of the shared draft sample, so the product label is exercised without
+    // changing the sample module.
+    const prompt = buildDraftPrompt({
+      instructions: 'Mina finds the letter under the stairs.',
+      targetChars: 3000,
+      styleCards: [],
+      packText: 'Pack.',
+      previousSummary: null,
+      previousTail: 'The door closed.',
+      chapterLabel: '4화 (새 회차)',
+    })
+    const result = translateScaffold(prompt)
     expect(findHangul(result)).toEqual([])
     expect(result).toContain('<chapter>Chapter 4 (new chapter)</chapter>')
   })
