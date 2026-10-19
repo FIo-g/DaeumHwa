@@ -194,7 +194,9 @@ export const draft: StepFn = async (ctx, key, state) => {
       instructions: spec.instructions,
       mustInclude: spec.mustInclude,
       textFile,
-      metrics: chapterMetrics(text, ctx.config.lang, ctx.bible.targetChars),
+      metrics: chapterMetrics(text, ctx.config.lang, ctx.bible.targetChars, [
+        ctx.bible.workStyle.examples,
+      ]),
     }
     const verdict = consult(ctx, review) as Extract<Answer, { kind: 'draft_review' }> | null
     if (!verdict) {
@@ -300,7 +302,13 @@ export const proofread: StepFn = async (ctx, key, state) => {
   writeRunFile(
     ctx.dir,
     `metrics/${pad(n)}.json`,
-    `${JSON.stringify(chapterMetrics(finalText, ctx.config.lang, ctx.bible.targetChars), null, 2)}\n`,
+    `${JSON.stringify(
+      chapterMetrics(finalText, ctx.config.lang, ctx.bible.targetChars, [
+        ctx.bible.workStyle.examples,
+      ]),
+      null,
+      2,
+    )}\n`,
   )
   return 'done'
 }
