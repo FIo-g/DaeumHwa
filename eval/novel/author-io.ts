@@ -11,7 +11,7 @@ import {
 import path from 'node:path'
 import { z } from 'zod'
 import { AdviceSchema } from '@/ai/tasks/direction-advice'
-import { ISSUE_KINDS, PROPOSAL_TYPES, SEVERITIES } from '@/db/types'
+import { ISSUE_KINDS, PROPOSAL_TYPES, type ProposalType, SEVERITIES } from '@/db/types'
 import type { ChapterMetrics } from './metrics'
 
 // File protocol between the eval runner and the human (or fake) author. The runner writes
@@ -20,7 +20,7 @@ import type { ChapterMetrics } from './metrics'
 const PENDING_FILE = 'pending.json'
 const ANSWER_FILE = 'answer.json'
 const ERROR_FILE = 'answer.error.txt'
-const DECISIONS_FILE = 'author-decisions.jsonl'
+export const DECISIONS_FILE = 'author-decisions.jsonl'
 
 const MetricsSchema: z.ZodType<ChapterMetrics> = z.object({
   chars: z.number(),
@@ -246,8 +246,77 @@ export function clearPending(dir: string): void {
   rmSync(path.join(dir, ANSWER_FILE), { force: true })
 }
 
+const LABEL_MAX = 120
+
+/**
+ * A short, human-readable name for a proposal, used in the decision log and in duplicate hints.
+ * Returns '' when the fields it needs are missing or not strings.
+ */
+export function proposalLabel(type: ProposalType, payload: Record<string, unknown>): string {
+  const text = (name: string): string => {
+    const value = payload[name]
+    return typeof value === 'string' ? value.trim() : ''
+  }
+  // Composite labels need every part; a partial one would read as a different item.
+  const joined = (...parts: string[]): string => (parts.some((part) => !part) ? '' : parts.join(''))
+  let label: string
+  switch (type) {
+    case 'entry_create':
+      label = text('name')
+      break
+    case 'entry_update':
+      label = text('entryName')
+      break
+    case 'fact_create':
+      label = joined(text('subjectName'), ': ', text('content'))
+      break
+    case 'thread_create':
+      label = text('title')
+      break
+    case 'thread_event':
+      label = joined(text('threadTitle'), ': ', text('kind'))
+      break
+    case 'relation_create':
+      label = joined(text('sourceName'), ' -> ', text('targetName'), ' (', text('kind'), ')')
+      break
+    case 'chapter_summary':
+      label = text('summary')
+      break
+    case 'style_card':
+      label = text('name')
+      break
+  }
+  return label.slice(0, LABEL_MAX)
+}
+
+/** Item-level detail for proposal decisions, so a later reader can match a card by its name. */
+function decisionDetail(p: Pending, a: Answer): Record<string, unknown> {
+  if (p.kind === 'interview_answer') return { topic: p.topic, question: p.question }
+  if (p.kind !== 'proposals' || a.kind !== 'proposals') return {}
+  const byId = new Map(p.items.map((item) => [item.id, item]))
+  const items = []
+  for (const decision of a.decisions) {
+    const item = byId.get(decision.id)
+    if (!item) continue
+    items.push({
+      id: item.id,
+      type: item.type,
+      label: proposalLabel(item.type, item.payload),
+      approve: decision.approve,
+      reason: decision.reason,
+    })
+  }
+  return { items }
+}
+
 export function logDecision(dir: string, p: Pending, a: Answer): void {
   mkdirSync(dir, { recursive: true })
-  const line = { at: new Date().toISOString(), step: p.step, kind: p.kind, answer: a }
+  const line = {
+    at: new Date().toISOString(),
+    step: p.step,
+    kind: p.kind,
+    answer: a,
+    ...decisionDetail(p, a),
+  }
   appendFileSync(path.join(dir, DECISIONS_FILE), `${JSON.stringify(line)}\n`)
 }
