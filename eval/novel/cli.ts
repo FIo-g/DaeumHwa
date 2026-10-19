@@ -17,7 +17,14 @@ import { readPending } from './author-io'
 import { loadBible } from './bible'
 import { publishReview, writeBlindCopy } from './blind'
 import { bibleExempt, chapterMetrics } from './metrics'
-import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
+import {
+  checkHelperThink,
+  HELPER_THINKS,
+  type HelperThink,
+  MODEL_IDS,
+  MODEL_PROFILES,
+  type ModelId,
+} from './models'
 import { publishFile } from './publish'
 import { buildRunSummary, readSummaryInputs } from './steps/finish'
 import { readCallRecords } from './steps/util'
@@ -88,6 +95,14 @@ function parseLang(value: string): 'ko' | 'en' {
   return value as 'ko' | 'en'
 }
 
+/** Operator message: this dev tool's errors stay English, like `unknown model:` above. */
+function parseHelperThink(value: string): HelperThink {
+  if (!(HELPER_THINKS as readonly string[]).includes(value)) {
+    throw new Error(`unknown helper think: ${value}`)
+  }
+  return value as HelperThink
+}
+
 function positiveInt(value: number, name: string): number {
   if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`)
   return value
@@ -99,20 +114,36 @@ export type InitOptions = {
   chapters?: number
   questions?: number
   dir?: string
+  helperThink?: string
 }
 
-/** Creates a run, or returns the existing one when it has the same model and lang. */
+/**
+ * Creates a run, or returns the existing one when it has the same model and lang. A helper think
+ * setting is fixed at creation: an existing run resumes without the flag, and a given flag must
+ * match what the run was created with.
+ */
 export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
   const model = parseModel(o.model)
   const lang = parseLang(o.lang)
   const chapters = positiveInt(o.chapters ?? 5, 'chapters')
   const questions = positiveInt(o.questions ?? 12, 'questions')
-  const dir = path.resolve(o.dir ?? path.join(RESULTS_DIR, `${seoulToday()}-${model}-${lang}`))
+  const helperThink = o.helperThink === undefined ? undefined : parseHelperThink(o.helperThink)
+  if (helperThink !== undefined) {
+    const refusal = checkHelperThink(MODEL_PROFILES[model], helperThink)
+    if (refusal) throw new Error(refusal)
+  }
+  const helperSuffix = helperThink === undefined ? '' : `-helper-${helperThink}`
+  const dir = path.resolve(
+    o.dir ?? path.join(RESULTS_DIR, `${seoulToday()}-${model}-${lang}${helperSuffix}`),
+  )
 
   if (existsSync(path.join(dir, 'config.json'))) {
     const existing: RunConfig = loadConfig(dir)
     if (existing.modelId !== model || existing.lang !== lang) {
       throw new Error(`run exists with another model or lang: ${dir}`)
+    }
+    if (helperThink !== undefined && existing.helperThink !== helperThink) {
+      throw new Error(`run exists with another helperThink: ${dir}`)
     }
   } else {
     createRun(dir, {
@@ -122,6 +153,7 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       questions,
       maxDraftAttempts: 3,
       commit: gitCommit(),
+      helperThink,
     })
   }
   return { dir, status: loadState(dir).status }
@@ -478,7 +510,7 @@ export function resummarizeDate(folder: string): ResummarizeOutcome[] {
     })
 }
 
-type Flags = Record<string, string | true>
+export type Flags = Record<string, string | true>
 
 function parseFlags(args: string[]): Flags {
   const flags: Flags = {}
@@ -500,6 +532,16 @@ function parseFlags(args: string[]): Flags {
 function stringFlag(flags: Flags, name: string): string {
   const value = flags[name]
   if (typeof value !== 'string') throw new Error(`missing --${name}`)
+  return value
+}
+
+/**
+ * The --helper-think value, or undefined when the flag is absent. A bare flag is refused, so a
+ * compare run is never created silently without its setting.
+ */
+export function helperThinkFlag(flags: Flags): string | undefined {
+  const value = flags['helper-think']
+  if (value === true) throw new Error('unknown helper think: true')
   return value
 }
 
@@ -527,6 +569,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         chapters: optionalNumber(flags, 'chapters'),
         questions: optionalNumber(flags, 'questions'),
         dir: typeof flags.dir === 'string' ? flags.dir : undefined,
+        helperThink: helperThinkFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {
