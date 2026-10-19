@@ -24,8 +24,13 @@ import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { extractionToProposals, type ExtractionContext } from '@/ai/extraction'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
-import { type InterviewQuestionInput, interviewQuestionTask } from '@/ai/tasks/interview-question'
+import {
+  CORE_TOPICS,
+  type InterviewQuestionInput,
+  interviewQuestionTask,
+} from '@/ai/tasks/interview-question'
 import { ReaderSimSchema } from '@/ai/tasks/reader-sim'
+import { normalizeQuestion, planInterviewTopics, violatesPlan } from '@/lib/interview-plan'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { loadKnownEntries } from '@/server/known-entries'
 import { insertProposals } from '@/server/proposal-store'
@@ -88,9 +93,9 @@ export async function startInterview(
 
 /**
  * Asks the next question. If a question is still waiting for an answer, that one is returned
- * instead of calling the AI again. A question that repeats an earlier one of the work is asked
- * once more with the repeated text in `rejected`; a repeat on the second try is stored anyway.
- * Editors and above.
+ * instead of calling the AI again. A question that repeats an earlier one of the work, or asks a
+ * topic the plan has closed, is asked once more with the repeated text in `rejected`; a question
+ * that breaks the plan again is stored anyway. Editors and above.
  */
 export async function askNextQuestion(
   db: Db,
@@ -117,7 +122,10 @@ export async function askNextQuestion(
     client,
   )
   const earlier = await loadQuestionKeys(db, workId)
-  if (earlier.has(normalizeQuestion(output.question))) {
+  if (
+    earlier.has(normalizeQuestion(output.question)) ||
+    (base.plan !== undefined && violatesPlan(output, base.plan, CORE_TOPICS))
+  ) {
     const repeated = output.question
     ;({ output } = await runAiTask(
       db,
@@ -275,10 +283,8 @@ export async function completeInterview(
   return updated
 }
 
-/** Comparison key for questions: whitespace and punctuation removed. */
-export function normalizeQuestion(text: string): string {
-  return text.replace(/[\s\p{P}\p{S}]+/gu, '')
-}
+// Kept exported here so existing callers keep their import; the definition lives in lib.
+export { normalizeQuestion }
 
 // ---- helpers ----
 
@@ -467,6 +473,20 @@ async function buildQuestionInput(
     .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
     .where(eq(interviewSessions.workId, workId))
 
+  // The plan reads every turn of the work, not the capped covered list, so a topic closed long
+  // ago stays closed.
+  const planRows = await db
+    .select({
+      topic: interviewTurns.topic,
+      answer: interviewTurns.answer,
+      skipped: interviewTurns.skipped,
+      focus: interviewTurns.focus,
+    })
+    .from(interviewTurns)
+    .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
+    .where(eq(interviewSessions.workId, workId))
+    .orderBy(asc(interviewTurns.createdAt))
+
   const recentRows = await db
     .select({
       topic: interviewTurns.topic,
@@ -540,6 +560,7 @@ async function buildQuestionInput(
       answer: turn.answer === null ? null : cut(turn.answer, RECENT_ANSWER_CHARS),
       skipped: turn.skipped,
     })),
+    plan: planInterviewTopics(planRows, CORE_TOPICS),
   }
 }
 
