@@ -20,7 +20,7 @@ export const BLIND_LABEL = '[masked]' as const
 
 export type BlindedCall = Omit<
   CallRecord,
-  'model' | 'effortRequested' | 'maxTokens' | 'productTimeoutMs' | 'speed'
+  'model' | 'effortRequested' | 'maxTokens' | 'productTimeoutMs' | 'speed' | 'thinkRequested'
 > & { model: typeof BLIND_LABEL }
 
 const VARIANT_SUFFIX = /-(mlx|gguf)$/
@@ -92,12 +92,13 @@ function maskDeep(value: unknown): unknown {
 
 /**
  * One call record for the reviewer. The model field is replaced by the label, the profile
- * fingerprints (effort, token cap, timeout, speed) are dropped, and every string is masked.
+ * fingerprints (effort, think, token cap, timeout, speed) are dropped, and every string is masked.
  * wouldTimeOut stays, because the operations score needs it. The input is not changed.
  */
 export function blindCallRecord(call: CallRecord): BlindedCall {
   const masked = maskDeep(call) as Record<string, unknown>
   delete masked.effortRequested
+  delete masked.thinkRequested
   delete masked.maxTokens
   delete masked.productTimeoutMs
   delete masked.speed
