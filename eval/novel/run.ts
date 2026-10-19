@@ -14,7 +14,7 @@ import { type Answer, type Pending, readPending } from './author-io'
 import { type Bible, loadBible } from './bible'
 import { EvalClient } from './eval-client'
 import { fakeAnswer } from './fake-author'
-import { type ModelId, MODEL_PROFILES, createModelClient } from './models'
+import { type HelperThink, type ModelId, MODEL_PROFILES, createModelClient } from './models'
 import {
   type RunConfig,
   type RunState,
@@ -84,6 +84,7 @@ export type RunCreateOptions = {
   questions: number
   maxDraftAttempts: number
   commit: string
+  helperThink?: HelperThink
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
@@ -98,6 +99,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     maxDraftAttempts: o.maxDraftAttempts,
     createdAt: new Date().toISOString(),
     commit: o.commit,
+    ...(o.helperThink ? { helperThink: o.helperThink } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))
@@ -118,11 +120,17 @@ export async function openRun(
   const bible = loadBible(config.lang)
   // The inner client reports Ollama timings to the eval client, which is built here first.
   const client: EvalClient = new EvalClient({
-    inner: o.inner ?? createModelClient(profile, { onStats: (s) => client.onOllamaStats(s) }),
+    inner:
+      o.inner ??
+      createModelClient(profile, {
+        onStats: (s) => client.onOllamaStats(s),
+        helperThink: config.helperThink,
+      }),
     profile,
     lang: config.lang,
     callsDir: join(dir, 'calls'),
     startSeq: Math.max(1, state.nextSeq),
+    helperThink: config.helperThink,
   })
   setAiTimeoutOverride(profile.timeoutMs)
   // 0 disables the product's daily token limit for eval runs. close() puts the previous value back.

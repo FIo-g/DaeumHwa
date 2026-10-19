@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { ModelId } from './models'
+import type { HelperThink, ModelId } from './models'
 import type { InterviewTurnStat } from './metrics-interview'
 
 // Run config and resumable progress for one novel eval run. Both files live in the run directory.
@@ -14,6 +14,8 @@ export type RunConfig = {
   maxDraftAttempts: number
   createdAt: string
   commit: string
+  /** Think level for helper tasks (compare runs only). Absent means the profile's own think. */
+  helperThink?: HelperThink
 }
 
 export type RunStatus =
