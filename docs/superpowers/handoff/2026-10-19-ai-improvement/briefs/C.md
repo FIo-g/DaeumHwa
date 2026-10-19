@@ -184,3 +184,8 @@ All tests green, no new tsc or eslint errors in touched files, no package change
 
 ## Decision (L3 review)
 The foreign-script repair block in the eval draft step runs only when `lang` is `ko` AND the model profile's `queue` is `local` (e.g. qwen3.8-27b). Cloud ko runs (haiku, luna) are not repaired, so the cloud eval baseline stays comparable; the repair is measured later with local models. Design step 6 and the Goal apply to local profiles only.
+
+## Decision (local check, 2026-10-19)
+- The foreign-script rule no longer sits in `DRAFT_REPAIR_SYSTEM` (ko) or its English twin. Both system texts are back to the cloud branch text, and `buildPrompt` prefixes `FOREIGN_SCRIPT_RULE` as plain text only when the batch has a `foreign-script` flag (commit 0183faf). Only the local ko foreign-script repair makes such flags, so cloud E2 repair calls send the same system and prompt as `feat/ai-improvement-cloud`.
+- The figures live on `DraftAttempt.foreign` and the run summary (step 5), not on `ChapterMetrics` as spec 8 lists. Accepted: the summary schema keeps them (`finish.C.test.ts`) and `metrics.ts` stays unchanged.
+- `repairDraftForeignScript` writes the run row when the text differs from the stored text. In the eval the trim stage already stored the trimmed text, so a repair that changes nothing writes nothing there. Left as is.
