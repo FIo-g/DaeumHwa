@@ -1,3 +1,5 @@
+import { BEATS_RULE } from '@/ai/tasks/draft-chapter'
+
 // Turns the Korean scaffolding that product prompt builders emit (labels, empty markers, persona
 // text, chapter numbers) into English. Content from the work itself is never matched by these rules,
 // so English manuscripts and English wiki text pass through unchanged.
@@ -136,6 +138,17 @@ const RULES: readonly Rule[] = [
   ['가정', 'assumed'],
   ['미정', 'undecided'],
   ['지연', 'overdue'],
+  // Scene beat list (brief D, draft-beats). The beat rule comes first: it contains the shorter
+  // labels below. The scene-number lookahead keeps the <scene_budget> line ("N개") out of it.
+  [
+    BEATS_RULE,
+    'Keep the places, characters, object locations and event order of the scene list above exactly, and do not write a move to a place that is not in the list.',
+  ],
+  [/장면 (\d+)(?![\d개])/g, 'Scene $1'],
+  ['인물: ', 'Characters: '],
+  ['물건: ', 'Objects: '],
+  ['장소: ', 'Place: '],
+  ['순서:', 'Sequence:'],
   ['인물', 'character'],
   ['장소', 'place'],
   ['조직', 'organization'],

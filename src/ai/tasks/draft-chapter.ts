@@ -40,17 +40,35 @@ export type DraftPromptInput = {
   chapterLabel: string
   /** Speech of each main character. Undefined (the speech feature is off) means no <voices> block. */
   voices?: Pick<VoiceLine, 'name' | 'speech'>[]
+  /** Scene beat list from draft-beats, already rendered as text. Empty or null adds no section. */
+  beats?: string | null
 }
 
-export function buildDraftPrompt(raw: DraftPromptInput): string {
+/**
+ * Appended to the draft prompt when beats are given: the prose must follow the beat list.
+ * Defined here (not in draft-beats.ts) so this file imports nothing from the beat task.
+ */
+export const BEATS_RULE =
+  '위 장면 목록의 장소, 인물, 물건의 위치, 사건 순서를 그대로 지키고 목록에 없는 장소 이동은 쓰지 않는다.'
+
+export function buildDraftPrompt(
+  raw: DraftPromptInput,
+  options?: { omitTargetLength?: boolean },
+): string {
   const input = neutralizeDeep(raw)
   const cards =
     input.styleCards.length > 0 ? input.styleCards.map(renderCard).join('\n\n') : '(없음)'
   const length = draftLengthPlan(input.targetChars)
+  // The beat-list call reuses this prompt without the length lines: it only lists scenes.
+  const lengthLines = options?.omitTargetLength
+    ? []
+    : [
+        `<target_length>공백 포함 ${length.minChars}자 이상, ${length.maxChars}자 이하</target_length>`,
+        `<scene_budget>장면 ${length.sceneCount}개, 장면마다 공백 포함 ${length.charsPerScene}자 안팎</scene_budget>`,
+      ]
   return [
     `<chapter>${input.chapterLabel}</chapter>`,
-    `<target_length>공백 포함 ${length.minChars}자 이상, ${length.maxChars}자 이하</target_length>`,
-    `<scene_budget>장면 ${length.sceneCount}개, 장면마다 공백 포함 ${length.charsPerScene}자 안팎</scene_budget>`,
+    ...lengthLines,
     '<instructions>',
     input.instructions,
     '</instructions>',
@@ -71,7 +89,14 @@ export function buildDraftPrompt(raw: DraftPromptInput): string {
     '<previous_tail>',
     input.previousTail ?? '(없음)',
     '</previous_tail>',
+    ...beatsSection(input.beats),
   ].join('\n')
+}
+
+/** The <beats> block, led by a blank line; empty when no beats are given. */
+function beatsSection(beats: DraftPromptInput['beats']): string[] {
+  if (!beats) return []
+  return ['', '<beats>', BEATS_RULE, beats, '</beats>']
 }
 
 /**

@@ -21,6 +21,7 @@ import {
   DRAFT_SYSTEM,
   type DraftPromptInput,
 } from '@/ai/tasks/draft-chapter'
+import { draftBeatsTask, type DraftBeats, renderBeats } from '@/ai/tasks/draft-beats'
 import { applyDraftEdits, draftRepairTask } from '@/ai/tasks/draft-repair'
 import { type AdviceResult, directionAdviceTask } from '@/ai/tasks/direction-advice'
 import {
@@ -302,10 +303,19 @@ export async function startDraft(
     instructions: string
     targetChars?: number
     entryIds: string[]
+    /** Eval only: ask for a scene beat list first (draft-beats) and pass it into the prose prompt. */
+    twoStep?: boolean
   },
   client?: AiClient,
   signal?: AbortSignal,
-): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
+): Promise<{
+  runId: string
+  textStream: AsyncIterable<string>
+  done: Promise<string>
+  /** Set only for a two-step draft: the beat list the prose was written from. */
+  beats?: DraftBeats
+  beatsRunId?: string
+}> {
   // First statement: the role check and the context work below count against the same budget.
   const startedAt = Date.now()
   const { workId } = input
@@ -382,6 +392,25 @@ export async function startDraft(
     voices: voices?.map((v) => ({ name: v.name, speech: v.speech })),
   }
 
+  // Two-step draft (eval only): the beat list is made before the prose and goes into both prose
+  // calls. A failed beat call rejects here, before any prose run exists. The beat call runs before
+  // firstTimeoutMs is computed, so the prose budget already counts it.
+  const beatsRun = input.twoStep
+    ? await runAiTask(
+        db,
+        { userId: actor.userId, workId, chapterId, signal },
+        draftBeatsTask,
+        promptInput,
+        client,
+      )
+    : null
+  if (beatsRun && beatsRun.output.scenes.length === 0) {
+    throw new AppError('AI_ERROR', '장면 목록을 만들지 못했습니다. 다시 시도해 주세요.')
+  }
+  const finalInput: DraftPromptInput = beatsRun
+    ? { ...promptInput, beats: renderBeats(beatsRun.output) }
+    : promptInput
+
   // The budget runs from the first line of startDraft, so the first stream gets what is left.
   const firstTimeoutMs = Math.max(
     MIN_FIRST_STREAM_MS,
@@ -396,20 +425,26 @@ export async function startDraft(
       effort: DRAFT_EFFORT,
       maxTokens: DRAFT_MAX_TOKENS,
       system: DRAFT_SYSTEM,
-      prompt: buildDraftPrompt(promptInput),
+      prompt: buildDraftPrompt(finalInput),
     },
     client,
   )
 
   const pipe = createTextPipe()
   const done = completeDraft(
-    { db, actor, workId, chapterId, promptInput, client, signal, startedAt },
+    { db, actor, workId, chapterId, promptInput: finalInput, client, signal, startedAt },
     first,
     pipe,
   )
   // Callers that only read the text stream must not see an unhandled rejection.
   done.catch(() => {})
-  return { runId: first.runId, textStream: pipe.iterable, done }
+  return {
+    runId: first.runId,
+    textStream: pipe.iterable,
+    done,
+    beats: beatsRun?.output,
+    beatsRunId: beatsRun?.runId,
+  }
 }
 
 type DraftContext = {

@@ -284,10 +284,12 @@ export const draft: StepFn = async (ctx, key, state) => {
             instructions: spec.instructions,
             targetChars: ctx.bible.targetChars,
             entryIds,
+            // Local eval only (brief D): the scene beat list is made first and goes into the prose.
+            twoStep: true,
           },
           ctx.client,
         )
-        return { runId: run.runId, text: await run.done }
+        return { runId: run.runId, text: await run.done, beats: run.beats }
       })
       if (!generated) {
         // A failed attempt is already in `failed`. With an earlier attempt that has text, the best
@@ -303,6 +305,7 @@ export const draft: StepFn = async (ctx, key, state) => {
       // the abandoned draft go first, and the raw text (A's output) is written for every draft.
       const stem = `chapters/${pad(n)}.attempt-${attemptNo}`
       for (const stale of [
+        'beats.json',
         'continue.json',
         'trim.json',
         'draft.trimmed.txt',
@@ -311,6 +314,9 @@ export const draft: StepFn = async (ctx, key, state) => {
         rmSync(path.join(ctx.dir, `${stem}.${stale}`), { force: true })
       }
       writeRunFile(ctx.dir, `${stem}.draft.raw.txt`, generated.text)
+      if (generated.beats) {
+        writeRunFile(ctx.dir, `${stem}.beats.json`, JSON.stringify(generated.beats, null, 2))
+      }
       // Taken before the trim stage, whose own takeLastFailure would discard it.
       await recordContinueFailure(ctx, generated.runId, n, attemptNo)
       // E1 then E2, each stage on the text the previous one returned (spec 7).
