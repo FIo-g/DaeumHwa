@@ -87,7 +87,13 @@ export async function createTestChapter(
 export async function createTestEntry(
   db: Db,
   workId: string,
-  o: { name: string; kind?: EntryKind; aliases?: string[]; summary?: string },
+  o: {
+    name: string
+    kind?: EntryKind
+    aliases?: string[]
+    summary?: string
+    fields?: Record<string, string>
+  },
 ): Promise<EntryRow> {
   const [entry] = await db
     .insert(wikiEntries)
@@ -97,6 +103,7 @@ export async function createTestEntry(
       kind: o.kind ?? 'character',
       aliases: o.aliases ?? [],
       summary: o.summary ?? '',
+      fields: o.fields ?? {},
     })
     .returning()
   return entry
