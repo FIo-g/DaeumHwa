@@ -1,13 +1,24 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import { buildContextPack, renderContextPack } from '@/ai/context'
 import { READER_PERSONAS, type Persona } from '@/ai/personas'
-import { listAiRuns, runAiTask, startAiStream, throwIfCancelled } from '@/ai/run'
+import {
+  listAiRuns,
+  replaceRunOutput,
+  runAiTask,
+  startAiStream,
+  STREAM_AI_TIMEOUT_MS,
+  throwIfCancelled,
+} from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import {
+  buildContinuationPrompt,
+  buildDraftPrompt,
+  CONTINUE_EFFORT,
+  CONTINUE_MAX_TOKENS,
   DRAFT_EFFORT,
   DRAFT_MAX_TOKENS,
   DRAFT_SYSTEM,
-  buildDraftPrompt,
+  type DraftPromptInput,
 } from '@/ai/tasks/draft-chapter'
 import { type AdviceResult, directionAdviceTask } from '@/ai/tasks/direction-advice'
 import { type ReaderSimResult, readerSimTask } from '@/ai/tasks/reader-sim'
@@ -21,8 +32,15 @@ import {
   type ThreadStatus,
   resolveWorkSettings,
 } from '@/db/types'
-import { AppError } from '@/lib/errors'
+import {
+  continuationPlan,
+  continuationSeparator,
+  continueFailedWarning,
+  draftCharCount,
+} from '@/lib/draft-length'
+import { AppError, isAppError } from '@/lib/errors'
 import { chapterLabel } from '@/lib/labels'
+import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
 import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
 import { assertEntryInWork, listFacts } from '@/server/facts'
@@ -49,6 +67,10 @@ const ADVICE_RECENT_SUMMARIES = 5
 const MIN_DIALOGUE_SAMPLES = 3
 const MAX_DIALOGUE_SAMPLES = 40
 const DRAFT_TAIL_CHARS = 1500
+/** The first draft and its continuation share one budget, under the route's 300 s maxDuration. */
+const DRAFT_TOTAL_BUDGET_MS = 290_000
+/** A continuation is not started with less time left than this. */
+const MIN_CONTINUATION_MS = 30_000
 /** A line of dialogue: straight double quotes, curly double quotes, or Korean corner brackets. */
 const DIALOGUE_RE = /"[^"\n]+"|“[^”\n]+”|「[^」\n]+」/
 
@@ -269,6 +291,8 @@ export async function startDraft(
   client?: AiClient,
   signal?: AbortSignal,
 ): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
+  // First statement: the role check and the context work below count against the same budget.
+  const startedAt = Date.now()
   const { workId } = input
   const instructions = input.instructions.trim()
   if (!instructions) throw new AppError('VALIDATION', '무슨 일이 일어나야 하는지 적어 주세요.')
@@ -315,7 +339,7 @@ export async function startDraft(
     position,
     extraEntryIds: input.entryIds,
   })
-  const prompt = buildDraftPrompt({
+  const promptInput: DraftPromptInput = {
     instructions,
     targetChars,
     styleCards,
@@ -323,9 +347,9 @@ export async function startDraft(
     previousSummary,
     previousTail,
     chapterLabel: promptLabel,
-  })
+  }
 
-  return startAiStream(
+  const first = await startAiStream(
     db,
     { userId: actor.userId, workId, chapterId, signal },
     {
@@ -334,10 +358,129 @@ export async function startDraft(
       effort: DRAFT_EFFORT,
       maxTokens: DRAFT_MAX_TOKENS,
       system: DRAFT_SYSTEM,
-      prompt,
+      prompt: buildDraftPrompt(promptInput),
     },
     client,
   )
+
+  const pipe = createTextPipe()
+  const done = completeDraft(
+    { db, actor, workId, chapterId, promptInput, client, signal, startedAt },
+    first,
+    pipe,
+  )
+  // Callers that only read the text stream must not see an unhandled rejection.
+  done.catch(() => {})
+  return { runId: first.runId, textStream: pipe.iterable, done }
+}
+
+type DraftContext = {
+  db: Db
+  actor: Actor
+  workId: string
+  chapterId: string | null
+  promptInput: DraftPromptInput
+  client?: AiClient
+  signal?: AbortSignal
+  startedAt: number
+}
+
+/**
+ * Finishes a draft (spec 7). The first stream is passed on to `pipe` as it arrives. A draft short
+ * of the target gets one continuation, buffered: its text reaches the stream only once it has
+ * succeeded. A failed or empty continuation keeps the first text and records a warning in the
+ * first run row. Only a user abort rejects.
+ */
+async function completeDraft(
+  ctx: DraftContext,
+  first: { runId: string; textStream: AsyncIterable<string>; done: Promise<string> },
+  pipe: TextPipe,
+): Promise<string> {
+  const { db, workId, chapterId, promptInput, client, signal } = ctx
+  let firstText: string
+  try {
+    for await (const chunk of first.textStream) pipe.push(chunk)
+    firstText = await first.done
+  } catch (error) {
+    pipe.fail(error)
+    throw error
+  }
+
+  const plan = continuationPlan(draftCharCount(firstText), promptInput.targetChars)
+  const remaining = Math.min(
+    DRAFT_TOTAL_BUDGET_MS - (Date.now() - ctx.startedAt),
+    STREAM_AI_TIMEOUT_MS,
+  )
+  // Skips are not failures: they make no call and record no warning.
+  if (plan === null || signal?.aborted || remaining < MIN_CONTINUATION_MS) {
+    pipe.end()
+    return firstText
+  }
+
+  let addition: string
+  try {
+    const cont = await startAiStream(
+      db,
+      { userId: ctx.actor.userId, workId, chapterId, signal, timeoutMs: remaining },
+      {
+        task: 'draft-continue',
+        input: { instructions: promptInput.instructions },
+        effort: CONTINUE_EFFORT,
+        maxTokens: CONTINUE_MAX_TOKENS,
+        system: DRAFT_SYSTEM,
+        prompt: buildContinuationPrompt(promptInput, firstText),
+      },
+      client,
+    )
+    addition = await cont.done
+  } catch (error) {
+    if (signal?.aborted) {
+      pipe.fail(error)
+      throw error
+    }
+    const reason = isAppError(error) ? error.code : 'UNKNOWN'
+    const detail = error instanceof Error ? error.message : String(error)
+    await recordContinueWarning(db, first.runId, firstText, reason, detail)
+    pipe.end()
+    return firstText
+  }
+
+  const text = addition.trimStart()
+  if (text.trim() === '') {
+    await recordContinueWarning(db, first.runId, firstText, 'EMPTY', 'The continuation is empty.')
+    pipe.end()
+    return firstText
+  }
+
+  const joined = firstText + continuationSeparator(firstText) + text
+  // Stored and streamed text must match, so a failure here rejects instead of keeping one half.
+  try {
+    await replaceRunOutput(db, first.runId, { text: joined })
+  } catch (error) {
+    pipe.fail(error)
+    throw error
+  }
+  pipe.push(joined.slice(firstText.length))
+  pipe.end()
+  return joined
+}
+
+/** Keeps the first text in the first run row with the warning. Best effort: never throws. */
+async function recordContinueWarning(
+  db: Db,
+  runId: string,
+  firstText: string,
+  reason: string,
+  detail: string,
+): Promise<void> {
+  try {
+    await replaceRunOutput(db, runId, {
+      text: firstText,
+      warnings: [continueFailedWarning(reason, detail)],
+    })
+  } catch {
+    // A failed warning write must not lose the first text, so it is ignored.
+  }
 }
 
 /**

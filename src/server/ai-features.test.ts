@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { eq } from 'drizzle-orm'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { and, eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import type { Db } from '@/db/client'
 import { aiRuns, chapterVersions, chapters, proposals } from '@/db/schema'
@@ -23,6 +23,7 @@ import {
   suggestStyleCard,
 } from '@/server/ai-features'
 import { createStyleCard } from '@/server/styles'
+import * as run from '@/ai/run'
 
 const CHAPTER_BODY = '서윤은 문을 열었다. "여기가 어디야?" 그녀가 물었다. 아무도 대답하지 않았다.'
 
@@ -192,7 +193,12 @@ describe('draft', () => {
     const { runId, textStream, done } = await startDraft(
       db,
       actor,
-      { workId, instructions: '서윤이 편지를 발견한다. 편지에는 날짜가 적혀 있다.', entryIds: [] },
+      {
+        workId,
+        instructions: '서윤이 편지를 발견한다. 편지에는 날짜가 적혀 있다.',
+        targetChars: 500,
+        entryIds: [],
+      },
       new FakeAiClient(),
     )
     const streamed = await readAll(textStream)
@@ -263,7 +269,13 @@ describe('draft', () => {
     const { done } = await startDraft(
       db,
       actor,
-      { workId, chapterId: current.id, instructions: '서윤이 문을 연다.', entryIds: [] },
+      {
+        workId,
+        chapterId: current.id,
+        instructions: '서윤이 문을 연다.',
+        targetChars: 500,
+        entryIds: [],
+      },
       client,
     )
     await done
@@ -277,7 +289,7 @@ describe('draft', () => {
     const { runId, done } = await startDraft(
       db,
       actor,
-      { workId, instructions: '서윤이 편지를 발견한다.', entryIds: [] },
+      { workId, instructions: '서윤이 편지를 발견한다.', targetChars: 500, entryIds: [] },
       new FakeAiClient(),
     )
     const text = await done
@@ -317,5 +329,321 @@ describe('draft', () => {
         new FakeAiClient(),
       ),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+})
+
+describe('draft continuation', () => {
+  const INSTRUCTIONS = '서윤이 편지를 발견한다. 편지에는 날짜가 적혀 있다.'
+  const FIRST_DRAFT = `(데모 초안) ${'서윤은 문을 열었다. 바람이 차가웠다. '.repeat(40)}`
+  const SHORT_CONTINUATION = '짧은 이어쓰기.'
+  let db: Db
+  let actor: { userId: string }
+  let workId: string
+  let savedLimit: string | undefined
+
+  beforeEach(async () => {
+    ;({ db, actor, workId } = await setup())
+    savedLimit = process.env.AI_DAILY_TOKEN_LIMIT
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    if (savedLimit === undefined) delete process.env.AI_DAILY_TOKEN_LIMIT
+    else process.env.AI_DAILY_TOKEN_LIMIT = savedLimit
+  })
+
+  function draftInput(extra: { targetChars?: number } = {}) {
+    return {
+      workId,
+      instructions: INSTRUCTIONS,
+      targetChars: 5000,
+      entryIds: [],
+      ...extra,
+    }
+  }
+
+  async function outputOf(runId: string) {
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
+    return row
+  }
+
+  async function continuationRows() {
+    return db
+      .select()
+      .from(aiRuns)
+      .where(and(eq(aiRuns.workId, workId), eq(aiRuns.task, 'draft-continue')))
+  }
+
+  /** The first run keeps its text and carries exactly one continue-failed warning. */
+  async function expectFirstTextKept(
+    result: { runId: string; streamed: string; text: string },
+    reason: string,
+  ) {
+    const row = await outputOf(result.runId)
+    expect(row.status).toBe('done')
+    const output = row.output as { text: string; warnings: unknown[] }
+    expect(output.text.startsWith('(데모 초안) ')).toBe(true)
+    expect(output.warnings).toEqual([
+      {
+        kind: 'continue-failed',
+        reason,
+        detail: expect.any(String),
+        message: '이어쓰기 실패',
+      },
+    ])
+    expect(result.text).toBe(output.text)
+    expect(result.streamed).toBe(output.text)
+    return output.warnings[0] as { detail: string }
+  }
+
+  async function runDraft(client: FakeAiClient, extra: { targetChars?: number } = {}) {
+    const { runId, textStream, done } = await startDraft(db, actor, draftInput(extra), client)
+    const streamed = await readAll(textStream)
+    const text = await done
+    return { runId, streamed, text }
+  }
+
+  it('continues once when the first draft is short', async () => {
+    const client = new FakeAiClient()
+    const spy = vi.spyOn(client, 'streamText')
+    const { runId, textStream, done } = await startDraft(db, actor, draftInput(), client)
+    const streamed = await readAll(textStream)
+    const text = await done
+
+    expect(spy).toHaveBeenCalledTimes(2)
+    const second = spy.mock.calls[1][0]
+    expect(second.task.name).toBe('draft-continue')
+    expect(second.prompt).toContain('<draft_so_far>')
+    expect(second.prompt).toContain('(데모 초안) ')
+    expect(streamed).toBe(text)
+    expect(text.startsWith('(데모 초안) ')).toBe(true)
+    expect(text).toContain('(데모 이어쓰기) ')
+
+    const row = await outputOf(runId)
+    expect(row.output).toEqual({ text })
+    const [cont] = await continuationRows()
+    expect(cont.status).toBe('done')
+  })
+
+  it('stores the joined text in the first run row with no warning on success', async () => {
+    const client = new FakeAiClient()
+    const { runId, done } = await startDraft(db, actor, draftInput(), client)
+    const text = await done
+    const row = await outputOf(runId)
+    expect(row.output).toEqual({ text })
+  })
+
+  it('does not continue when the first draft reaches the target', async () => {
+    const client = new FakeAiClient({
+      overrides: { 'draft-chapter': () => '가'.repeat(600) },
+    })
+    const spy = vi.spyOn(client, 'streamText')
+    const { done } = await startDraft(db, actor, draftInput({ targetChars: 500 }), client)
+    expect(await done).toBe('가'.repeat(600))
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(await continuationRows()).toHaveLength(0)
+  })
+
+  it('continues at most once', async () => {
+    const client = new FakeAiClient({
+      overrides: { 'draft-continue': () => SHORT_CONTINUATION },
+    })
+    const spy = vi.spyOn(client, 'streamText')
+    const { runId, done } = await startDraft(db, actor, draftInput(), client)
+    const text = await done
+
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(text.endsWith(SHORT_CONTINUATION)).toBe(true)
+    const row = await outputOf(runId)
+    expect(row.output).toEqual({ text })
+  })
+
+  it('createChapterFromDraft keeps the continuation', async () => {
+    const { runId, done } = await startDraft(db, actor, draftInput(), new FakeAiClient())
+    const text = await done
+    const chapter = await createChapterFromDraft(db, actor, { workId, runId })
+    expect(chapter.body).toBe(text)
+  })
+
+  it('done resolves without anyone reading the text stream', async () => {
+    const client = new FakeAiClient()
+    const spy = vi.spyOn(client, 'streamText')
+    const { done } = await startDraft(db, actor, draftInput(), client)
+    const text = await done
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(text).toContain('(데모 이어쓰기) ')
+  })
+
+  describe('failure policy', () => {
+    it('start guard error keeps the first text', async () => {
+      const client = new FakeAiClient()
+      const original = client.streamText.bind(client)
+      vi.spyOn(client, 'streamText')
+        .mockImplementationOnce(original)
+        .mockImplementationOnce(() => {
+          throw new AppError('CONFLICT', 'busy')
+        })
+      const result = await runDraft(client)
+      const warning = await expectFirstTextKept({ ...result }, 'CONFLICT')
+      expect(warning.detail).toContain('busy')
+      const [cont] = await continuationRows()
+      expect(cont.status).toBe('error')
+    })
+
+    it('provider error keeps the first text', async () => {
+      const client = new FakeAiClient()
+      const original = client.streamText.bind(client)
+      vi.spyOn(client, 'streamText')
+        .mockImplementationOnce(original)
+        .mockImplementationOnce(() => {
+          throw new Error('boom')
+        })
+      const result = await runDraft(client)
+      const warning = await expectFirstTextKept(result, 'AI_ERROR')
+      expect(warning.detail).toContain('boom')
+    })
+
+    it('failure after partial text keeps the first text and never shows the partial text', async () => {
+      const client = new FakeAiClient()
+      const original = client.streamText.bind(client)
+      const final = Promise.reject(new Error('boom'))
+      final.catch(() => {})
+      vi.spyOn(client, 'streamText')
+        .mockImplementationOnce(original)
+        .mockImplementationOnce(() => ({
+          textStream: (async function* () {
+            yield 'partial'
+            throw new Error('boom')
+          })(),
+          final,
+        }))
+      const result = await runDraft(client)
+      await expectFirstTextKept(result, 'AI_ERROR')
+      expect(result.text).not.toContain('partial')
+      expect(result.streamed).not.toContain('partial')
+    })
+
+    it('empty continuation keeps the first text', async () => {
+      const client = new FakeAiClient({ overrides: { 'draft-continue': () => '' } })
+      const result = await runDraft(client)
+      await expectFirstTextKept(result, 'EMPTY')
+      const [cont] = await continuationRows()
+      expect(cont.status).toBe('done')
+    })
+
+    it('whitespace-only continuation keeps the first text', async () => {
+      const client = new FakeAiClient({ overrides: { 'draft-continue': () => '   \n' } })
+      const result = await runDraft(client)
+      await expectFirstTextKept(result, 'EMPTY')
+    })
+
+    it('daily limit reached before the continuation keeps the first text', async () => {
+      process.env.AI_DAILY_TOKEN_LIMIT = '1000'
+      const client = new FakeAiClient()
+      const original = client.streamText.bind(client)
+      vi.spyOn(client, 'streamText').mockImplementationOnce((args) => {
+        const stream = original(args)
+        return {
+          ...stream,
+          final: stream.final.then(async (result) => {
+            await db.insert(aiRuns).values({
+              userId: actor.userId,
+              workId,
+              task: 'draft-chapter',
+              status: 'done',
+              model: 'fake',
+              inputTokens: 1_000_000,
+              outputTokens: 0,
+            })
+            return result
+          }),
+        }
+      })
+      const result = await runDraft(client)
+      await expectFirstTextKept(result, 'AI_LIMIT')
+      expect(await continuationRows()).toHaveLength(0)
+    })
+
+    it('a failed warning write does not reject', async () => {
+      const client = new FakeAiClient({
+        overrides: { 'draft-continue': () => '' },
+      })
+      const spy = vi.spyOn(run, 'replaceRunOutput').mockRejectedValueOnce(new Error('write failed'))
+      const { done, textStream } = await startDraft(db, actor, draftInput(), client)
+      const streamed = await readAll(textStream)
+      const text = await done
+      expect(text.startsWith('(데모 초안) ')).toBe(true)
+      expect(streamed).toBe(text)
+      expect(spy).toHaveBeenCalled()
+    })
+
+    it('user abort during the continuation rejects', async () => {
+      const controller = new AbortController()
+      const client = new FakeAiClient()
+      const original = client.streamText.bind(client)
+      vi.spyOn(client, 'streamText')
+        .mockImplementationOnce(original)
+        .mockImplementationOnce(() => {
+          controller.abort()
+          throw new Error('aborted by user')
+        })
+      const { runId, textStream, done } = await startDraft(
+        db,
+        actor,
+        draftInput(),
+        client,
+        controller.signal,
+      )
+      const chunks: string[] = []
+      await expect(
+        (async () => {
+          for await (const chunk of textStream) chunks.push(chunk)
+        })(),
+      ).rejects.toMatchObject({ code: 'CANCELLED' })
+      await expect(done).rejects.toMatchObject({ code: 'CANCELLED' })
+
+      const first = chunks.join('')
+      expect(first.startsWith('(데모 초안) ')).toBe(true)
+      const row = await outputOf(runId)
+      expect(row.output).toEqual({ text: first })
+    })
+  })
+
+  it('skips the continuation when the signal is already aborted, with no warning', async () => {
+    const controller = new AbortController()
+    const client = new FakeAiClient({
+      overrides: {
+        'draft-chapter': () => {
+          controller.abort()
+          return FIRST_DRAFT
+        },
+      },
+    })
+    const spy = vi.spyOn(client, 'streamText')
+    const { runId, done } = await startDraft(db, actor, draftInput(), client, controller.signal)
+    expect(await done).toBe(FIRST_DRAFT)
+    expect(spy).toHaveBeenCalledTimes(1)
+    const row = await outputOf(runId)
+    expect(row.output).toEqual({ text: FIRST_DRAFT })
+  })
+
+  it('skips the continuation when under 30 seconds of the 290 second budget remain, with no warning', async () => {
+    let offset = 0
+    const base = Date.now()
+    vi.spyOn(Date, 'now').mockImplementation(() => base + offset)
+    const client = new FakeAiClient({
+      overrides: {
+        'draft-chapter': () => {
+          offset = 270_000
+          return FIRST_DRAFT
+        },
+      },
+    })
+    const spy = vi.spyOn(client, 'streamText')
+    const { runId, done } = await startDraft(db, actor, draftInput(), client)
+    expect(await done).toBe(FIRST_DRAFT)
+    expect(spy).toHaveBeenCalledTimes(1)
+    const row = await outputOf(runId)
+    expect(row.output).toEqual({ text: FIRST_DRAFT })
   })
 })
