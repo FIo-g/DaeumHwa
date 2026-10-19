@@ -78,16 +78,16 @@ describe('initRun helperThink', () => {
   })
 
   it('rejects helperThink on a profile it cannot affect', () => {
-    const cases: [string, string][] = [
-      ['haiku-5.5', 'off'],
-      ['fake', 'off'],
-      ['gpt-oss-20b', 'off'],
-      ['qwen3.8-27b', 'low'],
-      ['exaone3.5-32b', 'off'],
+    const cases: [string, string, RegExp][] = [
+      ['haiku-5.5', 'off', /haiku-5\.5: --helper-think needs a local Ollama profile/],
+      ['fake', 'off', /fake: --helper-think needs a local Ollama profile/],
+      ['gpt-oss-20b', 'off', /gpt-oss-20b: .* takes low, medium or high/],
+      ['qwen3.8-27b', 'low', /qwen3\.8-27b: think is on or off only; use --helper-think off/],
+      ['exaone3.5-32b', 'off', /exaone3\.5-32b: thinking is off in this profile/],
     ]
-    for (const [model, helperThink] of cases) {
+    for (const [model, helperThink, message] of cases) {
       const dir = join(root(), `${model}-${helperThink}`)
-      expect(() => initRun({ model, lang: 'ko', helperThink, dir })).toThrow()
+      expect(() => initRun({ model, lang: 'ko', helperThink, dir })).toThrow(message)
       expect(existsSync(join(dir, 'config.json'))).toBe(false)
     }
   })

@@ -33,6 +33,13 @@ describe('speedSummary queue wait', () => {
     expect(summary.perChapterMs).toEqual({ '1': 140 })
     expect(summary.perChapterModelMs).toEqual({ '1': 140 })
   })
+
+  it('perChapterMs starts a call at its request time, not its start', () => {
+    // The wait was not preceded by a call of this chapter, so only the interval start can add it.
+    const summary = speedSummary([call({ startedAt: at(1000), durationMs: 100, queueMs: 30 })])
+    expect(summary.perChapterMs).toEqual({ '1': 130 })
+    expect(summary.perChapterModelMs).toEqual({ '1': 100 })
+  })
 })
 
 describe('timeoutSummary queue wait', () => {
