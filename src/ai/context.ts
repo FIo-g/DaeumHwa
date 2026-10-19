@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { chapters, facts, namingRules, relations, threads, wikiEntries } from '@/db/schema'
 import type { EntryKind, FactStatus, Importance, ThreadStatus } from '@/db/types'
-import { findMentions } from '@/lib/korean/mentions'
+import { findMentions, findNamedAnywhere } from '@/lib/korean/mentions'
 import {
   CHARACTER_FIELD_LABELS,
   ENTRY_KIND_LABEL,
@@ -62,6 +62,9 @@ export type ContextPack = {
 }
 
 const DEFAULT_BUDGET_CHARS = 12_000
+/** Budget for the continuity check (H). Named cards are kept over it by trimming their facts. */
+export const CONTINUITY_BUDGET_CHARS = 16_000
+const NAMED_SUMMARY_CAP = 200
 const MAX_FACTS_PER_ENTRY = 15
 const MAX_THREADS = 15
 const PREVIOUS_SUMMARY_COUNT = 2
@@ -84,6 +87,8 @@ interface SelectedEntry {
   fields: Record<string, string>
   mentionCount: number
   facts: Unref<PackFact>[]
+  /** Named in the text (mention, or substring when keepNamed). Extras from extraEntryIds are not. */
+  named: boolean
 }
 
 interface RelationCandidate {
@@ -110,11 +115,21 @@ interface Selection {
  * position, open threads, relations among the chosen entries, the previous chapter summaries
  * and the naming rules. When the rendered pack is over `budgetChars`, the lowest-ranked items
  * are dropped first: relations, then threads, then the oldest summaries, then entries.
+ *
+ * With `keepNamed`, a card whose name occurs anywhere in the text (even inside a compound such
+ * as "종루지기") is also chosen, and it is never dropped: facts are trimmed instead, then its
+ * summary is capped. Extra ids are dropped first.
  */
 export async function buildContextPack(
   db: Db,
   workId: string,
-  input: { text: string; position: number; extraEntryIds?: string[]; budgetChars?: number },
+  input: {
+    text: string
+    position: number
+    extraEntryIds?: string[]
+    budgetChars?: number
+    keepNamed?: boolean
+  },
 ): Promise<ContextPack> {
   const position = input.position
   const budget = input.budgetChars ?? DEFAULT_BUDGET_CHARS
@@ -137,13 +152,17 @@ export async function buildContextPack(
     .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
   const entryById = new Map(entryRows.map((e) => [e.id, e]))
 
-  const mentions = findMentions(
-    input.text,
-    entryRows.map((e) => ({ id: e.id, names: [e.name, ...e.aliases] })),
-  )
+  const targets = entryRows.map((e) => ({ id: e.id, names: [e.name, ...e.aliases] }))
+  const mentions = findMentions(input.text, targets)
   const mentionCount = new Map(mentions.map((m) => [m.entryId, m.count]))
   const chosenIds: string[] = []
   for (const m of mentions) chosenIds.push(m.entryId)
+  if (input.keepNamed) {
+    for (const hit of findNamedAnywhere(input.text, targets)) {
+      if (!chosenIds.includes(hit.entryId)) chosenIds.push(hit.entryId)
+    }
+  }
+  const namedIds = new Set(chosenIds)
   for (const id of input.extraEntryIds ?? []) {
     if (entryById.has(id) && !chosenIds.includes(id)) chosenIds.push(id)
   }
@@ -180,6 +199,7 @@ export async function buildContextPack(
       summary: entry.summary,
       fields: mergeCustomFields(entry.fields, entry.customFields),
       mentionCount: mentionCount.get(entry.id) ?? 0,
+      named: namedIds.has(entry.id),
       facts: usable.map((f) => ({
         id: f.id,
         content: f.content,
@@ -282,26 +302,87 @@ export async function buildContextPack(
     namingRules: rules,
   }
 
-  while (renderPack(assemble(position, selection, entryRows.length)).length > budget) {
-    if (selection.relations.length > 0) {
-      selection.relations.pop()
-    } else if (selection.threads.length > 0) {
-      selection.threads.pop()
-    } else if (selection.previousSummaries.length > 0) {
-      selection.previousSummaries.shift()
-    } else if (selection.entries.length > 0) {
-      const dropped = selection.entries.pop() as SelectedEntry
-      selection.relations = selection.relations.filter(
-        (r) => r.sourceId !== dropped.id && r.targetId !== dropped.id,
-      )
-    } else {
-      break
+  const measure = () => renderPack(assemble(position, selection, entryRows.length)).length
+  if (input.keepNamed) {
+    trimKeepingNamed(selection, budget, measure)
+  } else {
+    while (measure() > budget) {
+      if (selection.relations.length > 0) {
+        selection.relations.pop()
+      } else if (selection.threads.length > 0) {
+        selection.threads.pop()
+      } else if (selection.previousSummaries.length > 0) {
+        selection.previousSummaries.shift()
+      } else if (selection.entries.length > 0) {
+        const dropped = selection.entries.pop() as SelectedEntry
+        selection.relations = selection.relations.filter(
+          (r) => r.sourceId !== dropped.id && r.targetId !== dropped.id,
+        )
+      } else {
+        break
+      }
     }
   }
 
   const pack = assemble(position, selection, entryRows.length)
   pack.stats.approxChars = renderPack(pack).length
   return pack
+}
+
+/**
+ * Trims a selection to `budget` without dropping a named entry. Order: relations, threads, the
+ * oldest summaries, un-named (extra) entries from the end, then the last fact of the entry with
+ * the most facts (repeated). Only when no facts are left is each named summary capped once. If the
+ * pack is still over budget, it is returned as is: the overflow is bounded by fields and names.
+ */
+function trimKeepingNamed(selection: Selection, budget: number, measure: () => number): void {
+  let summariesCapped = false
+  while (measure() > budget) {
+    if (selection.relations.length > 0) {
+      selection.relations.pop()
+    } else if (selection.threads.length > 0) {
+      selection.threads.pop()
+    } else if (selection.previousSummaries.length > 0) {
+      selection.previousSummaries.shift()
+    } else if (dropLastExtraEntry(selection)) {
+      continue
+    } else if (dropLastFactOfRichestEntry(selection)) {
+      continue
+    } else if (!summariesCapped) {
+      summariesCapped = true
+      for (const entry of selection.entries) {
+        if (entry.named && entry.summary.length > NAMED_SUMMARY_CAP) {
+          entry.summary = `${entry.summary.slice(0, NAMED_SUMMARY_CAP)}…`
+        }
+      }
+    } else {
+      break
+    }
+  }
+}
+
+function dropLastExtraEntry(selection: Selection): boolean {
+  for (let i = selection.entries.length - 1; i >= 0; i--) {
+    const entry = selection.entries[i]
+    if (entry.named) continue
+    selection.entries.splice(i, 1)
+    selection.relations = selection.relations.filter(
+      (r) => r.sourceId !== entry.id && r.targetId !== entry.id,
+    )
+    return true
+  }
+  return false
+}
+
+function dropLastFactOfRichestEntry(selection: Selection): boolean {
+  let richest: SelectedEntry | null = null
+  for (const entry of selection.entries) {
+    if (entry.facts.length === 0) continue
+    if (richest === null || entry.facts.length >= richest.facts.length) richest = entry
+  }
+  if (richest === null) return false
+  richest.facts.pop()
+  return true
 }
 
 /** Deterministic text form of a pack, used in prompts. Same pack in, same bytes out. */
