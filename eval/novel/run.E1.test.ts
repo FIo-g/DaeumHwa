@@ -155,7 +155,10 @@ describe('eval draft paragraph trim (track E1)', () => {
     const state = await runUntilBlocked(ctx)
     expect(state.status).toBe('done')
     expect(existsSync(join(dir, 'chapters/01.attempt-1.trim.json'))).toBe(false)
-    expect(existsSync(join(dir, 'chapters/01.attempt-1.draft.raw.txt'))).toBe(false)
+    // The raw file is written for every draft, so it holds the attempt's text here.
+    expect(readRun(dir, 'chapters/01.attempt-1.draft.raw.txt')).toBe(
+      readRun(dir, 'chapters/01.attempt-1.md'),
+    )
     expect(readCallRecords(dir).some((record) => record.task === 'paragraph-trim')).toBe(false)
   }, 120_000)
 
@@ -174,6 +177,9 @@ describe('eval draft paragraph trim (track E1)', () => {
 
     const state = await runUntilBlocked(ctx)
     expect(state.status).toBe('done')
+    // The repair call was made and failed; the failure is recorded, not swallowed.
+    expect(state.failed).toContainEqual(expect.objectContaining({ step: 'ch1:draft:repair' }))
+    expect(readCallRecords(dir).some((record) => record.task === 'draft-repair')).toBe(true)
 
     const trimmed = readRun(dir, 'chapters/01.attempt-1.draft.trimmed.txt')
     expect(readRun(dir, 'chapters/01.attempt-1.md')).toBe(trimmed)

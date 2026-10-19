@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import path from 'node:path'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -23,7 +23,7 @@ import { getChapter, listChapters, saveChapter, setChapterStatus } from '@/serve
 import { listIssues, resolveIssue } from '@/server/issues'
 import { listProposals } from '@/server/proposals'
 import { classifyError, type FailureKind } from '../eval-client'
-import { chapterMetrics } from '../metrics'
+import { bibleExempt, chapterMetrics } from '../metrics'
 import type { Answer, Pending } from '../author-io'
 import type { RunContext, StepFn } from '../run'
 import type { RunState } from '../state'
@@ -231,8 +231,6 @@ async function trimStage(
   )
 
   if (trimmed === null || !useTrimmed) return text
-  const rawFile = `chapters/${pad(n)}.attempt-${attemptNo}.draft.raw.txt`
-  if (!existsSync(path.join(ctx.dir, rawFile))) writeRunFile(ctx.dir, rawFile, text)
   writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.draft.trimmed.txt`, trimmed.text)
   // The run record holds the trimmed text too, so a repair that fails still leaves it in place.
   // The other output fields (continuation warnings) are kept.
@@ -298,6 +296,14 @@ export const draft: StepFn = async (ctx, key, state) => {
         }
         break
       }
+      // A resumed draft gets the same attempt number as the abandoned one, so the stage files of
+      // the abandoned draft go first, and the raw text (A's output) is written for every draft.
+      const stem = `chapters/${pad(n)}.attempt-${attemptNo}`
+      for (const stale of ['trim.json', 'draft.trimmed.txt', 'draft.repaired.txt']) {
+        rmSync(path.join(ctx.dir, `${stem}.${stale}`), { force: true })
+      }
+      writeRunFile(ctx.dir, `${stem}.draft.raw.txt`, generated.text)
+      // Taken before the trim stage, whose own takeLastFailure would discard it.
       await recordContinueFailure(ctx, generated.runId, n, attemptNo)
       // E1 then E2, each stage on the text the previous one returned (spec 7).
       const trimmedText = await trimStage(
@@ -325,7 +331,7 @@ export const draft: StepFn = async (ctx, key, state) => {
         trimmedText,
       )
       if (repairedText !== trimmedText) {
-        writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.repaired.txt`, repairedText)
+        writeRunFile(ctx.dir, `${stem}.draft.repaired.txt`, repairedText)
       }
       writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.md`, repairedText)
       attempts.push({ runId: generated.runId, usable: null, quality: null, reason: '' })
@@ -344,9 +350,13 @@ export const draft: StepFn = async (ctx, key, state) => {
       instructions: spec.instructions,
       mustInclude: spec.mustInclude,
       textFile,
-      metrics: chapterMetrics(text, ctx.config.lang, ctx.bible.targetChars, [
-        ctx.bible.workStyle.examples,
-      ]),
+      metrics: chapterMetrics(
+        text,
+        ctx.config.lang,
+        ctx.bible.targetChars,
+        [ctx.bible.workStyle.examples],
+        bibleExempt(ctx.bible),
+      ),
     }
     const verdict = consult(ctx, review) as Extract<Answer, { kind: 'draft_review' }> | null
     if (!verdict) {
@@ -456,9 +466,13 @@ export const proofread: StepFn = async (ctx, key, state) => {
     ctx.dir,
     `metrics/${pad(n)}.json`,
     `${JSON.stringify(
-      chapterMetrics(finalText, ctx.config.lang, ctx.bible.targetChars, [
-        ctx.bible.workStyle.examples,
-      ]),
+      chapterMetrics(
+        finalText,
+        ctx.config.lang,
+        ctx.bible.targetChars,
+        [ctx.bible.workStyle.examples],
+        bibleExempt(ctx.bible),
+      ),
       null,
       2,
     )}\n`,
