@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { buildContextPack, CONTINUITY_BUDGET_CHARS, resolveRefs } from '@/ai/context'
 import { extractionToProposals } from '@/ai/extraction'
+import { isNearDuplicateFact } from '@/ai/guards'
 import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
@@ -10,7 +11,6 @@ import type { Db } from '@/db/client'
 import { chapters, facts, proposals, relations } from '@/db/schema'
 import type { Actor, ChapterRow, IssueRow, ProposalRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
-import { normalizeProposalText } from '@/lib/proposal-payloads'
 import { findNamingIssues } from '@/lib/korean/naming'
 import { ruleBasedSpellcheck } from '@/lib/korean/spelling-rules'
 import { locateAllQuotes, locateQuote, sentenceAt } from '@/lib/korean/sentences'
@@ -265,6 +265,7 @@ export async function runChapterCheck(
     sourceRef: extract.runId,
     chapterId: chapter.id,
     chapterPosition: chapter.position,
+    sourceText: text,
     existingEntries: known.active,
     pendingEntries: known.pending,
     pendingThreadCreateTitles: new Set(known.pendingThreadTitles),
@@ -308,21 +309,27 @@ export async function runChapterCheck(
           eq(proposals.type, 'fact_create'),
         ),
       )
-    const existingKeys = new Set([
-      ...existingFacts
-        .filter((f) => f.entryId !== null)
-        .map((f) => `${f.entryId}|${normalizeProposalText(f.content)}`),
-      ...pendingFacts.flatMap(({ payload }) => {
-        const p = payload as { entryId?: string | null; content?: string }
-        return p.entryId && p.content ? [`${p.entryId}|${normalizeProposalText(p.content)}`] : []
-      }),
-    ])
+    // Contents per card: current facts plus pending fact_create texts. A fact that repeats one of
+    // them (near-duplicate) is not proposed again.
+    const knownByEntry = new Map<string, string[]>()
+    const addKnown = (entryId: string, content: string) => {
+      knownByEntry.set(entryId, [...(knownByEntry.get(entryId) ?? []), content])
+    }
+    for (const f of existingFacts) {
+      if (f.entryId !== null) addKnown(f.entryId, f.content)
+    }
+    for (const { payload } of pendingFacts) {
+      const p = payload as { entryId?: string | null; content?: string }
+      if (p.entryId && p.content) addKnown(p.entryId, p.content)
+    }
     const fresh = items.filter(
       (item) =>
         !(
           item.type === 'fact_create' &&
           item.payload.entryId !== null &&
-          existingKeys.has(`${item.payload.entryId}|${normalizeProposalText(item.payload.content)}`)
+          (knownByEntry.get(item.payload.entryId) ?? []).some((known) =>
+            isNearDuplicateFact(known, item.payload.content),
+          )
         ),
     )
     return insertProposals(tx, workId, fresh)
