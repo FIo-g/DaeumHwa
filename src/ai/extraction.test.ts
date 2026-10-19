@@ -937,3 +937,165 @@ describe('extraction: dedup and naming rules', () => {
     expect(creates[0].payload.aliases).toEqual([])
   })
 })
+
+describe('extraction: speech field (feature flag on)', () => {
+  const speechCtx = (over: Partial<ExtractionContext> = {}): ExtractionContext =>
+    makeCtx({ source: 'interview', sourceRef: null, chapterId: null, speechStyle: true, ...over })
+  const seoyunWith = (speech: string | undefined) =>
+    makeCtx({
+      source: 'interview',
+      sourceRef: null,
+      chapterId: null,
+      speechStyle: true,
+      existingEntries: [
+        {
+          id: 'e-seoyun',
+          name: '서윤',
+          aliases: ['윤'],
+          kind: 'character',
+          ...(speech === undefined ? {} : { speech }),
+        },
+      ],
+    })
+  const entryWithFields = (name: string, fields: { key: string; value: string }[]) => ({
+    ...emptyExtraction,
+    entries: [{ name, kind: 'character' as const, aliases: [], summary: '', fields }],
+  })
+
+  it('normalizes Korean and English speech keys to "speech" on a new entry', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('민준', [
+        { key: '말투', value: '반말' },
+        { key: '나이', value: '17' },
+      ]),
+      speechCtx(),
+    )
+    const [create] = byType(out, 'entry_create')
+    expect(create.payload.fields).toEqual({ speech: '반말', 나이: '17' })
+  })
+
+  it('keeps the old keys when the flag is off', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('민준', [
+        { key: '말투', value: '반말' },
+        { key: '나이', value: '17' },
+      ]),
+      makeCtx({ source: 'interview', sourceRef: null, chapterId: null }),
+    )
+    const [create] = byType(out, 'entry_create')
+    expect(create.payload.fields).toEqual({ 말투: '반말', 나이: '17' })
+  })
+
+  it('writes speech to an existing card that has none', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('서윤', [{ key: 'speech', value: '존댓말' }]),
+      seoyunWith(''),
+    )
+    expect(byType(out, 'entry_create')).toEqual([])
+    expect(byType(out, 'entry_update')).toEqual([
+      expect.objectContaining({
+        payload: {
+          entryId: 'e-seoyun',
+          entryName: '서윤',
+          patch: { fields: { speech: '존댓말' } },
+        },
+      }),
+    ])
+  })
+
+  it('does not write speech to an existing card when the flag is off', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('서윤', [{ key: 'speech', value: '존댓말' }]),
+      makeCtx({
+        source: 'interview',
+        sourceRef: null,
+        chapterId: null,
+        existingEntries: [
+          { id: 'e-seoyun', name: '서윤', aliases: [], kind: 'character', speech: '' },
+        ],
+      }),
+    )
+    expect(out).toEqual([])
+  })
+
+  it('never overwrites an existing speech', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('서윤', [{ key: 'speech', value: '존댓말' }]),
+      seoyunWith('반말'),
+    )
+    expect(out).toEqual([])
+  })
+
+  it('does not touch a card whose speech is unknown', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('서윤', [{ key: 'speech', value: '존댓말' }]),
+      seoyunWith(undefined),
+    )
+    expect(out).toEqual([])
+  })
+
+  it('does nothing without a speech field', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('서윤', [{ key: '나이', value: '17' }]),
+      seoyunWith(''),
+    )
+    expect(out).toEqual([])
+  })
+
+  it('accepts a Korean key on an existing card', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('서윤', [{ key: '말투', value: '존댓말' }]),
+      seoyunWith(''),
+    )
+    expect(byType(out, 'entry_update')).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({ patch: { fields: { speech: '존댓말' } } }),
+      }),
+    ])
+  })
+
+  it('does not write a second speech while one is pending', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('서윤', [{ key: 'speech', value: '존댓말' }]),
+      makeCtx({
+        ...seoyunWith(''),
+        pendingSpeechEntryIds: ['e-seoyun'],
+      }),
+    )
+    expect(out).toEqual([])
+  })
+
+  it('writes one speech update when the same card appears twice', () => {
+    const ctx = seoyunWith('')
+    const x = {
+      ...emptyExtraction,
+      entries: [
+        {
+          name: '서윤',
+          kind: 'character' as const,
+          aliases: [],
+          summary: '',
+          fields: [{ key: 'speech', value: '존댓말' }],
+        },
+        {
+          name: '서윤',
+          kind: 'character' as const,
+          aliases: [],
+          summary: '',
+          fields: [{ key: 'speech', value: '반말' }],
+        },
+      ],
+    }
+    const { proposals: out } = extractionToProposals(x, ctx)
+    expect(byType(out, 'entry_update')).toHaveLength(1)
+    expect(ctx.existingEntries[0].speech).toBe('')
+  })
+
+  it('never writes speech from a non-interview source', () => {
+    const { proposals: out } = extractionToProposals(
+      entryWithFields('서윤', [{ key: 'speech', value: '존댓말' }]),
+      makeCtx({ ...seoyunWith(''), source: 'post_chapter' }),
+    )
+    expect(out).toEqual([])
+  })
+})

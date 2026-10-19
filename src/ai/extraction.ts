@@ -64,7 +64,14 @@ export type ExtractionContext = {
   sourceRef: string | null
   chapterId: string | null
   chapterPosition: number | null
-  existingEntries: { id: string; name: string; aliases: string[]; kind: EntryKind }[]
+  /** `speech` is the card's 말투 field: undefined when unknown, '' when the card has none. */
+  existingEntries: {
+    id: string
+    name: string
+    aliases: string[]
+    kind: EntryKind
+    speech?: string
+  }[]
   /** Model-facing ref (e.g. "T1") to an existing thread. `status` is set for threads on the wiki. */
   threadRefs: Map<string, { id: string; title: string; status?: ThreadStatus }>
   /** Model-facing ref (e.g. "F1") to an existing fact. */
@@ -89,6 +96,10 @@ export type ExtractionContext = {
   sourceText?: string
   /** Current wiki facts and pending fact_create texts. A near-duplicate of one of them is not proposed again. */
   existingFacts?: ExistingFactText[]
+  /** Speech feature on (spec 8, track B): speech keys are normalized and an interview fills a missing speech. */
+  speechStyle?: boolean
+  /** Entries with a pending entry_update that already sets speech. They get no second speech update. */
+  pendingSpeechEntryIds?: string[]
 }
 
 /** A fact the work already has (or has pending), as the dedupe needs it. */
@@ -122,6 +133,35 @@ export type ExtractionDropped = {
 
 type ExistingEntry = ExtractionContext['existingEntries'][number]
 type ThreadTarget = { id: string; title: string; status?: ThreadStatus }
+
+/** Field keys the model may use for a character's speech style. All of them map to "speech". */
+const SPEECH_KEYS = new Set(['speech', '말투', '화법', '말버릇', 'voice'])
+
+function normalizeFieldKey(key: string): string {
+  const trimmed = key.trim()
+  return SPEECH_KEYS.has(trimmed.toLowerCase()) ? 'speech' : trimmed
+}
+
+/**
+ * Field values of one entry by key, trimmed. The first value of a key wins; with the speech
+ * feature on, speech keys share one key and the first non-empty speech wins.
+ */
+function fieldMapOf(
+  fields: { key: string; value: string }[],
+  speechStyle: boolean,
+): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const f of fields) {
+    const key = speechStyle ? normalizeFieldKey(f.key) : f.key.trim()
+    if (!key) continue
+    const value = f.value.trim()
+    const current = map.get(key)
+    if (current === undefined || (speechStyle && key === 'speech' && current === '')) {
+      map.set(key, value)
+    }
+  }
+  return map
+}
 
 /** The word with one trailing particle removed, for each particle that fits the word. */
 function oneParticleStripped(word: string): string[] {
@@ -411,8 +451,12 @@ export function extractionToProposals(
     return full
   }
 
-  // Entries: a name that matches a card is skipped; an alias that matches a wiki card adds the
-  // new name to that card; anything else becomes entry_create (deduped by name).
+  // Entries: a name that matches a card is skipped (a speech feature may still fill its speech);
+  // an alias that matches a wiki card adds the new name to that card; anything else becomes
+  // entry_create (deduped by name).
+  const speechStyle = ctx.speechStyle === true
+  const pendingSpeech = new Set(ctx.pendingSpeechEntryIds ?? [])
+  const speechUpdated = new Set<string>()
   for (const e of x.entries) {
     const name = e.name.trim()
     if (!name || isRoleName(name)) continue
@@ -427,7 +471,32 @@ export function extractionToProposals(
       }
     }
 
-    if (locate(name, e.kind)) continue
+    const fieldMap = fieldMapOf(e.fields, speechStyle)
+    const hit = locate(name, e.kind)
+    if (hit) {
+      // Speech fills only a wiki card whose speech is empty, from an interview, once per card.
+      const speech = fieldMap.get('speech') ?? ''
+      if (
+        speechStyle &&
+        ctx.source === 'interview' &&
+        hit.source === 'wiki' &&
+        hit.entry.speech !== undefined &&
+        hit.entry.speech.trim() === '' &&
+        speech !== '' &&
+        !pendingSpeech.has(hit.entry.id) &&
+        !speechUpdated.has(hit.entry.id)
+      ) {
+        proposals.push(
+          makeProposal(ctx, 'entry_update', {
+            entryId: hit.entry.id,
+            entryName: hit.entry.name,
+            patch: { fields: { speech } },
+          }),
+        )
+        speechUpdated.add(hit.entry.id)
+      }
+      continue
+    }
 
     // Aliases match exactly or after a particle only (see NameIndex.find).
     const aliasHit = aliases
@@ -458,11 +527,6 @@ export function extractionToProposals(
 
     created.addCard(name, name, e.kind)
     created.add(aliases, name, e.kind)
-    const fieldMap = new Map<string, string>()
-    for (const f of e.fields) {
-      const k = f.key.trim()
-      if (k && !fieldMap.has(k)) fieldMap.set(k, f.value.trim())
-    }
     proposals.push(
       makeProposal(ctx, 'entry_create', {
         kind: e.kind,
