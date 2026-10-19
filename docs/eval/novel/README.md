@@ -121,6 +121,7 @@ pnpm eval:novel resummarize --date 2026-10-18                               # �
    ```
 
 2. 프롬프트를 고친 뒤 다시 잴 때는 새 `date`(예: `2026-10-25`)로 돌린다. 그래야 이번 결과와 섞이지 않는다.
+   - 보조 작업의 생각 설정만 바꿔 재려면 `--helper-think <off|low|medium|high>`를 쓴다. 비교 실행에만 쓰고 새 폴더를 쓴다. qwen은 `off`만, gpt-oss는 `low`, `medium`, `high`만 받는다(gpt-oss는 `off`를 무시한다). 클라우드 모델과 exaone은 거절한다. 초안, 이어 쓰기, 장면 고쳐 쓰기는 모델 설정을 그대로 쓴다. 스킬로 돌리려면 먼저 `pnpm eval:novel init --model qwen3.8-27b --lang ko --helper-think off --dir <실행 폴더>`로 실행을 만든다. 스킬이 하는 init은 그 실행을 이어 쓴다.
 
 ## 4. 알아 둘 점
 
@@ -129,7 +130,7 @@ pnpm eval:novel resummarize --date 2026-10-18                               # �
 - **Claude Code 사용량.** 클라우드 1화 실행 하나가 에이전트 약 57개, 서브에이전트 토큰 약 260만 개, 약 36분을 썼다. 대부분은 Sonnet 작가가 판단마다 설정집과 지침을 새로 읽는 데 든다.
 - **OpenCode Go 한도.** 모델마다 월 약 $15, 5시간마다 그 20%다. 1화 실행은 한도 안에서 충분히 돈다.
 - **채점 한계.** Sonnet 채점은 모델끼리 순위를 매기는 데 쓰고, 회차 하나의 절대 점수는 참고로만 본다. Haiku는 Sonnet과 같은 계열이라 후하게 채점될 위험이 있다. 자세한 내용은 기준 문서 4절에 있다.
-- **시간 값.** 호출 시간에는 큐 대기가 들어 있다. 로컬에서는 Ollama가 한 번에 하나만 처리하므로 병렬 호출 하나가 다른 호출을 기다린다. `run-summary.json`의 `perChapterMs`는 한 화 호출들이 점유한 시간의 합집합이다. 겹친 시간은 한 번만 세고, 작가를 기다린 틈은 빼고, 큐 대기는 포함한다. `perChapterModelMs`는 호출 시간의 단순 합이다. 연속성 검사와 추출은 병렬로 돈다. 로컬 `firstTokenMs`에는 생각 시간이 들어간다.
+- **시간 값.** 로컬 호출은 하네스가 한 번에 하나씩 돌린다. 호출 시간(`durationMs`)에는 큐 대기가 들어가지 않고, 대기 시간은 호출마다 `queueMs`에 남는다. `waitInclusiveMs`는 큐 대기를 더한 시간이다. 클라우드 호출은 여전히 겹쳐 돈다. `run-summary.json`의 `perChapterMs`는 한 화 호출들이 점유한 시간의 합집합이다. 겹친 시간은 한 번만 세고, 작가를 기다린 틈은 빼고, 큐 대기는 포함한다(`startedAt - queueMs`부터 `startedAt + durationMs`까지). `perChapterModelMs`, 작업별 `totalMs`, `timeouts`는 큐 대기를 뺀 실제 호출 시간이다. 그래서 이 변경 전 실행과는 직접 비교할 수 없다. 로컬 `firstTokenMs`에는 생각 시간이 들어간다.
 - **작가 에이전트의 시야.** 2026-10-19부터 작가는 대기 중인 항목, 설정집(bible), 지침 말고도 `author-context.json`을 읽는다. 이 파일에는 지금까지 승인된 위키, 앞서 내린 판단(거절한 항목 포함), 중복 힌트가 들어 있다. 힌트는 조언일 뿐이고 판단은 작가가 한다. 2026-10-18 이전 결과는 작가가 보는 것이 달라서 직접 비교할 수 없다. 새 실행에서 중복 승인은 `countDecisionMetrics`로 센다.
 
 ## 5. 시험 운행 기록
