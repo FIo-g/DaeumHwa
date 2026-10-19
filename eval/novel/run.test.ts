@@ -25,6 +25,7 @@ import { type Pending, readPending } from './author-io'
 import { type Bible, loadBible } from './bible'
 import { fakeAnswer } from './fake-author'
 import { createRun, openRun, runUntilBlocked } from './run'
+import { RunSummarySchema } from './steps/finish'
 import { applySuggestions, pendingKey, selectDraftEntries } from './steps/util'
 import type { RunState } from './state'
 
@@ -208,6 +209,16 @@ describe('novel eval step machine', () => {
     expect(summary.speed.overall.source).toBe('wall')
     expect(typeof summary.speed.byTask['draft-chapter']?.medianFirstTokenMs).toBe('number')
     expect(summary.speed.perChapterMs['1']).toBeDefined()
+
+    // Measurement blocks (HX5): the summary parses, the check step wrote the counters per chapter,
+    // and the fake proofread returns no AI items, so the proofread block is absent.
+    const parsed = RunSummarySchema.parse(summary)
+    expect(parsed.timeouts).toEqual({ total: 0, byTask: {} })
+    for (let n = 1; n <= 5; n++) {
+      expect(existsSync(join(dir, 'chapters', `0${n}.extraction.json`))).toBe(true)
+    }
+    expect(parsed.extraction?.chapters).toBe(5)
+    expect(parsed).not.toHaveProperty('proofread')
 
     const decisions = readFileSync(join(dir, 'author-decisions.jsonl'), 'utf8')
       .trim()

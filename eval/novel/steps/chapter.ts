@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { eq } from 'drizzle-orm'
+import { z } from 'zod'
 import {
   createChapterFromDraft,
   repairDraft,
@@ -21,6 +22,7 @@ import { type ProofreadSuggestion, runChapterCheck, runProofread } from '@/serve
 import { getChapter, listChapters, saveChapter, setChapterStatus } from '@/server/chapters'
 import { listIssues, resolveIssue } from '@/server/issues'
 import { listProposals } from '@/server/proposals'
+import { classifyError, type FailureKind } from '../eval-client'
 import { chapterMetrics } from '../metrics'
 import type { Answer, Pending } from '../author-io'
 import type { RunContext, StepFn } from '../run'
@@ -89,6 +91,63 @@ export const advice: StepFn = async (ctx, key, state) => {
   mark(ctx, state, key)
   settle(ctx, note, answer)
   return 'done'
+}
+
+const ContinueWarningSchema = z.object({
+  kind: z.literal('continue-failed'),
+  reason: z.string(),
+  detail: z.string(),
+})
+
+/**
+ * The continuation failure in a draft run row (A's warning, spec 7), or null. Other warning kinds
+ * are skipped. `reason` is an AppError code, 'UNKNOWN' or 'EMPTY'.
+ */
+export function continueFailureOf(output: unknown): { reason: string; detail: string } | null {
+  const row = z.object({ warnings: z.array(z.unknown()) }).safeParse(output)
+  if (!row.success) return null
+  for (const warning of row.data.warnings) {
+    const parsed = ContinueWarningSchema.safeParse(warning)
+    if (parsed.success) return { reason: parsed.data.reason, detail: parsed.data.detail }
+  }
+  return null
+}
+
+/**
+ * Records a continuation that failed, from the first run row. The draft keeps its first text, so
+ * the attempt is not lost; the failure the client still holds for it is taken, so no later step
+ * reads it as its own. An external limit or network failure pauses the run like any other external
+ * failure (withModelRetry). Writes the attempt's continue.json, which the run summary counts.
+ */
+async function recordContinueFailure(
+  ctx: RunContext,
+  runId: string,
+  n: number,
+  attemptNo: number,
+): Promise<void> {
+  const [run] = await ctx.db.select().from(aiRuns).where(eq(aiRuns.id, runId)).limit(1)
+  const failed = continueFailureOf(run?.output)
+  if (!failed) return
+  ctx.client.takeLastFailure()
+  // Same classification as the other calls. A reason that is not a limit is judged by its detail.
+  const failure: FailureKind =
+    failed.reason === 'AI_LIMIT' ? 'external-limit' : classifyError(new Error(failed.detail))
+  writeRunFile(
+    ctx.dir,
+    `chapters/${pad(n)}.attempt-${attemptNo}.continue.json`,
+    `${JSON.stringify(
+      {
+        kind: 'continue-failed',
+        message: '이어쓰기 실패',
+        reason: failed.reason,
+        detail: failed.detail,
+        failure,
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  if (failure !== 'model') throw new ExternalFailureError({ kind: failure, message: failed.detail })
 }
 
 /**
@@ -239,6 +298,7 @@ export const draft: StepFn = async (ctx, key, state) => {
         }
         break
       }
+      await recordContinueFailure(ctx, generated.runId, n, attemptNo)
       // E1 then E2, each stage on the text the previous one returned (spec 7).
       const trimmedText = await trimStage(
         ctx,
@@ -414,6 +474,13 @@ export const check: StepFn = async (ctx, key, state) => {
     runChapterCheck(ctx.db, ctx.actor, { chapterId }, ctx.client),
   )
   if (checked) {
+    if (checked.extraction) {
+      writeRunFile(
+        ctx.dir,
+        `chapters/${pad(n)}.extraction.json`,
+        `${JSON.stringify(checked.extraction)}\n`,
+      )
+    }
     state.data.checkProposalIds = {
       ...state.data.checkProposalIds,
       [n]: checked.proposals.map((row) => row.id),

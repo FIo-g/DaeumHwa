@@ -19,7 +19,7 @@ import { publishReview, writeBlindCopy } from './blind'
 import { chapterMetrics } from './metrics'
 import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
 import { publishFile } from './publish'
-import { buildRunSummary } from './steps/finish'
+import { buildRunSummary, readSummaryInputs } from './steps/finish'
 import { readCallRecords } from './steps/util'
 import {
   type RunConfig,
@@ -445,7 +445,7 @@ export function resummarizeRun(dir: string): ResummarizeResult {
   }
 
   const calls = readCallRecords(dir)
-  const summary = buildRunSummary(calls, state, config.lang)
+  const summary = buildRunSummary(calls, state, config.lang, readSummaryInputs(dir))
   writeFileSync(path.join(dir, 'run-summary.json'), `${JSON.stringify(summary, null, 2)}\n`)
   return { dir, chapters: chapterFiles.length, calls: calls.length }
 }
