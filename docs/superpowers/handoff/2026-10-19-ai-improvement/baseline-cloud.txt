@@ -1,0 +1,3 @@
+cloud baseline (branch feat/ai-improvement-cloud @ 3132e70, before seam)
+tsc --noEmit (after next typegen): 0 errors
+vitest run --maxWorkers=2: 174 files passed, 1651 tests passed
