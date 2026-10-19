@@ -4,6 +4,7 @@
 import { continuityCheckTask } from '@/ai/tasks/continuity-check'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { DRAFT_SYSTEM } from '@/ai/tasks/draft-chapter'
+import { draftRepairTask } from '@/ai/tasks/draft-repair'
 import { directionAdviceTask } from '@/ai/tasks/direction-advice'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
 import { interviewQuestionTask } from '@/ai/tasks/interview-question'
@@ -43,6 +44,7 @@ const ANSWERS: { task: string; system: string; answer: Answer }[] = [
   { task: 'direction-advice', system: directionAdviceTask.system, answer: adviceAnswer },
   { task: 'style-suggest', system: styleSuggestTask.system, answer: styleAnswer },
   { task: 'draft-chapter', system: DRAFT_SYSTEM, answer: draftAnswer },
+  { task: 'draft-repair', system: draftRepairTask.system, answer: () => ({ edits: [] }) },
 ]
 
 const DRAFT_TEXT = '서윤은 조용히 문을 열었다. 바람이 차가웠다.'

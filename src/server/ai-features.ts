@@ -20,6 +20,7 @@ import {
   DRAFT_SYSTEM,
   type DraftPromptInput,
 } from '@/ai/tasks/draft-chapter'
+import { applyDraftEdits, draftRepairTask } from '@/ai/tasks/draft-repair'
 import { type AdviceResult, directionAdviceTask } from '@/ai/tasks/direction-advice'
 import { type ReaderSimResult, readerSimTask } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
@@ -40,6 +41,7 @@ import {
 } from '@/lib/draft-length'
 import { AppError, isAppError } from '@/lib/errors'
 import { chapterLabel } from '@/lib/labels'
+import { findDraftFlags } from '@/lib/korean/style-copy'
 import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
 import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
@@ -513,6 +515,78 @@ export async function createChapterFromDraft(
     body: text,
     versionSource: 'ai_draft',
   })
+}
+
+export type RepairDraftResult = { runId: string; text: string; flagged: number; applied: number }
+
+/**
+ * Rewrites only the flagged sentences of a finished draft run (spec 6, 7). It runs after the
+ * draft is done, never inside the stream, and updates the run row only: the manuscript and the
+ * chapter are not changed. `input.text` repairs that text instead of the stored one. Editor role.
+ */
+export async function repairDraft(
+  db: Db,
+  actor: Actor,
+  input: { workId: string; runId: string; lang?: 'ko' | 'en'; text?: string },
+  client?: AiClient,
+  signal?: AbortSignal,
+): Promise<RepairDraftResult> {
+  const { workId, runId } = input
+  await requireWorkRole(db, workId, actor.userId, 'editor')
+  const [run] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId)).limit(1)
+  if (
+    !run ||
+    run.workId !== workId ||
+    run.userId !== actor.userId ||
+    run.task !== 'draft-chapter'
+  ) {
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  }
+  if (run.status !== 'done') {
+    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 다듬을 수 있습니다.')
+  }
+  const stored = draftText(run.output)
+  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없습니다.')
+
+  // Idempotent: a repaired run keeps its result, so a second call makes no AI call.
+  const output = run.output as Record<string, unknown>
+  const previous = (output.repair ?? null) as { flagged: number; applied: number } | null
+  if (previous) {
+    return { runId, text: stored, flagged: previous.flagged, applied: previous.applied }
+  }
+
+  const text = input.text ?? stored
+  const examples = (await listStyleCards(db, actor, workId))
+    .map((card) => card.examples)
+    .filter((example) => example.trim() !== '')
+  const exempt = (await listEntries(db, actor, workId)).flatMap((entry) => [
+    entry.name,
+    ...entry.aliases,
+  ])
+  const flags = findDraftFlags(text, { examples, exempt, lang: input.lang })
+  if (flags.length === 0) {
+    const repair = { flagged: 0, applied: 0 }
+    await replaceRunOutput(db, runId, { ...output, text, repair })
+    return { runId, text, ...repair }
+  }
+
+  const { output: edits } = await runAiTask(
+    db,
+    { userId: actor.userId, workId, chapterId: run.chapterId, signal },
+    draftRepairTask,
+    { text, flags },
+    client,
+  )
+  throwIfCancelled(signal)
+  const repaired = applyDraftEdits(text, flags, edits.edits)
+  const repair = { flagged: flags.length, applied: repaired.applied }
+  await replaceRunOutput(db, runId, {
+    ...output,
+    text: repaired.text,
+    originalText: text,
+    repair,
+  })
+  return { runId, text: repaired.text, ...repair }
 }
 
 function draftText(output: unknown): string | null {

@@ -4,7 +4,12 @@ import { z } from 'zod'
 import type { ChapterRow } from '@/db/types'
 import { requireRowWork } from '@/server/access'
 import { revalidateWork, withAction } from '@/server/action-helpers'
-import { createChapterFromDraft, runReaderSimulation } from '@/server/ai-features'
+import {
+  createChapterFromDraft,
+  type RepairDraftResult,
+  repairDraft,
+  runReaderSimulation,
+} from '@/server/ai-features'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import type { ActionResult } from '@/lib/result'
 
@@ -17,6 +22,11 @@ const CreateChapterFromDraftSchema = z.object({
   workId: z.uuid(),
   runId: z.uuid(),
   title: z.string().max(200).optional(),
+})
+
+const RepairDraftSchema = z.object({
+  workId: z.uuid(),
+  runId: z.uuid(),
 })
 
 export async function runReaderSimulationAction(
@@ -39,5 +49,14 @@ export async function createChapterFromDraftAction(
     const chapter = await createChapterFromDraft(db, actor, data)
     revalidateWork(data.workId)
     return chapter
+  })
+}
+
+export async function repairDraftAction(input: unknown): Promise<ActionResult<RepairDraftResult>> {
+  return withAction(async (db, actor) => {
+    const data = RepairDraftSchema.parse(input)
+    const result = await repairDraft(db, actor, data)
+    revalidateWork(data.workId)
+    return result
   })
 }
