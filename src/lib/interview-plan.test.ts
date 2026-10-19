@@ -48,6 +48,17 @@ describe('isUndecidedAnswer', () => {
     }
   })
 
+  it('skips filler-only pieces next to an undecided sentence', () => {
+    expect(isUndecidedAnswer('음... 아직 정하지 않았어요.')).toBe(true)
+    expect(isUndecidedAnswer('글쎄요. 아직 모르겠어요.')).toBe(true)
+  })
+
+  it('does not read filler alone, or filler beside content, as undecided', () => {
+    expect(isUndecidedAnswer('음...')).toBe(false)
+    expect(isUndecidedAnswer('글쎄요.')).toBe(false)
+    expect(isUndecidedAnswer('음... 서윤은 검객이다.')).toBe(false)
+  })
+
   it('documents a phrasing it does not match (partial answer with content)', () => {
     expect(isUndecidedAnswer('아직 드러나지 않아요')).toBe(false)
   })
@@ -99,6 +110,15 @@ describe('planInterviewTopics', () => {
     expect(plan.remainingCore).not.toContain('주인공')
     expect(plan.undecidedStreak).toBe(1)
     expect(plan.storyDue).toBe(false)
+  })
+
+  it('closes a topic and counts the streak for a filler-prefixed undecided answer', () => {
+    const plan = planInterviewTopics(
+      [turn('주인공', '음... 아직 정하지 않았어요.'), turn('주요 인물', '미정')],
+      CORE_TOPICS,
+    )
+    expect(plan.closedTopics).toEqual(['주인공', '주요 인물'])
+    expect(plan.undecidedStreak).toBe(2)
   })
 
   it('closes a skipped topic but does not count it toward the streak', () => {

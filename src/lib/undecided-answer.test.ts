@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { isUndecidedAnswer } from '@/lib/interview-plan'
 import { isUndecidedOnlyAnswer } from '@/lib/undecided-answer'
 
 describe('isUndecidedOnlyAnswer', () => {
@@ -10,6 +11,12 @@ describe('isUndecidedOnlyAnswer', () => {
     '아직 정하지 않았어요. 아직 모르겠어요.',
     '결말은 아직 정하지 않았어요.',
   ])('is true for an undecided-only answer: %s', (answer) => {
+    expect(isUndecidedOnlyAnswer(answer)).toBe(true)
+  })
+
+  it('agrees with isUndecidedAnswer on a filler-prefixed undecided answer', () => {
+    const answer = '음... 아직 정하지 않았어요.'
+    expect(isUndecidedAnswer(answer)).toBe(true)
     expect(isUndecidedOnlyAnswer(answer)).toBe(true)
   })
 

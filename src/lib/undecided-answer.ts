@@ -1,8 +1,5 @@
-import { isUndecidedAnswer } from '@/lib/interview-plan'
+import { FILLER_ONLY, isUndecidedAnswer } from '@/lib/interview-plan'
 import { splitSentences } from '@/lib/korean/sentences'
-
-// Filler words that carry no content on their own ("음...", "글쎄요").
-const FILLER_ONLY = /^(음+|어+|흠+|글쎄요?)$/
 
 /** Lowercased, with whitespace and punctuation removed. */
 function compactSentence(text: string): string {

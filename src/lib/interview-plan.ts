@@ -36,6 +36,12 @@ export function normalizeQuestion(text: string): string {
   return text.replace(/[\s\p{P}\p{S}]+/gu, '')
 }
 
+/**
+ * Filler words that carry no content on their own ("음...", "글쎄요"), matched on a compacted
+ * piece. Shared with undecided-answer.ts so both "미정" rules treat filler the same way.
+ */
+export const FILLER_ONLY = /^(음+|어+|흠+|글쎄요?)$/
+
 // Each pattern is anchored and matches one compacted sentence. No nested quantifiers: the filler
 // group is a flat alternation under one `*`.
 const UNDECIDED_KO =
@@ -51,10 +57,11 @@ const UNDECIDED_EN_DONT = /^i?(?:dont|donot|havent|havenot)(?:know|decided)(?:ye
 export function isUndecidedAnswer(answer: string | null): boolean {
   if (answer === null || answer.trim() === '') return false
   if (compact(answer).length > UNDECIDED_MAX_CHARS) return false
+  // Filler-only pieces ("음...") are neither content nor a marker; at least one marker is needed.
   const pieces = answer
     .split(/[.!?。…\n]+/)
     .map(compact)
-    .filter((piece) => piece !== '')
+    .filter((piece) => piece !== '' && !FILLER_ONLY.test(piece))
   if (pieces.length === 0) return false
   return pieces.every(
     (piece) =>
