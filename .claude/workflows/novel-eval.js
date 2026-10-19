@@ -78,6 +78,9 @@ const runDir = (run) => 'eval/results/novel/' + date + '/' + runName(run)
 // The reviewer reads only this blinded copy of a run (built by `eval:novel blind`), never the run.
 const blindDir = (run) => 'eval/results/novel/' + date + '/blind/' + runName(run)
 const docsReviewPath = (run) => `docs/eval/novel/${date}/${run.model}-${run.lang}.md`
+// The summary agent writes on the run side; the workflow copies it into docs after the agent returns.
+const summaryResultPath = () => `eval/results/novel/${date}/summary.md`
+const docsSummaryPath = () => `docs/eval/novel/${date}/summary.md`
 
 function errorText(err) {
   return err && err.message ? err.message : String(err)
@@ -181,8 +184,9 @@ function reviewerPrompt(dir, lang) {
   ].join('\n')
 }
 
-// Adds the model header to the blind review and copies it into docs. The command prints one JSON line.
-function copyPrompt(run, dir) {
+// Adds the model header to the blind review as <dir>/review.md and writes the docs copy. The
+// command prints one JSON line.
+function reviewHeaderPrompt(run, dir) {
   return [
     'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself; run only the commands below.',
     '',
@@ -190,6 +194,18 @@ function copyPrompt(run, dir) {
     `  cd ${REPO} && pnpm eval:novel publish-review --dir ${dir} --to ${docsReviewPath(run)}`,
     'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail.',
     'Otherwise return status "copied" and detail = the "docsPath" value from that JSON line.',
+  ].join('\n')
+}
+
+// Copies one run-side file into docs. The command prints one JSON line with a status.
+function publishPrompt(src, dest, ifMissing) {
+  return [
+    'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself; run only the command below.',
+    '',
+    'Run this command from the repository root, with the Bash timeout set to 120000 ms:',
+    `  cd ${REPO} && pnpm eval:novel publish --src ${src} --dest ${dest}${ifMissing ? ' --if-missing' : ''}`,
+    'The command prints one JSON line on stdout. If that line has a "status" field, return that status ("copied", "skipped" or "failed") and detail = the JSON line verbatim, whatever the exit code.',
+    'If that line has only an "error" field, or no JSON line is printed, return status "failed" and detail = the error text or the command output.',
   ].join('\n')
 }
 
@@ -213,15 +229,59 @@ function summaryPrompt(results) {
     `Follow the instructions in ${REPO}/eval/novel/agents/summary.md.`,
     `Inputs: date = ${date}, runs = ${JSON.stringify(list)}.`,
     'Also read every review document in docs/eval/novel/<date>/ named <model>-<lang>.md, including runs from earlier invocations that are not listed in runs.',
-    `Write ${REPO}/docs/eval/novel/${date}/summary.md as the instructions say.`,
+    `Write ${REPO}/${summaryResultPath()} as the instructions say. Do not write under docs/.`,
   ].join('\n')
 }
 
 const reviews = []
 const results = []
 
+// A copy failure a retry cannot fix: the source is missing, or the CLI refused the paths.
+const NO_RETRY = /source not found|publish: src must be under/
+
+// Runs one copy command through a runner agent, at most two runner calls. A step whose status is in
+// accept ends the loop and is returned. A failure a retry cannot fix ends it at once.
+async function copyCommand(prompt, label, accept) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const step = await agentLogged(prompt, {
+      label,
+      phase: 'Review',
+      model: 'haiku',
+      schema: RUNNER_SCHEMA,
+    })
+    const status = runnerStatus(step)
+    if (accept.includes(status)) return step
+    const detail = step && typeof step.detail === 'string' ? step.detail : 'no result'
+    log(`${label}: ${status}: ${detail}`)
+    if (NO_RETRY.test(detail)) break
+  }
+  return null
+}
+
+// Copies a run-side file into docs. An existing docs file is kept when ifMissing is set (skipped).
+// Returns the accepted runner step (its detail is the JSON line), or null when the copy failed.
+async function publish(src, dest, ifMissing, label) {
+  const accept = ifMissing ? ['copied', 'skipped'] : ['copied']
+  const step = await copyCommand(publishPrompt(src, dest, ifMissing), `publish ${label}`, accept)
+  if (step === null) return null
+  log(`publish ${label}: ${runnerStatus(step)}`)
+  return step
+}
+
+// Copies a finished run's review into docs. The header step adds the model line to <dir>/review.md
+// and writes the docs copy; the copy then puts that run-side file into docs with the retried publish.
+async function copyReview(run, dir, label) {
+  const header = await copyCommand(reviewHeaderPrompt(run, dir), `review header ${label}`, [
+    'copied',
+  ])
+  if (header === null) return null
+  return publish(`${dir}/review.md`, docsReviewPath(run), false, label)
+}
+
 // Reviews a finished run and copies the review into docs. A run that already has review.md keeps
-// it (its notes are never overwritten) unless args.rereview is true. Returns null on failure.
+// it (its notes are never overwritten) unless args.rereview is true; then only a missing docs copy
+// is made. Returns 'skipped' when the review was kept, the copy's detail when a review was written,
+// or null on failure.
 async function reviewRun(run, dir, label) {
   if (!rereview) {
     const found = await agentLogged(reviewExistsPrompt(dir), {
@@ -232,7 +292,9 @@ async function reviewRun(run, dir, label) {
     })
     const foundStatus = runnerStatus(found)
     if (foundStatus === 'exists') {
-      log(`${label}: review.md exists, review and copy skipped (args.rereview is not true)`)
+      const copied = await publish(`${dir}/review.md`, docsReviewPath(run), true, label)
+      if (copied === null) return null
+      log(`${label}: review.md exists, reviewer skipped; docs copy: ${runnerStatus(copied)}`)
       return 'skipped'
     }
     if (foundStatus !== 'missing') {
@@ -259,14 +321,9 @@ async function reviewRun(run, dir, label) {
     log(`${label}: review returned no result, copy skipped`)
     return null
   }
-  const copied = await agentLogged(copyPrompt(run, dir), {
-    label: `copy review ${label}`,
-    phase: 'Review',
-    model: 'haiku',
-    schema: RUNNER_SCHEMA,
-  })
-  if (runnerStatus(copied) !== 'copied') {
-    log(`${label}: review copy did not succeed: ${copied ? copied.detail : 'no result'}`)
+  const copied = await copyReview(run, dir, label)
+  if (copied === null) {
+    log(`${label}: review copy did not succeed`)
     return null
   }
   return copied.detail
@@ -394,11 +451,17 @@ log(`reviews finished: ${reviewResults.filter(Boolean).length}/${reviews.length}
 
 if (withSummary) {
   phase('Summary')
-  await agentLogged(summaryPrompt(results), {
+  const summary = await agentLogged(summaryPrompt(results), {
     label: 'summary',
     phase: 'Summary',
     model: 'sonnet',
   })
+  if (summary === null) {
+    log('summary copy skipped: the summary agent returned no result')
+  } else {
+    const copied = await publish(summaryResultPath(), docsSummaryPath(), false, 'summary')
+    log(`summary copy: ${copied === null ? 'failed' : 'copied'}`)
+  }
 } else {
   log('summary skipped (args.summary is not true)')
 }
