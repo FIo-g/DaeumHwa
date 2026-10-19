@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { proposals, threads, wikiEntries } from '@/db/schema'
+import { facts, proposals, threads, wikiEntries } from '@/db/schema'
 import type { EntryKind, ThreadStatus } from '@/db/types'
 
 // Names an extraction must not create again: wiki cards and threads, plus pending proposals that
@@ -11,6 +11,14 @@ export type KnownEntries = {
   pending: { name: string; aliases: string[]; kind: EntryKind }[]
   threads: { id: string; title: string; status: ThreadStatus }[]
   pendingThreadTitles: string[]
+}
+
+/** A fact the extraction must not repeat: a current wiki fact, or a pending fact_create. */
+export type KnownFactText = {
+  entryId: string | null
+  subjectName: string
+  content: string
+  pending: boolean
 }
 
 /**
@@ -76,4 +84,46 @@ export async function loadKnownEntries(
     .orderBy(asc(threads.createdAt))
 
   return { active, pending, threads: threadRows, pendingThreadTitles }
+}
+
+/**
+ * Fact texts of a work for the extraction dedupe: pending fact_create proposals first, then the
+ * current wiki facts (not archived, superseded or ended). Read-only; no limit, the prompt caps it.
+ */
+export async function loadKnownFactTexts(db: Db, workId: string): Promise<KnownFactText[]> {
+  const pendingRows = await db
+    .select({ payload: proposals.payload })
+    .from(proposals)
+    .where(
+      and(
+        eq(proposals.workId, workId),
+        eq(proposals.status, 'pending'),
+        eq(proposals.type, 'fact_create'),
+      ),
+    )
+    .orderBy(asc(proposals.createdAt))
+
+  const wikiRows = await db
+    .select({ entryId: facts.entryId, subjectName: facts.subjectName, content: facts.content })
+    .from(facts)
+    .where(
+      and(
+        eq(facts.workId, workId),
+        isNull(facts.archivedAt),
+        isNull(facts.supersededByFactId),
+        isNull(facts.validToPosition),
+      ),
+    )
+    .orderBy(desc(facts.createdAt))
+
+  const pending = pendingRows.map(({ payload }) => {
+    const p = payload as { entryId: string | null; subjectName: string; content: string }
+    return {
+      entryId: p.entryId ?? null,
+      subjectName: p.subjectName,
+      content: p.content,
+      pending: true,
+    }
+  })
+  return [...pending, ...wikiRows.map((f) => ({ ...f, pending: false }))]
 }
