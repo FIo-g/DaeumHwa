@@ -14,14 +14,17 @@ export type DraftBeats = {
 }
 
 export const DraftBeatsSchema: z.ZodType<DraftBeats> = z.object({
-  scenes: z.array(
-    z.object({
-      place: z.string(),
-      characters: z.array(z.string()),
-      objects: z.array(z.string()),
-      sequence: z.array(z.string()),
-    }),
-  ),
+  // At least one scene: an empty list is a model failure, so the call fails and is recorded as one.
+  scenes: z
+    .array(
+      z.object({
+        place: z.string(),
+        characters: z.array(z.string()),
+        objects: z.array(z.string()),
+        sequence: z.array(z.string()),
+      }),
+    )
+    .min(1),
 })
 
 export const DRAFT_BEATS_SYSTEM = `당신은 웹소설 초안의 장면 구성을 돕는 보조 작가다. 작가의 지시에 있는 사건을 장면 목록으로 나눈다.
