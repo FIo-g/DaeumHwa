@@ -4,6 +4,7 @@ import { type Extraction, ExtractionSchema } from '@/ai/extraction'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { ENTITY_NAME_RULES } from '@/ai/extraction-rules'
 import type { AiTaskDef } from '@/ai/types'
+import { isSpeechStyleEnabled } from '@/ai/voice'
 
 // interview-extract (F1): turns one interview answer into wiki candidates. The output is the shared
 // Extraction shape; the service maps it to proposals with extractionToProposals.
@@ -22,7 +23,7 @@ export type InterviewExtractInput = {
   knownFacts: { subjectName: string; content: string; pending: boolean }[]
 }
 
-const SYSTEM = [
+const SYSTEM_LINES = [
   '당신은 작가의 인터뷰 답변을 설정 위키 후보로 정리한다.',
   '규칙:',
   '- 답변에 담긴 내용만 정리한다. 지어내지 않는다.',
@@ -39,7 +40,27 @@ const SYSTEM = [
   ENTITY_NAME_RULES,
   TAG_DATA_RULE,
   '- 모든 출력은 한국어로 쓴다.',
-].join('\n')
+]
+
+/** Speech rules (spec 8, track B), added only when the feature is on. */
+const SPEECH_EXTRACT_APPEND =
+  ' 단, 답에 인물의 말투(존댓말·반말·말버릇)가 나오면 이미 있는 카드여도 그 인물을 entries에 넣고 fields에 key "speech"로 말투를 한 문장으로 쓴다.'
+const SPEECH_EXTRACT_RULE =
+  '- 인물 카드의 말투는 항상 fields의 key "speech"에 쓴다. 다른 key(말투, 화법, voice)를 쓰지 않는다.'
+
+/** The interview extraction system prompt. `speech` appends the speech rules at their anchors. */
+export function buildInterviewExtractSystem(speech: boolean): string {
+  if (!speech) return SYSTEM_LINES.join('\n')
+  const lines = [...SYSTEM_LINES]
+  const known = lines.findIndex((line) => line.startsWith('- 이미 있는 카드(<known>)'))
+  if (known === -1)
+    throw new Error('interview-extract SYSTEM has no "- 이미 있는 카드(<known>)" line')
+  lines[known] += SPEECH_EXTRACT_APPEND
+  const names = lines.indexOf(ENTITY_NAME_RULES)
+  if (names === -1) throw new Error('interview-extract SYSTEM has no ENTITY_NAME_RULES line')
+  lines.splice(names, 0, SPEECH_EXTRACT_RULE)
+  return lines.join('\n')
+}
 
 /** Prompt with <question>, <answer>, <known>, <known_facts> and <threads> sections. */
 export function buildInterviewExtractPrompt(raw: InterviewExtractInput): string {
@@ -89,7 +110,10 @@ export const interviewExtractTask: AiTaskDef<InterviewExtractInput, Extraction> 
   name: 'interview-extract',
   effort: 'medium',
   maxTokens: 8000,
-  system: SYSTEM,
+  // A getter: the speech flag is read at call time, never frozen at module load.
+  get system() {
+    return buildInterviewExtractSystem(isSpeechStyleEnabled())
+  },
   buildPrompt: buildInterviewExtractPrompt,
   schema: ExtractionSchema,
 }

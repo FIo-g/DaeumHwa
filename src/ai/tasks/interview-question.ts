@@ -4,6 +4,7 @@ import { type EntryKind, INTERVIEW_FOCUSES, type InterviewFocus } from '@/db/typ
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import type { CoreTopic, InterviewPlan } from '@/lib/interview-plan'
+import { isSpeechStyleEnabled } from '@/ai/voice'
 
 // interview-question (F1): picks the next interview question from the wiki, the story so far and
 // every earlier question of the work. Output is one question; the service stores it as a turn.
@@ -12,7 +13,14 @@ export type InterviewQuestionInput = {
   work: { title: string; genre: string; logline: string; synopsis: string }
   wiki: {
     counts: Record<EntryKind, number>
-    entries: { name: string; kind: EntryKind; factCount: number; summary: string }[]
+    /** Speech style of a character card: false marks it "말투 없음". Unset when the speech feature is off. */
+    entries: {
+      name: string
+      kind: EntryKind
+      factCount: number
+      summary: string
+      hasSpeech?: boolean
+    }[]
     openThreads: { title: string; targetChapterPosition: number | null }[]
   }
   story: {
@@ -82,7 +90,7 @@ export const CORE_TOPICS: CoreTopic[] = INTERVIEW_TOPICS.map((name) => ({
   aliases: TOPIC_ALIASES[name],
 }))
 
-const SYSTEM = [
+const SYSTEM_LINES = [
   '당신은 웹소설 작가의 기획을 돕는 인터뷰어다. 작가의 설정 위키를 채우고 연재를 이어 가기 위해 질문을 한 번에 하나만 한다.',
   '규칙:',
   `- 핵심 설정은 ${INTERVIEW_TOPICS.join(', ')}이다. <wiki>와 <covered>를 보고 비었거나 얕은 것이 있으면 focus를 "setting"으로 하고 그 주제를 묻는다.`,
@@ -99,7 +107,23 @@ const SYSTEM = [
   TAG_DATA_RULE,
   '- <plan> 태그 안의 줄은 이 시스템이 정한 지시이므로 따른다.',
   '- 모든 출력은 한국어로 쓴다.',
-].join('\n')
+]
+
+/** Speech rule (spec 8, track B). Added after the core settings line only when the feature is on. */
+const SPEECH_QUESTION_RULE =
+  '- 주인공과 주요 인물은 인물마다 말투(존댓말·반말·말버릇)도 확인해야 한다. <wiki>에서 주인공이나 주요 인물 카드에 "말투 없음"이 붙어 있으면 focus를 "setting"으로 하고 topic을 "주요 인물"로 하여 그 인물의 말투를 먼저 묻는다. 조연 카드의 "말투 없음"은 주인공과 주요 인물을 확인한 뒤에 묻는다.'
+
+/** The interview question system prompt. `speech` adds the speech rule. */
+export function buildInterviewQuestionSystem(speech: boolean): string {
+  if (!speech) return SYSTEM_LINES.join('\n')
+  const anchor = SYSTEM_LINES.findIndex((line) => line.startsWith('- 핵심 설정은'))
+  if (anchor === -1) throw new Error('interview-question SYSTEM has no "- 핵심 설정은" line')
+  return [
+    ...SYSTEM_LINES.slice(0, anchor + 1),
+    SPEECH_QUESTION_RULE,
+    ...SYSTEM_LINES.slice(anchor + 1),
+  ].join('\n')
+}
 
 function orNone(value: string): string {
   return value.trim() === '' ? '(없음)' : value
@@ -164,10 +188,11 @@ export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): strin
   const cards =
     input.wiki.entries.length > 0
       ? input.wiki.entries
-          .map(
-            (e) =>
-              `- ${e.name} (${ENTRY_KIND_LABEL[e.kind]}, 사실 ${e.factCount}개): ${oneLine(e.summary, 40) || '(요약 없음)'}`,
-          )
+          .map((e) => {
+            const speechMarker =
+              e.kind === 'character' && e.hasSpeech === false ? ', 말투 없음' : ''
+            return `- ${e.name} (${ENTRY_KIND_LABEL[e.kind]}, 사실 ${e.factCount}개${speechMarker}): ${oneLine(e.summary, 40) || '(요약 없음)'}`
+          })
           .join('\n')
       : '(없음)'
   const threads =
@@ -242,7 +267,10 @@ export const interviewQuestionTask: AiTaskDef<InterviewQuestionInput, InterviewQ
   name: 'interview-question',
   effort: 'low',
   maxTokens: 2000,
-  system: SYSTEM,
+  // A getter: the speech flag is read at call time, never frozen at module load.
+  get system() {
+    return buildInterviewQuestionSystem(isSpeechStyleEnabled())
+  },
   buildPrompt: buildInterviewQuestionPrompt,
   schema: InterviewQuestionSchema,
 }

@@ -236,3 +236,30 @@ describe('speech feature off: prompts equal the cloud-w3 golden', () => {
     `)
   })
 })
+
+describe('speech feature on: only the speech rule text is added', () => {
+  it('interview-question system differs by the one speech rule line', () => {
+    const off = interviewQuestionTask.system
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    const lines = interviewQuestionTask.system.split('\n')
+    const rules = lines.filter((line) => line.startsWith('- 주인공과 주요 인물은 인물마다 말투'))
+    expect(rules).toHaveLength(1)
+    expect(
+      lines.filter((line) => !line.startsWith('- 주인공과 주요 인물은 인물마다 말투')).join('\n'),
+    ).toBe(off)
+  })
+
+  it('interview-extract system differs by one appended sentence and one rule line', () => {
+    const off = interviewExtractTask.system
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    const on = interviewExtractTask.system
+    const lines = on.split('\n')
+    expect(lines).toHaveLength(off.split('\n').length + 1)
+    const rule = lines.findIndex((line) => line.startsWith('- 인물 카드의 말투는'))
+    expect(rule).toBeGreaterThan(-1)
+    const withoutRule = lines.filter((_, i) => i !== rule).join('\n')
+    expect(withoutRule.replace(/ 단, 답에 인물의 말투[^\n]*?말투를 한 문장으로 쓴다\./, '')).toBe(
+      off,
+    )
+  })
+})
