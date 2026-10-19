@@ -27,8 +27,8 @@ describe('chapterMetrics foreignRuns (golden)', () => {
   })
 
   it('ko: U+FFFD is flagged', () => {
-    const text = '깨진 � 글자'
-    expect(runs(text, 'ko')).toEqual(['�'])
+    const text = '깨진 \uFFFD 글자'
+    expect(runs(text, 'ko')).toEqual(['\uFFFD'])
   })
 
   it('ko: several runs of each kind in one text', () => {
