@@ -21,8 +21,14 @@ export const FACT_DUPLICATE_DICE = 0.8
  * - No number or synonym normalization: `19` and `nineteen` score about 0.58, so they are not
  *   duplicates. Korean number words such as 열아홉 are not compared with digits.
  * - A different number always means a different fact (digit rule).
+ *
+ * `minDice` exists for the threshold replay (eval/novel/thresholds.ts); product callers use the default.
  */
-export function isNearDuplicateFact(a: string, b: string): boolean {
+export function isNearDuplicateFact(
+  a: string,
+  b: string,
+  minDice: number = FACT_DUPLICATE_DICE,
+): boolean {
   const na = normalizeForCompare(a)
   const nb = normalizeForCompare(b)
   if (na === '' || nb === '') return false
@@ -33,7 +39,7 @@ export function isNearDuplicateFact(a: string, b: string): boolean {
   if (digitsA.join(' ') !== digitsB.join(' ')) return false
 
   if ([...na].length < 2 || [...nb].length < 2) return false
-  if (bigramDice(a, b) < FACT_DUPLICATE_DICE) return false
+  if (bigramDice(a, b) < minDice) return false
 
   return contentWordsContained(a, b)
 }

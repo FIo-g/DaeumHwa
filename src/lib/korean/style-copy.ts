@@ -26,8 +26,8 @@ export type RepeatedWordOptions = {
 }
 
 /** Provisional thresholds (spec 8). Calibrated only on hand counts; see the brief's section 10. */
-const SAMPLE_COPY_THRESHOLD = 0.5
-const REPEATED_WORD_MIN_COUNT = 8
+export const SAMPLE_COPY_THRESHOLD = 0.5
+export const REPEATED_WORD_MIN_COUNT = 8
 const REPEATED_WORD_KEEP = 3
 const REPEATED_WORD_MAX_FLAGS = 12
 const DRAFT_MAX_FLAGS = 20
