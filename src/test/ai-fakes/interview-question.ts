@@ -23,8 +23,7 @@ const FAKE_QUESTIONS: Record<(typeof INTERVIEW_TOPICS)[number], InterviewQuestio
   '주요 인물': {
     focus: 'setting',
     topic: '주요 인물',
-    question:
-      '주인공 곁에서 이야기를 움직이는 중요한 인물은 누구인가요? 주인공과의 관계도 알려 주세요.',
+    question: '주인공 곁에서 이야기를 움직이는 중요한 인물은 누구인가요?',
     rationale: '주요 인물 카드와 인물 관계를 채웁니다.',
   },
   '세계관 규칙': {
