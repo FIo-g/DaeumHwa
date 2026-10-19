@@ -59,6 +59,31 @@ export const ExtractionSchema = z.object({
 
 export type Extraction = z.infer<typeof ExtractionSchema>
 
+// The split chapter extraction (local providers) asks for three parts, one call each. Each part
+// schema is a pick of the full schema, so the part outputs carry the same fields and rules.
+export const FactsPartSchema = ExtractionSchema.pick({ summary: true, entries: true, facts: true })
+export const ThreadsPartSchema = ExtractionSchema.pick({ threads: true })
+export const RelationsPartSchema = ExtractionSchema.pick({ relations: true })
+
+export type FactsPart = z.infer<typeof FactsPartSchema>
+export type ThreadsPart = z.infer<typeof ThreadsPartSchema>
+export type RelationsPart = z.infer<typeof RelationsPartSchema>
+
+/** Joins the three part outputs into one Extraction. Pure: no AI call. */
+export function mergeExtractionParts(parts: {
+  facts: FactsPart
+  threads: ThreadsPart
+  relations: RelationsPart
+}): Extraction {
+  return {
+    summary: parts.facts.summary,
+    entries: parts.facts.entries,
+    facts: parts.facts.facts,
+    threads: parts.threads.threads,
+    relations: parts.relations.relations,
+  }
+}
+
 export type ExtractionContext = {
   source: ProposalSource
   sourceRef: string | null
