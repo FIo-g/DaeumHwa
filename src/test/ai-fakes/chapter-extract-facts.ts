@@ -1,4 +1,8 @@
-// PLACEHOLDER (Wave-L0 seam): track F2 replaces the body. Schema-valid empty output for 'chapter-extract-facts'.
-export function fakeChapterFacts(): { summary: null; entries: never[]; facts: never[] } {
-  return { summary: null, entries: [], facts: [] }
+import type { ChapterExtractInput } from '@/ai/tasks/chapter-extract'
+import { fakeChapterExtraction } from '@/test/ai-fakes/chapter-extract'
+
+// Stand-in output for 'chapter-extract-facts': the facts part of the same fake extraction.
+export function fakeChapterFacts(input: ChapterExtractInput) {
+  const { summary, entries, facts } = fakeChapterExtraction(input)
+  return { summary, entries, facts }
 }

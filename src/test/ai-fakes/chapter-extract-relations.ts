@@ -1,4 +1,7 @@
-// PLACEHOLDER (Wave-L0 seam): track F2 replaces the body. Schema-valid empty output for 'chapter-extract-relations'.
-export function fakeChapterRelations(): { relations: never[] } {
-  return { relations: [] }
+import type { ChapterExtractInput } from '@/ai/tasks/chapter-extract'
+import { fakeChapterExtraction } from '@/test/ai-fakes/chapter-extract'
+
+// Stand-in output for 'chapter-extract-relations': the relations part of the same fake extraction.
+export function fakeChapterRelations(input: ChapterExtractInput) {
+  return { relations: fakeChapterExtraction(input).relations }
 }
