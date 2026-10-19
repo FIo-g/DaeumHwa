@@ -17,6 +17,5 @@ export const chapterExtractSampleInput: ChapterExtractInput = {
   knownFacts: [{ ref: 'F1', subjectName: 'Mina Park', content: 'Lost a finger' }],
 }
 
-export const chapterExtractFactsSample = chapterExtractFactsTask.buildPrompt(
-  chapterExtractSampleInput,
-)
+export const chapterExtractFactsSample =
+  chapterExtractFactsTask.buildPrompt(chapterExtractSampleInput)

@@ -15,7 +15,12 @@ import type { Actor } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { runChapterCheck } from '@/server/chapter-check'
 import { createTestDb } from '@/test/db'
-import { createTestChapter, createTestEntry, createTestUser, createTestWork } from '@/test/factories'
+import {
+  createTestChapter,
+  createTestEntry,
+  createTestUser,
+  createTestWork,
+} from '@/test/factories'
 
 // Split extraction (local providers) inside the chapter check. Same setup as the HX5 file, with a
 // client that counts its calls.

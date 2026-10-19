@@ -124,7 +124,12 @@ describe('runChapterExtract: split mode', () => {
   })
 
   it('merged output equals the single-call output for the fake data', async () => {
-    const split = await runChapterExtract(db, meta(), input, countingClient({ provider: 'ollama' }).client)
+    const split = await runChapterExtract(
+      db,
+      meta(),
+      input,
+      countingClient({ provider: 'ollama' }).client,
+    )
     const single = await runChapterExtract(
       db,
       meta(),
@@ -181,12 +186,9 @@ describe('runChapterExtract: split mode', () => {
     const counted = countingClient()
     const controller = new AbortController()
     controller.abort()
-    const error = await runChapterExtract(
-      db,
-      meta(controller.signal),
-      input,
-      counted.client,
-    ).catch((e) => e)
+    const error = await runChapterExtract(db, meta(controller.signal), input, counted.client).catch(
+      (e) => e,
+    )
     expect(error).toBeInstanceOf(AppError)
     expect((error as AppError).code).toBe('CANCELLED')
     expect(counted.calls).toHaveLength(0)

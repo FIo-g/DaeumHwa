@@ -46,14 +46,12 @@ export async function runChapterExtract(
 
   const facts = await runAiTask(db, meta, chapterExtractFactsTask, input, c)
   const threads = await runAiTask(db, meta, chapterExtractThreadsTask, input, c)
-  const newCards = facts.output.entries.map(
-    (entry): ChapterExtractInput['known'][number] => ({
-      name: entry.name,
-      kind: entry.kind,
-      aliases: entry.aliases,
-      pending: true,
-    }),
-  )
+  const newCards = facts.output.entries.map((entry): ChapterExtractInput['known'][number] => ({
+    name: entry.name,
+    kind: entry.kind,
+    aliases: entry.aliases,
+    pending: true,
+  }))
   const relations = await runAiTask(
     db,
     meta,
