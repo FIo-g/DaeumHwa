@@ -67,6 +67,7 @@ const FAKE_QUESTIONS: Record<(typeof INTERVIEW_TOPICS)[number], InterviewQuestio
 
 /** Picks the first core topic that has not been covered, then a story question. */
 export function fakeInterviewQuestion(input: InterviewQuestionInput): InterviewQuestion {
+  if (input.plan?.storyDue) return { ...STORY_QUESTION }
   const covered = new Set(input.covered.map((turn) => turn.topic))
   const next = INTERVIEW_TOPICS.find((topic) => !covered.has(topic))
   if (next) return { ...FAKE_QUESTIONS[next] }
