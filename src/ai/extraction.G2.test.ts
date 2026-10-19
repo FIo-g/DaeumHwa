@@ -92,6 +92,10 @@ describe('extraction G2: findFragmentCanonical', () => {
     expect(findFragmentCanonical('세린', 'place', ['한세린'])).toBeUndefined()
   })
 
+  it('counts a duplicated card name once', () => {
+    expect(findFragmentCanonical('세린', 'character', ['한세린', '한세린'])).toBe('한세린')
+  })
+
   it('returns undefined when the card name has a space', () => {
     expect(findFragmentCanonical('세린', 'character', ['남궁 세린'])).toBeUndefined()
   })

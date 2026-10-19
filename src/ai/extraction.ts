@@ -173,10 +173,14 @@ export function findFragmentCanonical(
   if (forms.some((form) => cardNames.includes(form))) return undefined
   for (const form of forms) {
     if (/\s/.test(form) || form.length < 2) continue
-    const matches = cardNames.filter((card) => {
-      const extra = card.length - form.length
-      return !/\s/.test(card) && card.endsWith(form) && extra >= 1 && extra <= 2
-    })
+    const matches = [
+      ...new Set(
+        cardNames.filter((card) => {
+          const extra = card.length - form.length
+          return !/\s/.test(card) && card.endsWith(form) && extra >= 1 && extra <= 2
+        }),
+      ),
+    ]
     if (matches.length > 0) return matches.length === 1 ? matches[0] : undefined
   }
   return undefined
