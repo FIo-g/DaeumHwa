@@ -33,7 +33,15 @@ describe('chapterMetrics foreignRuns (golden)', () => {
 
   it('ko: several runs of each kind in one text', () => {
     const text = '그는 hello 와 Hello, 嬷嬷 그리고 三楼の, 그리고 Привет 그리고 ひら 끝 world'
-    expect(runs(text, 'ko')).toEqual(['hello', 'Hello', 'world', '嬷嬷', '三楼の', 'Привет', 'ひら'])
+    expect(runs(text, 'ko')).toEqual([
+      'hello',
+      'Hello',
+      'world',
+      '嬷嬷',
+      '三楼の',
+      'Привет',
+      'ひら',
+    ])
   })
 
   it('ko: clean text has no runs', () => {

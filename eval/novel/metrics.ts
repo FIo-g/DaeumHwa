@@ -1,4 +1,5 @@
 import { countChars } from '@/lib/korean/chars'
+import { foreignScriptRuns } from '@/ai/guards'
 
 export * from './metrics-interview'
 export * from './metrics-proofread'
@@ -34,12 +35,6 @@ export const META_PATTERNS: RegExp[] = [
 
 const CLEAN_ENDINGS = new Set([...'.!?…"”\'’」』)~', ...'다요까네지죠'])
 const DIALOGUE_OPENERS = new Set(['"', '“', "'", '‘', '「', '『'])
-// Scripts that should not appear in the other language's text. Latin is checked only in Korean
-// text, where a 4+ letter run is an English word; the other scripts are flagged at any length.
-const OTHER_SCRIPT_RUN =
-  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Cyrillic}\uFFFD]+/gu
-const LATIN_RUN = /[A-Za-z]{4,}/g
-const HANGUL_RUN = /[가-힣]+/g
 
 export function chapterMetrics(
   text: string,
@@ -52,10 +47,7 @@ export function chapterMetrics(
   const minChars = lang === 'ko' ? targetChars : targetChars * 0.8
   const lengthOk = chars >= minChars && chars <= targetChars * 1.3
 
-  const foreignRuns =
-    lang === 'ko'
-      ? [...(trimmed.match(LATIN_RUN) ?? []), ...(trimmed.match(OTHER_SCRIPT_RUN) ?? [])]
-      : [...(trimmed.match(HANGUL_RUN) ?? []), ...(trimmed.match(OTHER_SCRIPT_RUN) ?? [])]
+  const foreignRuns = foreignScriptRuns(trimmed, lang)
 
   const lines = trimmed
     .split('\n')

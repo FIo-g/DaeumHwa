@@ -46,9 +46,7 @@ describe('sampleCopies', () => {
   })
 
   it('matches English exactly and ignores short sentences', () => {
-    const en = [
-      'The fog had swallowed half the stairs. Serin braced her left hand on the railing.',
-    ]
+    const en = ['The fog had swallowed half the stairs. Serin braced her left hand on the railing.']
     const hits = sampleCopies('Rain fell. The fog had swallowed half the stairs. She waited.', en, {
       lang: 'en',
     })

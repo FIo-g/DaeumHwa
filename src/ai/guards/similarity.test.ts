@@ -24,7 +24,10 @@ describe('bigramDice', () => {
 describe('gramContainment', () => {
   it('finds a changed-syllable example inside the draft', () => {
     expect(
-      gramContainment('쇠가 손바닥에 들러붙을 만큼 차가웠다.', '쇠가 손바닥에 달라붙을 만큼 차가웠다.'),
+      gramContainment(
+        '쇠가 손바닥에 들러붙을 만큼 차가웠다.',
+        '쇠가 손바닥에 달라붙을 만큼 차가웠다.',
+      ),
     ).toBeCloseTo(0.714, 2)
   })
 

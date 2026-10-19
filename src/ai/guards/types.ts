@@ -9,4 +9,10 @@ export type ForeignSpan = { start: number; end: number; text: string; script: Fo
 
 export type RepeatedWord = { word: string; count: number; per1000: number; positions: number[] }
 
-export type SampleCopyHit = { start: number; end: number; text: string; example: string; score: number }
+export type SampleCopyHit = {
+  start: number
+  end: number
+  text: string
+  example: string
+  score: number
+}

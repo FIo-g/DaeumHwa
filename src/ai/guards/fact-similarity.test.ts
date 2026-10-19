@@ -14,9 +14,9 @@ describe('isNearDuplicateFact', () => {
   })
 
   it('treats a close rewording as a duplicate', () => {
-    expect(isNearDuplicateFact('종루의 종은 밤마다 떨린다.', '종루의 종은 밤마다 떨린다고 한다.')).toBe(
-      true,
-    )
+    expect(
+      isNearDuplicateFact('종루의 종은 밤마다 떨린다.', '종루의 종은 밤마다 떨린다고 한다.'),
+    ).toBe(true)
   })
 
   it('treats a rephrase as a duplicate', () => {
@@ -33,7 +33,10 @@ describe('isNearDuplicateFact', () => {
 
   it('blocks near-equal text whose digits differ', () => {
     expect(
-      isNearDuplicateFact('세린은 청해항 고아원에서 자란 16살 소녀다', '세린은 청해항 고아원에서 자란 19살 소녀다'),
+      isNearDuplicateFact(
+        '세린은 청해항 고아원에서 자란 16살 소녀다',
+        '세린은 청해항 고아원에서 자란 19살 소녀다',
+      ),
     ).toBe(false)
     expect(isNearDuplicateFact('서윤은 3층에 산다.', '서윤은 4층에 산다.')).toBe(false)
   })
@@ -51,12 +54,15 @@ describe('isNearDuplicateFact', () => {
   })
 
   it('documented limit: an antonym inside a long sentence is reported as a duplicate', () => {
-    expect(isNearDuplicateFact('서윤은 청해항 출신이며 왼손잡이다', '서윤은 청해항 출신이며 오른손잡이다')).toBe(
-      true,
-    )
-    expect(isNearDuplicateFact('Serin is right-handed and calm.', 'Serin is left-handed and calm.')).toBe(
-      true,
-    )
+    expect(
+      isNearDuplicateFact(
+        '서윤은 청해항 출신이며 왼손잡이다',
+        '서윤은 청해항 출신이며 오른손잡이다',
+      ),
+    ).toBe(true)
+    expect(
+      isNearDuplicateFact('Serin is right-handed and calm.', 'Serin is left-handed and calm.'),
+    ).toBe(true)
   })
 
   it('documented limit: a number word is not matched to its digits', () => {

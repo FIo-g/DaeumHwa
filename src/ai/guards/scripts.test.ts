@@ -9,7 +9,7 @@ describe('foreignScriptSpans', () => {
   })
 
   it('classifies kana, Cyrillic and replacement characters in text order', () => {
-    const spans = foreignScriptSpans('ひらがな '+'카타カナ Привет 깨짐\uFFFD', 'ko')
+    const spans = foreignScriptSpans('ひらがな ' + '카타カナ Привет 깨짐\uFFFD', 'ko')
     expect(spans.map((span) => span.script)).toEqual(['kana', 'kana', 'cyrillic', 'replacement'])
     expect(spans.map((span) => span.text)).toEqual(['ひらがな', 'カナ', 'Привет', '\uFFFD'])
   })
@@ -42,13 +42,9 @@ describe('foreignScriptSpans', () => {
   })
 
   it('matches the eval run order: Latin or Hangul first, then Han, kana, Cyrillic, replacement', () => {
-    expect(foreignScriptRuns('그는 嬷嬷에게 말했다. ひらがな 카타カナ Привет 깨짐\uFFFD 끝.', 'ko')).toEqual([
-      '嬷嬷',
-      'ひらがな',
-      'カナ',
-      'Привет',
-      '\uFFFD',
-    ])
+    expect(
+      foreignScriptRuns('그는 嬷嬷에게 말했다. ひらがな 카타カナ Привет 깨짐\uFFFD 끝.', 'ko'),
+    ).toEqual(['嬷嬷', 'ひらがな', 'カナ', 'Привет', '\uFFFD'])
   })
 
   it('lists Latin runs before Han runs even when Han comes first in the text', () => {

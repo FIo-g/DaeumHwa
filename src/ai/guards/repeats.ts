@@ -64,7 +64,8 @@ export function repeatedWords(
     .map(([word, positions]) => ({
       word,
       count: positions.length,
-      per1000: codePoints === 0 ? 0 : Math.round((positions.length * 1000 * 100) / codePoints) / 100,
+      per1000:
+        codePoints === 0 ? 0 : Math.round((positions.length * 1000 * 100) / codePoints) / 100,
       positions,
     }))
     .sort((a, b) => b.count - a.count || (a.word < b.word ? -1 : a.word > b.word ? 1 : 0))
