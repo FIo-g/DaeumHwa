@@ -735,9 +735,10 @@ describe('extraction: dedup and naming rules', () => {
       facts: [factOf('주인공')],
       relations: [relationOf('그녀', '한시우')],
     }
-    const { proposals } = extractionToProposals(x, makeCtx({ existingEntries: [] }))
+    const { proposals, stats } = extractionToProposals(x, makeCtx({ existingEntries: [] }))
     expect(byType(proposals, 'fact_create')).toHaveLength(0)
     expect(byType(proposals, 'relation_create')).toHaveLength(0)
+    expect(stats.relationsDropped).toBe(0)
   })
 
   it('a long place name is not merged into a place card by its last word', () => {
