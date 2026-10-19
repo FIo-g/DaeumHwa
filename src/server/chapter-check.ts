@@ -1,6 +1,10 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { buildContextPack, CONTINUITY_BUDGET_CHARS, resolveRefs } from '@/ai/context'
-import { extractionToProposals } from '@/ai/extraction'
+import {
+  type ExtractionDropped,
+  extractionToProposals,
+  type ExtractionStats,
+} from '@/ai/extraction'
 import { isNearDuplicateFact } from '@/ai/guards'
 import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
@@ -24,11 +28,16 @@ import { deletePendingProposals, insertProposals } from '@/server/proposal-store
 // AI output becomes issues (replaced on each run) and post_chapter proposals (also replaced).
 // Nothing here writes wiki rows.
 
+/** G2 and G1 counters of one chapter extraction, for the eval run summary. */
+export type ExtractionCounts = ExtractionStats & ExtractionDropped
+
 export type ChapterCheckResult = {
   issues: IssueRow[]
   proposals: ProposalRow[]
   runIds: string[]
   namingIssueCount: number
+  /** Counters of the extraction mapper (G2 stats, G1 dropped). Not shown to users. */
+  extraction?: ExtractionCounts
 }
 
 export type ProofreadSuggestion = {
@@ -260,7 +269,7 @@ export async function runChapterCheck(
     issues: [...namingIssues, ...aiIssues],
   })
 
-  const { proposals: items } = extractionToProposals(extract.output, {
+  const extracted = extractionToProposals(extract.output, {
     source: 'post_chapter',
     sourceRef: extract.runId,
     chapterId: chapter.id,
@@ -282,6 +291,8 @@ export async function runChapterCheck(
       endPosition: r.endPosition,
     })),
   })
+
+  const items = extracted.proposals
 
   throwIfCancelled(signal)
   const proposalRows = await db.transaction(async (tx) => {
@@ -340,6 +351,7 @@ export async function runChapterCheck(
     proposals: proposalRows,
     runIds: [continuity.runId, extract.runId],
     namingIssueCount: namingIssues.length,
+    extraction: { ...extracted.stats, ...extracted.dropped },
   }
 }
 
