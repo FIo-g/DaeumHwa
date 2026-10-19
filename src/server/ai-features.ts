@@ -10,6 +10,7 @@ import {
   STREAM_AI_TIMEOUT_MS,
   throwIfCancelled,
 } from '@/ai/run'
+import type { ForeignSpan } from '@/ai/guards'
 import type { AiClient } from '@/ai/types'
 import {
   buildContinuationPrompt,
@@ -22,7 +23,7 @@ import {
   type DraftPromptInput,
 } from '@/ai/tasks/draft-chapter'
 import { draftBeatsTask, type DraftBeats, renderBeats } from '@/ai/tasks/draft-beats'
-import { applyDraftEdits, draftRepairTask } from '@/ai/tasks/draft-repair'
+import { applyDraftEdits, draftRepairTask, repairableForeignSpans } from '@/ai/tasks/draft-repair'
 import { type AdviceResult, directionAdviceTask } from '@/ai/tasks/direction-advice'
 import {
   mergeReaderSim,
@@ -49,7 +50,8 @@ import {
 } from '@/lib/draft-length'
 import { AppError, isAppError } from '@/lib/errors'
 import { chapterLabel } from '@/lib/labels'
-import { findDraftFlags } from '@/lib/korean/style-copy'
+import { type DraftFlag, findDraftFlags } from '@/lib/korean/style-copy'
+import { sentenceIn, splitSentences } from '@/lib/korean/sentences'
 import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
 import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
@@ -84,6 +86,9 @@ const DRAFT_TOTAL_BUDGET_MS = 290_000
 const MIN_FIRST_STREAM_MS = 10_000
 /** A continuation is not started with less time left than this. */
 const MIN_CONTINUATION_MS = 30_000
+/** Foreign-script repair (eval only): model calls at most, and sentences sent in one call. */
+const MAX_REPAIR_ROUNDS = 2
+const MAX_REPAIR_SENTENCES = 30
 /** A line of dialogue: straight double quotes, curly double quotes, or Korean corner brackets. */
 const DIALOGUE_RE = /"[^"\n]+"|“[^”\n]+”|「[^」\n]+」/
 
@@ -670,6 +675,80 @@ export async function repairDraft(
     repair,
   })
   return { runId, text: repaired.text, ...repair }
+}
+
+/**
+ * Rewrites only the sentences with foreign script (Han, kana, Cyrillic, U+FFFD) in a finished draft
+ * (spec 6, 7). Eval only: the product does not call it. Each round sends the sentences that still
+ * have foreign script to draft-repair, and applyDraftEdits keeps the change inside them. The run row
+ * is rewritten only when the text changed, and keeps the first raw draft in `rawText`. A failed
+ * round throws and writes nothing. `input.text` repairs that text instead of the stored one. Editor role.
+ */
+export async function repairDraftForeignScript(
+  db: Db,
+  actor: Actor,
+  input: { workId: string; runId: string; text?: string },
+  client?: AiClient,
+  signal?: AbortSignal,
+): Promise<{ text: string; replaced: number; unresolved: ForeignSpan[] }> {
+  const { workId, runId } = input
+  await requireWorkRole(db, workId, actor.userId, 'editor')
+  const [run] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId)).limit(1)
+  if (
+    !run ||
+    run.workId !== workId ||
+    run.userId !== actor.userId ||
+    run.task !== 'draft-chapter'
+  ) {
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  }
+  if (run.status !== 'done') {
+    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 고칠 수 있습니다.')
+  }
+  const stored = draftText(run.output)
+  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없습니다.')
+  const output = run.output as Record<string, unknown>
+  // A repaired run keeps the draft it had before the first repair.
+  const storedRaw = typeof output.rawText === 'string' ? output.rawText : null
+
+  let text = input.text ?? stored
+  if (repairableForeignSpans(text).length === 0) return { text, replaced: 0, unresolved: [] }
+
+  let replaced = 0
+  for (let round = 1; round <= MAX_REPAIR_ROUNDS; round++) {
+    const spans = repairableForeignSpans(text)
+    if (spans.length === 0) break
+    const sentences = splitSentences(text)
+    const flags: DraftFlag[] = []
+    for (const span of spans) {
+      const sentence = sentenceIn(sentences, span.start)
+      if (flags.some((flag) => flag.start === sentence.start)) continue
+      flags.push({
+        kind: 'foreign-script',
+        start: sentence.start,
+        end: sentence.end,
+        quote: sentence.text,
+        reason: '한글이 아닌 글자가 섞여 있다.',
+      })
+    }
+    const batch = flags.slice(0, MAX_REPAIR_SENTENCES)
+    const { output: edits } = await runAiTask(
+      db,
+      { userId: actor.userId, workId, chapterId: run.chapterId, signal },
+      draftRepairTask,
+      { text, flags: batch },
+      client,
+    )
+    throwIfCancelled(signal)
+    const applied = applyDraftEdits(text, batch, edits.edits)
+    text = applied.text
+    replaced += applied.applied
+  }
+
+  if (text !== stored) {
+    await replaceRunOutput(db, runId, { ...output, text, rawText: storedRaw ?? stored })
+  }
+  return { text, replaced, unresolved: repairableForeignSpans(text) }
 }
 
 function draftText(output: unknown): string | null {
