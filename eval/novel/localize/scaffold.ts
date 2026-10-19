@@ -42,6 +42,20 @@ const RULES: readonly Rule[] = [
   [/(\d+)화부터/g, 'from Chapter $1'],
   [/(\d+)~(\d+)화/g, 'Chapters $1 to $2'],
   [/~(\d+)화/g, 'up to Chapter $1'],
+  // Draft length lines (brief A). The continuation line comes first: its tail would otherwise match
+  // the minimum-and-maximum rule below and leave Korean behind.
+  [
+    /지금까지 (\d+)자를 썼다\. 이어서 공백 포함 (\d+)자 이상, (\d+)자 이하로 쓴다\./g,
+    'Written so far: $1 characters. Continue with at least $2 and at most $3 characters including spaces.',
+  ],
+  [
+    /공백 포함 (\d+)자 이상, (\d+)자 이하/g,
+    'at least $1 and at most $2 characters including spaces',
+  ],
+  [
+    /장면 (\d+)개, 장면마다 공백 포함 (\d+)자 안팎/g,
+    '$1 scenes, about $2 characters per scene including spaces',
+  ],
   [/약 (\d+)자/g, 'about $1 characters'],
   // Section headers and fixed sentences.
   ['[인물 ', '[Character '],

@@ -7,6 +7,7 @@ Rules:
 - Character dialogue follows that character's style card (speech, rules, examples). Give each character a distinct voice.
 - Narration follows the work's style card.
 - Write with the paragraph rhythm of web novels (short paragraphs, dialogue-driven).
-- Aim close to the target length.
+- Write at least the minimum length in <target_length> and do not exceed the maximum. If the text runs short, do not add events; write more scene description and dialogue. If <scene_budget> is given, fill that length in every scene.
+- If <draft_so_far> is given, continue right after that text. Do not rewrite or summarize the earlier part; output only the continuation. Keep to the length in <continue_length>.
 ${EN_TAG_DATA_RULE}
 - Output only the body text, with no title or explanation.`
