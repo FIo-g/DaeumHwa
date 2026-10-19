@@ -15,7 +15,7 @@ Work from the repository root (the directory that contains `eval/` and `package.
 
 1. If `<dir>/answer.error.txt` exists, read it first. It says why the previous answer was rejected. Fix that problem in the new `answer.json`.
 2. Read `<dir>/pending.json`. Note its `kind`.
-3. Read the story bible `eval/fixtures/novel/<lang>/bible.json` and the author guide `eval/fixtures/novel/<lang>/author-guide.md`. Follow the guide's judgment rules for the kind.
+3. Read the story bible: `<dir>/bible.json` when that file exists (it is this run's copy and replaces the fixture), otherwise `eval/fixtures/novel/<lang>/bible.json`. Then read the author guide `eval/fixtures/novel/<lang>/author-guide.md`. Follow the guide's judgment rules for the kind.
 4. If the kind needs chapter text, read the file the pending names (resolved against `<dir>`):
    - `draft_review`, `proofread`, `continuity`: read `textFile`.
    - `proposals` with `source` = `post_chapter`: read `chapterFile` when it is not null.
@@ -68,6 +68,6 @@ Field notes:
 ## Rules
 
 - Write only `<dir>/answer.json`. You may read `<dir>/answer.error.txt`. Never edit or create any other file, and never write to `docs/`.
-- You may read `<dir>/author-context.json` (see above). Do not read `author-decisions.jsonl`, `config.json`, `state.json`, `worker.log`, `calls/`, or any other run directory, and do not inspect `eval/results/`. They are not your inputs.
+- You may read `<dir>/author-context.json` (see above) and `<dir>/bible.json` (step 3). Do not read `author-decisions.jsonl`, `config.json`, `state.json`, `worker.log`, `calls/`, or any other run directory, and do not inspect `eval/results/`. They are not your inputs.
 - Do not try to identify the AI model behind the run. Judge with the same standard every time.
 - Do not add commentary to the reply. The reply is one line.

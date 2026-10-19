@@ -11,7 +11,14 @@ import * as schema from '@/db/schema'
 import type { Actor } from '@/db/types'
 import { buildAuthorContext, removeAuthorContext, writeAuthorContext } from './author-context'
 import { type Answer, type Pending, readPending } from './author-io'
-import { type Bible, loadBible } from './bible'
+import {
+  type Bible,
+  loadBible,
+  loadRunBible,
+  RUN_BIBLE_FILE,
+  withVoicesInAnswerBank,
+  writeRunBible,
+} from './bible'
 import { EvalClient } from './eval-client'
 import { fakeAnswer } from './fake-author'
 import type { PowerReader } from './power'
@@ -87,11 +94,14 @@ export type RunCreateOptions = {
   commit: string
   helperThink?: HelperThink
   productLimits?: boolean
+  speech?: boolean
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
 export function createRun(dir: string, o: RunCreateOptions): RunConfig {
   if (existsSync(join(dir, 'config.json'))) throw new Error(`run already exists: ${dir}`)
+  // The bible copy is written before config.json, which marks the run as existing, so a retry after a crash rewrites it.
+  if (o.speech) writeRunBible(dir, withVoicesInAnswerBank(loadBible(o.lang)))
   const config: RunConfig = {
     runId: randomUUID(),
     modelId: o.modelId,
@@ -103,6 +113,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     commit: o.commit,
     ...(o.helperThink ? { helperThink: o.helperThink } : {}),
     ...(o.productLimits ? { productLimits: true } : {}),
+    ...(o.speech ? { speech: true } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))
@@ -115,12 +126,15 @@ export async function openRun(
   o: { inner?: AiClient; autoAuthor?: boolean; readPower?: PowerReader } = {},
 ): Promise<RunContext & { close(): Promise<void> }> {
   const config = loadConfig(dir)
+  if (config.speech === true && !existsSync(join(dir, RUN_BIBLE_FILE))) {
+    throw new Error(`speech run has no ${RUN_BIBLE_FILE}: ${dir}`)
+  }
+  const bible = loadRunBible(dir, config.lang)
   const state = loadState(dir)
   const profile = MODEL_PROFILES[config.modelId]
   const pg = new PGlite(join(dir, 'db'))
   const db = drizzle(pg, { schema }) as unknown as Db
   await migrateDb(db, 'pglite')
-  const bible = loadBible(config.lang)
   // The inner client reports Ollama timings to the eval client, which is built here first.
   const client: EvalClient = new EvalClient({
     inner:
@@ -142,10 +156,11 @@ export async function openRun(
   // 0 disables the product's daily token limit for eval runs. close() puts the previous value back.
   const previousDailyLimit = process.env.AI_DAILY_TOKEN_LIMIT
   process.env.AI_DAILY_TOKEN_LIMIT = '0'
-  // The eval keeps the speech feature off so runs stay comparable with the 2026-10-18 baseline, even
-  // when .env.local turns the product flag on. close() puts the previous value back.
+  // The eval keeps the speech feature off unless the run was created with --speech on, so runs stay
+  // comparable with the 2026-10-18 baseline even when .env.local turns the product flag on. close()
+  // puts the previous value back.
   const previousSpeechStyle = process.env.AI_SPEECH_STYLE
-  process.env.AI_SPEECH_STYLE = ''
+  process.env.AI_SPEECH_STYLE = config.speech === true ? 'on' : ''
   return {
     dir,
     config,

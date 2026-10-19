@@ -153,6 +153,7 @@ export type InitOptions = {
   dir?: string
   helperThink?: string
   productLimits?: boolean
+  speech?: string
 }
 
 /**
@@ -170,11 +171,16 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     const refusal = checkHelperThink(MODEL_PROFILES[model], helperThink)
     if (refusal) throw new Error(refusal)
   }
+  const speech = o.speech === undefined ? false : parseSpeech(o.speech)
   const helperSuffix = helperThink === undefined ? '' : `-helper-${helperThink}`
   const limitsSuffix = o.productLimits ? '-product-limits' : ''
+  const speechSuffix = speech ? '-speech' : ''
   const dir = path.resolve(
     o.dir ??
-      path.join(RESULTS_DIR, `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}`),
+      path.join(
+        RESULTS_DIR,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}`,
+      ),
   )
 
   if (existsSync(path.join(dir, 'config.json'))) {
@@ -188,6 +194,9 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (o.productLimits !== undefined && (existing.productLimits ?? false) !== o.productLimits) {
       throw new Error(`run exists with another productLimits: ${dir}`)
     }
+    if (speech && existing.speech !== true) {
+      throw new Error(`run exists with another speech setting: ${dir}`)
+    }
   } else {
     createRun(dir, {
       modelId: model,
@@ -198,9 +207,26 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       commit: gitCommit(),
       helperThink,
       productLimits: o.productLimits,
+      speech: speech || undefined,
     })
   }
   return { dir, status: loadState(dir).status }
+}
+
+/** The --speech value. Only `on` is accepted; the default run is speech off. */
+function parseSpeech(value: string): true {
+  if (value !== 'on') throw new Error(`unknown speech value: ${value}`)
+  return true
+}
+
+/**
+ * The --speech value, or undefined when the flag is absent. A bare flag is refused, so a compare run
+ * is never created silently without its setting.
+ */
+export function speechFlag(flags: Flags): string | undefined {
+  const value = flags.speech
+  if (value === true) throw new Error('unknown speech value: true')
+  return value
 }
 
 /**
@@ -666,6 +692,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         dir: typeof flags.dir === 'string' ? flags.dir : undefined,
         helperThink: helperThinkFlag(flags),
         productLimits: productLimitsFlag(flags),
+        speech: speechFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {

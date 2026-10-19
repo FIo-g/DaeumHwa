@@ -18,6 +18,8 @@ export type RunConfig = {
   helperThink?: HelperThink
   /** Send the task's own maxTokens (compare runs only). Absent means the profile floor applies. */
   productLimits?: boolean
+  /** Speech feature on for this run, with its bible copy (compare runs only). Absent means off. */
+  speech?: boolean
 }
 
 export type RunStatus =

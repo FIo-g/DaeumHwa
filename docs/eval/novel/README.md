@@ -123,11 +123,15 @@ pnpm eval:novel resummarize --date 2026-10-18                               # �
 
 2. 프롬프트를 고친 뒤 다시 잴 때는 새 `date`(예: `2026-10-25`)로 돌린다. 그래야 이번 결과와 섞이지 않는다.
    - 보조 작업의 생각 설정만 바꿔 재려면 `--helper-think <off|low|medium|high>`를 쓴다. 비교 실행에만 쓰고 새 폴더를 쓴다. qwen은 `off`만, gpt-oss는 `low`, `medium`, `high`만 받는다(gpt-oss는 `off`를 무시한다). 클라우드 모델과 exaone은 거절한다. 초안, 이어 쓰기, 장면 고쳐 쓰기는 모델 설정을 그대로 쓴다.
+   - 말투 기능을 켜고 재려면 `--speech on`을 쓴다. 실행하는 동안 `AI_SPEECH_STYLE=on`이 되어 인터뷰가 인물 말투를 묻고 초안에 `<voices>`가 실린다. 실행 폴더에 `bible.json` 사본이 생긴다. 사본은 원본 설정집의 답 은행에서 인물 답 뒤에 그 인물의 `voice`를 덧붙인 것이고, 작가는 폴더에 `bible.json`이 있으면 그것을 읽는다. 원본 설정집은 그대로다. 비교 실행에만 쓰고 새 폴더를 쓴다(말투 실행은 `2026-10-19-r2speech`처럼 날짜 폴더를 따로 쓴다). 값은 `on`뿐이고 만들 때 정한다.
+   - 확인: 말투 실행이 사본을 읽는지는 첫 인터뷰 답이 쌓인 뒤 `author-decisions.jsonl`에서 본다. `bankKeys`에 `protagonist`가 든 답에 `반말`이 있어야 한다(원본 답 은행에는 없는 말이다). 없으면 작가가 원본을 읽은 것이니 그 실행은 버린다.
    - 스킬로 돌리려면 스킬이 쓸 폴더에 먼저 실행을 만든다. 폴더는 `eval/results/novel/<새 날짜>/run-NN-<lang>`이고 NN은 1절의 모델 번호다.
 
      ```bash
      pnpm eval:novel init --model qwen3.8-27b --lang ko --helper-think off --chapters 1 --dir eval/results/novel/<새 날짜>/run-01-ko
      pnpm eval:novel init --model gpt-oss-20b --lang ko --helper-think low --chapters 1 --dir eval/results/novel/<새 날짜>/run-02-ko
+     pnpm eval:novel init --model haiku-5.5 --lang ko --speech on --chapters 1 --dir eval/results/novel/<새 날짜>/run-04-ko
+     pnpm eval:novel init --model luna-6 --lang ko --speech on --chapters 1 --dir eval/results/novel/<새 날짜>/run-05-ko
      ```
 
    - 출력 한도를 작업 자체의 값으로 재려면 `--product-limits`를 쓴다(초안 16,000 등). 하한 32,000을 적용하지 않는다. effort는 그대로 high다. 비교 실행에만 쓰고 새 폴더를 쓴다. 클라우드 모델용이다(로컬 모델은 생각이 길어 한도에 자주 걸리고, 작업 한도를 넘기기도 한다). 만들 때 정한 값은 바꿀 수 없다. `--product-limits off`는 받지만 이 옵션 없이 만든 실행과만 맞는다.
