@@ -236,12 +236,13 @@ describe('buildAuthorContext hints', () => {
   })
 
   it('matches a relation logged with spaces and punctuation', async () => {
-    const relation = { sourceName: 'A', targetName: 'B', kind: '동료' }
-    logDecision(dir, proposalsPending([{ id: 'r', type: 'relation_create', payload: relation }]), {
+    const logged = { sourceName: 'A B', targetName: 'B', kind: '동료' }
+    logDecision(dir, proposalsPending([{ id: 'r', type: 'relation_create', payload: logged }]), {
       kind: 'proposals',
       decisions: [{ id: 'r', approve: false, reason: 'no' }],
     })
-    const pending = proposalsPending([{ id: 'a', type: 'relation_create', payload: relation }])
+    const next = { sourceName: 'AB', targetName: 'B', kind: '동료' }
+    const pending = proposalsPending([{ id: 'a', type: 'relation_create', payload: next }])
     const { hints } = await buildAuthorContext(db, actor, workId, dir, pending)
     expect(hints.a?.previouslyRejected).toEqual({ step: 'ch1:proposals', reason: 'no' })
   })
