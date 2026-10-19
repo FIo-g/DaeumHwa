@@ -152,6 +152,11 @@ export const AI_TASKS = [
   'draft-continue',
   'paragraph-trim',
   'draft-repair',
+  'draft-beats',
+  'scene-rewrite',
+  'chapter-extract-facts',
+  'chapter-extract-threads',
+  'chapter-extract-relations',
 ] as const
 export type AiTaskName = (typeof AI_TASKS)[number]
 

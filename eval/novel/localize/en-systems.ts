@@ -5,8 +5,12 @@
 import { isSpeechStyleEnabled } from '@/ai/voice'
 import type { AiTaskName } from '@/db/types'
 import { CHAPTER_EXTRACT_SYSTEM } from './en/chapter-extract'
+import { CHAPTER_EXTRACT_FACTS_SYSTEM } from './en/chapter-extract-facts'
+import { CHAPTER_EXTRACT_THREADS_SYSTEM } from './en/chapter-extract-threads'
+import { CHAPTER_EXTRACT_RELATIONS_SYSTEM } from './en/chapter-extract-relations'
 import { CONTINUITY_SYSTEM } from './en/continuity-check'
 import { DIRECTION_ADVICE_SYSTEM } from './en/direction-advice'
+import { DRAFT_BEATS_SYSTEM } from './en/draft-beats'
 import { DRAFT_CHAPTER_SYSTEM } from './en/draft-chapter'
 import { DRAFT_REPAIR_SYSTEM } from './en/draft-repair'
 import { buildEnInterviewExtractSystem } from './en/interview-extract'
@@ -14,6 +18,7 @@ import { buildEnInterviewQuestionSystem } from './en/interview-question'
 import { PARAGRAPH_TRIM_SYSTEM } from './en/paragraph-trim'
 import { PROOFREAD_SYSTEM } from './en/proofread'
 import { READER_SIM_SYSTEM } from './en/reader-sim'
+import { SCENE_REWRITE_SYSTEM } from './en/scene-rewrite'
 import { STYLE_SUGGEST_SYSTEM } from './en/style-suggest'
 
 export { EN_ENTITY_NAME_RULES, EN_INTERVIEW_TOPICS, EN_TAG_DATA_RULE } from './en/shared'
@@ -38,4 +43,9 @@ export const EN_SYSTEMS: Record<AiTaskName, string> = {
   'style-suggest': STYLE_SUGGEST_SYSTEM,
   'paragraph-trim': PARAGRAPH_TRIM_SYSTEM,
   'draft-repair': DRAFT_REPAIR_SYSTEM,
+  'draft-beats': DRAFT_BEATS_SYSTEM,
+  'scene-rewrite': SCENE_REWRITE_SYSTEM,
+  'chapter-extract-facts': CHAPTER_EXTRACT_FACTS_SYSTEM,
+  'chapter-extract-threads': CHAPTER_EXTRACT_THREADS_SYSTEM,
+  'chapter-extract-relations': CHAPTER_EXTRACT_RELATIONS_SYSTEM,
 }

@@ -5,8 +5,12 @@ import { buildDraftPrompt } from '@/ai/tasks/draft-chapter'
 import { AI_TASKS, type AiTaskName } from '@/db/types'
 import { EN_INTERVIEW_TOPICS, EN_SYSTEMS } from './en-systems'
 import { chapterExtractSample } from './samples/chapter-extract'
+import { chapterExtractFactsSample } from './samples/chapter-extract-facts'
+import { chapterExtractRelationsSample } from './samples/chapter-extract-relations'
+import { chapterExtractThreadsSample } from './samples/chapter-extract-threads'
 import { continuityCheckSample } from './samples/continuity-check'
 import { directionAdviceSample } from './samples/direction-advice'
+import { draftBeatsSample } from './samples/draft-beats'
 import { draftSample } from './samples/draft-chapter'
 import { draftContinueSample } from './samples/draft-continue'
 import { draftRepairSample } from './samples/draft-repair'
@@ -15,6 +19,7 @@ import { interviewQuestionSample } from './samples/interview-question'
 import { paragraphTrimSample } from './samples/paragraph-trim'
 import { proofreadSample } from './samples/proofread'
 import { readerSimSample } from './samples/reader-sim'
+import { sceneRewriteSample } from './samples/scene-rewrite'
 import { styleSuggestSample } from './samples/style-suggest'
 import { countHangul, findHangul, translateScaffold } from './scaffold'
 
@@ -35,6 +40,11 @@ const PROMPTS: Record<AiTaskName, string> = {
   'style-suggest': styleSuggestSample,
   'paragraph-trim': paragraphTrimSample,
   'draft-repair': draftRepairSample,
+  'draft-beats': draftBeatsSample,
+  'scene-rewrite': sceneRewriteSample,
+  'chapter-extract-facts': chapterExtractFactsSample,
+  'chapter-extract-threads': chapterExtractThreadsSample,
+  'chapter-extract-relations': chapterExtractRelationsSample,
 }
 
 describe('EN_SYSTEMS', () => {
