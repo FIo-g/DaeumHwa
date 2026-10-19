@@ -22,6 +22,12 @@ describe('reviewer.md', () => {
   it('does not name a model', () => {
     expect(reviewerMd).not.toMatch(/haiku|luna|sonnet|opus|qwen|exaone|gpt-oss/i)
   })
+
+  it('puts the verdict data under a real heading and does not call the blinding note the last section', () => {
+    expect(reviewerMd).toMatch(/^### Verdict data$/m)
+    expect(reviewerMd).not.toContain('last section')
+    expect(reviewerMd).toContain('before the verdict data')
+  })
 })
 
 describe('criteria file', () => {
@@ -57,5 +63,11 @@ describe('README', () => {
     expect(readmeMd).toContain('### 6.3 반복 실행 규칙')
     expect(readmeMd).toContain('r2brep2')
     expect(readmeMd).toContain('secondReview: false')
+  })
+
+  it('says the second review is made only when review-2.md is missing', () => {
+    expect(readmeMd).toContain(
+      '두 번째 검토는 `review-2.md`가 없을 때만 만든다. `rereview: true`는 첫 검토만 다시 쓴다.',
+    )
   })
 })

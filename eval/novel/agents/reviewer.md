@@ -56,9 +56,11 @@ Use this structure. Headings in the document's language.
 - Five-chapter totals: mean Q score, publishable chapters count, and the continuity error count per 10,000 characters (Korean: characters; English: words, as section 3.3 says) (the T2 scope of criteria section 3.5 only).
 - Weakness list with improvement candidates, each with the expected effect.
 
-**Blinding note** (last section, one sentence): say whether anything in `dir` identified the model or the provider; if yes, say what it was. Write "none found" when nothing did.
+**Blinding note** (one sentence, before the verdict data): say whether anything in `dir` identified the model or the provider; if yes, say what it was. Write "none found" when nothing did.
 
-**Verdict data** (the final block of the file): end `review.md` with one fenced json block under a heading "Verdict data" (Korean: "판정 데이터"). Keys stay in English. One object per chapter.
+### Verdict data
+
+End `review.md` with one fenced json block under this heading (Korean heading: `### 판정 데이터`). It is the final block of the file. Keys stay in English. One object per chapter.
 
 ```json
 {
