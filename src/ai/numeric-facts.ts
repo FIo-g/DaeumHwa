@@ -4,7 +4,8 @@ import { splitSentences } from '@/lib/korean/sentences'
 // Numeric fact check (H): finds a sentence whose "N살" age contradicts a confirmed wiki age.
 // Runs in code, not in the model, so an empty model answer cannot hide it. It is deliberately
 // narrow: a sentence with a flashback or time skip word, two ages, two named entries or a
-// possessive ("세린의 동생은 9살이다") is skipped. Only the age in a confirmed fact is compared.
+// possessive ("세린의 동생은 9살이다") is skipped. So is a relative age ("5살 어린 동생", "5살짜리",
+// "동생보다 5살 많다"). Only the age in a confirmed fact is compared.
 
 export type NumericFactHit = {
   factRef: string
@@ -20,6 +21,10 @@ export type NumericFactHit = {
 }
 
 const AGE = /(\d{1,3})\s*살/g
+// Words right after "N살" that make it a relative age or a rough guess ("5살 어린 동생",
+// "20살이 넘은", "5살짜리"), not the age of the named entry.
+const RELATIVE_AFTER_AGE =
+  /^\s*(어린|많은|위|아래|차이|터울|연상|연하|배기|짜리|남짓|쯤|정도|이 넘|가 넘)/
 const TIME_FRAME = /(때|시절|무렵|전에|이었|였던|예전|과거|년 전|년 뒤|년 후|이후|뒤에|후에|나중)/
 
 /** Names and aliases that can identify an entry in a sentence (at least 2 characters). */
@@ -65,6 +70,9 @@ export function findNumericFactMismatches(input: {
     const ageMatches = [...sentence.text.matchAll(AGE)]
     if (ageMatches.length !== 1) continue
     if (TIME_FRAME.test(sentence.text)) continue
+    if (sentence.text.includes('보다')) continue
+    const ageEnd = (ageMatches[0].index ?? 0) + ageMatches[0][0].length
+    if (RELATIVE_AFTER_AGE.test(sentence.text.slice(ageEnd))) continue
 
     const named = entries.filter((entry) =>
       namesOf(entry).some((name) => sentence.text.includes(name)),

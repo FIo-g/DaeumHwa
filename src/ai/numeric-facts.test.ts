@@ -150,6 +150,44 @@ describe('findNumericFactMismatches', () => {
     expect(findNumericFactMismatches({ chapterText: '세린의 동생은 9살이다.', pack })).toEqual([])
   })
 
+  describe('relative ages are not the entry age', () => {
+    const serin = () =>
+      makePack([
+        { name: '한세린', aliases: ['세린'], facts: [{ content: '한세린의 나이는 16살이다.' }] },
+      ])
+
+    it.each([
+      '세린에게는 5살 어린 동생이 있었다.',
+      '세린에게는 5살 많은 오빠가 있었다.',
+      '세린에게는 20살이 넘은 오빠가 있었다.',
+      '세린은 30살가 넘은 사람들 틈에 섞였다.',
+      '5살짜리 아이가 세린을 올려다보았다.',
+      '세린 곁에는 5살 위 언니가 앉아 있었다.',
+      '세린 옆에는 5살 아래 동생이 앉았다.',
+      '세린과 그 사람은 5살 차이가 났다.',
+      '세린과 그 사람은 5살 터울이었다.',
+      '세린은 5살 연상의 남자를 만났다.',
+      '세린은 5살 연하의 남자를 만났다.',
+      '세린은 5살배기 아이를 안아 올렸다.',
+      '세린은 20살 남짓한 청년을 바라보았다.',
+      '세린은 20살쯤 되어 보이는 청년을 바라보았다.',
+      '세린은 20살 정도의 청년을 바라보았다.',
+      '세린은 윤서보다 25살이 많았다고 했다.',
+      '세린은 오빠보다 5살이었다.',
+    ])('skips "%s"', (chapterText) => {
+      expect(findNumericFactMismatches({ chapterText, pack: serin() })).toEqual([])
+    })
+
+    it('still flags a real age contradiction in a similar sentence', () => {
+      const hits = findNumericFactMismatches({
+        chapterText: '세린은 19살로 보였다.',
+        pack: serin(),
+      })
+      expect(hits).toHaveLength(1)
+      expect(hits[0].suggestion).toBe('세린은 16살로 보였다.')
+    })
+  })
+
   it('ignores a fact without 나이', () => {
     const pack = makePack([
       {
