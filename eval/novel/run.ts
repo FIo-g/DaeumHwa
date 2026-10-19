@@ -128,6 +128,10 @@ export async function openRun(
   // 0 disables the product's daily token limit for eval runs. close() puts the previous value back.
   const previousDailyLimit = process.env.AI_DAILY_TOKEN_LIMIT
   process.env.AI_DAILY_TOKEN_LIMIT = '0'
+  // The eval keeps the speech feature off so runs stay comparable with the 2026-10-18 baseline, even
+  // when .env.local turns the product flag on. close() puts the previous value back.
+  const previousSpeechStyle = process.env.AI_SPEECH_STYLE
+  process.env.AI_SPEECH_STYLE = ''
   return {
     dir,
     config,
@@ -141,6 +145,8 @@ export async function openRun(
       setAiTimeoutOverride(null)
       if (previousDailyLimit === undefined) delete process.env.AI_DAILY_TOKEN_LIMIT
       else process.env.AI_DAILY_TOKEN_LIMIT = previousDailyLimit
+      if (previousSpeechStyle === undefined) delete process.env.AI_SPEECH_STYLE
+      else process.env.AI_SPEECH_STYLE = previousSpeechStyle
       await pg.close()
     },
   }
