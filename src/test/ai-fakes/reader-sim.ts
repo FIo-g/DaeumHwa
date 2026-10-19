@@ -1,3 +1,4 @@
+import { READER_PERSONAS } from '@/ai/personas'
 import type { ReaderSimInput, ReaderSimResult } from '@/ai/tasks/reader-sim'
 import { REACTIONS } from '@/ai/tasks/reader-sim'
 import { splitSentences } from '@/lib/korean'
@@ -14,17 +15,23 @@ export function fakeReaderSim(input: ReaderSimInput): ReaderSimResult {
     .filter((text) => text.length > 0)
     .slice(0, 2)
   return {
-    personas: input.personas.map((persona, index) => ({
-      personaId: persona.id,
-      rating: FAKE_RATINGS[index % FAKE_RATINGS.length],
-      dropOffRisk: FAKE_RISKS[index % FAKE_RISKS.length],
-      overall: `${persona.name} 관점에서 이번 화는 무난하게 읽힙니다. (데모 응답)`,
-      moments: quotes.map((quote, j) => ({
-        quote,
-        reaction: REACTIONS[(index + j) % REACTIONS.length],
-        comment: '(데모) 이 장면의 흐름을 한 번 더 점검해 보세요.',
-      })),
-    })),
+    personas: input.personas.map((persona, index) => {
+      // Keyed by the persona's place in READER_PERSONAS, so a one-persona call gets the same answer
+      // as that persona gets in the full call.
+      const slot = READER_PERSONAS.findIndex((p) => p.id === persona.id)
+      const variant = slot >= 0 ? slot : index
+      return {
+        personaId: persona.id,
+        rating: FAKE_RATINGS[variant % FAKE_RATINGS.length],
+        dropOffRisk: FAKE_RISKS[variant % FAKE_RISKS.length],
+        overall: `${persona.name} 관점에서 이번 화는 무난하게 읽힙니다. (데모 응답)`,
+        moments: quotes.map((quote, j) => ({
+          quote,
+          reaction: REACTIONS[(variant + j) % REACTIONS.length],
+          comment: '(데모) 이 장면의 흐름을 한 번 더 점검해 보세요.',
+        })),
+      }
+    }),
     summary: '(데모) 독자 반응이 전반적으로 무난합니다. 도입부의 설명 분량을 확인해 보세요.',
   }
 }

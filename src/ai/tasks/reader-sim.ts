@@ -102,3 +102,30 @@ function postProcessReaderSim(output: ReaderSimResult, input: ReaderSimInput): R
     })),
   }
 }
+
+/** One input per persona. Each keeps the same chapter, summaries and work, so one call reads as one reader. */
+export function splitReaderSimInput(input: ReaderSimInput): ReaderSimInput[] {
+  return input.personas.map((persona) => ({ ...input, personas: [persona] }))
+}
+
+/**
+ * Joins per-persona outputs back into one result, in the order given. A persona that appears twice
+ * keeps its first output. The summary is the distinct non-empty summaries, one per line.
+ */
+export function mergeReaderSim(outputs: ReaderSimResult[]): ReaderSimResult {
+  const seen = new Set<string>()
+  const personas: ReaderSimResult['personas'] = []
+  for (const output of outputs) {
+    for (const persona of output.personas) {
+      if (seen.has(persona.personaId)) continue
+      seen.add(persona.personaId)
+      personas.push(persona)
+    }
+  }
+  const summaries = new Set<string>()
+  for (const output of outputs) {
+    const summary = output.summary.trim()
+    if (summary !== '') summaries.add(summary)
+  }
+  return { personas, summary: [...summaries].join('\n') }
+}
