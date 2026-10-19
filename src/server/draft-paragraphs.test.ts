@@ -166,6 +166,23 @@ describe('trimOverlongParagraphs', () => {
     expect(result.text.endsWith(`\n\n${B}`)).toBe(true)
   })
 
+  it('rethrows a cancel in the second round instead of returning the round-1 text', async () => {
+    const text = `${A}\n\n${B}`
+    let calls = 0
+    const client = new FakeAiClient({
+      overrides: {
+        'paragraph-trim': (input) => {
+          calls += 1
+          if (calls === 2) throw new AppError('CANCELLED', '요청이 취소되었습니다.')
+          return answerFor([A])(input)
+        },
+      },
+    })
+    await expect(trimOverlongParagraphs(db, actor, { workId, text }, client)).rejects.toMatchObject(
+      { code: 'CANCELLED' },
+    )
+  })
+
   it('rethrows an AI error from the first round', async () => {
     const text = `${A}\n\n${B}`
     const client = new FakeAiClient({
@@ -198,6 +215,20 @@ describe('trimOverlongParagraphs', () => {
         new FakeAiClient(),
       ),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('finishes on foreign-script-only text without throwing', async () => {
+    const japanese =
+      '彼はドアを開けた。廊下は暗かった。風が吹いた。足音が遠ざかった。彼女は息を殺した。'
+    const russian =
+      'Он открыл дверь. Коридор был тёмным. Подул ветер. Шаги затихли. Она затаила дыхание.'
+    for (const text of [japanese, russian, `${japanese}\n\n${russian}`]) {
+      const result = await trimOverlongParagraphs(db, actor, { workId, text }, new FakeAiClient())
+      expect(result.rounds).toBeLessThanOrEqual(MAX_TRIM_ROUNDS)
+      expect(result.text.length).toBeGreaterThan(0)
+      expect(result.after).toBeLessThanOrEqual(result.before)
+      expect(result.changed).toBe(result.text !== text)
+    }
   })
 
   it('finishes on a single 5,000-character paragraph and on text without breaks', async () => {

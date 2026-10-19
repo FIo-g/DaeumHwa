@@ -81,7 +81,8 @@ export async function trimOverlongParagraphs(
       answer = run.output
       runIds.push(run.runId)
     } catch (error) {
-      if (rounds === 1 || !isAppError(error)) throw error
+      // A cancel always reaches the caller; other later-round failures keep the fixes already made.
+      if (rounds === 1 || !isAppError(error) || error.code === 'CANCELLED') throw error
       break
     }
     if (answer.paragraphs.length === 0) break
