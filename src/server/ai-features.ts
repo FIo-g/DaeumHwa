@@ -55,6 +55,7 @@ import {
   type ChapterListItem,
 } from '@/server/chapters'
 import { listEntries } from '@/server/wiki'
+import { isSpeechStyleEnabled, selectMainVoices } from '@/ai/voice'
 import { listStyleCards } from '@/server/styles'
 import { listThreads } from '@/server/threads'
 import { getWork } from '@/server/works'
@@ -326,8 +327,25 @@ export async function startDraft(
   const previousSummary = previous && previous.summary.trim() ? previous.summary.trim() : null
 
   const selected = new Set(input.entryIds)
+  // Speech feature (off by default): characters with a speech style go to <voices>, and their
+  // style cards are kept even when the author did not select them.
+  const speech = isSpeechStyleEnabled()
+  const voices = speech
+    ? selectMainVoices(
+        (await listEntries(db, actor, workId, { kinds: ['character'] })).map((e) => ({
+          entryId: e.id,
+          name: e.name,
+          speech: e.fields.speech ?? '',
+          selected: selected.has(e.id),
+          createdAt: e.createdAt,
+        })),
+      )
+    : undefined
+  const voiceIds = new Set((voices ?? []).map((v) => v.entryId))
   const styleCards = (await listStyleCards(db, actor, workId))
-    .filter((card) => card.entryId === null || selected.has(card.entryId))
+    .filter(
+      (card) => card.entryId === null || selected.has(card.entryId) || voiceIds.has(card.entryId),
+    )
     .map((card) => ({
       name: card.name,
       entryName: card.entryName,
@@ -349,6 +367,7 @@ export async function startDraft(
     previousSummary,
     previousTail,
     chapterLabel: promptLabel,
+    voices: voices?.map((v) => ({ name: v.name, speech: v.speech })),
   }
 
   const first = await startAiStream(

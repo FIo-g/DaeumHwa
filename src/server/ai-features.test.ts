@@ -654,3 +654,129 @@ describe('draft continuation', () => {
     expect(row.output).toEqual({ text: FIRST_DRAFT })
   })
 })
+
+describe('draft voices (speech feature)', () => {
+  const voicesOf = (prompt: string) => prompt.slice(prompt.indexOf('<voices>'))
+
+  async function draftPrompt(
+    db: Db,
+    actor: { userId: string },
+    workId: string,
+    o: { instructions: string; entryIds: string[] },
+  ): Promise<string> {
+    const client = new FakeAiClient()
+    const spy = vi.spyOn(client, 'streamText')
+    const { done } = await startDraft(
+      db,
+      actor,
+      { workId, instructions: o.instructions, entryIds: o.entryIds, targetChars: 500 },
+      client,
+    )
+    await done
+    return spy.mock.calls[0][0].prompt
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('adds a voice with speech even without selection or mention', async () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    const { db, actor, workId } = await setup()
+    await createTestEntry(db, workId, { name: '서윤', fields: { speech: '반말' } })
+
+    const prompt = await draftPrompt(db, actor, workId, {
+      instructions: '민준이 웃는다.',
+      entryIds: [],
+    })
+    expect(prompt).toContain('<voices>')
+    expect(prompt).toContain('- 서윤: 반말')
+  })
+
+  it('leaves a character without speech out of the voices', async () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    const { db, actor, workId } = await setup()
+    await createTestEntry(db, workId, { name: '서윤', fields: { speech: '반말' } })
+    await createTestEntry(db, workId, { name: '철수' })
+
+    const prompt = await draftPrompt(db, actor, workId, {
+      instructions: '민준이 웃는다.',
+      entryIds: [],
+    })
+    expect(voicesOf(prompt)).not.toContain('철수')
+  })
+
+  it('ignores a non-character entry with speech', async () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    const { db, actor, workId } = await setup()
+    await createTestEntry(db, workId, {
+      name: '잿빛 종루',
+      kind: 'place',
+      fields: { speech: '반말' },
+    })
+
+    const prompt = await draftPrompt(db, actor, workId, {
+      instructions: '민준이 웃는다.',
+      entryIds: [],
+    })
+    expect(prompt).not.toContain('잿빛 종루: 반말')
+    expect(prompt).not.toContain('- 잿빛 종루')
+  })
+
+  it('includes the style card of a voice character even when not selected', async () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    const { db, actor, workId } = await setup()
+    const seoyun = await createTestEntry(db, workId, { name: '서윤', fields: { speech: '반말' } })
+    await createStyleCard(db, actor, {
+      workId,
+      entryId: seoyun.id,
+      name: '서윤 말투',
+      tone: '단호하다.',
+    })
+
+    const prompt = await draftPrompt(db, actor, workId, {
+      instructions: '민준이 웃는다.',
+      entryIds: [],
+    })
+    expect(prompt).toContain('서윤 말투')
+  })
+
+  it('has no voices and no voice card when the flag is off', async () => {
+    const { db, actor, workId } = await setup()
+    const seoyun = await createTestEntry(db, workId, { name: '서윤', fields: { speech: '반말' } })
+    await createStyleCard(db, actor, {
+      workId,
+      entryId: seoyun.id,
+      name: '서윤 말투',
+      tone: '단호하다.',
+    })
+
+    const prompt = await draftPrompt(db, actor, workId, {
+      instructions: '민준이 웃는다.',
+      entryIds: [],
+    })
+    expect(prompt).not.toContain('<voices>')
+    expect(prompt).not.toContain('서윤 말투')
+  })
+
+  it('matches the prompt of a work without speech data when the flag is off', async () => {
+    const withSpeech = await setup()
+    await createTestEntry(withSpeech.db, withSpeech.workId, {
+      name: '서윤',
+      fields: { speech: '반말' },
+    })
+    const plain = await setup()
+    await createTestEntry(plain.db, plain.workId, { name: '서윤' })
+
+    const instructions = '민준이 웃는다.'
+    const a = await draftPrompt(withSpeech.db, withSpeech.actor, withSpeech.workId, {
+      instructions,
+      entryIds: [],
+    })
+    const b = await draftPrompt(plain.db, plain.actor, plain.workId, {
+      instructions,
+      entryIds: [],
+    })
+    expect(a).toBe(b)
+  })
+})
