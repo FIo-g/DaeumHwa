@@ -1,5 +1,9 @@
 import { runAiTask } from '@/ai/run'
-import { type ParagraphTrimItem, type ParagraphTrimOutput, paragraphTrimTask } from '@/ai/tasks/paragraph-trim'
+import {
+  type ParagraphTrimItem,
+  type ParagraphTrimOutput,
+  paragraphTrimTask,
+} from '@/ai/tasks/paragraph-trim'
 import type { AiClient } from '@/ai/types'
 import type { Db } from '@/db/client'
 import type { Actor } from '@/db/types'

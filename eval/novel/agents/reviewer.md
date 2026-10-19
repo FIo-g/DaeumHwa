@@ -37,7 +37,7 @@ Use this structure. Headings in the document's language.
 
 **Per chapter (one section per chapter)**
 
-- T1 to T7: pass or fail for each, with the harness metric that decides it (for example `chars`, `targetChars`, `lengthOk`, `foreignRuns`, `metaHits`, `endsCleanly`, `hangulLeft`, `proofread` errors per 1,000 characters).
+- T1 to T7: pass or fail for each, with the harness metric that decides it (for example `chars`, `targetChars`, `lengthOk`, `foreignRuns`, `metaHits`, `endsCleanly`, `hangulLeft`, `proofread` errors per 1,000 characters, `overlongParagraphs`). For the three-sentence paragraph rule, use the `overlongParagraphs` metric, not a hand count.
 - Q1 to Q9: a score from 1 to 5 for each, with at least one quote from the chapter text for each score. Quotes are mandatory. A score without a quote is not accepted. Quote the Korean or English exactly.
 - Verdict: publishable (출판 가능 / publishable), excellent (우수 / excellent), or not publishable, using the section 3.3 rules.
 - Continuity count for the chapter: each contradiction with the bible, classified with the ConStory five-way categories described in the criteria file.

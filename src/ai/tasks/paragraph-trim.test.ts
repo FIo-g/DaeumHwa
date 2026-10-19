@@ -5,7 +5,8 @@ import { TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { isValidTrim, paragraphTrimTask } from '@/ai/tasks/paragraph-trim'
 import { replaceParagraphs, splitParagraphs } from '@/lib/korean/paragraphs'
 
-const FIVE = '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다. 그녀는 숨을 죽였다.'
+const FIVE =
+  '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다. 그녀는 숨을 죽였다.'
 const SPLIT_3_2 =
   '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다.\n\n발소리가 멀어졌다. 그녀는 숨을 죽였다.'
 
@@ -43,13 +44,16 @@ describe('isValidTrim', () => {
   })
 
   it('rejects a rewrite whose line still has four sentences', () => {
-    const still = '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다.\n\n그녀는 숨을 죽였다.'
+    const still =
+      '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다.\n\n그녀는 숨을 죽였다.'
     expect(isValidTrim(FIVE, still, 3)).toBe(false)
   })
 
   it('rejects a rewrite that changes quoted dialogue', () => {
-    const original = '민아가 "나가자." 말했다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다. 그녀는 숨을 죽였다.'
-    const altered = '민아가 "나가자" 말했다. 복도는 어두웠다. 바람이 불었다.\n\n발소리가 멀어졌다. 그녀는 숨을 죽였다.'
+    const original =
+      '민아가 "나가자." 말했다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다. 그녀는 숨을 죽였다.'
+    const altered =
+      '민아가 "나가자" 말했다. 복도는 어두웠다. 바람이 불었다.\n\n발소리가 멀어졌다. 그녀는 숨을 죽였다.'
     expect(isValidTrim(original, altered, 3)).toBe(false)
   })
 
@@ -93,7 +97,8 @@ describe('paragraphTrimTask postProcess', () => {
   it('joins a single-newline split with a blank line, trimming blank parts', () => {
     const original =
       '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다. 그녀는 숨을 죽였다.'
-    const rewrite = '  민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다.\n발소리가 멀어졌다. 그녀는 숨을 죽였다.  \n\n'
+    const rewrite =
+      '  민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다.\n발소리가 멀어졌다. 그녀는 숨을 죽였다.  \n\n'
     const processed = paragraphTrimTask.postProcess?.(
       { paragraphs: [{ index: 1, text: rewrite }] },
       { maxSentences: 3, items: [{ index: 1, text: original, before: null, after: null }] },

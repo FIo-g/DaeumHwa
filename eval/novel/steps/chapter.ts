@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import {
   createChapterFromDraft,
   repairDraft,
@@ -5,7 +7,13 @@ import {
   runReaderSimulation,
   startDraft,
 } from '@/server/ai-features'
+import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
+import {
+  hasOverlongSpan,
+  overlongParagraphs,
+  PARAGRAPH_MAX_SENTENCES,
+} from '@/lib/korean/paragraphs'
 import { type ProofreadSuggestion, runChapterCheck, runProofread } from '@/server/chapter-check'
 import { getChapter, listChapters, saveChapter, setChapterStatus } from '@/server/chapters'
 import { listIssues, resolveIssue } from '@/server/issues'
@@ -105,6 +113,67 @@ export async function repairBestEffort(
   }
 }
 
+/**
+ * E1: trims the paragraphs that run over the sentence limit (spec 7). Runs on the draft text after
+ * the continuation and before the repair. Returns the text the next stage starts from. A trim that
+ * breaks the length check, fails, or changes nothing keeps the raw text. A draft with offenders
+ * always gets a trim.json; a draft without offenders makes no call and writes nothing.
+ */
+async function trimStage(
+  ctx: RunContext,
+  state: RunState,
+  key: string,
+  workId: string,
+  text: string,
+  attemptNo: number,
+): Promise<string> {
+  const n = chapterOf(key)
+  const preOffenders = overlongParagraphs(text)
+  if (preOffenders.length === 0) return text
+
+  const trimmed = await withModelRetry(ctx, state, `${key}:paragraphs`, () =>
+    trimOverlongParagraphs(ctx.db, ctx.actor, { workId, text }, ctx.client),
+  )
+  // A round-2 failure is swallowed by the service, which keeps the round-1 fixes. Its failure record
+  // must not reach a later call, so it is discarded here.
+  ctx.client.takeLastFailure()
+
+  const lengthOk = (value: string) =>
+    chapterMetrics(value, ctx.config.lang, ctx.bible.targetChars).lengthOk
+  const lengthRejected =
+    trimmed !== null && trimmed.changed && lengthOk(text) && !lengthOk(trimmed.text)
+  const useTrimmed = trimmed !== null && trimmed.changed && !lengthRejected
+
+  let status: 'ok' | 'unchanged' | 'guarded' | 'failed'
+  if (trimmed === null) status = 'failed'
+  else if (!trimmed.changed) status = 'unchanged'
+  else if (lengthRejected) status = 'guarded'
+  else status = 'ok'
+  // A quoted span over the limit can never pass isValidTrim, so these are reported apart.
+  const unfixableDialogue = preOffenders.filter((p) =>
+    hasOverlongSpan(p.text, PARAGRAPH_MAX_SENTENCES),
+  ).length
+  const record = {
+    status,
+    before: preOffenders.length,
+    after: useTrimmed && trimmed ? trimmed.after : preOffenders.length,
+    rounds: trimmed?.rounds ?? 0,
+    runIds: trimmed?.runIds ?? [],
+    unfixableDialogue,
+  }
+  writeRunFile(
+    ctx.dir,
+    `chapters/${pad(n)}.attempt-${attemptNo}.trim.json`,
+    `${JSON.stringify(record, null, 2)}\n`,
+  )
+
+  if (trimmed === null || !useTrimmed) return text
+  const rawFile = `chapters/${pad(n)}.attempt-${attemptNo}.draft.raw.txt`
+  if (!existsSync(path.join(ctx.dir, rawFile))) writeRunFile(ctx.dir, rawFile, text)
+  writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.draft.trimmed.txt`, trimmed.text)
+  return trimmed.text
+}
+
 export const draft: StepFn = async (ctx, key, state) => {
   const n = chapterOf(key)
   const created = `ch${n}:chapter-created`
@@ -160,7 +229,10 @@ export const draft: StepFn = async (ctx, key, state) => {
         }
         break
       }
+      // E1 then E2, each stage on the text the previous one returned (spec 7).
+      const trimmedText = await trimStage(ctx, state, key, workId, generated.text, attemptNo)
       // E2: one repair on the final text (after A's continuation). Best effort, see repairBestEffort.
+      // It starts from the trimmed text, which is also what repairDraft stores when it runs.
       const repairedText = await repairBestEffort(
         ctx,
         state,
@@ -169,12 +241,12 @@ export const draft: StepFn = async (ctx, key, state) => {
           repairDraft(
             ctx.db,
             ctx.actor,
-            { workId, runId: generated.runId, lang: ctx.config.lang },
+            { workId, runId: generated.runId, lang: ctx.config.lang, text: trimmedText },
             ctx.client,
           ),
-        generated.text,
+        trimmedText,
       )
-      if (repairedText !== generated.text) {
+      if (repairedText !== trimmedText) {
         writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.repaired.txt`, repairedText)
       }
       writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.md`, repairedText)
@@ -214,11 +286,14 @@ export const draft: StepFn = async (ctx, key, state) => {
   }
 
   const chosen = pickAttempt(attempts)
+  // The saved chapter is the attempt file the author reviewed, not the run's stored text.
+  const chosenFile = `chapters/${pad(n)}.attempt-${attempts.indexOf(chosen) + 1}.md`
   const chapter = await guarded(ctx, state, key, () =>
     createChapterFromDraft(ctx.db, ctx.actor, {
       workId,
       runId: chosen.runId,
       title: spec.title,
+      body: readRunFile(ctx.dir, chosenFile),
     }),
   )
   if (chapter) state.data.chapterIds[n] = chapter.id

@@ -10,10 +10,13 @@ import { createTestDb } from '@/test/db'
 import { addTestMember, createTestUser, createTestWork } from '@/test/factories'
 import { MAX_TRIM_ROUNDS, trimOverlongParagraphs } from '@/server/draft-paragraphs'
 
-const FIVE = '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다. 그녀는 숨을 죽였다.'
+const FIVE =
+  '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다. 그녀는 숨을 죽였다.'
 const A = FIVE
-const B = '서윤은 편지를 펼쳤다. 글씨는 낯설었다. 종이는 눅눅했다. 끝에는 서명이 없었다. 그는 한참을 서 있었다.'
-const C = '탑의 종이 울렸다. 사람들이 광장에 모였다. 노인이 앞으로 나섰다. 아이들은 조용했다. 해가 기울기 시작했다.'
+const B =
+  '서윤은 편지를 펼쳤다. 글씨는 낯설었다. 종이는 눅눅했다. 끝에는 서명이 없었다. 그는 한참을 서 있었다.'
+const C =
+  '탑의 종이 울렸다. 사람들이 광장에 모였다. 노인이 앞으로 나섰다. 아이들은 조용했다. 해가 기울기 시작했다.'
 const SHORT_BEFORE = '비가 내렸다. 그녀는 창가에 섰다.'
 const SHORT_AFTER = '아무도 답하지 않았다.'
 const FOUR = '민아는 문을 열었다. 복도는 어두웠다. 바람이 불었다. 발소리가 멀어졌다.'
@@ -188,7 +191,12 @@ describe('trimOverlongParagraphs', () => {
   it('answers a non-member with NOT_FOUND', async () => {
     const stranger = await createTestUser(db, { email: 'stranger@example.com' })
     await expect(
-      trimOverlongParagraphs(db, { userId: stranger.id }, { workId, text: FIVE }, new FakeAiClient()),
+      trimOverlongParagraphs(
+        db,
+        { userId: stranger.id },
+        { workId, text: FIVE },
+        new FakeAiClient(),
+      ),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 })
