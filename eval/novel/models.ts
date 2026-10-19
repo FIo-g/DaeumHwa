@@ -1,6 +1,7 @@
 import { FakeAiClient } from '@/test/fake-ai'
 import {
   OllamaAiClient,
+  type OllamaAttempt,
   type OllamaCallStats,
   type OllamaOptions,
   type OllamaThink,
@@ -184,6 +185,7 @@ export function createModelClient(
   o: {
     fetch?: typeof fetch
     onStats?: (s: OllamaCallStats) => void
+    onAttempt?: (a: OllamaAttempt) => void
     helperThink?: HelperThink
   } = {},
 ): AiClient {
@@ -200,6 +202,7 @@ export function createModelClient(
         model: profile.model,
         fetch: o.fetch ?? ollamaTransport,
         onStats: o.onStats,
+        onAttempt: o.onAttempt,
         ...(thinkByTask ? { thinkByTask } : {}),
       })
     }

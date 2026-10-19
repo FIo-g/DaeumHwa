@@ -125,6 +125,7 @@ export async function openRun(
       o.inner ??
       createModelClient(profile, {
         onStats: (s) => client.onOllamaStats(s),
+        onAttempt: (a) => client.onOllamaAttempt(a),
         helperThink: config.helperThink,
       }),
     profile,

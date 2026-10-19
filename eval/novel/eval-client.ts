@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
@@ -11,13 +12,19 @@ import { readerSimTask } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
 import { DEFAULT_AI_TIMEOUT_MS, STREAM_AI_TIMEOUT_MS } from '@/ai/run'
 import type { AiClient, AiEffort, AiUsage, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
-import { OLLAMA_STREAM_FAILURE, type OllamaCallStats, type OllamaThink } from '@/ai/ollama'
+import {
+  OLLAMA_STREAM_FAILURE,
+  type OllamaAttempt,
+  type OllamaCallStats,
+  type OllamaThink,
+} from '@/ai/ollama'
 import type { AiTaskName } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { type HelperThink, type ModelProfile, thinkFor } from './models'
 import { type PowerInfo, type PowerReader, UNKNOWN_POWER } from './power'
 import { EN_SYSTEMS } from './localize/en-systems'
 import { countHangul, translateScaffold } from './localize/scaffold'
+import { type CallOllama, callOllama, promptRateSuspect } from './ollama-detail'
 
 // Eval client: wraps the real AI client for one model profile. It forces the eval settings (the
 // profile's effort, model and output floor), optionally swaps prompts to English, and writes one
@@ -67,6 +74,8 @@ export type CallRecord = {
   thinkRequested?: OllamaThink | null
   /** Machine power state when the call started. Local profiles only; absent on cloud runs and on records written before M1. */
   power?: PowerInfo
+  /** Ollama's record of the call: its attempts and time outside Ollama's timer. Present on Ollama calls that reported at least one attempt; absent on cloud calls and on records written before M2. */
+  ollama?: CallOllama
 }
 
 export interface EvalClientOptions {
@@ -259,6 +268,8 @@ function speedOf(args: {
   firstTokenMs: number | null
   usage: AiUsage | null
   ollama: OllamaCallStats[]
+  /** True when the prompt rate cannot be trusted (see ollama-detail); the prompt speed is then left out. */
+  promptCacheSuspected: boolean
 }): CallSpeed {
   if (args.ollama.length > 0) {
     if (!args.ok) return { outputTokensPerSec: null, promptTokensPerSec: null, source: 'ollama' }
@@ -269,10 +280,12 @@ function speedOf(args: {
         sum((s) => s.outputTokens),
         sum((s) => s.evalMs),
       ),
-      promptTokensPerSec: ratePerSec(
-        sum((s) => s.promptTokens),
-        sum((s) => s.promptMs),
-      ),
+      promptTokensPerSec: args.promptCacheSuspected
+        ? null
+        : ratePerSec(
+            sum((s) => s.promptTokens),
+            sum((s) => s.promptMs),
+          ),
       source: 'ollama',
     }
   }
@@ -306,6 +319,10 @@ type Prepared = {
   maxTokens: number
   productTimeoutMs: number
   power?: PowerInfo
+  /** Local calls only: a hash of task, system and prompt. Null on other providers. */
+  promptKey: string | null
+  /** True when an identical prompt was already sent to Ollama in this process. */
+  promptRepeated: boolean
 }
 
 type Outcome = { ok: true; output: unknown; usage: AiUsage } | { ok: false; error: unknown }
@@ -342,6 +359,10 @@ export class EvalClient implements AiClient {
   private pendingFailure: CallError | null = null
   /** Ollama timings reported by the inner client, waiting for their call to settle. */
   private readonly ollamaStats = new Map<AiTaskName, OllamaCallStats[]>()
+  /** Ollama attempts reported by the inner client, waiting for their call to settle. */
+  private readonly ollamaAttempts = new Map<AiTaskName, OllamaAttempt[]>()
+  /** Prompt keys already sent to Ollama in this process (local profiles only). */
+  private readonly sentPrompts = new Set<string>()
   private step: string | null = null
   /** Tail of the local lane: resolves when the last call that took a turn has released it. */
   private lane: Promise<void> = Promise.resolve()
@@ -383,6 +404,13 @@ export class EvalClient implements AiClient {
     this.ollamaStats.set(stats.task, list)
   }
 
+  /** Receives one Ollama HTTP attempt from the inner client. Each call takes its own by task name. */
+  onOllamaAttempt(attempt: OllamaAttempt): void {
+    const list = this.ollamaAttempts.get(attempt.task) ?? []
+    list.push(attempt)
+    this.ollamaAttempts.set(attempt.task, list)
+  }
+
   /**
    * Returns the most severe failure recorded since the previous take (external limit, then external
    * network, then model), and clears it. Ties keep the earlier failure.
@@ -409,6 +437,7 @@ export class EvalClient implements AiClient {
     try {
       const call = this.prepare(args.task.name, 'object', args.system, args.prompt, args.maxTokens)
       const queueMs = local ? call.startedMs - requestedMs : 0
+      if (call.promptKey) this.sentPrompts.add(call.promptKey)
       // A synchronous throw from a non-async inner client becomes a rejection, so it is recorded too.
       const pending = (() => {
         try {
@@ -440,6 +469,7 @@ export class EvalClient implements AiClient {
     // AI call starts (eval/novel/steps/chapter.ts), so no helper call overlaps a stream.
     const call = this.prepare(args.task.name, 'stream', args.system, args.prompt, args.maxTokens)
     let inner: ReturnType<AiClient['streamText']>
+    if (call.promptKey) this.sentPrompts.add(call.promptKey)
     try {
       inner = this.inner.streamText({
         ...args,
@@ -515,6 +545,10 @@ export class EvalClient implements AiClient {
     const prompt = this.lang === 'en' ? translateScaffold(productPrompt) : productPrompt
     const taskTimeout = TASK_DEFS.find((def) => def.name === task)?.timeoutMs
     const fallback = kind === 'stream' ? STREAM_AI_TIMEOUT_MS : DEFAULT_AI_TIMEOUT_MS
+    const promptKey =
+      this.profile.provider === 'ollama'
+        ? createHash('sha1').update(`${task}\u0000${system}\u0000${prompt}`).digest('hex')
+        : null
     return {
       seq,
       task,
@@ -527,6 +561,8 @@ export class EvalClient implements AiClient {
       maxTokens: Math.max(productMaxTokens, this.profile.maxTokensFloor),
       productTimeoutMs: taskTimeout ?? fallback,
       power,
+      promptKey,
+      promptRepeated: promptKey !== null && this.sentPrompts.has(promptKey),
     }
   }
 
@@ -566,6 +602,12 @@ export class EvalClient implements AiClient {
     const usage = outcome.ok ? outcome.usage : billedUsageOf(outcome.error)
     const ollama = this.ollamaStats.get(call.task) ?? []
     this.ollamaStats.delete(call.task)
+    const attempts = this.ollamaAttempts.get(call.task) ?? []
+    this.ollamaAttempts.delete(call.task)
+    // A prompt that was sent before may be cached, so its reported prompt time is not trusted.
+    const promptCacheSuspected =
+      call.promptRepeated || ollama.some((s) => promptRateSuspect(s.promptTokens, s.promptMs))
+    const detail = callOllama({ durationMs, attempts, promptCacheSuspected })
     const numCtx = this.profile.ollama?.numCtx
     const status = outcome.ok ? undefined : statusOf(outcome.error)
     const error: CallError | null = outcome.ok
@@ -590,6 +632,7 @@ export class EvalClient implements AiClient {
         firstTokenMs,
         usage,
         ollama,
+        promptCacheSuspected,
       }),
       model: this.profile.model,
       effortRequested: this.profile.effort,
@@ -607,6 +650,7 @@ export class EvalClient implements AiClient {
       queueMs,
       waitInclusiveMs: queueMs + durationMs,
       thinkRequested: thinkFor(this.profile, call.task, this.helperThink),
+      ...(detail ? { ollama: detail } : {}),
       ...(call.power ? { power: call.power } : {}),
     }
     this.records.push(record)
