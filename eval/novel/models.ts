@@ -38,6 +38,15 @@ export type ModelProfile = {
 const LOCAL_TIMEOUT_MS = 3_600_000
 const CLOUD_TIMEOUT_MS = 900_000
 
+const QWEN_OLLAMA: NonNullable<ModelProfile['ollama']> = {
+  numCtx: 262144,
+  temperature: 1.0,
+  topP: 0.95,
+  topK: 20,
+  minP: 0,
+  think: true,
+}
+
 const QWEN: ModelProfile = {
   id: 'qwen3.8-27b',
   queue: 'local',
@@ -46,7 +55,7 @@ const QWEN: ModelProfile = {
   effort: 'max',
   maxTokensFloor: 32000,
   timeoutMs: LOCAL_TIMEOUT_MS,
-  ollama: { numCtx: 262144, temperature: 1.0, topP: 0.95, topK: 20, minP: 0, think: true },
+  ollama: QWEN_OLLAMA,
   variant: 'mlx',
 }
 
@@ -58,7 +67,7 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
   'qwen3.8-27b-t06': {
     ...QWEN,
     id: 'qwen3.8-27b-t06',
-    ollama: { ...QWEN.ollama, temperature: 0.6 },
+    ollama: { ...QWEN_OLLAMA, temperature: 0.6 },
   },
   'gpt-oss-20b': {
     id: 'gpt-oss-20b',
