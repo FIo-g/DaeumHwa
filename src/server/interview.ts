@@ -37,9 +37,6 @@ import { requireRowWork, requireWorkRole } from '@/server/access'
 import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { insertProposals } from '@/server/proposal-store'
 
-// Known facts sent to the extraction prompt (pending facts first). Keeps the prompt bounded.
-const PROMPT_FACT_LIMIT = 100
-
 // F1 interview service. Questions and answers are stored as interview_sessions / interview_turns.
 // Answers go through the AI extraction task and become pending proposals (source 'interview').
 // Nothing here writes wiki tables; approval happens later through the proposal engine.
@@ -54,6 +51,8 @@ const ENTRY_SUMMARY_CHARS = 40
 const THREAD_LIMIT = 30
 const SUMMARY_LIMIT = 5
 const READER_LIMIT = 3
+// Known facts sent to the extraction prompt; pending facts come first, so they are kept.
+const PROMPT_FACT_LIMIT = 100
 const READER_DIGEST_CHARS = 200
 const ENDED_MESSAGE = '이미 끝난 인터뷰입니다.'
 
