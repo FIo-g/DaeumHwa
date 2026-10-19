@@ -114,11 +114,11 @@ describe('OllamaAiClient thinkByTask', () => {
       effort: 'low',
       maxTokens: 4000,
     })
-    for await (const _chunk of textStream) {
-      // drain the text stream so the request finishes
-    }
+    const chunks: string[] = []
+    for await (const chunk of textStream) chunks.push(chunk)
     await final
 
+    expect(chunks.join('')).toBe('본문')
     expect(calls).toHaveLength(1)
     expect(calls[0].body.think).toBe(false)
   })
