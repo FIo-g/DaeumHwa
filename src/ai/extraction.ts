@@ -9,6 +9,8 @@ import {
 import { hasJongseong, JOSA } from '@/lib/korean'
 import type { NewProposal, ProposalPayloadMap } from '@/lib/proposal-payloads'
 import { ROLE_WORDS } from '@/ai/extraction-rules'
+import { isNearDuplicateFact } from '@/ai/guards'
+import { verifyEvidenceQuote } from '@/lib/evidence-quote'
 
 // Structured-output schema shared by interview extraction (T12), chapter extraction (T13) and
 // import extraction (T16). Structured-output rules: no min/max/regex/default/optional; maps are
@@ -83,6 +85,17 @@ export type ExtractionContext = {
     directed: boolean
     endPosition: number | null
   }[]
+  /** Source text the model read. When set, every evidence quote must appear in it. */
+  sourceText?: string
+  /** Current wiki facts and pending fact_create texts. A near-duplicate of one of them is not proposed again. */
+  existingFacts?: ExistingFactText[]
+}
+
+/** A fact the work already has (or has pending), as the dedupe needs it. */
+export type ExistingFactText = {
+  entryId: string | null
+  subjectName: string
+  content: string
 }
 
 /** A thread event whose target is a pending (not yet approved) thread_create. T16 attaches these. */
@@ -101,9 +114,9 @@ export type ExtractionStats = {
 }
 
 export type ExtractionDropped = {
-  /** Always 0 in G2. G1 counts near-duplicate facts dropped. */
+  /** Facts dropped as near-duplicates of an existing or earlier fact of this extraction. */
   duplicateFacts: number
-  /** Always 0 in G2. G1 counts items dropped for evidence not found in the source. */
+  /** Facts, threads and relations dropped because their evidence is not in the source text. */
   unverifiedEvidence: number
 }
 
@@ -351,6 +364,27 @@ export function extractionToProposals(
     return undefined
   }
 
+  // Evidence as stored: the raw text when no source is set, else the verified source slice. A
+  // quote that is not in the source is counted and returns null.
+  const evidenceOf = (raw: string): string | null => {
+    if (ctx.sourceText === undefined) return raw.trim()
+    const verified = verifyEvidenceQuote(ctx.sourceText, raw)
+    if (verified === null) dropped.unverifiedEvidence += 1
+    return verified
+  }
+  // Fact texts already on the work for this card: a wiki card's facts, else the facts of a
+  // pending or new card that has no wiki id, matched by subject name.
+  const existingFactTexts = (subjectName: string, hit: Hit | undefined): string[] => {
+    const canonical = collapse(canonicalName(subjectName, hit))
+    return (ctx.existingFacts ?? [])
+      .filter((c) =>
+        hit?.source === 'wiki'
+          ? c.entryId === hit.entry.id
+          : c.entryId === null && collapse(c.subjectName) === canonical,
+      )
+      .map((c) => c.content)
+  }
+
   // Character card names a tail fragment may complete: wiki and pending cards, then character
   // entries of this extraction. A name's own entry is left out of its candidates, so an entry
   // "세린" beside "한세린" can still be rewritten.
@@ -442,6 +476,8 @@ export function extractionToProposals(
 
   // Facts: subject binds to a wiki card when one matches (pending and new entries stay null).
   const seenFacts = new Set<string>()
+  // Contents kept so far per card identity, for the near-duplicate check within this extraction.
+  const keptFacts = new Map<string, string[]>()
   for (const f of x.facts) {
     const content = collapse(f.content)
     if (!content) continue
@@ -450,9 +486,29 @@ export function extractionToProposals(
     const kind = kindOfEntry(rawSubject)
     const subjectName = resolveFragment(rawSubject, kind)
     const hit = locate(subjectName, kind)
-    const key = `${identityOf(subjectName, hit)}|${content}`
+    const identity = identityOf(subjectName, hit)
+    const supersedesFactId = lookupRef(ctx.factRefs, f.supersedesFactRef)?.id ?? null
+    // A state change (supersede) is never a duplicate of the fact it replaces.
+    const isState = supersedesFactId !== null
+
+    if (
+      !isState &&
+      existingFactTexts(subjectName, hit).some((c) => isNearDuplicateFact(c, content))
+    ) {
+      dropped.duplicateFacts += 1
+      continue
+    }
+    const evidence = evidenceOf(f.evidence)
+    if (evidence === null) continue
+
+    const key = `${identity}|${content}`
     if (seenFacts.has(key)) continue
+    if (!isState && (keptFacts.get(identity) ?? []).some((c) => isNearDuplicateFact(c, content))) {
+      dropped.duplicateFacts += 1
+      continue
+    }
     seenFacts.add(key)
+    keptFacts.set(identity, [...(keptFacts.get(identity) ?? []), content])
 
     proposals.push(
       makeProposal(ctx, 'fact_create', {
@@ -461,8 +517,8 @@ export function extractionToProposals(
         content,
         suggestedStatus: f.suggestedStatus,
         sourceChapterId: ctx.chapterId,
-        evidence: f.evidence.trim(),
-        supersedesFactId: lookupRef(ctx.factRefs, f.supersedesFactRef)?.id ?? null,
+        evidence,
+        supersedesFactId,
       }),
     )
   }
@@ -497,8 +553,9 @@ export function extractionToProposals(
   for (const t of x.threads) {
     const title = t.title.trim()
     if (!title) continue
+    const evidence = evidenceOf(t.evidence)
+    if (evidence === null) continue
     const description = t.description.trim()
-    const evidence = t.evidence.trim()
 
     const target = threadTargetOf(t.existingThreadRef, title, t.kind)
     if (target) {
@@ -599,6 +656,8 @@ export function extractionToProposals(
     ) {
       continue
     }
+    const evidence = evidenceOf(r.evidence)
+    if (evidence === null) continue
     const key = `${identityOf(sourceName, sourceHit)}|${identityOf(targetName, targetHit)}|${kind}`
     if (seenRelations.has(key)) continue
     seenRelations.add(key)
@@ -610,7 +669,7 @@ export function extractionToProposals(
         description: r.description.trim(),
         directed: false,
         startPosition: ctx.chapterPosition,
-        evidence: r.evidence.trim(),
+        evidence,
       }),
     )
   }
