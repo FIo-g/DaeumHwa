@@ -1,6 +1,6 @@
 import { getAiClient } from '@/ai'
 import { type Extraction, mergeExtractionParts } from '@/ai/extraction'
-import { runAiTask, type AiRunMeta } from '@/ai/run'
+import { isLocalProvider, runAiTask, type AiRunMeta } from '@/ai/run'
 import { chapterExtractTask, type ChapterExtractInput } from '@/ai/tasks/chapter-extract'
 import {
   chapterExtractFactsTask,
@@ -21,7 +21,7 @@ export function shouldSplitChapterExtract(provider: string): boolean {
   const override = process.env.AI_EXTRACT_SPLIT
   if (override === 'on') return true
   if (override === 'off') return false
-  return provider === 'ollama' || provider === 'eval:ollama'
+  return isLocalProvider(provider)
 }
 
 /**

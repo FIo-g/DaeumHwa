@@ -299,6 +299,27 @@ describe('runAiTaskSplit', () => {
     expect(output).toEqual({ text: '답: a|답: b|답: c|답: d' })
   })
 
+  it.each([Number.NaN, Number.POSITIVE_INFINITY])(
+    'falls back to the provider default when options.concurrency is %s',
+    async (concurrency) => {
+      const { db, userId, workId } = await setup()
+      const client = new RecordingClient('ollama')
+      const { output, runId } = await runAiTaskSplit(
+        db,
+        { userId, workId },
+        task,
+        PARTS,
+        joinMerge,
+        client,
+        { concurrency },
+      )
+      expect(client.calls).toHaveLength(3)
+      expect(output).toEqual({ text: '답: a|답: b|답: c' })
+      const [row] = (await allRuns(db, userId)).filter((r) => r.id === runId)
+      expect(row.status).toBe('done')
+    },
+  )
+
   it('reads AI_SPLIT_CONCURRENCY at call time and ignores invalid values', async () => {
     const { db, userId, workId } = await setup()
 

@@ -7,7 +7,7 @@ import {
   type ExtractionStats,
 } from '@/ai/extraction'
 import { isNearDuplicateFact } from '@/ai/guards'
-import { DEFAULT_AI_TIMEOUT_MS, runAiTask, throwIfCancelled } from '@/ai/run'
+import { DEFAULT_AI_TIMEOUT_MS, isLocalProvider, runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { runChapterExtract } from '@/ai/chapter-extract-run'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
@@ -157,11 +157,10 @@ export const PROOFREAD_TOTAL_BUDGET_MS = 285_000
 
 /**
  * Local servers answer slowly, so only they get a split proofread. Cloud providers keep one call
- * (spec section 8: local-only behavior is gated by provider). The provider list mirrors the
- * private `isLocalProvider` in `src/ai/run.ts`; keep the two in step.
+ * (spec section 8: local-only behavior is gated by provider).
  */
 function shouldSplitProofread(provider: string): boolean {
-  return provider === 'ollama' || provider === 'eval:ollama'
+  return isLocalProvider(provider)
 }
 
 /** Wraps the proofread task. `lastRunId` is the run of the most recent check call. */

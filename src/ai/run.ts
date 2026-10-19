@@ -153,11 +153,14 @@ export async function runAiTaskSplit<I, O>(
   const taskModel = task.model?.()
   const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
   const timeoutMs = resolveSplitTimeoutMs(meta, task)
+  const defaultConcurrency = isLocalProvider(client.provider) ? 1 : DEFAULT_CLOUD_SPLIT_CONCURRENCY
+  // A NaN or infinite request would start no worker and store an empty merge as a done run.
+  const requestedOption = options?.concurrency
   const requested =
-    options?.concurrency ??
-    splitConcurrencyFromEnv() ??
-    (isLocalProvider(client.provider) ? 1 : DEFAULT_CLOUD_SPLIT_CONCURRENCY)
-  const concurrency = Math.max(1, Math.min(requested, parts.length))
+    requestedOption !== undefined && Number.isFinite(requestedOption)
+      ? requestedOption
+      : (splitConcurrencyFromEnv() ?? defaultConcurrency)
+  const concurrency = Math.max(1, Math.min(Math.floor(requested), parts.length))
   const abortSiblings = new AbortController()
   const outputs: O[] = []
   // An object, not loose lets: the pool writes these from closures.
@@ -259,7 +262,7 @@ function resolveSplitTimeoutMs(meta: AiRunMeta, task: { timeoutMs?: number }): n
 }
 
 /** Local providers serve one request at a time, so their parts run in order by default. */
-function isLocalProvider(provider: string): boolean {
+export function isLocalProvider(provider: string): boolean {
   return provider === 'ollama' || provider === 'eval:ollama'
 }
 
