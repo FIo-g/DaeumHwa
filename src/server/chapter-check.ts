@@ -155,7 +155,11 @@ function locateAiSuggestions(
  */
 export const PROOFREAD_TOTAL_BUDGET_MS = 285_000
 
-/** Local servers answer slowly, so only they get a split proofread. Cloud providers keep one call. */
+/**
+ * Local servers answer slowly, so only they get a split proofread. Cloud providers keep one call
+ * (spec section 8: local-only behavior is gated by provider). The provider list mirrors the
+ * private `isLocalProvider` in `src/ai/run.ts`; keep the two in step.
+ */
 function shouldSplitProofread(provider: string): boolean {
   return provider === 'ollama' || provider === 'eval:ollama'
 }
