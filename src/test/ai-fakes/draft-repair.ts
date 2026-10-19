@@ -1,4 +1,7 @@
-// PLACEHOLDER (Wave-0 seam): track E2 fills this in. Schema-valid empty output for 'draft-repair'.
-export function fakeDraftRepair(): { edits: never[] } {
+import type { DraftRepairOutput } from '@/ai/tasks/draft-repair'
+
+// Stand-in output for the draft-repair task. Used only by tests (see src/test/fake-ai.ts).
+// No edits: the draft is kept as it is.
+export function fakeDraftRepair(): DraftRepairOutput {
   return { edits: [] }
 }

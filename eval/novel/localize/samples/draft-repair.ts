@@ -1,2 +1,7 @@
-// PLACEHOLDER (Wave-0 seam): track E2 replaces this with draftRepairTask.buildPrompt(...).
-export const draftRepairSample = '<manuscript>\nShe go to the tower.\n</manuscript>'
+import { draftRepairTask } from '@/ai/tasks/draft-repair'
+
+// The repair prompt for one English sample-copy flag.
+export const draftRepairSample = draftRepairTask.buildPrompt({
+  text: 'Mina opened the door.',
+  flags: [{ kind: 'sample-copy', start: 0, end: 21, quote: 'Mina opened the door.', reason: 'x' }],
+})
