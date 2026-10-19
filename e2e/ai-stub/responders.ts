@@ -42,10 +42,16 @@ const ANSWERS: { task: string; system: string; answer: Answer }[] = [
   { task: 'reader-sim', system: readerSimTask.system, answer: readerSimAnswer },
   { task: 'direction-advice', system: directionAdviceTask.system, answer: adviceAnswer },
   { task: 'style-suggest', system: styleSuggestTask.system, answer: styleAnswer },
-  { task: 'draft-chapter', system: DRAFT_SYSTEM, answer: () => DRAFT_TEXT },
+  { task: 'draft-chapter', system: DRAFT_SYSTEM, answer: draftAnswer },
 ]
 
 const DRAFT_TEXT = '서윤은 조용히 문을 열었다. 바람이 차가웠다.'
+const CONTINUE_TEXT = '바람은 밤새 잦아들었다. 아침 빛이 문틈으로 들어왔다.'
+
+/** The continuation shares the draft system prompt, so it is told apart by its <draft_so_far> section. */
+function draftAnswer(prompt: string): string {
+  return prompt.includes('<draft_so_far>') ? CONTINUE_TEXT : DRAFT_TEXT
+}
 
 /** Answers one request. Throws UnknownSystemError when the system prompt is not a known task. */
 export function respond(body: RespondBody): StubReply {

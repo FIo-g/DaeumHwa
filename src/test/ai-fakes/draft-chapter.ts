@@ -25,7 +25,10 @@ export function fakeDraft(input: { instructions: string }): string {
   return `(데모 초안) ${paragraphs.join('\n\n')}`
 }
 
-/** PLACEHOLDER (Wave-0 seam): track A replaces the body. Stand-in continuation text for 'draft-continue'. */
+/**
+ * Demo continuation for 'draft-continue': the filler paragraphs four times over, so the text is
+ * always at least 600 characters and reads as a separate part of the draft.
+ */
 export function fakeDraftContinue(): string {
-  return ''
+  return `(데모 이어쓰기) ${[...FILLER, ...FILLER, ...FILLER, ...FILLER].join('\n\n')}`
 }

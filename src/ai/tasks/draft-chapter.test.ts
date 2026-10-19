@@ -9,7 +9,7 @@ import {
   DRAFT_SYSTEM,
   type DraftPromptInput,
 } from '@/ai/tasks/draft-chapter'
-import { fakeDraft } from '@/test/ai-fakes/draft-chapter'
+import { fakeDraft, fakeDraftContinue } from '@/test/ai-fakes/draft-chapter'
 
 const promptInput: DraftPromptInput = {
   instructions: '서윤이 편지를 발견한다. 편지에는 날짜가 적혀 있다.',
@@ -99,6 +99,14 @@ describe('fakeDraft', () => {
 
   it('is deterministic', () => {
     expect(fakeDraft({ instructions: '가 나다.' })).toBe(fakeDraft({ instructions: '가 나다.' }))
+  })
+})
+
+describe('fakeDraftContinue', () => {
+  it('starts with the continuation marker and is at least 600 characters', () => {
+    const text = fakeDraftContinue()
+    expect(text.startsWith('(데모 이어쓰기) ')).toBe(true)
+    expect(text.length).toBeGreaterThanOrEqual(600)
   })
 })
 
