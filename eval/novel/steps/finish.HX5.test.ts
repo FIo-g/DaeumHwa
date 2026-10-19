@@ -1,10 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { CallRecord } from '../eval-client'
 import { newState, type RunConfig } from '../state'
-import { continueFailureOf } from './chapter'
+import { continueFailureOf, recordContinueFailure } from './chapter'
+import type { RunContext } from '../run'
+import { ExternalFailureError } from './util'
 import {
   buildRunSummary,
   parseContinuityResults,
@@ -296,6 +298,24 @@ describe('buildRunSummary extraction and proofread blocks', () => {
     })
   })
 
+  it('counts every decided chapter but lists only chapters with AI items by chapter', () => {
+    const summary = buildRunSummary([call({})], newState(config), 'ko', {
+      proofread: {
+        '1': {
+          suggestions: [{ source: 'rule', quote: '되요', replacement: '돼요', kind: 'spelling' }],
+          decisions: [{ id: '0', accept: true }],
+        },
+        '2': {
+          suggestions: [{ source: 'ai', quote: '가다', replacement: '갔다', kind: 'awkward' }],
+          decisions: [{ id: '0', accept: true }],
+        },
+      },
+    })
+    expect(summary.proofread?.chapters).toBe(2)
+    expect(Object.keys(summary.proofread?.byChapter ?? {})).toEqual(['2'])
+    expect(summary.proofread?.totals).toMatchObject({ total: 1, accepted: 1 })
+  })
+
   it('omits the proofread block when no chapter has an AI item', () => {
     const summary = buildRunSummary([call({})], newState(config), 'ko', {
       proofread: {
@@ -531,5 +551,68 @@ describe('continueFailureOf', () => {
     expect(continueFailureOf({ text: '첫 문단.' })).toBeNull()
     expect(continueFailureOf({ text: '첫 문단.', warnings: [] })).toBeNull()
     expect(continueFailureOf(null)).toBeNull()
+  })
+})
+
+describe('recordContinueFailure', () => {
+  /** The parts of RunContext it reads: a db whose select chain yields one run row, and the client. */
+  function ctxWith(output: unknown, dir: string) {
+    let taken = 0
+    const chain = { from: () => chain, where: () => chain, limit: async () => [{ output }] }
+    const client = {
+      takeLastFailure: () => {
+        taken += 1
+        return null
+      },
+    }
+    const ctx = { dir, db: { select: () => chain }, client } as unknown as RunContext
+    return { ctx, taken: () => taken }
+  }
+
+  const warning = (reason: string, detail: string) => ({
+    text: '첫 문단.',
+    warnings: [{ kind: 'continue-failed', reason, detail, message: '이어쓰기 실패' }],
+  })
+  const file = (dir: string) => join(dir, 'chapters', '01.attempt-1.continue.json')
+
+  it('writes the attempt file and pauses the run on an external limit', async () => {
+    const dir = newDir()
+    const { ctx, taken } = ctxWith(warning('AI_LIMIT', 'usage limit'), dir)
+    await expect(recordContinueFailure(ctx, 'run-1', 1, 1)).rejects.toBeInstanceOf(
+      ExternalFailureError,
+    )
+    expect(taken()).toBe(1)
+    expect(JSON.parse(readFileSync(file(dir), 'utf8'))).toMatchObject({
+      kind: 'continue-failed',
+      reason: 'AI_LIMIT',
+      failure: 'external-limit',
+    })
+  })
+
+  it('records a model failure without pausing', async () => {
+    const dir = newDir()
+    const { ctx, taken } = ctxWith(warning('EMPTY', 'the continuation was empty'), dir)
+    await expect(recordContinueFailure(ctx, 'run-1', 1, 1)).resolves.toBeUndefined()
+    expect(taken()).toBe(1)
+    expect(JSON.parse(readFileSync(file(dir), 'utf8'))).toMatchObject({
+      reason: 'EMPTY',
+      failure: 'model',
+    })
+  })
+
+  it('writes nothing for a run row without the warning', async () => {
+    const dir = newDir()
+    const { ctx, taken } = ctxWith({ text: '첫 문단.' }, dir)
+    await recordContinueFailure(ctx, 'run-1', 1, 1)
+    expect(taken()).toBe(0)
+    expect(existsSync(file(dir))).toBe(false)
+  })
+
+  it('a recorded failure is counted as continueFailed 1 in the summary', async () => {
+    const dir = newDir()
+    const { ctx } = ctxWith(warning('EMPTY', 'the continuation was empty'), dir)
+    await recordContinueFailure(ctx, 'run-1', 1, 1)
+    const summary = buildRunSummary([call({})], newState(config), 'ko', readSummaryInputs(dir))
+    expect(summary.draft?.continueFailed).toMatchObject({ total: 1, external: 0 })
   })
 })

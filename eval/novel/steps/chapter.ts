@@ -119,7 +119,7 @@ export function continueFailureOf(output: unknown): { reason: string; detail: st
  * reads it as its own. An external limit or network failure pauses the run like any other external
  * failure (withModelRetry). Writes the attempt's continue.json, which the run summary counts.
  */
-async function recordContinueFailure(
+export async function recordContinueFailure(
   ctx: RunContext,
   runId: string,
   n: number,

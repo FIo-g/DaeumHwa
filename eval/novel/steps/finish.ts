@@ -329,12 +329,15 @@ export function proofreadSummary(
   perChapter: NonNullable<SummaryInputs['proofread']>,
 ): NonNullable<RunSummary['proofread']> | null {
   const byChapter: Record<string, ProofreadStats> = {}
+  let decided = 0
   for (const [chapter, { suggestions, decisions }] of Object.entries(perChapter)) {
     const items = suggestions.flatMap((s, index) =>
       s.source === 'ai'
         ? [{ id: String(index), quote: s.quote, replacement: s.replacement, kind: s.kind }]
         : [],
     )
+    // A decided chapter counts even when it has no AI item; only chapters with AI items get stats.
+    decided += 1
     if (items.length === 0) continue
     byChapter[chapter] = proofreadStats(items, decisions)
   }
@@ -346,7 +349,7 @@ export function proofreadSummary(
   const distinctQuotes = sum((s) => s.distinctQuotes)
   const acceptedQuotes = sum((s) => s.acceptedQuotes)
   return {
-    chapters: stats.length,
+    chapters: decided,
     totals: {
       total,
       accepted,
