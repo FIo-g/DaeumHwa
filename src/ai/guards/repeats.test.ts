@@ -59,3 +59,41 @@ describe('repeatedWords', () => {
     expect(result[0].per1000).toBe(50)
   })
 })
+
+describe('repeatedWords on large and degenerate text', () => {
+  it('handles a 5,000-character paragraph with no break', () => {
+    const text = '오른손을'.repeat(1250)
+    const t0 = performance.now()
+    const result = repeatedWords(text)
+    expect(performance.now() - t0).toBeLessThan(1000)
+    // One token with no spaces: a single 5,000-character word, not 1,250 repeats.
+    expect(result).toEqual([])
+  })
+
+  it('counts a repeated word in a long paragraph with spaces and reports offsets', () => {
+    const text = '오른손을 뻗었다 '.repeat(625)
+    const t0 = performance.now()
+    const result = repeatedWords(text)
+    expect(performance.now() - t0).toBeLessThan(1000)
+    expect(pick(result)).toEqual([
+      { word: '뻗었다', count: 625 },
+      { word: '오른손', count: 625 },
+    ])
+    expect(result[0].positions[0]).toBe(5)
+  })
+
+  it('returns nothing for empty text and for text without letters', () => {
+    expect(repeatedWords('')).toEqual([])
+    expect(repeatedWords('... !!! ???\n\n', { lang: 'en', ngram: 2 })).toEqual([])
+  })
+
+  it('does not throw on text that is only foreign script', () => {
+    const han = '以上是 '.repeat(2000)
+    expect(() => repeatedWords(han, { minCount: 2 })).not.toThrow()
+    expect(pick(repeatedWords(han, { minCount: 2 }))).toEqual([{ word: '以上是', count: 2000 }])
+    const cyrillic = 'Привет мир '.repeat(500)
+    expect(pick(repeatedWords(cyrillic, { lang: 'en', minCount: 2 }))).toEqual([
+      { word: 'привет', count: 500 },
+    ])
+  })
+})

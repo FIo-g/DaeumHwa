@@ -69,3 +69,38 @@ describe('sampleCopies', () => {
     ).toEqual([])
   })
 })
+
+describe('sampleCopies on large and degenerate text', () => {
+  it('handles a 5,000-character paragraph with no break', () => {
+    const text = '그녀는조용히계단을올랐다'.repeat(420)
+    expect(text.length).toBeGreaterThanOrEqual(5000)
+    const t0 = performance.now()
+    const hits = sampleCopies(text, examples)
+    expect(performance.now() - t0).toBeLessThan(1000)
+    expect(hits).toEqual([])
+  })
+
+  it('flags a copied sentence buried in a 5,000-character paragraph through containment', () => {
+    const filler = '그녀는 조용히 계단을 올랐다 '.repeat(250)
+    const text = `${filler}쇠가 손바닥에 들러붙을 만큼 차가웠다.`
+    const t0 = performance.now()
+    const hits = sampleCopies(text, examples)
+    expect(performance.now() - t0).toBeLessThan(1000)
+    expect(hits).toHaveLength(1)
+    expect(hits[0].example).toBe('쇠가 손바닥에 들러붙을 만큼 차가웠다.')
+  })
+
+  it('returns nothing for empty text, empty examples and text without letters', () => {
+    expect(sampleCopies('', examples)).toEqual([])
+    expect(sampleCopies('쇠가 손바닥에 들러붙을 만큼 차가웠다.', [])).toEqual([])
+    expect(sampleCopies('... !!! ??? 123', examples)).toEqual([])
+  })
+
+  it('does not throw on text and examples that are only foreign script', () => {
+    const han = '以上是中文的长句子用来测试比较'.repeat(300)
+    expect(sampleCopies(han, examples)).toEqual([])
+    expect(sampleCopies(han, [han])).toHaveLength(1)
+    const cyrillic = 'Это длинное предложение для проверки. '.repeat(100)
+    expect(() => sampleCopies(cyrillic, [cyrillic], { lang: 'en' })).not.toThrow()
+  })
+})

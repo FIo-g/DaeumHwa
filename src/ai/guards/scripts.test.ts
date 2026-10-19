@@ -52,3 +52,37 @@ describe('foreignScriptSpans', () => {
     expect(foreignScriptSpans('嬷嬷 hello 三楼', 'ko').map((span) => span.start)).toEqual([0, 3, 9])
   })
 })
+
+describe('foreignScriptSpans on large and degenerate text', () => {
+  const timed = <T>(run: () => T): { value: T; ms: number } => {
+    const t0 = performance.now()
+    const value = run()
+    return { value, ms: performance.now() - t0 }
+  }
+
+  it('handles a 5,000-character paragraph with no break and flags the one foreign run', () => {
+    const text = '그는조용히문을열었다'.repeat(500) + 'Hello' + '그는조용히문을열었다'.repeat(10)
+    const { value, ms } = timed(() => foreignScriptSpans(text, 'ko'))
+    expect(text.length).toBeGreaterThanOrEqual(5000)
+    expect(value).toEqual([{ text: 'Hello', script: 'latin', start: 5000, end: 5005 }])
+    expect(ms).toBeLessThan(1000)
+  })
+
+  it('returns one span for a 5,000-character run that is only foreign script', () => {
+    const han = '以上是'.repeat(1700)
+    const { value, ms } = timed(() => foreignScriptSpans(han, 'ko'))
+    expect(value).toEqual([{ text: han, script: 'han', start: 0, end: han.length }])
+    expect(ms).toBeLessThan(1000)
+    expect(foreignScriptRuns(han, 'ko')).toEqual([han])
+
+    const hangul = '안녕하세요'.repeat(1000)
+    expect(foreignScriptSpans(hangul, 'en')).toEqual([
+      { text: hangul, script: 'hangul', start: 0, end: hangul.length },
+    ])
+  })
+
+  it('returns nothing for empty text and for text without letters', () => {
+    expect(foreignScriptSpans('', 'ko')).toEqual([])
+    expect(foreignScriptSpans('...!!! 123 ???\n\n', 'en')).toEqual([])
+  })
+})
