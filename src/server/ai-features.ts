@@ -492,7 +492,16 @@ async function recordContinueWarning(
 export async function createChapterFromDraft(
   db: Db,
   actor: Actor,
-  input: { workId: string; runId: string; title?: string },
+  input: {
+    workId: string
+    runId: string
+    title?: string
+    /**
+     * Text to save instead of the run's stored text. For the eval and server callers only: the
+     * action wrapper does not accept it, so a client of the app can only save the stored text.
+     */
+    body?: string
+  },
 ): Promise<ChapterRow> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
   const [run] = await db.select().from(aiRuns).where(eq(aiRuns.id, input.runId)).limit(1)
@@ -509,10 +518,13 @@ export async function createChapterFromDraft(
   }
   const text = draftText(run.output)
   if (text === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없습니다.')
+  if (input.body !== undefined && input.body.trim() === '') {
+    throw new AppError('VALIDATION', '본문이 비어 있습니다.')
+  }
   return createChapter(db, actor, {
     workId: input.workId,
     title: input.title,
-    body: text,
+    body: input.body ?? text,
     versionSource: 'ai_draft',
   })
 }
