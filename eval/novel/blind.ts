@@ -1,4 +1,12 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import type { CallRecord } from './eval-client'
 import { MODEL_PROFILES } from './models'
@@ -41,7 +49,8 @@ const PROVIDER_PATTERN = /ollama|opencode/gi
 // Claude followed by a version (Claude v1.3) is a literature citation in the criteria doc, not a model.
 const BRAND_PATTERN =
   /(?<![A-Za-z])(?:Claude(?!\s+v\d)|Anthropic|Qwen|EXAONE|Sonnet|Opus|Haiku|gpt-oss)(?![A-Za-z])/gi
-const REFERENCE_PATTERN = /(?<![A-Za-z])(?:Haiku|Luna|Sonnet|Opus|Qwen|EXAONE|gpt-oss)(?![A-Za-z])/gi
+const REFERENCE_PATTERN =
+  /(?<![A-Za-z])(?:Haiku|Luna|Sonnet|Opus|Qwen|EXAONE|gpt-oss)(?![A-Za-z])/gi
 const REFERENCE_LABEL = '[모델]'
 
 /** Replaces every model id, tag and base tag (any case) with the label. */
@@ -110,4 +119,158 @@ export function blindRunSummary(summary: unknown): unknown {
 /** Where the blinded copy of a run goes: the sibling blind/ folder with the same run name. */
 export function defaultBlindDir(runDir: string): string {
   return path.join(path.dirname(runDir), 'blind', path.basename(runDir))
+}
+
+const CRITERIA_DOC = 'docs/eval/novel-quality-criteria.md'
+const SPEC_DOC = 'docs/superpowers/specs/2026-10-18-lightweight-model-novel-eval-design.md'
+
+function jsonText(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`
+}
+
+/** Every file under root/rel, as paths relative to root with '/' separators, sorted. */
+function listFiles(root: string, rel = ''): string[] {
+  const abs = path.join(root, rel)
+  if (!existsSync(abs)) return []
+  return readdirSync(abs, { withFileTypes: true })
+    .flatMap((entry) => {
+      const child = rel === '' ? entry.name : `${rel}/${entry.name}`
+      return entry.isDirectory() ? listFiles(root, child) : [child]
+    })
+    .sort()
+}
+
+/** True when child is parent itself or inside it. */
+function isWithin(child: string, parent: string): boolean {
+  const rel = path.relative(parent, child)
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))
+}
+
+function readRequired(file: string): string {
+  if (!existsSync(file)) throw new Error(`missing blind source: ${file}`)
+  return readFileSync(file, 'utf8')
+}
+
+/** Spec section 9, from its heading up to (not including) the heading of section 10. */
+function specSectionNine(spec: string): string {
+  const lines = spec.split('\n')
+  const start = lines.findIndex((line) => line.startsWith('## 9.'))
+  const end = lines.findIndex((line, index) => index > start && line.startsWith('## 10.'))
+  if (start < 0 || end < 0) throw new Error('spec section 9 not found')
+  return lines.slice(start, end).join('\n')
+}
+
+/** Text for one file of the copy: .json through blindJson (falls back to text masking), other text through masking. */
+function blindText(file: string, text: string): string {
+  if (!file.endsWith('.json')) return maskOperationalText(text)
+  try {
+    return jsonText(blindJson(JSON.parse(text)))
+  } catch {
+    return maskOperationalText(text)
+  }
+}
+
+/**
+ * Builds the reviewer's copy of a run. Only an allow-list is copied (chapters, metrics, reader,
+ * calls, summary, state, log, two docs), and every file except chapters is masked. Rebuilds from
+ * scratch, so an old copy (and its review.md) is removed first.
+ */
+export function writeBlindCopy(
+  runDir: string,
+  opts: { out?: string; repoRoot?: string } = {},
+): { dir: string; files: number } {
+  const run = path.resolve(runDir)
+  if (!existsSync(path.join(run, 'config.json'))) throw new Error(`not a run dir: ${run}`)
+  const out = path.resolve(opts.out ?? defaultBlindDir(run))
+  if (isWithin(out, run) || isWithin(run, out)) throw new Error(`unsafe blind output dir: ${out}`)
+
+  // Read the reference docs before the old copy is removed, so a missing doc leaves it in place.
+  const repoRoot = path.resolve(opts.repoRoot ?? process.cwd())
+  const criteria = maskReferenceText(readRequired(path.join(repoRoot, CRITERIA_DOC)))
+  const section = maskReferenceText(specSectionNine(readRequired(path.join(repoRoot, SPEC_DOC))))
+
+  rmSync(out, { recursive: true, force: true })
+  mkdirSync(out, { recursive: true })
+  const write = (rel: string, text: string): void => {
+    mkdirSync(path.dirname(path.join(out, rel)), { recursive: true })
+    writeFileSync(path.join(out, rel), text)
+  }
+
+  if (existsSync(path.join(run, 'chapters'))) {
+    cpSync(path.join(run, 'chapters'), path.join(out, 'chapters'), { recursive: true })
+  }
+  for (const rel of ['metrics', 'reader']) {
+    for (const file of listFiles(run, rel)) {
+      write(file, blindText(file, readFileSync(path.join(run, file), 'utf8')))
+    }
+  }
+  for (const file of ['author-decisions.jsonl', 'wiki-final.json', 'worker.log']) {
+    if (existsSync(path.join(run, file))) {
+      write(file, blindText(file, readFileSync(path.join(run, file), 'utf8')))
+    }
+  }
+  for (const file of listFiles(run, 'calls').filter((name) => name.endsWith('.json'))) {
+    const call = JSON.parse(readFileSync(path.join(run, file), 'utf8')) as CallRecord
+    write(file, jsonText(blindCallRecord(call)))
+  }
+  if (existsSync(path.join(run, 'run-summary.json'))) {
+    const summary = JSON.parse(readFileSync(path.join(run, 'run-summary.json'), 'utf8'))
+    write('run-summary.json', jsonText(blindRunSummary(summary)))
+  }
+  if (existsSync(path.join(run, 'state.json'))) {
+    write('state.json', blindText('state.json', readFileSync(path.join(run, 'state.json'), 'utf8')))
+  }
+  write('reference/criteria.md', criteria)
+  write('reference/spec-section-9.md', section)
+
+  const leaks = findLeaks(out)
+  if (leaks.length > 0) throw new Error(`model name left in blind copy: ${leaks.join(', ')}`)
+  return { dir: out, files: listFiles(out).length }
+}
+
+/**
+ * Files in a blinded copy that still hold a model name, provider word or brand word, sorted.
+ * chapters/ (story text) and review.md (the reviewer's own output) are not checked.
+ */
+export function findLeaks(blindDir: string): string[] {
+  return listFiles(blindDir)
+    .filter((rel) => rel !== 'review.md' && !rel.startsWith('chapters/'))
+    .filter((rel) => {
+      const text = readFileSync(path.join(blindDir, rel), 'utf8')
+      const masked = rel.startsWith('reference/')
+        ? maskReferenceText(text)
+        : maskOperationalText(text)
+      return masked !== text
+    })
+    .sort()
+}
+
+/**
+ * Writes the review to docs (header line first), then to the run dir. The model id is read from the
+ * real run's config.json; the blind dir has none. The docs file is written first, so a failed docs
+ * write leaves no run-dir review that would make the next invocation skip the review.
+ */
+export function publishReview(
+  runDir: string,
+  docsPath: string,
+  opts: { blindDir?: string } = {},
+): { docsPath: string; runReviewPath: string } {
+  const run = path.resolve(runDir)
+  const blindReview = path.join(path.resolve(opts.blindDir ?? defaultBlindDir(run)), 'review.md')
+  if (!existsSync(blindReview)) {
+    throw new Error(`review.md missing in blind dir: ${path.dirname(blindReview)}`)
+  }
+  const config = loadConfig(run)
+  const header =
+    config.lang === 'ko'
+      ? `모델: ${config.modelId} | 언어: ${config.lang}`
+      : `Model: ${config.modelId} | Language: ${config.lang}`
+  const text = `${header}\n\n${readFileSync(blindReview, 'utf8')}`
+
+  const docs = path.resolve(docsPath)
+  mkdirSync(path.dirname(docs), { recursive: true })
+  writeFileSync(docs, text)
+  const runReviewPath = path.join(run, 'review.md')
+  writeFileSync(runReviewPath, text)
+  return { docsPath: docs, runReviewPath }
 }
