@@ -1,18 +1,20 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { acquireLock, releaseLock } from './worker-lock'
 import {
   advanceRun,
   formatStatus,
   initRun,
+  main,
   probeContext,
   resummarizeDate,
   resummarizeRun,
   runWorker,
 } from './cli'
+import { defaultBlindDir, writeBlindCopy } from './blind'
 import { loadState, newState, type RunConfig, saveState } from './state'
 
 const dirs: string[] = []
@@ -384,5 +386,81 @@ describe('probeContext', () => {
     })
 
     expect(result.numCtx).toBeNull()
+  })
+})
+
+/** The JSON line a command printed last, parsed. */
+function lastJsonLine(log: ReturnType<typeof vi.spyOn>): Record<string, unknown> {
+  const line = log.mock.calls.at(-1)?.[0]
+  return JSON.parse(String(line)) as Record<string, unknown>
+}
+
+describe('blind commands', () => {
+  it('blind prints the blind dir and its file count', async () => {
+    const dir = join(tempDir(), '2026-10-19', 'run-01-ko')
+    initRun({ model: 'fake', lang: 'ko', dir })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      expect(await main(['blind', '--dir', dir])).toBe(0)
+      const printed = lastJsonLine(log)
+      expect(String(printed.dir).endsWith(join('blind', 'run-01-ko'))).toBe(true)
+      expect(printed.files).toBeGreaterThan(0)
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it('publish-review writes the docs file and the run review from the blind review', async () => {
+    const dir = join(tempDir(), '2026-10-19', 'run-01-ko')
+    initRun({ model: 'fake', lang: 'ko', dir })
+    mkdirSync(defaultBlindDir(dir), { recursive: true })
+    writeFileSync(join(defaultBlindDir(dir), 'review.md'), '# Review\nbody')
+    const docs = join(tempDir(), 'docs', 'a.md')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      expect(await main(['publish-review', '--dir', dir, '--to', docs])).toBe(0)
+      expect(lastJsonLine(log)).toEqual({ docsPath: docs, runReviewPath: join(dir, 'review.md') })
+    } finally {
+      log.mockRestore()
+    }
+    expect(readFileSync(docs, 'utf8')).toMatch(/^모델: fake \| 언어: ko\n\n# Review\nbody$/)
+    expect(readFileSync(join(dir, 'review.md'), 'utf8')).toBe(readFileSync(docs, 'utf8'))
+  })
+
+  it('publish-review returns an error when the blind review is missing', async () => {
+    const dir = join(tempDir(), '2026-10-19', 'run-01-ko')
+    initRun({ model: 'fake', lang: 'ko', dir })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      expect(await main(['publish-review', '--dir', dir, '--to', join(tempDir(), 'a.md')])).toBe(1)
+      expect(String(lastJsonLine(log).error)).toContain('review.md missing')
+    } finally {
+      log.mockRestore()
+    }
+    expect(existsSync(join(dir, 'review.md'))).toBe(false)
+  })
+
+  it('blind refuses an out dir that is the run itself and leaves the run intact', async () => {
+    const dir = join(tempDir(), '2026-10-19', 'run-01-ko')
+    initRun({ model: 'fake', lang: 'ko', dir })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      expect(await main(['blind', '--dir', dir, '--out', dir])).toBe(1)
+      expect(String(lastJsonLine(log).error)).toContain('unsafe blind output dir')
+    } finally {
+      log.mockRestore()
+    }
+    expect(existsSync(join(dir, 'config.json'))).toBe(true)
+  })
+
+  it('resummarize skips the blind folder under a date folder', () => {
+    const folder = join(tempDir(), '2026-10-19')
+    initRun({ model: 'fake', lang: 'ko', dir: join(folder, 'run-01-ko') })
+    initRun({ model: 'fake', lang: 'en', dir: join(folder, 'run-02-en') })
+    writeBlindCopy(join(folder, 'run-01-ko'), { repoRoot: process.cwd() })
+    writeFileSync(join(folder, 'blind', 'run-01-ko', 'review.md'), 'review')
+
+    expect(existsSync(join(folder, 'blind', 'run-01-ko', 'review.md'))).toBe(true)
+    expect(resummarizeDate(folder)).toHaveLength(2)
   })
 })

@@ -15,6 +15,7 @@ import { ollamaTransport } from '@/ai/ollama'
 import { seoulToday } from '@/lib/dates'
 import { readPending } from './author-io'
 import { loadBible } from './bible'
+import { publishReview, writeBlindCopy } from './blind'
 import { chapterMetrics } from './metrics'
 import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
 import { buildRunSummary } from './steps/finish'
@@ -32,7 +33,7 @@ import { acquireLock, releaseLock, workerAlive } from './worker-lock'
 
 // Command line for the novel eval. Every command prints exactly one JSON line on stdout. Long
 // steps run in a detached worker so they outlive the agent's command timeout.
-//   init | advance | worker | status | probe-ctx | resummarize
+//   init | advance | worker | status | probe-ctx | resummarize | blind | publish-review
 
 const RESULTS_DIR = 'eval/results/novel'
 const LANGS = ['ko', 'en'] as const
@@ -537,9 +538,19 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
       }
       return resummarizeRun(path.resolve(stringFlag(flags, 'dir')))
     }
+    case 'blind':
+      // The reviewer's copy of a run, with model names masked. --out overrides blind/<run name>.
+      return writeBlindCopy(path.resolve(stringFlag(flags, 'dir')), {
+        out: flags.out === undefined ? undefined : path.resolve(stringFlag(flags, 'out')),
+      })
+    case 'publish-review':
+      return publishReview(
+        path.resolve(stringFlag(flags, 'dir')),
+        path.resolve(stringFlag(flags, 'to')),
+      )
     default:
       throw new Error(
-        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize (got ${command ?? 'nothing'})`,
+        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize|blind|publish-review (got ${command ?? 'nothing'})`,
       )
   }
 }
