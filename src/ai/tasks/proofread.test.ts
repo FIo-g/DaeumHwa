@@ -63,3 +63,32 @@ describe('proofread prompt isolation', () => {
     expect(proofreadTask.system).toContain(TAG_DATA_RULE)
   })
 })
+
+describe('proofread scope rules (track J)', () => {
+  it('system prompt limits fixes to standard-norm violations', () => {
+    expect(proofreadTask.system).toContain('표준어 규범 위반만 고친다.')
+  })
+
+  it('system prompt allows an empty list', () => {
+    expect(proofreadTask.system).toContain('빈 배열')
+  })
+
+  it('system prompt still forbids style edits and keeps the data rule', () => {
+    expect(proofreadTask.system).toContain('문체를 바꾸는 제안은 하지 않는다.')
+    expect(proofreadTask.system).toContain(TAG_DATA_RULE)
+  })
+
+  it('postProcess merges the same quote into one suggestion', () => {
+    const text = '그건 어색해요. 저것도 어색해요.'
+    const output = {
+      suggestions: [
+        { quote: '어색해요', replacement: '어색합니다', kind: 'awkward' as const, reason: '이유' },
+        { quote: '어색해요', replacement: '어색하군요', kind: 'awkward' as const, reason: '이유' },
+      ],
+    }
+    const processed = proofreadTask.postProcess?.(output, { text })
+    expect(processed?.suggestions).toEqual([
+      { quote: '어색해요', replacement: '어색합니다', kind: 'awkward', reason: '이유' },
+    ])
+  })
+})
