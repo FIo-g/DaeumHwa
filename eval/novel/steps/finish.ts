@@ -5,6 +5,7 @@ import { listStyleCards } from '@/server/styles'
 import { listThreads } from '@/server/threads'
 import { listEntries } from '@/server/wiki'
 import type { CallRecord, CallSpeed } from '../eval-client'
+import { interviewMetrics } from '../metrics-interview'
 import type { StepFn } from '../run'
 import type { RunState } from '../state'
 import { readCallRecords, requireWorkId, writeRunFile } from './util'
@@ -117,6 +118,7 @@ export function buildRunSummary(calls: CallRecord[], state: RunState, lang: 'ko'
     pauses: state.pauses,
     drafts: state.data.drafts,
     focusCounts: state.data.focusCounts,
+    interview: interviewMetrics(state.data.interviewTurns ?? []),
   }
 }
 

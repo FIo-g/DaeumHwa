@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ModelId } from './models'
+import type { InterviewTurnStat } from './metrics-interview'
 
 // Run config and resumable progress for one novel eval run. Both files live in the run directory.
 
@@ -40,6 +41,8 @@ export type RunData = {
   /** Ids of proposals returned by runChapterCheck for chapter n; read by the ch{n}:proposals step. */
   checkProposalIds?: Record<number, string[]>
   focusCounts: Record<string, number>
+  /** One entry per answered or skipped interview turn; optional so state files from before resume. */
+  interviewTurns?: InterviewTurnStat[]
 }
 
 export type RunState = {
