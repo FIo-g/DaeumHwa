@@ -1,4 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm'
+import { getAiClient } from '@/ai'
 import { buildContextPack, CONTINUITY_BUDGET_CHARS, resolveRefs } from '@/ai/context'
 import {
   type ExtractionDropped,
@@ -6,7 +7,7 @@ import {
   type ExtractionStats,
 } from '@/ai/extraction'
 import { isNearDuplicateFact } from '@/ai/guards'
-import { runAiTask, throwIfCancelled } from '@/ai/run'
+import { DEFAULT_AI_TIMEOUT_MS, runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
@@ -17,6 +18,11 @@ import type { Actor, ChapterRow, IssueRow, ProposalRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { findNamingIssues } from '@/lib/korean/naming'
 import { ruleBasedSpellcheck } from '@/lib/korean/spelling-rules'
+import {
+  mergeSuggestionGroups,
+  PROOFREAD_MAX_PARTS,
+  splitProofreadParts,
+} from '@/lib/korean/proofread-parts'
 import { locateAllQuotes, locateQuote, sentenceAt } from '@/lib/korean/sentences'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
@@ -143,20 +149,58 @@ function locateAiSuggestions(
   return result
 }
 
+/**
+ * Total time for a split proofread (sequential parts). Stays under the route's 300 s limit.
+ * Each part gets this budget divided by the part count, capped at the default call limit.
+ */
+export const PROOFREAD_TOTAL_BUDGET_MS = 285_000
+
+/** Local servers answer slowly, so only they get a split proofread. Cloud providers keep one call. */
+function shouldSplitProofread(provider: string): boolean {
+  return provider === 'ollama' || provider === 'eval:ollama'
+}
+
 /** Wraps the proofread task. `lastRunId` is the run of the most recent check call. */
 function aiSpellChecker(
   db: Db,
   meta: { userId: string; workId: string; chapterId: string; signal?: AbortSignal },
   client: AiClient | undefined,
-): SpellChecker & { lastRunId: () => string | null } {
+): SpellChecker & { lastRunId: () => string | null; runIds: () => string[] } {
   let runId: string | null = null
+  let runIds: string[] = []
   return {
     id: 'ai',
     lastRunId: () => runId,
+    runIds: () => runIds,
     async check(text) {
-      const result = await runAiTask(db, meta, proofreadTask, { text }, client)
-      runId = result.runId
-      return locateAiSuggestions(text, result.output.suggestions)
+      const aiClient = client ?? getAiClient()
+      const parts = splitProofreadParts(
+        text,
+        shouldSplitProofread(aiClient.provider) ? PROOFREAD_MAX_PARTS : 1,
+      )
+      const partTimeout =
+        parts.length > 1
+          ? Math.min(DEFAULT_AI_TIMEOUT_MS, Math.floor(PROOFREAD_TOTAL_BUDGET_MS / parts.length))
+          : undefined
+      runIds = []
+      const groups: ProofreadOutput['suggestions'][] = []
+      // Parts run one after another: one local server, and the route's time limit is shared.
+      // Each part is its own run. A failing part fails the call; earlier runs stay stored.
+      for (const part of parts) {
+        throwIfCancelled(meta.signal)
+        const result = await runAiTask(
+          db,
+          partTimeout === undefined ? meta : { ...meta, timeoutMs: partTimeout },
+          proofreadTask,
+          { text: part.text },
+          aiClient,
+        )
+        runIds.push(result.runId)
+        runId = result.runId
+        groups.push(result.output.suggestions)
+      }
+      // Quotes are located once, on the whole text, so offsets and the 20-occurrence cap are per chapter.
+      return locateAiSuggestions(text, mergeSuggestionGroups(groups))
     },
   }
 }
@@ -435,6 +479,14 @@ function namingIssuesFor(
   })
 }
 
+export type ProofreadResult = {
+  suggestions: ProofreadSuggestion[]
+  /** Run of the last AI part; kept for the panel and the eval. */
+  runId: string | null
+  /** One run per AI part, in order; [] when AI is off. */
+  runIds: string[]
+}
+
 /**
  * Proofreading: the rule checker always runs; the AI checker runs when `useAi` is set. AI
  * suggestions that overlap a rule suggestion are dropped. Result is sorted by offset.
@@ -445,7 +497,7 @@ export async function runProofread(
   input: { chapterId: string; text?: string; useAi: boolean },
   client?: AiClient,
   signal?: AbortSignal,
-): Promise<{ suggestions: ProofreadSuggestion[]; runId: string | null }> {
+): Promise<ProofreadResult> {
   const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId)
   const text = input.text ?? chapter.body
   if (input.useAi && text.length > MAX_PROOFREAD_AI_CHARS) {
@@ -467,5 +519,5 @@ export async function runProofread(
   const suggestions = [...ruleSuggestions, ...kept].sort(
     (a, b) => a.start - b.start || a.end - b.end,
   )
-  return { suggestions, runId: ai?.lastRunId() ?? null }
+  return { suggestions, runId: ai?.lastRunId() ?? null, runIds: ai?.runIds() ?? [] }
 }
