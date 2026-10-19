@@ -70,10 +70,13 @@ if (runs.length === 0 && !withSummary) {
 }
 
 // Opaque run dir: the model id must not appear in any path an author or reviewer sees.
-const runDir = (run) => {
+const runName = (run) => {
   const n = CANONICAL_MODELS.indexOf(run.model) + 1
-  return `eval/results/novel/${date}/run-${String(n).padStart(2, '0')}-${run.lang}`
+  return 'run-' + String(n).padStart(2, '0') + '-' + run.lang
 }
+const runDir = (run) => 'eval/results/novel/' + date + '/' + runName(run)
+// The reviewer reads only this blinded copy of a run (built by `eval:novel blind`), never the run.
+const blindDir = (run) => 'eval/results/novel/' + date + '/blind/' + runName(run)
 const docsReviewPath = (run) => `docs/eval/novel/${date}/${run.model}-${run.lang}.md`
 
 function errorText(err) {
@@ -150,6 +153,18 @@ function reviewExistsPrompt(dir) {
   ].join('\n')
 }
 
+// Builds the blinded copy the reviewer reads. The command prints one JSON line.
+function blindPrompt(dir) {
+  return [
+    'You are a runner. Use only the Bash tool. Do not edit any file. Do not read any file.',
+    '',
+    'Run this command from the repository root, with the Bash timeout set to 600000 ms:',
+    `  cd ${REPO} && pnpm eval:novel blind --dir ${dir}`,
+    'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail, and stop.',
+    'Otherwise return status "blinded" and detail = the "dir" value from that JSON line.',
+  ].join('\n')
+}
+
 function authorPrompt(dir, lang) {
   return [
     `Follow the instructions in ${REPO}/eval/novel/agents/author.md.`,
@@ -166,14 +181,15 @@ function reviewerPrompt(dir, lang) {
   ].join('\n')
 }
 
+// Adds the model header to the blind review and copies it into docs. The command prints one JSON line.
 function copyPrompt(run, dir) {
   return [
     'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself; run only the commands below.',
     '',
     'Run this command from the repository root:',
-    `  cd ${REPO} && mkdir -p docs/eval/novel/${date} && cp ${dir}/review.md ${docsReviewPath(run)}`,
-    'If the command succeeds, return status "copied" and detail = the destination path.',
-    'If it fails, return status "failed" and the error text as detail.',
+    `  cd ${REPO} && pnpm eval:novel publish-review --dir ${dir} --to ${docsReviewPath(run)}`,
+    'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail.',
+    'Otherwise return status "copied" and detail = the "docsPath" value from that JSON line.',
   ].join('\n')
 }
 
@@ -224,7 +240,17 @@ async function reviewRun(run, dir, label) {
       return null
     }
   }
-  const reviewed = await agentLogged(reviewerPrompt(dir, run.lang), {
+  const blinded = await agentLogged(blindPrompt(dir), {
+    label: `blind ${label}`,
+    phase: 'Review',
+    model: 'haiku',
+    schema: RUNNER_SCHEMA,
+  })
+  if (runnerStatus(blinded) !== 'blinded') {
+    log(`${label}: blind copy did not succeed: ${blinded ? blinded.detail : 'no result'}`)
+    return null
+  }
+  const reviewed = await agentLogged(reviewerPrompt(blindDir(run), run.lang), {
     label: `review ${label}`,
     phase: 'Review',
     model: 'sonnet',
