@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
-import { FakeAiClient } from '@/test/fake-ai'
 import { FAKE_OUTPUTS } from '@/test/ai-fakes'
 import type { AiClient } from '@/ai/types'
 import type { Extraction } from '@/ai/extraction'
