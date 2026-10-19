@@ -119,6 +119,28 @@ describe('draft step: continuation failure (finding 4)', () => {
   }, 120_000)
 })
 
+describe('draft step: continuation failure classification', () => {
+  it('pauses on a network failure the client classified, though its message reads as a model one', async () => {
+    const dir = newDir()
+    makeRun(dir)
+    // The message carries no hint of a network failure. Only the error's own code does, which the
+    // client sees and the stored Korean detail no longer shows.
+    const reset = () => Object.assign(new Error('socket closed'), { code: 'ECONNRESET' })
+    const inner = faultyClient([{ task: 'draft-continue', error: reset }], {
+      overrides: { 'draft-chapter': () => SHORT },
+    })
+    const ctx = await open(dir, { inner, autoAuthor: true })
+    ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
+    const state = await runUntilBlocked(ctx)
+
+    expect(state.status).toBe('paused-error')
+    expect(state.plan[state.cursor]).toBe('ch1:draft')
+    expect(JSON.parse(read(dir, 'chapters/01.attempt-1.continue.json'))).toMatchObject({
+      failure: 'external-network',
+    })
+  }, 120_000)
+})
+
 describe('draft step: stage files (finding 6)', () => {
   it('writes draft.raw.txt for every draft, also when no stage changes the text', async () => {
     const dir = newDir()
@@ -190,6 +212,34 @@ describe('draft step: stage files (finding 6)', () => {
     for (const stale of ['trim.json', 'draft.trimmed.txt', 'draft.repaired.txt']) {
       expect(existsSync(join(dir, `chapters/01.attempt-1.${stale}`))).toBe(false)
     }
+  }, 120_000)
+
+  it('a resumed draft whose continuation succeeds drops the abandoned continuation failure', async () => {
+    const dir = newDir()
+    makeRun(dir)
+    // First draft: the continuation hits a 429 and the run pauses with continue.json written.
+    const first = faultyClient([{ task: 'draft-continue', error: tooManyRequests }], {
+      overrides: { 'draft-chapter': () => SHORT },
+    })
+    const ctx1 = await open(dir, { inner: first, autoAuthor: true })
+    ctx1.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
+    const paused = await runUntilBlocked(ctx1)
+    expect(paused.status).toBe('paused-limit')
+    expect(existsSync(join(dir, 'chapters/01.attempt-1.continue.json'))).toBe(true)
+    await opened.pop()?.close()
+
+    // Resumed draft: the continuation succeeds, so the text had no failure.
+    const ctx2 = await open(dir, {
+      inner: new FakeAiClient({ overrides: { 'draft-chapter': () => SHORT } }),
+      autoAuthor: true,
+    })
+    ctx2.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
+    const done = await runUntilBlocked(ctx2)
+    expect(done.status).toBe('done')
+
+    expect(existsSync(join(dir, 'chapters/01.attempt-1.continue.json'))).toBe(false)
+    const summary = JSON.parse(read(dir, 'run-summary.json')) as { draft?: unknown }
+    expect(summary.draft).toBeUndefined()
   }, 120_000)
 })
 

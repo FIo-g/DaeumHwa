@@ -128,10 +128,13 @@ export async function recordContinueFailure(
   const [run] = await ctx.db.select().from(aiRuns).where(eq(aiRuns.id, runId)).limit(1)
   const failed = continueFailureOf(run?.output)
   if (!failed) return
-  ctx.client.takeLastFailure()
-  // Same classification as the other calls. A reason that is not a limit is judged by its detail.
+  // The client's own classification of the failed call (it saw the error itself, with its status,
+  // cause codes and stream tag). Only when it holds none, the stored detail is judged by its text.
+  const held = ctx.client.takeLastFailure()
   const failure: FailureKind =
-    failed.reason === 'AI_LIMIT' ? 'external-limit' : classifyError(new Error(failed.detail))
+    failed.reason === 'AI_LIMIT'
+      ? 'external-limit'
+      : (held?.kind ?? classifyError(new Error(failed.detail)))
   writeRunFile(
     ctx.dir,
     `chapters/${pad(n)}.attempt-${attemptNo}.continue.json`,
@@ -299,7 +302,12 @@ export const draft: StepFn = async (ctx, key, state) => {
       // A resumed draft gets the same attempt number as the abandoned one, so the stage files of
       // the abandoned draft go first, and the raw text (A's output) is written for every draft.
       const stem = `chapters/${pad(n)}.attempt-${attemptNo}`
-      for (const stale of ['trim.json', 'draft.trimmed.txt', 'draft.repaired.txt']) {
+      for (const stale of [
+        'continue.json',
+        'trim.json',
+        'draft.trimmed.txt',
+        'draft.repaired.txt',
+      ]) {
         rmSync(path.join(ctx.dir, `${stem}.${stale}`), { force: true })
       }
       writeRunFile(ctx.dir, `${stem}.draft.raw.txt`, generated.text)
