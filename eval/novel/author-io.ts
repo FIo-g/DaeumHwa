@@ -22,7 +22,7 @@ const ANSWER_FILE = 'answer.json'
 const ERROR_FILE = 'answer.error.txt'
 export const DECISIONS_FILE = 'author-decisions.jsonl'
 
-const MetricsSchema: z.ZodType<ChapterMetrics> = z.object({
+const MetricsSchema: z.ZodType<ChapterMetrics, unknown> = z.object({
   chars: z.number(),
   targetChars: z.number(),
   lengthOk: z.boolean(),
@@ -35,6 +35,8 @@ const MetricsSchema: z.ZodType<ChapterMetrics> = z.object({
   // Saved runs from before E2 lack these two keys; the defaults keep them readable.
   sampleCopyHits: z.number().default(0),
   repeatedWords: z.array(z.object({ word: z.string(), count: z.number() })).default([]),
+  // Saved runs from before E1 lack this key.
+  overlongParagraphs: z.number().default(0),
 })
 
 const ProposalItemSchema = z.object({

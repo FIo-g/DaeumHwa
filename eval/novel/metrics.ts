@@ -1,6 +1,7 @@
 import { countChars } from '@/lib/korean/chars'
 import { foreignScriptRuns } from '@/ai/guards'
 import { countRepeatedWords, findSampleCopies } from '@/lib/korean/style-copy'
+import { overlongParagraphs } from '@/lib/korean/paragraphs'
 
 export * from './metrics-interview'
 export * from './metrics-proofread'
@@ -21,6 +22,8 @@ export type ChapterMetrics = {
   sampleCopyHits: number
   // E2: words or pairs repeated at least 8 times, from countRepeatedWords.
   repeatedWords: { word: string; count: number }[]
+  // E1: paragraphs over PARAGRAPH_MAX_SENTENCES sentences. Informational for Q6, not a T threshold.
+  overlongParagraphs: number
 }
 
 export const META_PATTERNS: RegExp[] = [
@@ -78,6 +81,7 @@ export function chapterMetrics(
 
   const sampleCopyHits = findSampleCopies(trimmed, styleExamples.filter(Boolean), { lang }).length
   const repeatedWords = countRepeatedWords(trimmed, { lang })
+  const overlong = overlongParagraphs(trimmed).length
 
   return {
     chars,
@@ -91,5 +95,6 @@ export function chapterMetrics(
     dialogueLineRatio,
     sampleCopyHits,
     repeatedWords,
+    overlongParagraphs: overlong,
   }
 }
