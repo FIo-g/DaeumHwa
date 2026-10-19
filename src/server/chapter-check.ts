@@ -13,7 +13,7 @@ import { AppError } from '@/lib/errors'
 import { normalizeProposalText } from '@/lib/proposal-payloads'
 import { findNamingIssues } from '@/lib/korean/naming'
 import { ruleBasedSpellcheck } from '@/lib/korean/spelling-rules'
-import { locateQuote, sentenceAt } from '@/lib/korean/sentences'
+import { locateAllQuotes, locateQuote, sentenceAt } from '@/lib/korean/sentences'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
 import { loadKnownEntries } from '@/server/known-entries'
@@ -71,6 +71,20 @@ export const ruleSpellChecker: SpellChecker = {
   },
 }
 
+/**
+ * Ranges where a model quote occurs. A quote of 2+ characters applies at every exact occurrence
+ * (up to the locateAllQuotes limit). A shorter quote, or one only found after whitespace is
+ * collapsed, maps to its first occurrence.
+ */
+function expandQuote(text: string, quote: string): { start: number; end: number }[] {
+  if (quote.trim().length >= 2) {
+    const all = locateAllQuotes(text, quote)
+    if (all.length > 0) return all
+  }
+  const single = locateQuote(text, quote)
+  return single ? [single] : []
+}
+
 /** Wraps the proofread task. `lastRunId` is the run of the most recent check call. */
 function aiSpellChecker(
   db: Db,
@@ -85,18 +99,24 @@ function aiSpellChecker(
       const result = await runAiTask(db, meta, proofreadTask, { text }, client)
       runId = result.runId
       const suggestions: ProofreadSuggestion[] = []
+      // Ranges already emitted. A later model item that overlaps one is dropped, so the
+      // result follows model output order, not text position.
+      const emitted: { start: number; end: number }[] = []
       for (const s of result.output.suggestions) {
-        const range = locateQuote(text, s.quote)
-        if (!range) continue
-        suggestions.push({
-          source: 'ai',
-          quote: s.quote,
-          replacement: s.replacement,
-          kind: s.kind,
-          reason: s.reason,
-          start: range.start,
-          end: range.end,
-        })
+        for (const range of expandQuote(text, s.quote)) {
+          if (emitted.some((e) => range.start < e.end && e.start < range.end)) continue
+          emitted.push(range)
+          suggestions.push({
+            source: 'ai',
+            // Equals the model quote for exact matches; the manuscript text otherwise.
+            quote: text.slice(range.start, range.end),
+            replacement: s.replacement,
+            kind: s.kind,
+            reason: s.reason,
+            start: range.start,
+            end: range.end,
+          })
+        }
       }
       return suggestions
     },
