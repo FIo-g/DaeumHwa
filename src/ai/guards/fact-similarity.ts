@@ -10,9 +10,12 @@ export const FACT_DUPLICATE_DICE = 0.8
  * Known limits, each pinned by a test in fact-similarity.test.ts:
  * - Korean sentences must also agree on their content words: after Dice, the Hangul words (particles
  *   stripped) of one sentence must all occur in the other. One changed word (좋다/나쁘다,
- *   북쪽/남쪽, a negation) keeps the pair apart even when Dice is above 0.8. Words that only one
- *   side adds, or a word with a short ending added (떨린다 / 떨린다고 한다), still count as a
- *   rewording.
+ *   북쪽/남쪽) keeps the pair apart even when Dice is above 0.8. A separate negation or state
+ *   word that only one side has also keeps them apart: a one-syllable word (안 믿는다, 못 쓴다,
+ *   전 부단장) or one of 옛 더는 이제 아직 결코 절대. Other words that only one side adds, or a
+ *   word with a short ending added (떨린다 / 떨린다고 한다), still count as a rewording.
+ *   A negation glued to the next word (안믿는다) is not split; it is only caught when it changes
+ *   the words enough to differ.
  * - English antonyms inside long sentences keep a high Dice (left-/right-handed and calm is
  *   about 0.83) and are reported as duplicates; the word check covers Hangul words only.
  * - No number or synonym normalization: `19` and `nineteen` score about 0.58, so they are not
@@ -46,12 +49,28 @@ function hangulWords(s: string): Set<string> {
   return words
 }
 
-/** True when the smaller Hangul word set sits inside the larger one (spacing variants pass). */
+/** Words that flip or restrict a fact; one on only one side means the facts differ. */
+const POLARITY_WORDS = new Set(['안', '못', '전', '옛', '더는', '이제', '아직', '결코', '절대'])
+
+/**
+ * True when the smaller Hangul word set sits inside the larger one (spacing variants pass) and
+ * the larger one has no extra negation or state word: a word only one side has that is one
+ * syllable long or in POLARITY_WORDS (안 믿는다, 못 쓴다, 전 부단장).
+ */
 function contentWordsContained(a: string, b: string): boolean {
   const wa = hangulWords(a)
   const wb = hangulWords(b)
   const [small, large] = wa.size <= wb.size ? [wa, wb] : [wb, wa]
-  return [...small].every((word) => large.has(word) || [...large].some((w) => extendsWord(w, word)))
+  const smallCovered = [...small].every(
+    (word) => large.has(word) || [...large].some((w) => extendsWord(w, word)),
+  )
+  if (!smallCovered) return false
+  return [...large].every(
+    (word) =>
+      small.has(word) ||
+      [...small].some((w) => extendsWord(word, w)) ||
+      !([...word].length === 1 || POLARITY_WORDS.has(word)),
+  )
 }
 
 /** True when `long` is `short` plus a short ending (떨린다 -> 떨린다고), not a different word. */

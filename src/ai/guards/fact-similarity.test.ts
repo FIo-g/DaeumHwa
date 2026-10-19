@@ -59,6 +59,30 @@ describe('isNearDuplicateFact', () => {
     expect(isNearDuplicateFact(b, a)).toBe(false)
   })
 
+  it.each([
+    ['서윤은 민준을 믿는다.', '서윤은 민준을 안 믿는다.'],
+    ['한세린은 오래 검을 쓴다.', '한세린은 오래 검을 못 쓴다.'],
+    ['서윤은 오래 검을 쓴다.', '서윤은 오래 검을 못 쓴다.'],
+    ['한세린은 기사단의 부단장이다.', '한세린은 기사단의 전 부단장이다.'],
+    ['서윤은 기사단의 부단장이다.', '서윤은 기사단의 전 부단장이다.'],
+    ['서윤은 사실 민준을 믿어요', '서윤은 사실 민준을 안 믿어요'],
+  ])('keeps a negation or state word on only one side apart (%s)', (a, b) => {
+    expect(bigramDice(a, b)).toBeGreaterThanOrEqual(FACT_DUPLICATE_DICE)
+    expect(isNearDuplicateFact(a, b)).toBe(false)
+    expect(isNearDuplicateFact(b, a)).toBe(false)
+  })
+
+  it.each([
+    ['서윤은 민준을 더는 믿는다', '서윤은 민준을 믿는다'],
+    ['서윤은 이제 민준을 믿는다', '서윤은 민준을 믿는다'],
+    ['서윤은 아직 민준을 믿는다', '서윤은 민준을 믿는다'],
+    ['서윤은 결코 민준을 믿는다', '서윤은 민준을 믿는다'],
+    ['서윤은 옛 기사단의 부단장이다', '서윤은 기사단의 부단장이다'],
+  ])('keeps a polarity word on only one side apart (%s)', (a, b) => {
+    expect(isNearDuplicateFact(a, b)).toBe(false)
+    expect(isNearDuplicateFact(b, a)).toBe(false)
+  })
+
   it('keeps a short antonym apart', () => {
     expect(isNearDuplicateFact('서윤은 왼손잡이다', '서윤은 오른손잡이다')).toBe(false)
   })
