@@ -5,12 +5,14 @@ import { z } from 'zod'
 import {
   createChapterFromDraft,
   repairDraft,
+  repairDraftForeignScript,
   runDirectionAdvice,
   runReaderSimulation,
   startDraft,
 } from '@/server/ai-features'
 import { aiRuns } from '@/db/schema'
 import { replaceRunOutput } from '@/ai/run'
+import { repairableForeignSpans } from '@/ai/tasks/draft-repair'
 import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
 import {
@@ -311,6 +313,7 @@ export const draft: StepFn = async (ctx, key, state) => {
         'continue.json',
         'trim.json',
         'draft.trimmed.txt',
+        'draft.foreign-repaired.txt',
         'draft.repaired.txt',
       ]) {
         rmSync(path.join(ctx.dir, `${stem}.${stale}`), { force: true })
@@ -331,8 +334,40 @@ export const draft: StepFn = async (ctx, key, state) => {
         attemptNo,
         generated.runId,
       )
-      // E2: one repair on the final text (after A's continuation). Best effort, see repairBestEffort.
-      // It starts from the trimmed text, which is also what repairDraft stores when it runs.
+      // C (ko only): the sentences with foreign script (Han, kana, Cyrillic, U+FFFD) are repaired
+      // once on the trimmed text, before E2. Best effort, see repairBestEffort. Its calls carry the
+      // step `${key}:foreign-repair`; the step is set back to `key` afterwards.
+      let stageText = trimmedText
+      const foreignFound = ctx.config.lang === 'ko' ? repairableForeignSpans(trimmedText).length : 0
+      const foreignRepair = { replaced: 0 }
+      if (foreignFound > 0) {
+        ctx.client.setStep(`${key}:foreign-repair`)
+        try {
+          stageText = await repairBestEffort(
+            ctx,
+            state,
+            `${key}:foreign-repair`,
+            async () => {
+              const repaired = await repairDraftForeignScript(
+                ctx.db,
+                ctx.actor,
+                { workId, runId: generated.runId, text: trimmedText },
+                ctx.client,
+              )
+              foreignRepair.replaced = repaired.replaced
+              return repaired
+            },
+            trimmedText,
+          )
+        } finally {
+          ctx.client.setStep(key)
+        }
+        if (stageText !== trimmedText) {
+          writeRunFile(ctx.dir, `${stem}.draft.foreign-repaired.txt`, stageText)
+        }
+      }
+      // E2: one repair on the text after C (after A's continuation). Best effort, see repairBestEffort.
+      // It starts from that text, which is also what repairDraft stores when it runs.
       const repairedText = await repairBestEffort(
         ctx,
         state,
@@ -341,16 +376,31 @@ export const draft: StepFn = async (ctx, key, state) => {
           repairDraft(
             ctx.db,
             ctx.actor,
-            { workId, runId: generated.runId, lang: ctx.config.lang, text: trimmedText },
+            { workId, runId: generated.runId, lang: ctx.config.lang, text: stageText },
             ctx.client,
           ),
-        trimmedText,
+        stageText,
       )
-      if (repairedText !== trimmedText) {
+      if (repairedText !== stageText) {
         writeRunFile(ctx.dir, `${stem}.draft.repaired.txt`, repairedText)
       }
       writeRunFile(ctx.dir, `chapters/${pad(n)}.attempt-${attemptNo}.md`, repairedText)
-      attempts.push({ runId: generated.runId, usable: null, quality: null, reason: '' })
+      // The figures are counted on the final text: E2's rewrite could bring foreign script back.
+      const foreign =
+        foreignFound > 0
+          ? {
+              found: foreignFound,
+              replaced: foreignRepair.replaced,
+              unresolved: repairableForeignSpans(repairedText).length,
+            }
+          : undefined
+      attempts.push({
+        runId: generated.runId,
+        usable: null,
+        quality: null,
+        reason: '',
+        ...(foreign ? { foreign } : {}),
+      })
       persist(ctx, state)
       current = attempts.at(-1)
     }
