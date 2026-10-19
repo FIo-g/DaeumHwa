@@ -24,6 +24,7 @@
 - **gpt-oss reasoning effort**: 품질 우선으로 `high`를 골랐다. 응답이 느려질 수 있으므로 지연 측정 후 `medium`과 비교할 수 있다.
 - **EXAONE 샘플링**: 공식 카드는 temperature, top_p, top_k를 권장하지 않는다. 공식 quickstart는 `do_sample=False`(greedy)를 쓴다. 이 평가는 greedy 대신 Ollama 패키지 기본 temperature 1.0을 쓴다. `ollama show exaone3.5:32b --parameters` 결과는 `temperature 1`, `repeat_penalty 1`이다. 카드의 "repetition penalty not exceeding 1.0" 문구에 맞춰 repeat_penalty는 1.0으로 둔다. generation_config.json에는 샘플링 필드가 없다.
 - **주의(Qwen)**: 공식 카드는 `enable_thinking: false`를 문서화하지만, HF 커뮤니티 토론 #113은 "3.8에서는 더 이상 지원되지 않는다"고 주장한다. 이 충돌은 확인하지 못했다. 끄기 설정은 실제 테스트 후에 확정한다.
+- **Qwen t06 프로필(`qwen3.8-27b-t06`)**: 한국어 초안에 한자가 섞이는 원인을 가리기 위한 비교용이다. temperature만 0.6으로 낮췄고, 벤더 권장값(thinking 모드 1.0)에서 의도적으로 벗어난다. 이 프로필은 그 비교에만 쓰며, 결과를 주 qwen 실행으로 재사용하지 않는다.
 
 ## Ollama 서버 설정
 

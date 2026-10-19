@@ -12,6 +12,7 @@ import { AI_TASKS, type AiTaskName } from '@/db/types'
 
 export const MODEL_IDS = [
   'qwen3.8-27b',
+  'qwen3.8-27b-t06',
   'gpt-oss-20b',
   'exaone3.5-32b',
   'haiku-5.5',
@@ -37,18 +38,27 @@ export type ModelProfile = {
 const LOCAL_TIMEOUT_MS = 3_600_000
 const CLOUD_TIMEOUT_MS = 900_000
 
+const QWEN: ModelProfile = {
+  id: 'qwen3.8-27b',
+  queue: 'local',
+  provider: 'ollama',
+  model: 'qwen3.8:27b-mlx',
+  effort: 'max',
+  maxTokensFloor: 32000,
+  timeoutMs: LOCAL_TIMEOUT_MS,
+  ollama: { numCtx: 262144, temperature: 1.0, topP: 0.95, topK: 20, minP: 0, think: true },
+  variant: 'mlx',
+}
+
 /** Initial values. Task 10 replaces the ollama numbers and tags with researched, measured ones. */
 export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
-  'qwen3.8-27b': {
-    id: 'qwen3.8-27b',
-    queue: 'local',
-    provider: 'ollama',
-    model: 'qwen3.8:27b-mlx',
-    effort: 'max',
-    maxTokensFloor: 32000,
-    timeoutMs: LOCAL_TIMEOUT_MS,
-    ollama: { numCtx: 262144, temperature: 1.0, topP: 0.95, topK: 20, minP: 0, think: true },
-    variant: 'mlx',
+  'qwen3.8-27b': QWEN,
+  // Comparison for the Han-in-Korean hypothesis. Vendor value is 1.0; this is an experiment, run
+  // under a new date, never reuse its results as the main qwen run.
+  'qwen3.8-27b-t06': {
+    ...QWEN,
+    id: 'qwen3.8-27b-t06',
+    ollama: { ...QWEN.ollama, temperature: 0.6 },
   },
   'gpt-oss-20b': {
     id: 'gpt-oss-20b',
