@@ -332,6 +332,11 @@ export async function advanceImportJob(
     })),
     threadRefs,
     factRefs,
+    // Cards earlier chapters of this job proposed. They are not wiki cards yet, so relations to
+    // them need this list to resolve.
+    pendingEntries: job.state.knownEntities
+      .filter((k) => !dbNames.has(k.name.trim()))
+      .map((k) => ({ name: k.name, aliases: k.aliases, kind: k.kind })),
     pendingThreadTitles: new Set([...job.state.threadTitles, ...plantedTitles]),
     existingThreads: allThreads,
     existingRelations: allRelations.map((r) => ({
