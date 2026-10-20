@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import type { Db } from '@/db/client'
@@ -42,6 +42,15 @@ async function rowsOf(db: Db, workId: string) {
 }
 
 describe('startDraft with state lines in the beat list (P2)', () => {
+  beforeEach(() => {
+    // These tests check the append continuation, which is the `continue` length mode.
+    vi.stubEnv('AI_DRAFT_LENGTH_MODE', 'continue')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   let db: Db
   let actor: { userId: string }
   let workId: string

@@ -39,6 +39,13 @@ import {
 } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
 import { draftPlanTask, PLAN_MAX_SCENES } from '@/ai/tasks/draft-plan'
+import {
+  acceptExpansion,
+  buildExpandPrompt,
+  DRAFT_EXPAND_SYSTEM,
+  EXPAND_EFFORT,
+  EXPAND_MAX_TOKENS,
+} from '@/ai/tasks/draft-expand'
 import type { Db } from '@/db/client'
 import { aiRuns, chapters } from '@/db/schema'
 import {
@@ -54,6 +61,7 @@ import {
   continueFailedWarning,
   draftCharCount,
   draftLengthPlan,
+  type DraftWarning,
   isContinuationCommentary,
 } from '@/lib/draft-length'
 import {
@@ -66,9 +74,10 @@ import {
 } from '@/lib/draft-plan'
 import { AppError, isAppError } from '@/lib/errors'
 import { chapterLabel } from '@/lib/labels'
-import { createSceneEdgeFilter } from '@/lib/scene'
+import { createSceneEdgeFilter, sceneSpans, type SceneRange, spliceSpans } from '@/lib/scene'
 import { type DraftFlag, findDraftFlags } from '@/lib/korean/style-copy'
 import { sentenceIn, splitSentences } from '@/lib/korean/sentences'
+import { splitParagraphs } from '@/lib/korean/paragraphs'
 import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
 import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
@@ -104,6 +113,10 @@ const DRAFT_TOTAL_BUDGET_MS = 290_000
 const MIN_FIRST_STREAM_MS = 10_000
 /** A continuation is not started with less time left than this. */
 const MIN_CONTINUATION_MS = 30_000
+/** Expansion: at most this many short spans are rewritten in one draft. */
+const MAX_EXPAND_SPANS = 4
+/** A span under this share of its target is short enough to rewrite. */
+const EXPAND_SHORT_RATIO = 0.9
 /** Joins the scenes of a `scenes`-mode draft. The model is not asked to write it. */
 const SCENE_SEPARATOR = '\n\n***\n\n'
 /** Foreign-script repair (eval only): model calls at most, and sentences sent in one call. */
@@ -663,6 +676,7 @@ export async function startDraft(
     client,
     signal,
     startedAt,
+    card,
   }
   const drafted = scenesCard
     ? completeScenes(ctx, first, pipe, scenesCard)
@@ -699,20 +713,30 @@ type DraftContext = {
   client?: AiClient
   signal?: AbortSignal
   startedAt: number
+  /** The approved plan card of this draft, or null without one. */
+  card: DraftPlanCard | null
+}
+
+/** How a short draft is filled (spec 6.4): `expand` by default, `continue` for the append path. */
+export type DraftLengthMode = 'expand' | 'continue'
+
+export function draftLengthModeFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): DraftLengthMode {
+  return env.AI_DRAFT_LENGTH_MODE === 'continue' ? 'continue' : 'expand'
 }
 
 /**
  * Finishes a draft (spec 7). The first stream is passed on to `pipe` as it arrives. A draft short
- * of the target gets one continuation, buffered: its text reaches the stream only once it has
- * succeeded. A failed or empty continuation keeps the first text and records a warning in the
- * first run row. Only a user abort rejects.
+ * of the target is filled after it: in `expand` mode (the default) its short scenes are rewritten
+ * in place (expandDraft), in `continue` mode one continuation is appended (continueDraft).
+ * Only a user abort rejects.
  */
 async function completeDraft(
   ctx: DraftContext,
   first: { runId: string; textStream: AsyncIterable<string>; done: Promise<string> },
   pipe: TextPipe,
 ): Promise<string> {
-  const { db, workId, chapterId, promptInput, client, signal } = ctx
   let firstText: string
   try {
     for await (const chunk of first.textStream) pipe.push(chunk)
@@ -722,6 +746,22 @@ async function completeDraft(
     throw error
   }
 
+  if (draftLengthModeFromEnv() === 'continue') return continueDraft(ctx, first, pipe, firstText)
+  return expandDraft(ctx, first, pipe, firstText)
+}
+
+/**
+ * The append path (`AI_DRAFT_LENGTH_MODE=continue`). One continuation is buffered: its text reaches
+ * the stream only once it has succeeded. A failed or empty continuation keeps the first text and
+ * records a warning in the first run row.
+ */
+async function continueDraft(
+  ctx: DraftContext,
+  first: { runId: string; textStream: AsyncIterable<string>; done: Promise<string> },
+  pipe: TextPipe,
+  firstText: string,
+): Promise<string> {
+  const { db, workId, chapterId, promptInput, client, signal } = ctx
   const plan = continuationPlan(draftCharCount(firstText), promptInput.targetChars)
   const remaining = Math.min(
     DRAFT_TOTAL_BUDGET_MS - (Date.now() - ctx.startedAt),
@@ -756,21 +796,25 @@ async function completeDraft(
     }
     const reason = isAppError(error) ? error.code : 'UNKNOWN'
     const detail = error instanceof Error ? error.message : String(error)
-    await recordContinueWarning(db, first.runId, firstText, reason, detail)
+    await recordWarnings(db, first.runId, firstText, [continueFailedWarning(reason, detail)])
     pipe.end()
     return firstText
   }
 
   const text = addition.trimStart()
   if (text.trim() === '') {
-    await recordContinueWarning(db, first.runId, firstText, 'EMPTY', 'The continuation is empty.')
+    await recordWarnings(db, first.runId, firstText, [
+      continueFailedWarning('EMPTY', 'The continuation is empty.'),
+    ])
     pipe.end()
     return firstText
   }
   // A draft that already ends on its final line makes some models explain why they will not add
   // more. That note must never be glued to the story, so the shorter draft stands.
   if (isContinuationCommentary(text)) {
-    await recordContinueWarning(db, first.runId, firstText, 'COMMENTARY', text.slice(0, 300))
+    await recordWarnings(db, first.runId, firstText, [
+      continueFailedWarning('COMMENTARY', text.slice(0, 300)),
+    ])
     pipe.end()
     return firstText
   }
@@ -786,6 +830,135 @@ async function completeDraft(
   pipe.push(joined.slice(firstText.length))
   pipe.end()
   return joined
+}
+
+/**
+ * The expand path (default). The first text is split into scene spans (sceneSpans). Each span under
+ * 90% of its share of the target is rewritten in place, all at once, with the end of the span before
+ * and the start of the span after as context. An expansion that passes acceptExpansion is spliced in;
+ * any other span keeps its text and records a warning. The spliced text is stored in the first run
+ * row. Only a user abort rejects, and then nothing is stored.
+ */
+async function expandDraft(
+  ctx: DraftContext,
+  first: { runId: string; textStream: AsyncIterable<string>; done: Promise<string> },
+  pipe: TextPipe,
+  firstText: string,
+): Promise<string> {
+  const { db, actor, workId, chapterId, promptInput, client, signal, card } = ctx
+  const targetChars = promptInput.targetChars
+  const remaining = Math.min(
+    DRAFT_TOTAL_BUDGET_MS - (Date.now() - ctx.startedAt),
+    STREAM_AI_TIMEOUT_MS,
+  )
+  // Skips are not failures: they make no call and record no warning.
+  if (
+    draftCharCount(firstText) >= targetChars ||
+    signal?.aborted ||
+    remaining < MIN_CONTINUATION_MS
+  ) {
+    pipe.end()
+    return firstText
+  }
+
+  const spans = sceneSpans(
+    firstText,
+    card?.scenes.length ?? draftLengthPlan(targetChars).sceneCount,
+  )
+  const spanText = (index: number): string => firstText.slice(spans[index].start, spans[index].end)
+  // A card whose scene count matches the spans gives each span its own scene target.
+  const shareOf = (index: number): number =>
+    Math.round(
+      card && card.scenes.length === spans.length
+        ? card.scenes[index].targetChars
+        : targetChars / spans.length,
+    )
+  const picked = spans
+    .map((_, index) => ({ index, text: spanText(index), share: shareOf(index) }))
+    .filter((item) => draftCharCount(item.text) < item.share * EXPAND_SHORT_RATIO)
+    .sort((a, b) => draftCharCount(a.text) / a.share - draftCharCount(b.text) / b.share)
+    .slice(0, MAX_EXPAND_SPANS)
+  if (picked.length === 0) {
+    pipe.end()
+    return firstText
+  }
+
+  const settled = await Promise.allSettled(
+    picked.map(async ({ index, text, share }) => {
+      const before =
+        index > 0
+          ? splitParagraphs(spanText(index - 1))
+              .slice(-2)
+              .map((paragraph) => paragraph.text)
+              .join('\n\n')
+          : ''
+      const after =
+        index + 1 < spans.length ? (splitParagraphs(spanText(index + 1))[0]?.text ?? '') : ''
+      const expansion = await startAiStream(
+        db,
+        { userId: actor.userId, workId, chapterId, signal, timeoutMs: remaining },
+        {
+          task: 'draft-expand',
+          input: { instructions: promptInput.instructions },
+          effort: EXPAND_EFFORT,
+          maxTokens: EXPAND_MAX_TOKENS,
+          system: DRAFT_EXPAND_SYSTEM,
+          prompt: buildExpandPrompt({
+            before,
+            scene: text,
+            after,
+            targetChars: share,
+            styleCards: promptInput.styleCards,
+          }),
+        },
+        client,
+      )
+      return (await expansion.done).trim()
+    }),
+  )
+
+  // An abort rejects whatever else happened, so nothing half-spliced is stored.
+  if (signal?.aborted) {
+    const failed = settled.find((item): item is PromiseRejectedResult => item.status === 'rejected')
+    const error = failed ? failed.reason : signal.reason
+    pipe.fail(error)
+    throw error
+  }
+
+  const replacements: { span: SceneRange; text: string }[] = []
+  const warnings: DraftWarning[] = []
+  settled.forEach((outcome, k) => {
+    const { index, text } = picked[k]
+    if (outcome.status === 'rejected') {
+      const error = outcome.reason
+      const detail = isAppError(error)
+        ? error.code
+        : error instanceof Error
+          ? error.message
+          : String(error)
+      warnings.push(continueFailedWarning('EXPAND_ERROR', detail))
+    } else if (!acceptExpansion(text, outcome.value)) {
+      warnings.push(continueFailedWarning('EXPAND_REJECTED', outcome.value))
+    } else {
+      replacements.push({ span: spans[index], text: outcome.value })
+    }
+  })
+
+  if (replacements.length === 0) {
+    if (warnings.length > 0) await recordWarnings(db, first.runId, firstText, warnings)
+    pipe.end()
+    return firstText
+  }
+  const text = spliceSpans(firstText, replacements)
+  // Stored text must be the text returned, so a failure here rejects instead of keeping one half.
+  try {
+    await replaceRunOutput(db, first.runId, warnings.length > 0 ? { text, warnings } : { text })
+  } catch (error) {
+    pipe.fail(error)
+    throw error
+  }
+  pipe.end()
+  return text
 }
 
 /**
@@ -922,19 +1095,15 @@ async function keepPlanInRun(
   await replaceRunOutput(db, runId, { ...output, plan: card, planRunId: planRunId ?? null })
 }
 
-/** Keeps the first text in the first run row with the warning. Best effort: never throws. */
-async function recordContinueWarning(
+/** Keeps the first text in the first run row with the warnings. Best effort: never throws. */
+async function recordWarnings(
   db: Db,
   runId: string,
   firstText: string,
-  reason: string,
-  detail: string,
+  warnings: DraftWarning[],
 ): Promise<void> {
   try {
-    await replaceRunOutput(db, runId, {
-      text: firstText,
-      warnings: [continueFailedWarning(reason, detail)],
-    })
+    await replaceRunOutput(db, runId, { text: firstText, warnings })
   } catch {
     // A failed warning write must not lose the first text, so it is ignored.
   }

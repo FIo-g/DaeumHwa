@@ -334,6 +334,15 @@ describe('draft', () => {
 })
 
 describe('draft continuation', () => {
+  beforeEach(() => {
+    // These tests check the append continuation, which is the `continue` length mode.
+    vi.stubEnv('AI_DRAFT_LENGTH_MODE', 'continue')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   const INSTRUCTIONS = '서윤이 편지를 발견한다. 편지에는 날짜가 적혀 있다.'
   const FIRST_DRAFT = `(데모 초안) ${'서윤은 문을 열었다. 바람이 차가웠다. '.repeat(40)}`
   const SHORT_CONTINUATION = '짧은 이어쓰기.'

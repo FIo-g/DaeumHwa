@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FORMAT_MESSAGE } from '@/ai/anthropic'
 import type { AiClient, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import type { AiTaskName } from '@/db/types'
@@ -44,9 +44,14 @@ async function open(dir: string, o: Parameters<typeof openRun>[1] = {}): Promise
   return ctx
 }
 
+beforeEach(() => {
+  vi.stubEnv('AI_DRAFT_LENGTH_MODE', 'continue')
+})
+
 afterEach(async () => {
   while (opened.length > 0) await opened.pop()?.close()
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  vi.unstubAllEnvs()
 })
 
 type Fault = { task: AiTaskName; error: () => unknown; times?: number }

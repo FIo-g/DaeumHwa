@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PLANNED_THREAD_MARK } from '@/ai/context'
 import { FakeAiClient } from '@/test/fake-ai'
 import type { Db } from '@/db/client'
@@ -18,6 +18,15 @@ function markedLines(prompt: string): string[] {
 }
 
 describe('startDraft planned-thread mark (P5)', () => {
+  beforeEach(() => {
+    // These tests check the append continuation, which is the `continue` length mode.
+    vi.stubEnv('AI_DRAFT_LENGTH_MODE', 'continue')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   let db: Db
   let actor: { userId: string }
   let workId: string

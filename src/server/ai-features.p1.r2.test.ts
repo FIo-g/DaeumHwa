@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeAiClient } from '@/test/fake-ai'
 import type { Db } from '@/db/client'
 import { createTestDb } from '@/test/db'
@@ -30,6 +30,15 @@ async function setup() {
 }
 
 describe('P1 startDraft scene count (round 2)', () => {
+  beforeEach(() => {
+    // These tests check the append continuation, which is the `continue` length mode.
+    vi.stubEnv('AI_DRAFT_LENGTH_MODE', 'continue')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   let db: Db
   let actor: { userId: string }
   let workId: string

@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FORMAT_MESSAGE } from '@/ai/anthropic'
 import type { AiClient, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import type { AiTaskName } from '@/db/types'
@@ -73,6 +73,14 @@ function readRun(dir: string, rel: string): string {
 }
 
 describe('eval draft paragraph trim (track E1)', () => {
+  beforeEach(() => {
+    vi.stubEnv('AI_DRAFT_LENGTH_MODE', 'continue')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('trims the overlong paragraphs before the saved chapter is written', async () => {
     const dir = newDir()
     makeRun(dir, 1, 2)

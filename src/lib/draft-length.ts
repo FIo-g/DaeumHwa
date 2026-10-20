@@ -102,7 +102,9 @@ export type DraftWarning = {
 
 /**
  * `reason` is the AppError code, 'UNKNOWN' for a non-AppError, 'EMPTY' for an empty answer, or
- * 'COMMENTARY' for a note to the author instead of story text.
+ * 'COMMENTARY' for a note to the author instead of story text. A scene expansion (stage 1b) uses
+ * 'EXPAND_ERROR' for a failed span (`detail` holds the AppError code or the message) and
+ * 'EXPAND_REJECTED' for a rewrite that acceptExpansion did not pass (`detail` holds the rewrite).
  * `detail` is cut to 300 characters.
  */
 export function continueFailedWarning(reason: string, detail: string): DraftWarning {
