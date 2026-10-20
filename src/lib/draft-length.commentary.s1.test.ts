@@ -10,7 +10,14 @@ const NOTE_TAG =
 const NOTE_OPTIONS =
   '현재 초안은 약 3,888자입니다. 목표 분량인 공백 포함 5,000자 이상에 못 미치므로 다음 중 하나를 골라 주세요.\n\n1. **앞부분을 늘리는 방식**: 장면 1과 2를 늘립니다.\n\n어느 쪽으로 진행할지 알려 주시면 바로 쓰겠습니다.'
 
+const NOTE_NOTHING_TO_ADD =
+  '이어 쓸 내용이 없어서 아무것도 덧붙이지 않았습니다. 현재 초안은 마지막 줄 "아무도 안 쳤잖아."에서 회차가 이미 끝나 있습니다.'
+
 describe('isContinuationCommentary', () => {
+  it('flags a note that says there is nothing to add', () => {
+    expect(isContinuationCommentary(NOTE_NOTHING_TO_ADD)).toBe(true)
+  })
+
   it.each([NOTE_KEEP_ENDING, NOTE_TAG, NOTE_OPTIONS])('flags a note to the author: %#', (text) => {
     expect(isContinuationCommentary(text)).toBe(true)
   })

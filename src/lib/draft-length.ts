@@ -61,6 +61,8 @@ const COMMENTARY_MARKERS = [
   /<\/?(?:draft_so_far|continue_length|target_length|instructions)>/,
   /이어\s*쓰지\s*않았/,
   /이어\s*쓴\s*부분은/,
+  /이어\s*쓸\s*(?:내용|것)이\s*없/,
+  /덧붙이지\s*않았/,
   /원하시면/,
   /알려\s*주시면/,
   /골라\s*주세요/,
