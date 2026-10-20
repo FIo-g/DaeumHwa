@@ -45,6 +45,7 @@ import {
   EXPAND_EFFORT,
   EXPAND_MAX_TOKENS,
   expansionRejection,
+  unwrapExpansion,
 } from '@/ai/tasks/draft-expand'
 import type { Db } from '@/db/client'
 import { aiRuns, chapters } from '@/db/schema'
@@ -122,7 +123,9 @@ const MAX_EXPAND_SPANS = 4
  */
 const EXPAND_CONCURRENCY = 2
 /** A span under this share of its target is short enough to rewrite. */
-const EXPAND_SHORT_RATIO = 0.9
+const EXPAND_SHORT_RATIO = 1
+/** A rewrite is asked for this many times its span's share: the middle of the 1.0x to 1.2x range. */
+const EXPAND_ASK_RATIO = 1.1
 /** Characters of a refused rewrite kept in its EXPAND_REJECTED warning, after the failed check. */
 const REJECTED_PREVIEW_CHARS = 300
 /** Joins the scenes of a `scenes`-mode draft. The model is not asked to write it. */
@@ -871,8 +874,9 @@ type ExpandOutcome =
 
 /**
  * The expand path (default). The first text is split into scene spans (sceneSpans). Each span under
- * 90% of its share of the target is rewritten in place, EXPAND_CONCURRENCY at a time, with the end
- * of the span before and the start of the span after as context. A span is not started with less
+ * under its share of the target is rewritten in place, asked for EXPAND_ASK_RATIO times the share,
+ * EXPAND_CONCURRENCY at a time, with the end of the span before and the start of the span after as
+ * context. A span is not started with less
  * than MIN_CONTINUATION_MS of the budget left; it keeps its text and records no warning. An
  * expansion that passes acceptExpansion is spliced in; any other span keeps its text and records a
  * warning whose detail starts with the failed check. The spliced text is stored in the first run
@@ -962,14 +966,14 @@ async function expandDraft(
               before,
               scene: text,
               after,
-              targetChars: share,
+              targetChars: Math.round(share * EXPAND_ASK_RATIO),
               styleCards: promptInput.styleCards,
               instructions: promptInput.instructions,
             }),
           },
           client,
         )
-        settled[k] = { status: 'fulfilled', value: (await expansion.done).trim() }
+        settled[k] = { status: 'fulfilled', value: unwrapExpansion(await expansion.done) }
       } catch (reason) {
         settled[k] = { status: 'rejected', reason }
       }

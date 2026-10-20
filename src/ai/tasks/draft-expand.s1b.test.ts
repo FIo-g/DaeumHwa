@@ -158,7 +158,7 @@ describe('acceptExpansion and the narration the span already had (F2)', () => {
   })
 
   it('rejects a new sentence that holds the phrase outside dialogue', () => {
-    const expanded = `${original} ${uniqueSentences(500, 8)} 윤서는 더 아무 말도 덧붙이지 않았다.`
+    const expanded = `${original} ${uniqueSentences(500, 8)} 윤서는 더 아무 말도 덧붙이지 않았습니다.`
     expect(expansionRejection(original, expanded)).toBe('note')
   })
 })

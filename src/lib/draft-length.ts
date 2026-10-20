@@ -57,7 +57,7 @@ export function continuationPlan(
 
 // Phrases a model uses when it talks to the author instead of continuing the story, for example
 // when the draft already ends on its final line. Prompt tag names never belong in prose either.
-const COMMENTARY_MARKERS = [
+export const COMMENTARY_MARKERS = [
   /<\/?(?:draft_so_far|continue_length|target_length|instructions)>/,
   /이어\s*쓰지\s*않았/,
   /이어\s*쓴\s*부분은/,

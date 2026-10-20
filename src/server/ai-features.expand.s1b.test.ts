@@ -195,7 +195,7 @@ describe('draft expansion', () => {
   })
 
   it('names the failed check and keeps 300 characters of the rewrite in the warning', async () => {
-    const note = `${grown('가')}\n\n다음은 분량을 늘린 장면입니다.`
+    const note = `다음은 분량을 늘린 장면입니다.\n\n${grown('가')}`
     const client = new FakeAiClient({
       overrides: {
         'draft-chapter': () => DRAFT,
@@ -344,7 +344,8 @@ describe('draft expansion', () => {
       .filter((c) => c[0].task.name === 'draft-expand')
       .map((c) => c[0].prompt)
     expect(prompts).toHaveLength(3)
-    const targets = card.scenes.map((scene) => `약 ${scene.targetChars}자`).sort()
+    // Each span is asked for 1.1 times its scene target, rounded.
+    const targets = card.scenes.map((scene) => `약 ${Math.round(scene.targetChars * 1.1)}자`).sort()
     const asked = prompts.map((prompt) => prompt.match(/약 \d+자/)?.[0] ?? '').sort()
     expect(asked).toEqual(targets)
   })

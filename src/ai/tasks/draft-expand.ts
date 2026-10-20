@@ -7,7 +7,7 @@
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { renderCard, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
 import { splitSentences } from '@/lib/korean/sentences'
-import { draftCharCount, isContinuationCommentary, QUOTED } from '@/lib/draft-length'
+import { COMMENTARY_MARKERS, draftCharCount, QUOTED } from '@/lib/draft-length'
 import { isBreakLine } from '@/lib/scene'
 
 export const DRAFT_EXPAND_SYSTEM = `너는 웹소설 장면을 늘려 다시 쓰는 보조 작가다.
@@ -66,16 +66,33 @@ function orNone(text: string): string {
 }
 
 /**
+ * The continuation's note markers (COMMENTARY_MARKERS in src/lib/draft-length.ts), minus the two
+ * phrases that also occur in plain narration ("덧붙이지 않았다"). Those two count only in the polite
+ * form that a note to the author uses. The continuation's own list stays unchanged, so the continue
+ * mode behaves as before.
+ */
+const LOOSE_COMMENTARY_SOURCES = [/이어\s*쓰지\s*않았/.source, /덧붙이지\s*않았/.source]
+const EXPAND_COMMENTARY_MARKERS = [
+  ...COMMENTARY_MARKERS.filter((marker) => !LOOSE_COMMENTARY_SOURCES.includes(marker.source)),
+  /덧붙이지\s*않았습니다/,
+  /이어\s*쓰지\s*않았습니다/,
+]
+
+/**
+ * A first line that announces the text. It is tested on the first non-blank line of an expansion
+ * only, never on its middle sentences.
+ */
+const ANNOUNCING_LINE =
+  /^(?:다음은|아래는|여기)[^\n]{0,40}(?:장면|본문)[^\n]{0,20}(?:입니다|이다)[.:：]?$/
+
+/**
  * Notes a model writes to the author about a rewrite, as opposed to story text. They are tested on
  * the new sentences of an expansion only (see expansionRejection), one sentence per line, after
- * quoted dialogue is removed. The continuation's own list (COMMENTARY_MARKERS in
- * src/lib/draft-length.ts) stays unchanged so that the continue mode behaves as before.
+ * quoted dialogue is removed.
  */
 const EXPAND_NOTE_MARKERS = [
   // The input tags echoed back.
   /<\/?(?:scene|before|after|length|style_cards|instructions)>/,
-  // A first line that announces the text.
-  /^\s*(?:다음은|아래는|여기)[^\n]{0,40}(?:장면|본문)[^\n]{0,20}(?:입니다|이다)[.:：]?\s*$/m,
   // A bare length note.
   /^\s*\(?\s*(?:공백\s*포함\s*)?약?\s*[\d,]+\s*자\s*\)?\s*$/m,
   // The English forms, for the eval runs.
@@ -99,8 +116,9 @@ export type ExpansionRejection = 'short' | 'break' | 'note' | 'repeat'
 export function expansionRejection(original: string, expanded: string): ExpansionRejection | null {
   if (draftCharCount(expanded) < draftCharCount(original) * MIN_GROWTH) return 'short'
   if (expanded.split('\n').some((line) => isBreakLine(line))) return 'break'
+  if (ANNOUNCING_LINE.test(firstLine(expanded))) return 'note'
   const fresh = newSentences(original, expanded)
-  if (isContinuationCommentary(fresh)) return 'note'
+  if (EXPAND_COMMENTARY_MARKERS.some((marker) => marker.test(fresh))) return 'note'
   if (EXPAND_NOTE_MARKERS.some((marker) => marker.test(fresh))) return 'note'
   const before = sentenceCounts(original)
   const after = sentenceCounts(expanded)
@@ -113,6 +131,23 @@ export function expansionRejection(original: string, expanded: string): Expansio
 /** True only when the expansion is usable (see expansionRejection). */
 export function acceptExpansion(original: string, expanded: string): boolean {
   return expansionRejection(original, expanded) === null
+}
+
+/**
+ * Drops the scene tags a model may wrap an expansion in: a first line that is exactly `<scene>` and
+ * a last line that is exactly `</scene>`, each compared after trimming. A tag anywhere else stays,
+ * so expansionRejection still refuses it as a note.
+ */
+export function unwrapExpansion(text: string): string {
+  const lines = text.trim().split('\n')
+  if (lines[0]?.trim() === '<scene>') lines.shift()
+  if (lines.length > 0 && lines[lines.length - 1].trim() === '</scene>') lines.pop()
+  return lines.join('\n').trim()
+}
+
+/** The first line that is not blank, trimmed; empty when the text is blank. */
+function firstLine(text: string): string {
+  return (text.split('\n').find((line) => line.trim() !== '') ?? '').trim()
 }
 
 /**
