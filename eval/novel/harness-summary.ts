@@ -31,6 +31,7 @@ export const HarnessSummarySchema = z.object({
       outputTokens: CountSchema,
       cacheReadTokens: CountSchema,
       cacheWriteTokens: CountSchema,
+      cacheRecorded: z.boolean(),
       usd: UsdSchema,
       firstCharMs: MsSchema.nullable(),
       writeMs: MsSchema,
@@ -44,6 +45,7 @@ export const HarnessSummarySchema = z.object({
     calls: CountSchema,
     inputTokens: CountSchema,
     outputTokens: CountSchema,
+    cacheRecorded: z.boolean(),
     usd: UsdSchema,
     totalMs: MsSchema,
   }),
@@ -71,12 +73,16 @@ export function callCostUsd(usage: AiUsage, price: ModelPrice): number {
 
 const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
 
-/** Sum of the tokens over the calls; cost is null without a price. A failed call counts its billed usage. */
+/**
+ * Sum of the tokens over the calls; cost is null without a price. A failed call counts its billed usage.
+ * cacheRecorded is false when no call carries a cache key, so the cache values are not known.
+ */
 function tally(calls: CallRecord[], price: ModelPrice | undefined) {
   let inputTokens = 0
   let outputTokens = 0
   let cacheReadTokens = 0
   let cacheWriteTokens = 0
+  let cacheRecorded = false
   let usd = price ? 0 : null
   let totalMs = 0
   for (const call of calls) {
@@ -85,6 +91,9 @@ function tally(calls: CallRecord[], price: ModelPrice | undefined) {
     outputTokens += usage.outputTokens
     cacheReadTokens += usage.cacheReadTokens ?? 0
     cacheWriteTokens += usage.cacheWriteTokens ?? 0
+    if (usage.cacheReadTokens !== undefined || usage.cacheWriteTokens !== undefined) {
+      cacheRecorded = true
+    }
     if (price && usd !== null) usd += callCostUsd(usage, price)
     totalMs += call.durationMs
   }
@@ -94,6 +103,7 @@ function tally(calls: CallRecord[], price: ModelPrice | undefined) {
     outputTokens,
     cacheReadTokens,
     cacheWriteTokens,
+    cacheRecorded,
     usd,
     totalMs,
   }
@@ -147,6 +157,7 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
       outputTokens: all.outputTokens,
       cacheReadTokens: all.cacheReadTokens,
       cacheWriteTokens: all.cacheWriteTokens,
+      cacheRecorded: all.cacheRecorded,
       usd: all.usd,
       firstCharMs: firstCharMs(writes),
       writeMs,
@@ -170,6 +181,7 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
       calls: interview.calls,
       inputTokens: interview.inputTokens,
       outputTokens: interview.outputTokens,
+      cacheRecorded: interview.cacheRecorded,
       usd: interview.usd,
       totalMs: interview.totalMs,
     },

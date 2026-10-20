@@ -50,6 +50,7 @@ describe('harness summary block', () => {
     const chapter = summary.harness?.chapters[0]
     expect(chapter?.calls).toBeGreaterThan(0)
     expect(chapter?.cacheReadTokens).toBe(0)
+    expect(chapter?.cacheRecorded).toBe(false)
     expect(chapter?.usd).toBeGreaterThan(0)
     expect(summary.harness?.settings).toBe('eval')
     expect(RunSummarySchema.parse(summary).harness).toEqual(summary.harness)

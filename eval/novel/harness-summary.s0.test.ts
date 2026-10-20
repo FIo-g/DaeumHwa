@@ -78,6 +78,26 @@ describe('harnessSummary', () => {
     expect(summary.chapters[0]?.firstCharMs).toBe(1200)
   })
 
+  it('marks a block whose calls did not record cache tokens', () => {
+    const summary = harnessSummary(CHAPTER_CALLS, base)
+    expect(summary.chapters[0]?.cacheRecorded).toBe(false)
+    expect(summary.interview.cacheRecorded).toBe(false)
+  })
+
+  it('marks a block whose calls recorded a cache key, even at zero', () => {
+    const records = [
+      call(1, 'ch1:draft', 'draft-chapter', {
+        usage: { inputTokens: 100, outputTokens: 10, cacheReadTokens: 0 },
+      }),
+      call(2, 'interview', 'interview-question', {
+        usage: { inputTokens: 100, outputTokens: 10, cacheWriteTokens: 0 },
+      }),
+    ]
+    const summary = harnessSummary(records, base)
+    expect(summary.chapters[0]?.cacheRecorded).toBe(true)
+    expect(summary.interview.cacheRecorded).toBe(true)
+  })
+
   it('counts one regeneration for two draft attempts', () => {
     const summary = harnessSummary(CHAPTER_CALLS, {
       ...base,
