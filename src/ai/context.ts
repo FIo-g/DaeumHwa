@@ -385,8 +385,13 @@ function dropLastFactOfRichestEntry(selection: Selection): boolean {
   return true
 }
 
+/** Label printed on planned threads in the draft's wiki block; DRAFT_SYSTEM quotes it. */
+export const PLANNED_THREAD_MARK = '지시에 있을 때만 쓴다'
+
+export type RenderContextPackOptions = { markPlannedThreads?: boolean }
+
 /** Deterministic text form of a pack, used in prompts. Same pack in, same bytes out. */
-export function renderContextPack(pack: ContextPack): string {
+export function renderContextPack(pack: ContextPack, options?: RenderContextPackOptions): string {
   const lines: string[] = [`현재 회차: ${pack.position}화`, '']
 
   lines.push('<entries>')
@@ -404,7 +409,8 @@ export function renderContextPack(pack: ContextPack): string {
 
   lines.push('<threads>')
   if (pack.threads.length === 0) lines.push('(없음)')
-  for (const thread of pack.threads) lines.push(renderThread(thread))
+  for (const thread of pack.threads)
+    lines.push(renderThread(thread, options?.markPlannedThreads === true))
   lines.push('</threads>', '')
 
   lines.push('<relations>')
@@ -499,11 +505,12 @@ function renderFact(fact: PackFact): string {
   return `[${fact.ref}][${FACT_STATUS_LABEL[fact.status]}] ${fact.content}${parens}`
 }
 
-function renderThread(thread: PackThread): string {
+function renderThread(thread: PackThread, markPlanned: boolean): string {
   const meta = [`중요도 ${IMPORTANCE_LABEL[thread.importance]}`, THREAD_STATUS_LABEL[thread.status]]
   if (thread.plantedPosition !== null) meta.push(`${thread.plantedPosition}화에 심음`)
   if (thread.targetPosition !== null) meta.push(`목표 ${thread.targetPosition}화`)
   if (thread.overdue) meta.push('지연')
+  if (markPlanned && thread.status === 'planned') meta.push(PLANNED_THREAD_MARK)
   const description = thread.description ? `: ${thread.description}` : ''
   return `- [${thread.ref}] ${thread.title} (${meta.join(', ')})${description}`
 }

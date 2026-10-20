@@ -403,7 +403,7 @@ export async function startDraft(
     instructions,
     targetChars,
     styleCards,
-    packText: renderContextPack(pack),
+    packText: renderContextPack(pack, { markPlannedThreads: true }),
     previousSummary,
     previousTail,
     chapterLabel: promptLabel,

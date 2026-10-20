@@ -61,6 +61,8 @@ const RULES: readonly Rule[] = [
   [/(\d+)화부터/g, 'from Chapter $1'],
   [/(\d+)~(\d+)화/g, 'Chapters $1 to $2'],
   [/~(\d+)화/g, 'up to Chapter $1'],
+  // Planned-thread mark (brief P5). The label is printed on planned threads in the draft's wiki block.
+  ['지시에 있을 때만 쓴다', 'use only if the instructions mention it'],
   // Draft length lines (brief A). The continuation line comes first: its tail would otherwise match
   // the minimum-and-maximum rule below and leave Korean behind.
   [
