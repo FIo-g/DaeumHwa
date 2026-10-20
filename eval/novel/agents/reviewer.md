@@ -41,6 +41,7 @@ Use this structure. Headings in the document's language.
 - Q1 to Q9: a score from 1 to 5 for each, with at least one quote from the chapter text for each score. Quotes are mandatory. A score without a quote is not accepted. Quote the Korean or English exactly. `metrics/NN.json` may hold `paragraphOpeners`: `counted` is the number of non-dialogue paragraphs, `top` lists the words that start four or more of them (Korean particles removed), and `repeated` is how many paragraphs start with such a word. Cite it when you mention repeated paragraph openers in Q7, instead of a hand count. It is context for the score, not a threshold; do not lower a score for it alone.
 - Verdict: publishable (출판 가능 / publishable), excellent (우수 / excellent), or not publishable, using the section 3.3 rules.
 - Continuity count for the chapter: each contradiction with the bible or the approved wiki, classified with the four ConStory categories in criteria section 3.5 (not Narrative & Style). Mark speech-register contradictions `Characterization (voice)`. Under the table, list apart: style-card violations (say how they were scored in Q6 to Q8), in-chapter inconsistencies (scored in Q2), and uncounted items with one line of reason each. These lists are not part of T2.
+- Places the author must fix (heading `작가가 반드시 고칠 곳` for `ko`, `Places the author must fix` for `en`; criteria section 3.6): one place is one sentence or one paragraph that a working web-novel author would surely rewrite before publishing. Count each place once even if it has several problems. Count a contradiction with the bible or approved wiki, a wrong name, a broken or ungrammatical sentence (not a typo a spelling checker would catch), speech that does not fit the character's set voice, meta text or foreign script, a violation of the chapter instruction other than a missing `mustInclude` item (T1 counts those), a key moment summarized instead of shown, and a repeat of an earlier beat or sentence with no new information. Do not count taste-level style choices or things you would merely like better. List each place with the exact quote and a one-line reason, then write the count as `mustFix` in the verdict block.
 
 **Whole run**
 
@@ -70,7 +71,8 @@ End `review.md` with one fenced json block under this heading (Korean heading: `
       "chapter": 1,
       "thresholdsFailed": ["T2", "T3"],
       "qScores": [4, 3, 4, 3, 3, 4, 4, 4, 4],
-      "verdict": "not-publishable"
+      "verdict": "not-publishable",
+      "mustFix": 4
     }
   ]
 }
@@ -79,6 +81,7 @@ End `review.md` with one fenced json block under this heading (Korean heading: `
 - `thresholdsFailed`: the T ids you marked fail, from T1 to T7 only. Use `[]` when none failed.
 - `qScores`: nine integers, Q1 to Q9 in order, identical to your Q scores in the chapter section.
 - `verdict`: `"publishable"`, `"excellent"` or `"not-publishable"`, identical to your prose verdict.
+- `mustFix`: the number of places in the chapter's "Places the author must fix" list, an integer of 0 or more. Use `0` when the list is empty.
 - No comments or other text inside the block. Write exactly one such block per review.
 - A workflow step reads this block to decide whether the run needs a second review, so keep the keys and values exact.
 

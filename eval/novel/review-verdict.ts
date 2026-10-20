@@ -19,6 +19,8 @@ const chapterSchema = z.object({
   thresholdsFailed: z.array(z.enum(THRESHOLD_IDS)),
   qScores: z.array(z.number().min(1).max(5)).length(9),
   verdict: z.enum(['publishable', 'excellent', 'not-publishable']),
+  // Places the author must fix (criteria 3.6). Optional so reviews saved before this key still parse.
+  mustFix: z.number().int().min(0).optional(),
 })
 
 const reviewVerdictSchema = z
@@ -148,6 +150,20 @@ export type ReviewGateResult = SecondReviewCheck & {
   decision: 'needed' | 'not-needed' | 'already-done'
   parse: 'ok' | 'no-verdict-block' | 'invalid-verdict-block'
   detail: string | null
+  mustFix: number | null
+}
+
+/**
+ * Sums the must-fix places over chapters. null when any chapter lacks the count (an old review),
+ * so a partial sum is never reported as the run's total.
+ */
+function sumMustFix(v: ReviewVerdict): number | null {
+  let total = 0
+  for (const chapter of v.chapters) {
+    if (chapter.mustFix === undefined) return null
+    total += chapter.mustFix
+  }
+  return total
 }
 
 /**
@@ -161,9 +177,10 @@ export function reviewGate(runDir: string): ReviewGateResult {
   const check = checkSecondReview(parsed)
   const parse = parsed.ok ? 'ok' : parsed.code
   const detail = parsed.ok ? null : parsed.detail
+  const mustFix = parsed.ok ? sumMustFix(parsed.verdict) : null
   const alreadyDone = existsSync(path.join(runDir, SECOND_REVIEW_FILE))
   let decision: ReviewGateResult['decision'] = 'not-needed'
   if (alreadyDone) decision = 'already-done'
   else if (check.needed) decision = 'needed'
-  return { ...check, decision, parse, detail }
+  return { ...check, decision, parse, detail, mustFix }
 }
