@@ -94,8 +94,9 @@ export async function previewDraftRefinement(
         repaired = applied.applied
         repairState = 'done'
       } catch (error) {
-        // A cancel is rethrown; any other AI failure keeps the trim result.
-        if (!isAppError(error) || error.code === 'CANCELLED') throw error
+        // A cancel is rethrown; any other AI failure keeps the trim result. When the trim changed
+        // nothing there is no result to keep, so the failure is rethrown and the author sees why.
+        if (!isAppError(error) || error.code === 'CANCELLED' || trimmed.text === stored) throw error
         repairState = 'failed'
       }
     }

@@ -210,6 +210,22 @@ describe('previewDraftRefinement', () => {
     expect(refinement.text).toContain('불었다.\n\n발소리가')
   })
 
+  it('rethrows the repair error when the trim changed nothing', async () => {
+    await createStyleCard(s.db, s.actor, { workId: s.workId, name: '작품 문체', examples: SAMPLE })
+    const { runId, client } = await draftOf(s, `${SHORT}\n\n${SAMPLE}`, {
+      'draft-repair': () => {
+        throw new AppError('AI_LIMIT', '오늘 AI 사용량 한도를 넘었습니다. 내일 다시 시도해 주세요.')
+      },
+    })
+
+    const error = await captureError(
+      previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client),
+    )
+
+    expect(error.code).toBe('AI_LIMIT')
+    expect(await outputOf(s.db, runId)).not.toHaveProperty('refinement')
+  })
+
   it('skips the repair when little time is left', async () => {
     await createStyleCard(s.db, s.actor, { workId: s.workId, name: '작품 문체', examples: SAMPLE })
     const repairCall = vi.fn(() => ({ edits: [] }))

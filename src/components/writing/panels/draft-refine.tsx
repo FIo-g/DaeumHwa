@@ -24,13 +24,13 @@ type DraftRefineProps = {
  */
 export function DraftRefine({ workId, runId, onApplied, onPreviewChange }: DraftRefineProps) {
   const [preview, setPreview] = useState<DraftRefinePreview | null>(null)
-  const [nothing, setNothing] = useState(false)
+  const [nothing, setNothing] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
   const ai = useAiRun()
   const url = `/api/works/${workId}/draft/refine`
 
   async function refine() {
-    setNothing(false)
+    setNothing(null)
     setPreview(null)
     onPreviewChange(false)
     // Resolves null on a failure (already toasted) or a cancel (silent).
@@ -39,7 +39,8 @@ export function DraftRefine({ workId, runId, onApplied, onPreviewChange }: Draft
     )
     if (result === null) return
     if (!result.changed) {
-      setNothing(true)
+      // A skipped sentence repair says why nothing else was done; otherwise the draft is clean.
+      setNothing(refineRepairNote(result) ?? '다듬을 곳을 찾지 못했습니다.')
       return
     }
     setPreview(result)
@@ -134,7 +135,7 @@ export function DraftRefine({ workId, runId, onApplied, onPreviewChange }: Draft
       <p className="text-xs text-muted-foreground">
         긴 문단과 반복되는 표현을 고칩니다. 결과를 보고 적용할지 정합니다.
       </p>
-      {nothing && <p className="text-sm text-muted-foreground">다듬을 곳을 찾지 못했습니다.</p>}
+      {nothing && <p className="text-sm text-muted-foreground">{nothing}</p>}
     </div>
   )
 }

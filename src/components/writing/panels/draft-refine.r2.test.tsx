@@ -144,6 +144,28 @@ describe('DraftRefine', () => {
     expect(onApplied).not.toHaveBeenCalled()
   })
 
+  it('shows the skipped repair note instead of the nothing-found line', async () => {
+    renderRefine()
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse({
+        ok: true,
+        data: {
+          ...PREVIEW,
+          changed: false,
+          parts: [],
+          beforeChars: 20,
+          afterChars: 20,
+          repairState: 'skipped',
+        },
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '다듬기' }))
+
+    expect(await screen.findByText('시간이 모자라 문장 고치기는 건너뛰었습니다.')).toBeTruthy()
+    expect(screen.queryByText('다듬을 곳을 찾지 못했습니다.')).toBeNull()
+  })
+
   it('says nothing needed fixing when the server found no change', async () => {
     const { onPreviewChange } = renderRefine()
     vi.mocked(fetch).mockResolvedValue(
