@@ -35,28 +35,55 @@ export type DraftPlan = {
   threads: string[]
 }
 
+const DraftPlanSceneSchema = z.object({
+  summary: z.string(),
+  goal: z.string(),
+  decision: z.string(),
+  stake: z.string(),
+  trigger: z.string(),
+  role: z.enum(SCENE_ROLES),
+  place: z.string(),
+  characters: z.array(z.string()),
+})
+
+const DraftPlanEndingSchema = z.object({
+  device: z.enum(ENDING_DEVICES),
+  line: z.string(),
+})
+
 export const DraftPlanSchema: z.ZodType<DraftPlan> = z.object({
   // One to eight scenes: the call fails and is recorded as one when the model goes outside that.
+  scenes: z.array(DraftPlanSceneSchema).min(1).max(8),
+  ending: DraftPlanEndingSchema,
+  threads: z.array(z.string()),
+})
+
+const CardText = z.string().max(400)
+
+/**
+ * The card the author sends back (an approved or edited card). Client input goes into the prompt, so
+ * every string and list is capped here; model output (DraftPlanSchema) is not. Targets are recomputed
+ * on the server.
+ */
+export const DraftPlanCardSchema: z.ZodType<DraftPlanCard> = z.object({
   scenes: z
     .array(
       z.object({
-        summary: z.string(),
-        goal: z.string(),
-        decision: z.string(),
-        stake: z.string(),
-        trigger: z.string(),
+        summary: CardText,
+        goal: CardText,
+        decision: CardText,
+        stake: CardText,
+        trigger: CardText,
         role: z.enum(SCENE_ROLES),
-        place: z.string(),
-        characters: z.array(z.string()),
+        place: CardText,
+        characters: z.array(CardText).max(12),
+        targetChars: z.number().int().min(0),
       }),
     )
     .min(1)
     .max(8),
-  ending: z.object({
-    device: z.enum(ENDING_DEVICES),
-    line: z.string(),
-  }),
-  threads: z.array(z.string()),
+  ending: z.object({ device: z.enum(ENDING_DEVICES), line: CardText }),
+  threads: z.array(CardText).max(12),
 })
 
 export type DraftPlanInput = DraftPromptInput & {

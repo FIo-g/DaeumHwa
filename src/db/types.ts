@@ -166,7 +166,13 @@ export const AI_RUN_STATUSES = ['running', 'done', 'error'] as const
 export type AiRunStatus = (typeof AI_RUN_STATUSES)[number]
 
 /** Numbers-only usage events (stage 0). Stages 1–3 add kinds. */
-export const USAGE_EVENT_KINDS = ['draft_started', 'draft_used', 'draft_edit_ratio'] as const
+export const USAGE_EVENT_KINDS = [
+  'draft_started',
+  'draft_used',
+  'draft_edit_ratio',
+  'plan_shown',
+  'plan_edited',
+] as const
 export type UsageEventKind = (typeof USAGE_EVENT_KINDS)[number]
 
 // ---- Actor and work settings ----

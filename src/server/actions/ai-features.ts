@@ -1,17 +1,20 @@
 'use server'
 
 import { z } from 'zod'
+import { DraftPlanCardSchema } from '@/ai/tasks/draft-plan'
 import type { ChapterRow } from '@/db/types'
 import { requireRowWork } from '@/server/access'
 import { revalidateWork, withAction } from '@/server/action-helpers'
 import {
   createChapterFromDraft,
+  planDraft,
   type RepairDraftResult,
   repairDraft,
   runReaderSimulation,
 } from '@/server/ai-features'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import type { AppliedRefinement } from '@/lib/draft-refine'
+import type { DraftPlanCard } from '@/lib/draft-plan'
 import type { ActionResult } from '@/lib/result'
 import { applyDraftRefinement } from '@/server/draft-refine'
 import { recordDraftUse } from '@/server/usage-events'
@@ -30,6 +33,20 @@ const CreateChapterFromDraftSchema = z.object({
 const RepairDraftSchema = z.object({
   workId: z.uuid(),
   runId: z.uuid(),
+})
+
+const PlanDraftSchema = z.object({
+  workId: z.uuid(),
+  chapterId: z.uuid().nullish(),
+  instructions: z.string().max(5000),
+  targetChars: z.number().int().min(500).max(20000).optional(),
+  entryIds: z.array(z.uuid()).max(50),
+  revision: z
+    .object({
+      card: DraftPlanCardSchema,
+      note: z.string().trim().min(1).max(300),
+    })
+    .optional(),
 })
 
 const RecordDraftUseSchema = z.object({
@@ -93,5 +110,15 @@ export async function applyDraftRefinementAction(
     const applied = await applyDraftRefinement(db, actor, data)
     revalidateWork(data.workId)
     return applied
+  })
+}
+
+/** Proposes a chapter plan card. Nothing is written; the card lives in the run output. Editor role. */
+export async function planDraftAction(
+  input: unknown,
+): Promise<ActionResult<{ runId: string; card: DraftPlanCard; warnings: string[] }>> {
+  return withAction(async (db, actor) => {
+    const data = PlanDraftSchema.parse(input)
+    return planDraft(db, actor, data)
   })
 }

@@ -36,6 +36,7 @@ import {
   splitReaderSimInput,
 } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
+import { draftPlanTask } from '@/ai/tasks/draft-plan'
 import type { Db } from '@/db/client'
 import { aiRuns, chapters } from '@/db/schema'
 import {
@@ -50,7 +51,9 @@ import {
   continuationSeparator,
   continueFailedWarning,
   draftCharCount,
+  draftLengthPlan,
 } from '@/lib/draft-length'
+import { planWarnings, type DraftPlanCard, withSceneTargets } from '@/lib/draft-plan'
 import { AppError, isAppError } from '@/lib/errors'
 import { chapterLabel } from '@/lib/labels'
 import { type DraftFlag, findDraftFlags } from '@/lib/korean/style-copy'
@@ -317,10 +320,10 @@ async function collectDialogueSamples(db: Db, workId: string, names: string[]): 
 // ---- Draft (F13) ----
 
 /**
- * Starts a streamed chapter draft. The caller reads `textStream`; `done` resolves with the full
- * text once the run is stored. Nothing is written to the manuscript here. Editor role.
+ * The draft context of a chapter: the previous chapter's tail and summary, the style cards, the
+ * context pack and the prompt input. Shared by startDraft and planDraft. Does not check the role.
  */
-export async function startDraft(
+export async function buildDraftContext(
   db: Db,
   actor: Actor,
   input: {
@@ -329,26 +332,14 @@ export async function startDraft(
     instructions: string
     targetChars?: number
     entryIds: string[]
-    /** Eval only: ask for a scene beat list first (draft-beats) and pass it into the prose prompt. */
-    twoStep?: boolean
   },
-  client?: AiClient,
-  signal?: AbortSignal,
 ): Promise<{
-  runId: string
-  textStream: AsyncIterable<string>
-  done: Promise<string>
-  /** Set only for a two-step draft: the beat list the prose was written from. */
-  beats?: DraftBeats
-  beatsRunId?: string
+  promptInput: DraftPromptInput
+  chapterId: string | null
+  position: number
+  targetChars: number
 }> {
-  // First statement: the role check and the context work below count against the same budget.
-  const startedAt = Date.now()
-  const { workId } = input
-  const instructions = input.instructions.trim()
-  if (!instructions) throw new AppError('VALIDATION', '무슨 일이 일어나야 하는지 적어 주세요.')
-  await requireWorkRole(db, workId, actor.userId, 'editor')
-
+  const { workId, instructions } = input
   const work = await getWork(db, actor, workId)
   const targetChars = input.targetChars ?? resolveWorkSettings(work.settings).targetChars
   const all = await listChapters(db, actor, workId)
@@ -417,6 +408,122 @@ export async function startDraft(
     chapterLabel: promptLabel,
     voices: voices?.map((v) => ({ name: v.name, speech: v.speech })),
   }
+  return { promptInput, chapterId, position, targetChars }
+}
+
+// ---- Chapter plan card (stage 1) ----
+
+/**
+ * Proposes the plan card of a chapter from the draft context. Empty instructions are allowed; the
+ * card is stored only in the run output. Nothing is written to the manuscript or the wiki. With a
+ * revision, the current card and the author's note go into the prompt. Editor role.
+ */
+export async function planDraft(
+  db: Db,
+  actor: Actor,
+  input: {
+    workId: string
+    chapterId?: string | null
+    instructions: string
+    targetChars?: number
+    entryIds: string[]
+    revision?: { card: DraftPlanCard; note: string }
+  },
+  client?: AiClient,
+  signal?: AbortSignal,
+): Promise<{ runId: string; card: DraftPlanCard; warnings: string[] }> {
+  const { workId } = input
+  await requireWorkRole(db, workId, actor.userId, 'editor')
+
+  const { promptInput, chapterId, targetChars } = await buildDraftContext(db, actor, {
+    workId,
+    chapterId: input.chapterId,
+    instructions: input.instructions.trim(),
+    targetChars: input.targetChars,
+    entryIds: input.entryIds,
+  })
+  const revision = input.revision ?? null
+  const { output, runId } = await runAiTask(
+    db,
+    { userId: actor.userId, workId, chapterId, signal },
+    draftPlanTask,
+    {
+      ...promptInput,
+      sceneCount: revision ? revision.card.scenes.length : draftLengthPlan(targetChars).sceneCount,
+      advice: await latestAdviceText(db, actor, workId),
+      revision,
+    },
+    client,
+  )
+  const card = withSceneTargets(output, targetChars)
+
+  // Counted once the run row exists. A failed count is only logged and never fails the plan.
+  try {
+    await recordUsageEvent(db, actor, {
+      workId,
+      chapterId,
+      runId,
+      kind: 'plan_shown',
+      value: card.scenes.length,
+      extra: { revision: revision ? 1 : 0 },
+    })
+  } catch (error) {
+    console.warn('usage event plan_shown failed', error)
+  }
+  return { runId, card, warnings: planWarnings(card) }
+}
+
+/**
+ * Text of the newest done direction advice of the work, or null when there is none. Advice runs
+ * keep no chapter or position, so the newest run is the one used for the previous chapter.
+ */
+async function latestAdviceText(db: Db, actor: Actor, workId: string): Promise<string | null> {
+  const [run] = await listAdviceRuns(db, actor, workId)
+  const output = run?.output as Partial<AdviceResult> | null | undefined
+  if (!output || !Array.isArray(output.options) || output.options.length === 0) return null
+  return output.options.map((option) => `${option.title}: ${option.summary}`).join('\n')
+}
+
+/**
+ * Starts a streamed chapter draft. The caller reads `textStream`; `done` resolves with the full
+ * text once the run is stored. Nothing is written to the manuscript here. Editor role.
+ */
+export async function startDraft(
+  db: Db,
+  actor: Actor,
+  input: {
+    workId: string
+    chapterId?: string | null
+    instructions: string
+    targetChars?: number
+    entryIds: string[]
+    /** Eval only: ask for a scene beat list first (draft-beats) and pass it into the prose prompt. */
+    twoStep?: boolean
+  },
+  client?: AiClient,
+  signal?: AbortSignal,
+): Promise<{
+  runId: string
+  textStream: AsyncIterable<string>
+  done: Promise<string>
+  /** Set only for a two-step draft: the beat list the prose was written from. */
+  beats?: DraftBeats
+  beatsRunId?: string
+}> {
+  // First statement: the role check and the context work below count against the same budget.
+  const startedAt = Date.now()
+  const { workId } = input
+  const instructions = input.instructions.trim()
+  if (!instructions) throw new AppError('VALIDATION', '무슨 일이 일어나야 하는지 적어 주세요.')
+  await requireWorkRole(db, workId, actor.userId, 'editor')
+
+  const { promptInput, chapterId, targetChars } = await buildDraftContext(db, actor, {
+    workId,
+    chapterId: input.chapterId,
+    instructions,
+    targetChars: input.targetChars,
+    entryIds: input.entryIds,
+  })
 
   // Two-step draft (eval only): the beat list is made before the prose and goes into both prose
   // calls. A failed beat call rejects here, before any prose run exists. The beat call runs before

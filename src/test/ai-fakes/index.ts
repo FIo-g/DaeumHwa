@@ -6,6 +6,7 @@ import { fakeChapterThreads } from '@/test/ai-fakes/chapter-extract-threads'
 import { fakeContinuity } from '@/test/ai-fakes/continuity-check'
 import { fakeAdvice } from '@/test/ai-fakes/direction-advice'
 import { fakeDraftBeats } from '@/test/ai-fakes/draft-beats'
+import { fakeDraftPlan } from '@/test/ai-fakes/draft-plan'
 import { fakeDraft, fakeDraftContinue } from '@/test/ai-fakes/draft-chapter'
 import { fakeDraftRepair } from '@/test/ai-fakes/draft-repair'
 import { fakeInterviewExtraction } from '@/test/ai-fakes/interview-extract'
@@ -30,6 +31,7 @@ export const FAKE_OUTPUTS: Partial<Record<AiTaskName, (input: any) => unknown>> 
   'paragraph-trim': fakeParagraphTrim,
   'draft-repair': fakeDraftRepair,
   'draft-beats': fakeDraftBeats,
+  'draft-plan': fakeDraftPlan,
   'scene-rewrite': fakeSceneRewrite,
   'chapter-extract-facts': fakeChapterFacts,
   'chapter-extract-threads': fakeChapterThreads,
