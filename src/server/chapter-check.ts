@@ -2,9 +2,11 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { getAiClient } from '@/ai'
 import { buildContextPack, CONTINUITY_BUDGET_CHARS, resolveRefs } from '@/ai/context'
 import {
+  type ExtractionContext,
   type ExtractionDropped,
   extractionToProposals,
   type ExtractionStats,
+  type ExtractionWeak,
 } from '@/ai/extraction'
 import { isNearDuplicateFact } from '@/ai/guards'
 import { DEFAULT_AI_TIMEOUT_MS, isLocalProvider, runAiTask, throwIfCancelled } from '@/ai/run'
@@ -40,8 +42,8 @@ import { deletePendingProposals, insertProposals } from '@/server/proposal-store
 // AI output becomes issues (replaced on each run) and post_chapter proposals (also replaced).
 // Nothing here writes wiki rows.
 
-/** G2 and G1 counters of one chapter extraction, for the eval run summary. */
-export type ExtractionCounts = ExtractionStats & ExtractionDropped
+/** G2, G1 and P10 counters of one chapter extraction, for the eval run summary. */
+export type ExtractionCounts = ExtractionStats & ExtractionDropped & ExtractionWeak
 
 export type ChapterCheckResult = {
   issues: IssueRow[]
@@ -234,6 +236,13 @@ async function loadEditableChapter(
 }
 
 /**
+ * What the chapter check does with extraction items whose evidence does not name their subject
+ * or thread (round 2, P10). Count only: on the six saved runs the drop rule would remove about
+ * 70% of the facts and about 36 of those 47 are fine. Flip to 'drop' only with the R2b numbers.
+ */
+const EVIDENCE_ANCHOR: NonNullable<ExtractionContext['evidenceAnchor']> = 'count'
+
+/**
  * Runs the chapter check on the saved chapter text: deterministic naming rules, the continuity
  * check and chapter extraction (in parallel). Replaces the chapter's open issues and the pending
  * post_chapter proposals; resolved issues are kept.
@@ -366,6 +375,7 @@ export async function runChapterCheck(
   const wikiFacts = (await loadKnownFactTexts(db, workId)).filter((f) => !f.pending)
 
   const extracted = extractionToProposals(extract.output, {
+    evidenceAnchor: EVIDENCE_ANCHOR,
     existingFacts: wikiFacts,
     source: 'post_chapter',
     sourceRef: extract.runId,
@@ -456,6 +466,7 @@ export async function runChapterCheck(
       ...extracted.stats,
       ...extracted.dropped,
       duplicateFacts: extracted.dropped.duplicateFacts + raceDuplicates,
+      ...extracted.weak,
     },
   }
 }

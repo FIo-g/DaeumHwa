@@ -237,12 +237,16 @@ export function mergedMs(intervals: [number, number][]): number {
 const CountSchema = z.number().int().nonnegative()
 const NullableNumberSchema = z.number().nullable()
 
-/** G2 stats and G1 dropped counters of one chapter extraction. */
+/** G2 stats and G1 dropped counters of one chapter extraction, and P10 weak-evidence counters. */
 export const ExtractionCountsSchema = z.object({
   fragmentNamesFixed: CountSchema,
   relationsDropped: CountSchema,
   duplicateFacts: CountSchema,
   unverifiedEvidence: CountSchema,
+  // P10: optional, because chapters saved before it have neither. Zod strips unknown keys, so
+  // without these two lines the values would vanish from the summary.
+  weakFactEvidence: CountSchema.optional(),
+  weakThreadEvidence: CountSchema.optional(),
 })
 export type ExtractionCounts = z.infer<typeof ExtractionCountsSchema>
 
@@ -520,7 +524,7 @@ export function outputCapSummary(calls: CallRecord[]): {
   return { mode, cutOff, overTaskCap }
 }
 
-/** Sums the four counters over the chapters. */
+/** Sums the four counters over the chapters, and the P10 weak counters when a chapter has them. */
 function sumExtraction(
   byChapter: Record<string, ExtractionCounts>,
 ): NonNullable<RunSummary['extraction']> {
@@ -535,6 +539,14 @@ function sumExtraction(
     totals.relationsDropped += counts.relationsDropped
     totals.duplicateFacts += counts.duplicateFacts
     totals.unverifiedEvidence += counts.unverifiedEvidence
+  }
+  // P10: a weak key is summed only when some chapter has it; the others count as zero.
+  const values = Object.values(byChapter)
+  if (values.some((c) => c.weakFactEvidence !== undefined)) {
+    totals.weakFactEvidence = values.reduce((sum, c) => sum + (c.weakFactEvidence ?? 0), 0)
+  }
+  if (values.some((c) => c.weakThreadEvidence !== undefined)) {
+    totals.weakThreadEvidence = values.reduce((sum, c) => sum + (c.weakThreadEvidence ?? 0), 0)
   }
   return { chapters: Object.keys(byChapter).length, totals, byChapter }
 }

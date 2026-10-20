@@ -11,6 +11,7 @@ import type { NewProposal, ProposalPayloadMap } from '@/lib/proposal-payloads'
 import { ROLE_WORDS } from '@/ai/extraction-rules'
 import { isNearDuplicateFact } from '@/ai/guards'
 import { verifyEvidenceQuote } from '@/lib/evidence-quote'
+import { evidenceHasThreadKeyword, evidenceNamesSubject } from '@/ai/evidence-anchor'
 
 // Structured-output schema shared by interview extraction (T12), chapter extraction (T13) and
 // import extraction (T16). Structured-output rules: no min/max/regex/default/optional; maps are
@@ -125,6 +126,14 @@ export type ExtractionContext = {
   speechStyle?: boolean
   /** Entries with a pending entry_update that already sets speech. They get no second speech update. */
   pendingSpeechEntryIds?: string[]
+  /**
+   * Evidence-anchor check (round 2, P10). Default 'off'. 'count' keeps every item and counts the
+   * weak ones in `weak`; 'drop' leaves weak items out. Only chapter text is checked: interview
+   * answers name their subject in the question, so the interview and import callers leave it unset.
+   * Facts are checked after the duplicate checks, threads after the evidence quote is verified,
+   * so an item dropped for another reason is not counted.
+   */
+  evidenceAnchor?: 'off' | 'count' | 'drop'
 }
 
 /** A fact the work already has (or has pending), as the dedupe needs it. */
@@ -139,6 +148,14 @@ export type PendingThreadEvent = {
   title: string
   kind: 'developed' | 'resolved'
   evidence: string
+}
+
+/** Items whose evidence does not name their subject or thread (round 2, P10). Counted only. */
+export type ExtractionWeak = {
+  /** Facts whose evidence sentence contains none of the subject's forms. */
+  weakFactEvidence: number
+  /** Threads whose evidence sentence shares no keyword with the title or description. */
+  weakThreadEvidence: number
 }
 
 /** Counters of what the mapper changed. Always present; zero until a rule counts into them. */
@@ -375,11 +392,14 @@ export function extractionToProposals(
   pendingThreadEvents: PendingThreadEvent[]
   stats: ExtractionStats
   dropped: ExtractionDropped
+  weak: ExtractionWeak
 } {
   const proposals: NewProposal[] = []
   const pendingThreadEvents: PendingThreadEvent[] = []
   const stats: ExtractionStats = { fragmentNamesFixed: 0, relationsDropped: 0 }
   const dropped: ExtractionDropped = { duplicateFacts: 0, unverifiedEvidence: 0 }
+  const weak: ExtractionWeak = { weakFactEvidence: 0, weakThreadEvidence: 0 }
+  const anchorMode = ctx.evidenceAnchor ?? 'off'
 
   // Cards a name can refer to, searched in this order: wiki cards, pending entry_create
   // proposals, then names created earlier in this extraction.
@@ -436,6 +456,13 @@ export function extractionToProposals(
     const verified = verifyEvidenceQuote(ctx.sourceText, raw)
     if (verified === null) dropped.unverifiedEvidence += 1
     return verified
+  }
+  // Aliases of the card a fact subject resolved to, for the evidence check.
+  const aliasesOf = (subjectName: string, hit: Hit | undefined): string[] => {
+    if (hit?.source === 'wiki') return hit.entry.aliases
+    const name = hit?.name ?? subjectName
+    const pendingAliases = (ctx.pendingEntries ?? []).find((p) => p.name === name)?.aliases
+    return pendingAliases ?? x.entries.find((e) => e.name.trim() === name)?.aliases ?? []
   }
   // Fact texts already on the work for this card: a wiki card's facts, else the facts of a
   // pending or new card that has no wiki id, matched by subject name.
@@ -596,6 +623,18 @@ export function extractionToProposals(
       dropped.duplicateFacts += 1
       continue
     }
+    if (anchorMode !== 'off') {
+      const names = [
+        canonicalName(subjectName, hit),
+        ...aliasesOf(subjectName, hit),
+        ...nameCandidates(rawSubject),
+      ]
+      const subjectKind = hit?.source === 'wiki' ? hit.entry.kind : kind
+      if (!evidenceNamesSubject(evidence, names, subjectKind)) {
+        weak.weakFactEvidence += 1
+        if (anchorMode === 'drop') continue
+      }
+    }
     seenFacts.add(key)
     keptFacts.set(identity, [...(keptFacts.get(identity) ?? []), content])
 
@@ -645,6 +684,10 @@ export function extractionToProposals(
     const evidence = evidenceOf(t.evidence)
     if (evidence === null) continue
     const description = t.description.trim()
+    if (anchorMode !== 'off' && !evidenceHasThreadKeyword(evidence, [title, description])) {
+      weak.weakThreadEvidence += 1
+      if (anchorMode === 'drop') continue
+    }
 
     const target = threadTargetOf(t.existingThreadRef, title, t.kind)
     if (target) {
@@ -769,5 +812,5 @@ export function extractionToProposals(
     proposals.push(makeProposal(ctx, 'chapter_summary', { chapterId: ctx.chapterId, summary }))
   }
 
-  return { proposals, pendingThreadEvents, stats, dropped }
+  return { proposals, pendingThreadEvents, stats, dropped, weak }
 }

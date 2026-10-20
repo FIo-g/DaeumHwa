@@ -94,6 +94,9 @@ describe('runChapterCheck: extraction counters (HX5)', () => {
       relationsDropped: 1,
       duplicateFacts: 1,
       unverifiedEvidence: 0,
+      // P10: the scripted evidence names 서윤, so no weak evidence is counted.
+      weakFactEvidence: 0,
+      weakThreadEvidence: 0,
     })
     for (const value of Object.values(result.extraction ?? {})) {
       expect(Number.isInteger(value)).toBe(true)
