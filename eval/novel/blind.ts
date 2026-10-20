@@ -128,14 +128,16 @@ export function blindJson(value: unknown): unknown {
 }
 
 /**
- * The run summary without its speed, power and directives blocks (speed is the profile fingerprint
- * the reviewer must not see; power only exists on local runs; directives are the planted-request
- * measure).
+ * The run summary without its speed, power, harness and directives blocks (speed is the profile
+ * fingerprint the reviewer must not see; power only exists on local runs; harness holds the price
+ * and settings mode; directives are the planted-request measure).
  */
 export function blindRunSummary(summary: unknown): unknown {
   const masked = maskDeep(summary) as Record<string, unknown>
   delete masked.speed
   delete masked.power
+  // Cost and time of the run, and the settings mode, are not the reviewer's to see.
+  delete masked.harness
   // Planted directive results are the test's own measure; the reviewer does not see them.
   delete masked.directives
   return masked

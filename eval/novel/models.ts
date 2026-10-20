@@ -23,6 +23,24 @@ export const MODEL_IDS = [
 
 export type ModelId = (typeof MODEL_IDS)[number]
 
+/** USD per million tokens. Cached input is billed at the cache read and write rates. */
+export type ModelPrice = {
+  inputPerMTok: number
+  outputPerMTok: number
+  cacheReadPerMTok: number
+  cacheWritePerMTok: number
+  source: string
+}
+
+/** Cloud list prices, read on 2026-10-20. Local and fake profiles have no price. */
+const CLOUD_PRICE: ModelPrice = {
+  inputPerMTok: 0.1,
+  outputPerMTok: 0.5,
+  cacheReadPerMTok: 0.01,
+  cacheWritePerMTok: 0.125,
+  source: 'official pricing pages, 2026-10-20',
+}
+
 export type ModelProfile = {
   id: ModelId
   queue: 'local' | 'cloud' | 'test'
@@ -36,6 +54,8 @@ export type ModelProfile = {
   ollama?: Omit<OllamaOptions, 'model' | 'fetch' | 'baseUrl'>
   /** e.g. 'mlx' | 'gguf' | 'api'; filled by Task 10. */
   variant: string
+  /** List price for the chapter cost block. Absent on local and fake profiles. */
+  price?: ModelPrice
 }
 
 const LOCAL_TIMEOUT_MS = 3_600_000
@@ -105,6 +125,7 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     maxTokensFloor: 32000,
     timeoutMs: CLOUD_TIMEOUT_MS,
     variant: 'api',
+    price: CLOUD_PRICE,
   },
   'luna-6': {
     id: 'luna-6',
@@ -116,6 +137,7 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     maxTokensFloor: 32000,
     timeoutMs: CLOUD_TIMEOUT_MS,
     variant: 'api',
+    price: CLOUD_PRICE,
   },
   fake: {
     id: 'fake',

@@ -10,10 +10,14 @@ import { listStyleCards } from '@/server/styles'
 import { listThreads } from '@/server/threads'
 import { listEntries } from '@/server/wiki'
 import { packCoverage } from '../../coverage'
+import { chapterInstructions } from '../instructions'
+import { loadRunBible } from '../bible'
 import { directiveCounts, directiveResults, type DirectiveResults } from '../directives'
 import type { CallRecord, CallSpeed, FailureKind } from '../eval-client'
+import { harnessSummary, type HarnessInput, HarnessSummarySchema } from '../harness-summary'
 import { interviewMetrics } from '../metrics-interview'
 import { type ProofreadStats, proofreadStats } from '../metrics-proofread'
+import { type ModelId, MODEL_IDS, MODEL_PROFILES } from '../models'
 import { powerSummary } from '../power'
 import type { StepFn } from '../run'
 import type { RunState } from '../state'
@@ -460,6 +464,7 @@ export const RunSummarySchema = z.object({
   continuity: ContinuityBlockSchema.optional(),
   draft: DraftBlockSchema.optional(),
   directives: DirectivesBlockSchema.optional(),
+  harness: HarnessSummarySchema.optional(),
 })
 export type RunSummary = z.infer<typeof RunSummarySchema>
 /** What buildRunSummary produces today: always with the interview block, which old files lack. */
@@ -489,6 +494,8 @@ export type SummaryInputs = {
   continueFailures?: ContinueFailure[]
   /** Planted directive results of the saved chapters (`--directives on`). */
   directives?: DirectiveResults
+  /** Cost and time inputs from the run config and its bible copy. Absent when the config is unreadable. */
+  harness?: Omit<HarnessInput, 'drafts'>
 }
 
 // ---- Aggregators (pure) ----
@@ -841,12 +848,40 @@ export function readSummaryInputs(dir: string): SummaryInputs {
     inputs.directives = directiveResults(chapters, config.data.lang)
   }
 
+  // Cost and time use the model's list price (none for local and fake profiles) and the chapter
+  // instructions as the author got them.
+  const harnessConfig = HarnessFlagsSchema.safeParse(readJsonFile(path.join(dir, 'config.json')))
+  if (harnessConfig.success) {
+    const flags = harnessConfig.data
+    const profile = (MODEL_IDS as readonly string[]).includes(flags.modelId)
+      ? MODEL_PROFILES[flags.modelId as ModelId]
+      : undefined
+    const bible = loadRunBible(dir, flags.lang)
+    inputs.harness = {
+      chapters: flags.chapters,
+      price: profile?.price,
+      settings: flags.deploySettings === true ? 'deploy' : 'eval',
+      // A chapter the bible does not have gets no instruction text rather than failing the summary.
+      instructions: (n) => (bible.chapters[n - 1] ? chapterInstructions(bible, n, flags) : ''),
+    }
+  }
+
   return inputs
 }
 
 /** The config fields the summary reads. Other fields are ignored. */
 const RunFlagsSchema = z.object({
   lang: z.enum(['ko', 'en']),
+  directives: z.boolean().optional(),
+})
+
+/** The config fields the harness block reads. Old configs have all of them; a partial one gets no block. */
+const HarnessFlagsSchema = z.object({
+  lang: z.enum(['ko', 'en']),
+  modelId: z.string(),
+  chapters: z.number().int().positive(),
+  deploySettings: z.boolean().optional(),
+  fewInstructions: z.boolean().optional(),
   directives: z.boolean().optional(),
 })
 
@@ -919,6 +954,10 @@ export function buildRunSummary(
 
   if (inputs.directives) {
     summary.directives = { chapters: inputs.directives.chapters.map(directiveCounts) }
+  }
+
+  if (inputs.harness) {
+    summary.harness = harnessSummary(calls, { ...inputs.harness, drafts: state.data.drafts })
   }
 
   const failures = inputs.continueFailures ?? []
