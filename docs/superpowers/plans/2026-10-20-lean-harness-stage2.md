@@ -107,7 +107,7 @@
 
 **Interfaces:**
 - Produces in `src/ai/types.ts`: `GenerateObjectArgs` and `StreamTextArgs` gain `promptPrefix?: string[]` (0–2 blocks; what the model reads is the blocks, then `prompt`) and `cacheKey?: string`. `AiTaskDef` gains `buildPromptPrefix?(input: I): string[]`.
-- Produces in `src/ai/run.ts`: `runAiTask` and `runAiTaskSplit` send `task.buildPromptPrefix?.(input)` (omitted when undefined or empty); `StreamRunArgs` gains `promptPrefix?: string[]`; every call sends `cacheKey: cacheKeyFor(meta.workId)`; `cacheKeyFor(workId: string): string` = `'w' + sha256(workId) hex, first 16 characters` (node `crypto`).
+- Produces in `src/ai/run.ts`: `runAiTask` and `runAiTaskSplit` send `task.buildPromptPrefix?.(input)` (omitted when undefined or empty); `StreamRunArgs` gains `promptPrefix?: string[]`; every call with a `meta.workId` sends `cacheKey: cacheKeyFor(meta.workId)` (none when it is null); `cacheKeyFor(workId: string): string` = `'w' + sha256(workId) hex, first 16 characters` (node `crypto`).
 - Anthropic: without a prefix the user `content` stays the plain `prompt` string. With a prefix it is `[...prefix.map((text) => ({ type: 'text', text, cache_control: { type: 'ephemeral' } })), { type: 'text', text: prompt }]`; the JSON-instruction fallback appends to the last block's text. `cacheKey` is not sent.
 - Responses: the user content parts are the prefix blocks then the prompt, each `input_text`. `prompt_cache_key: cacheKey` is sent only when `cacheKey` is set and `isPromptCacheKeyEnabled()` (`AI_PROMPT_CACHE_KEY` is `1`/`true`/`on`; default off, exported from `src/ai/responses.ts`).
 - Ollama and `FakeAiClient`: the model text is `[...prefix, prompt].join('\n\n')`; `FakeAiClient` also keeps `promptPrefix` in its recorded call.
