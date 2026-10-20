@@ -11,19 +11,28 @@ const CHARS_PER_SCENE = 1500
 const MIN_SCENES = 2
 const DETAIL_MAX_CHARS = 300
 
-/** Minimum, maximum and per-scene length of a draft, all counted with spaces. */
-export function draftLengthPlan(target: number): {
+/**
+ * Minimum, maximum and per-scene length of a draft, all counted with spaces. A given `sceneCount`
+ * (integer >= 1, e.g. the length of a beat list) replaces the computed scene count.
+ */
+export function draftLengthPlan(
+  target: number,
+  sceneCount?: number,
+): {
   minChars: number
   maxChars: number
   sceneCount: number
   charsPerScene: number
 } {
-  const sceneCount = Math.max(MIN_SCENES, Math.round(target / CHARS_PER_SCENE))
+  const count =
+    sceneCount !== undefined && Number.isInteger(sceneCount) && sceneCount >= 1
+      ? sceneCount
+      : Math.max(MIN_SCENES, Math.round(target / CHARS_PER_SCENE))
   return {
     minChars: target,
     maxChars: Math.floor(target * MAX_RATIO),
-    sceneCount,
-    charsPerScene: Math.ceil(target / sceneCount),
+    sceneCount: count,
+    charsPerScene: Math.ceil(target / count),
   }
 }
 

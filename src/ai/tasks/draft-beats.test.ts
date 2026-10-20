@@ -112,7 +112,7 @@ describe('draftBeatsTask', () => {
 
   it('shares the draft prompt sections instead of copying them', () => {
     expect(draftBeatsTask.buildPrompt(sample)).toBe(
-      buildDraftPrompt(sample, { omitTargetLength: true }),
+      `${buildDraftPrompt(sample, { omitTargetLength: true })}\n\n<scene_count>4</scene_count>`,
     )
   })
 

@@ -42,6 +42,8 @@ export type DraftPromptInput = {
   voices?: Pick<VoiceLine, 'name' | 'speech'>[]
   /** Scene beat list from draft-beats, already rendered as text. Empty or null adds no section. */
   beats?: string | null
+  /** Scene count of `beats`. With a non-empty `beats` it replaces the plan's scene count in `<scene_budget>`; ignored without beats. */
+  beatSceneCount?: number
 }
 
 /**
@@ -58,7 +60,7 @@ export function buildDraftPrompt(
   const input = neutralizeDeep(raw)
   const cards =
     input.styleCards.length > 0 ? input.styleCards.map(renderCard).join('\n\n') : '(없음)'
-  const length = draftLengthPlan(input.targetChars)
+  const length = draftLengthPlan(input.targetChars, input.beats ? input.beatSceneCount : undefined)
   // The beat-list call reuses this prompt without the length lines: it only lists scenes.
   const lengthLines = options?.omitTargetLength
     ? []

@@ -426,7 +426,11 @@ export async function startDraft(
     throw new AppError('AI_ERROR', '장면 목록을 만들지 못했습니다. 다시 시도해 주세요.')
   }
   const finalInput: DraftPromptInput = beatsRun
-    ? { ...promptInput, beats: renderBeats(beatsRun.output) }
+    ? {
+        ...promptInput,
+        beats: renderBeats(beatsRun.output),
+        beatSceneCount: beatsRun.output.scenes.length,
+      }
     : promptInput
 
   // The budget runs from the first line of startDraft, so the first stream gets what is left.
