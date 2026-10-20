@@ -55,6 +55,32 @@ export function continuationPlan(
   return { count, askMin, askMax }
 }
 
+// Phrases a model uses when it talks to the author instead of continuing the story, for example
+// when the draft already ends on its final line. Prompt tag names never belong in prose either.
+const COMMENTARY_MARKERS = [
+  /<\/?(?:draft_so_far|continue_length|target_length|instructions)>/,
+  /이어\s*쓰지\s*않았/,
+  /이어\s*쓴\s*부분은/,
+  /원하시면/,
+  /알려\s*주시면/,
+  /골라\s*주세요/,
+  /다시\s*(?:써|작성해)\s*드리겠/,
+  /다시\s*작성하겠습니다/,
+  /\b(?:I|I've)\s+(?:did not|didn't|will not|won't|have not|haven't)\s+(?:continue|continued)\b/i,
+  /\bthe draft already\b/i,
+  /\blet me know\b/i,
+  /\bwould you like\b/i,
+]
+
+// Quoted spans are dialogue, where a character may well say "알려 주시면" or "let me know".
+const QUOTED = /"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』/g
+
+/** True when a continuation answer is a note to the author rather than story text. */
+export function isContinuationCommentary(text: string): boolean {
+  const narration = text.replace(QUOTED, ' ')
+  return COMMENTARY_MARKERS.some((marker) => marker.test(narration))
+}
+
 /** Glue between the first draft and its continuation, so the joined text reads as one body. */
 export function continuationSeparator(first: string): '' | '\n' | '\n\n' {
   if (first.endsWith('\n\n')) return ''
@@ -71,7 +97,8 @@ export type DraftWarning = {
 }
 
 /**
- * `reason` is the AppError code, 'UNKNOWN' for a non-AppError, or 'EMPTY' for an empty answer.
+ * `reason` is the AppError code, 'UNKNOWN' for a non-AppError, 'EMPTY' for an empty answer, or
+ * 'COMMENTARY' for a note to the author instead of story text.
  * `detail` is cut to 300 characters.
  */
 export function continueFailedWarning(reason: string, detail: string): DraftWarning {

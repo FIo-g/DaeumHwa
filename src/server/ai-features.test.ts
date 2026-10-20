@@ -538,6 +538,15 @@ describe('draft continuation', () => {
       expect(cont.status).toBe('done')
     })
 
+    it('a continuation that talks to the author keeps the first text', async () => {
+      const note =
+        '초안은 이미 회차 끝 대사로 끝나 있어서 이어 쓰지 않았습니다. 원하시면 전체를 다시 써 드리겠습니다.'
+      const client = new FakeAiClient({ overrides: { 'draft-continue': () => note } })
+      const result = await runDraft(client)
+      await expectFirstTextKept(result, 'COMMENTARY')
+      expect(result.text).not.toContain('이어 쓰지 않았습니다')
+    })
+
     it('whitespace-only continuation keeps the first text', async () => {
       const client = new FakeAiClient({ overrides: { 'draft-continue': () => '   \n' } })
       const result = await runDraft(client)

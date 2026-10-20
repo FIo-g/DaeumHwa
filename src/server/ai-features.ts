@@ -54,6 +54,7 @@ import {
   continueFailedWarning,
   draftCharCount,
   draftLengthPlan,
+  isContinuationCommentary,
 } from '@/lib/draft-length'
 import {
   normalizeCard,
@@ -763,6 +764,13 @@ async function completeDraft(
   const text = addition.trimStart()
   if (text.trim() === '') {
     await recordContinueWarning(db, first.runId, firstText, 'EMPTY', 'The continuation is empty.')
+    pipe.end()
+    return firstText
+  }
+  // A draft that already ends on its final line makes some models explain why they will not add
+  // more. That note must never be glued to the story, so the shorter draft stands.
+  if (isContinuationCommentary(text)) {
+    await recordContinueWarning(db, first.runId, firstText, 'COMMENTARY', text.slice(0, 300))
     pipe.end()
     return firstText
   }
