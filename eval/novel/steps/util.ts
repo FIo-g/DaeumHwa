@@ -62,7 +62,10 @@ export function mark(ctx: RunContext, state: RunState, key: string): void {
   }
 }
 
-/** Runs `fn`, retrying once on a model failure. External failures propagate to the runner. */
+/**
+ * Runs `fn`, retrying once on a model failure; a local call that was cut off or malformed is
+ * repeated with a changed budget. External failures propagate to the runner.
+ */
 export async function withModelRetry<T>(
   ctx: RunContext,
   state: RunState,
@@ -80,11 +83,15 @@ export async function withModelRetry<T>(
       if (attempt === 1) {
         state.retried[label] = (state.retried[label] ?? 0) + 1
         persist(ctx, state)
+        // The repeat may run with a changed budget (local profiles only, see EvalClient.beginRetry).
+        ctx.client.beginRetry()
         continue
       }
       state.failed.push({ step: label, message: failure.message })
       persist(ctx, state)
       return null
+    } finally {
+      if (attempt > 1) ctx.client.endRetry()
     }
   }
 }

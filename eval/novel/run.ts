@@ -22,7 +22,14 @@ import {
 import { EvalClient } from './eval-client'
 import { fakeAnswer } from './fake-author'
 import type { PowerReader } from './power'
-import { type HelperThink, type ModelId, MODEL_PROFILES, createModelClient } from './models'
+import {
+  type HelperThink,
+  type ModelClientOptions,
+  type ModelId,
+  MODEL_PROFILES,
+  createModelClient,
+  createRetryClient,
+} from './models'
 import {
   type RunConfig,
   type RunState,
@@ -137,15 +144,16 @@ export async function openRun(
   const pg = new PGlite(join(dir, 'db'))
   const db = drizzle(pg, { schema }) as unknown as Db
   await migrateDb(db, 'pglite')
-  // The inner client reports Ollama timings to the eval client, which is built here first.
+  // The inner clients report Ollama timings to the eval client, which is built here first. The retry
+  // client (local profiles only) repeats a failed helper call with a lower think; a test inner gets none.
+  const wiring: ModelClientOptions = {
+    onStats: (s) => client.onOllamaStats(s),
+    onAttempt: (a) => client.onOllamaAttempt(a),
+    helperThink: config.helperThink,
+  }
   const client: EvalClient = new EvalClient({
-    inner:
-      o.inner ??
-      createModelClient(profile, {
-        onStats: (s) => client.onOllamaStats(s),
-        onAttempt: (a) => client.onOllamaAttempt(a),
-        helperThink: config.helperThink,
-      }),
+    inner: o.inner ?? createModelClient(profile, wiring),
+    retryInner: o.inner ? undefined : createRetryClient(profile, wiring),
     profile,
     lang: config.lang,
     callsDir: join(dir, 'calls'),

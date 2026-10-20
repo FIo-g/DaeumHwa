@@ -27,6 +27,7 @@ export type BlindedCall = Omit<
   | 'productTimeoutMs'
   | 'speed'
   | 'thinkRequested'
+  | 'retryBudget'
   | 'power'
   | 'ollama'
 > & { model: typeof BLIND_LABEL }
@@ -112,6 +113,7 @@ export function blindCallRecord(call: CallRecord): BlindedCall {
   const masked = maskDeep(copy) as Record<string, unknown>
   delete masked.effortRequested
   delete masked.thinkRequested
+  delete masked.retryBudget
   delete masked.maxTokens
   delete masked.productTimeoutMs
   delete masked.speed
