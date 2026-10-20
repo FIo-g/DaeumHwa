@@ -21,6 +21,7 @@ import {
 import type { AiTaskName } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { type HelperThink, type ModelProfile, thinkFor } from './models'
+import { planRetry, type RetryBudget, type RetryHint, retryReasonOf } from './retry-budget'
 import { type PowerInfo, type PowerReader, UNKNOWN_POWER } from './power'
 import { EN_SYSTEMS } from './localize/en-systems'
 import { countHangul, translateScaffold } from './localize/scaffold'
@@ -84,6 +85,8 @@ export type CallRecord = {
   power?: PowerInfo
   /** Ollama's record of the call: its attempts and time outside Ollama's timer. Present on Ollama calls that reported at least one attempt; absent on cloud calls and on records written before M2. */
   ollama?: CallOllama
+  /** Present on a call that was the retry of a failed call and ran with a changed budget. `maxTokens` is the widened cap or null, `think` is the lowered think or null; `maxTokens` and `thinkRequested` of the record hold what was really sent. */
+  retryBudget?: RetryBudget
 }
 
 export interface EvalClientOptions {
@@ -99,6 +102,8 @@ export interface EvalClientOptions {
   productLimits?: boolean
   /** Reads the machine power state. Used for local profiles only; see the constructor. */
   readPower?: PowerReader
+  /** Client used for a retry whose think is lowered; built by `createRetryClient`. Without it only the output cap can change. */
+  retryInner?: AiClient
 }
 
 type CallError = NonNullable<CallRecord['error']>
@@ -336,6 +341,8 @@ type Prepared = {
   system: string
   prompt: string
   maxTokens: number
+  /** The budget change of a repeat of a failed call, or null. */
+  retry: RetryBudget | null
   taskEffort: AiEffort
   taskMaxTokens: number
   maxTokensRule: 'floor' | 'product'
@@ -379,6 +386,12 @@ export class EvalClient implements AiClient {
   private seq: number
   /** Most severe failure recorded since the last take. */
   private pendingFailure: CallError | null = null
+  /** Retry hint of the failure held in pendingFailure (local profiles only). */
+  private pendingRetry: RetryHint | null = null
+  /** The hint of the failure the last takeLastFailure() returned. */
+  private takenRetry: RetryHint | null = null
+  /** The failed call to change the budget of while a retry attempt runs. */
+  private retrying: RetryHint | null = null
   /** Ollama timings reported by the inner client, waiting for their call to settle. */
   private readonly ollamaStats = new Map<AiTaskName, OllamaCallStats[]>()
   /** Ollama attempts reported by the inner client, waiting for their call to settle. */
@@ -397,9 +410,11 @@ export class EvalClient implements AiClient {
   private readonly productLimits: boolean
   /** Set only for local profiles, so cloud and fake runs never read power. */
   private readonly readPower: PowerReader | undefined
+  private readonly retryInner: AiClient | undefined
 
   constructor(o: EvalClientOptions) {
     this.inner = o.inner
+    this.retryInner = o.retryInner
     this.profile = o.profile
     this.lang = o.lang
     this.callsDir = o.callsDir
@@ -442,7 +457,20 @@ export class EvalClient implements AiClient {
   takeLastFailure(): CallError | null {
     const failure = this.pendingFailure
     this.pendingFailure = null
+    this.takenRetry = this.pendingRetry
+    this.pendingRetry = null
     return failure
+  }
+
+  /** Called by withModelRetry right after takeLastFailure() when it repeats the step: the calls of the failed task in the repeat may change budget. */
+  beginRetry(): void {
+    this.retrying = this.takenRetry
+    this.takenRetry = null
+  }
+
+  /** Called when the repeat is over, whatever its outcome. */
+  endRetry(): void {
+    this.retrying = null
   }
 
   async generateObject<T>(args: GenerateObjectArgs<T>) {
@@ -479,7 +507,7 @@ export class EvalClient implements AiClient {
       // A synchronous throw from a non-async inner client becomes a rejection, so it is recorded too.
       const pending = (() => {
         try {
-          return this.inner.generateObject<T>({
+          return this.innerFor(call).generateObject<T>({
             ...args,
             system: call.system,
             prompt: call.prompt,
@@ -516,7 +544,7 @@ export class EvalClient implements AiClient {
     let inner: ReturnType<AiClient['streamText']>
     if (call.promptKey) this.sentPrompts.add(call.promptKey)
     try {
-      inner = this.inner.streamText({
+      inner = this.innerFor(call).streamText({
         ...args,
         system: call.system,
         prompt: call.prompt,
@@ -565,6 +593,23 @@ export class EvalClient implements AiClient {
     return { textStream: relay.iterate(), final }
   }
 
+  /** The client a call runs on: the retry client when its think is lowered, else the main one. */
+  private innerFor(call: Prepared): AiClient {
+    if (call.retry?.think != null && this.retryInner !== undefined) return this.retryInner
+    return this.inner
+  }
+
+  /** The retry hint of a failed call, or null when a repeat of it may not change the budget. */
+  private retryHintOf(
+    task: AiTaskName,
+    error: CallError,
+    contextOverflow: boolean,
+  ): RetryHint | null {
+    if (this.profile.queue !== 'local' || error.kind !== 'model') return null
+    const reason = retryReasonOf(error.message)
+    return reason ? { task, reason, contextOverflow } : null
+  }
+
   /** Power state now, or undefined without a reader. A broken reader gives unknown, never a throw. */
   private samplePower(): PowerInfo | undefined {
     if (!this.readPower) return undefined
@@ -595,6 +640,18 @@ export class EvalClient implements AiClient {
     const maxTokens = this.productLimits
       ? productMaxTokens
       : Math.max(productMaxTokens, this.profile.maxTokensFloor)
+    // Every call of the failed task during its repeat is changed (a split task's failing part is not known).
+    const retry =
+      this.retrying && this.retrying.task === task
+        ? planRetry({
+            hint: this.retrying,
+            profile: this.profile,
+            baseMaxTokens: maxTokens,
+            helperThink: this.helperThink,
+            hasRetryClient: this.retryInner !== undefined,
+            productLimits: this.productLimits,
+          })
+        : null
     const promptKey =
       this.profile.provider === 'ollama'
         ? createHash('sha1').update(`${task}\u0000${system}\u0000${prompt}`).digest('hex')
@@ -608,7 +665,8 @@ export class EvalClient implements AiClient {
       startedAt: new Date(startedMs).toISOString(),
       system,
       prompt,
-      maxTokens,
+      maxTokens: retry?.maxTokens ?? maxTokens,
+      retry,
       taskEffort: productEffort,
       taskMaxTokens: productMaxTokens,
       maxTokensRule,
@@ -662,6 +720,8 @@ export class EvalClient implements AiClient {
       call.promptRepeated || ollama.some((s) => promptRateSuspect(s.promptTokens, s.promptMs))
     const detail = callOllama({ durationMs, attempts, promptCacheSuspected })
     const numCtx = this.profile.ollama?.numCtx
+    const contextOverflow =
+      numCtx !== undefined && usage !== null && usage.inputTokens + usage.outputTokens >= numCtx
     const status = outcome.ok ? undefined : statusOf(outcome.error)
     const error: CallError | null = outcome.ok
       ? null
@@ -700,14 +760,14 @@ export class EvalClient implements AiClient {
       output: outcome.ok ? outcome.output : null,
       usage,
       hangulLeft: this.lang === 'en' ? countHangul(`${call.system}\n${call.prompt}`) : null,
-      contextOverflow:
-        numCtx !== undefined && usage !== null && usage.inputTokens + usage.outputTokens >= numCtx,
+      contextOverflow,
       error,
       queueMs,
       waitInclusiveMs: queueMs + durationMs,
-      thinkRequested: thinkFor(this.profile, call.task, this.helperThink),
+      thinkRequested: call.retry?.think ?? thinkFor(this.profile, call.task, this.helperThink),
       ...(detail ? { ollama: detail } : {}),
       ...(call.power ? { power: call.power } : {}),
+      ...(call.retry ? { retryBudget: call.retry } : {}),
     }
     this.records.push(record)
     if (
@@ -715,6 +775,7 @@ export class EvalClient implements AiClient {
       (!this.pendingFailure || SEVERITY[error.kind] > SEVERITY[this.pendingFailure.kind])
     ) {
       this.pendingFailure = error
+      this.pendingRetry = this.retryHintOf(call.task, error, contextOverflow)
     }
     mkdirSync(this.callsDir, { recursive: true })
     const file = `${String(call.seq).padStart(3, '0')}-${call.task}.json`

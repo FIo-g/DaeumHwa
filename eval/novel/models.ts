@@ -195,16 +195,66 @@ export function checkTwoStep(profile: ModelProfile): string | null {
     : null
 }
 
-/** Builds the AI client a profile runs on. `fetch` is injected in tests. */
-export function createModelClient(
+/** Options for building a profile's client. `fetch` is injected in tests. */
+export type ModelClientOptions = {
+  fetch?: typeof fetch
+  onStats?: (s: OllamaCallStats) => void
+  onAttempt?: (a: OllamaAttempt) => void
+  helperThink?: HelperThink
+}
+
+/**
+ * The think one step lower, or null where there is none. Qwen's boolean `true` drops to `false`;
+ * gpt-oss levels step down to `'low'` and stop there (it ignores `false`).
+ */
+export function lowerThink(think: OllamaThink | null | undefined): OllamaThink | null {
+  if (think === true) return false
+  if (think === 'high') return 'medium'
+  if (think === 'medium') return 'low'
+  return null
+}
+
+/**
+ * The lower think a repeat of a helper call uses (P9), or null when the call keeps its think: a
+ * prose task, a profile without Ollama settings, or a think that cannot go lower.
+ */
+export function retryThinkFor(
   profile: ModelProfile,
-  o: {
-    fetch?: typeof fetch
-    onStats?: (s: OllamaCallStats) => void
-    onAttempt?: (a: OllamaAttempt) => void
-    helperThink?: HelperThink
-  } = {},
-): AiClient {
+  task: AiTaskName,
+  helper?: HelperThink,
+): OllamaThink | null {
+  if (!profile.ollama || PROSE_TASKS.includes(task)) return null
+  return lowerThink(thinkFor(profile, task, helper))
+}
+
+/**
+ * The client a repeat of a failed local call uses when its think is lowered (P9). Only tasks with
+ * a lower think are listed; the rest fall back to the profile's think. Undefined when no task can
+ * go lower, or the profile is not Ollama.
+ */
+export function createRetryClient(
+  profile: ModelProfile,
+  o: ModelClientOptions = {},
+): AiClient | undefined {
+  if (profile.provider !== 'ollama' || !profile.ollama) return undefined
+  const thinkByTask: Partial<Record<AiTaskName, OllamaThink>> = {}
+  for (const task of HELPER_TASKS) {
+    const think = retryThinkFor(profile, task, o.helperThink)
+    if (think !== null) thinkByTask[task] = think
+  }
+  if (Object.keys(thinkByTask).length === 0) return undefined
+  return new OllamaAiClient({
+    ...profile.ollama,
+    model: profile.model,
+    fetch: o.fetch ?? ollamaTransport,
+    onStats: o.onStats,
+    onAttempt: o.onAttempt,
+    thinkByTask,
+  })
+}
+
+/** Builds the AI client a profile runs on. `fetch` is injected in tests. */
+export function createModelClient(profile: ModelProfile, o: ModelClientOptions = {}): AiClient {
   switch (profile.provider) {
     case 'ollama': {
       if (!profile.ollama) throw new Error(`${profile.id}: ollama settings are missing`)
