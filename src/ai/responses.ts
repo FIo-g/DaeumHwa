@@ -59,7 +59,11 @@ type ResponseBody = {
   status?: string
   incomplete_details?: { reason?: string } | null
   output?: OutputItem[]
-  usage?: { input_tokens?: number; output_tokens?: number }
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    input_tokens_details?: { cached_tokens?: number } | null
+  }
   error?: { message?: string } | null
 }
 
@@ -373,14 +377,32 @@ function textOf(output: OutputItem[] | undefined): string {
 }
 
 function usageOf(usage: ResponseBody['usage']): AiUsage {
-  return { inputTokens: usage?.input_tokens ?? 0, outputTokens: usage?.output_tokens ?? 0 }
+  const result: AiUsage = {
+    inputTokens: usage?.input_tokens ?? 0,
+    outputTokens: usage?.output_tokens ?? 0,
+  }
+  // Cached input is part of input_tokens here; the key is set only when the gateway reported it.
+  const cached = usage?.input_tokens_details?.cached_tokens
+  if (typeof cached === 'number') result.cacheReadTokens = cached
+  return result
 }
 
 function addUsage(a: AiUsage, b: AiUsage): AiUsage {
-  return {
+  const result: AiUsage = {
     inputTokens: a.inputTokens + b.inputTokens,
     outputTokens: a.outputTokens + b.outputTokens,
   }
+  const cacheRead = sumCache(a.cacheReadTokens, b.cacheReadTokens)
+  const cacheWrite = sumCache(a.cacheWriteTokens, b.cacheWriteTokens)
+  if (cacheRead !== undefined) result.cacheReadTokens = cacheRead
+  if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite
+  return result
+}
+
+/** Sum of two optional cache counts; undefined when neither side has the key. */
+function sumCache(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined && b === undefined) return undefined
+  return (a ?? 0) + (b ?? 0)
 }
 
 /** Usage billed by one failed attempt, so the retry counts still include it. */

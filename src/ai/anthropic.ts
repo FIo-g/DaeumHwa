@@ -61,7 +61,12 @@ interface TextStream {
   }>
 }
 
-type ResponseUsage = { input_tokens: number; output_tokens: number }
+type ResponseUsage = {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens?: number | null
+  cache_creation_input_tokens?: number | null
+}
 
 type ObjectResponse<T> = {
   parsed_output: T | null
@@ -419,15 +424,41 @@ function aiErrorWithUsage(message: string, usage: AiUsage): AppError {
   return new AppError('AI_ERROR', message, { usage })
 }
 
+/**
+ * Anthropic reports cached input apart from `input_tokens`. Cache reads and writes are added to
+ * the input total, and each cache key is set only when the response carried it (0 included).
+ */
 function usageOf(usage: ResponseUsage): AiUsage {
-  return { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens }
+  const cacheRead = usage.cache_read_input_tokens
+  const cacheWrite = usage.cache_creation_input_tokens
+  const result: AiUsage = {
+    inputTokens:
+      usage.input_tokens +
+      (typeof cacheRead === 'number' ? cacheRead : 0) +
+      (typeof cacheWrite === 'number' ? cacheWrite : 0),
+    outputTokens: usage.output_tokens,
+  }
+  if (typeof cacheRead === 'number') result.cacheReadTokens = cacheRead
+  if (typeof cacheWrite === 'number') result.cacheWriteTokens = cacheWrite
+  return result
 }
 
 function addUsage(a: AiUsage, b: AiUsage): AiUsage {
-  return {
+  const result: AiUsage = {
     inputTokens: a.inputTokens + b.inputTokens,
     outputTokens: a.outputTokens + b.outputTokens,
   }
+  const cacheRead = sumCache(a.cacheReadTokens, b.cacheReadTokens)
+  const cacheWrite = sumCache(a.cacheWriteTokens, b.cacheWriteTokens)
+  if (cacheRead !== undefined) result.cacheReadTokens = cacheRead
+  if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite
+  return result
+}
+
+/** Sum of two optional cache counts; undefined when neither side has the key. */
+function sumCache(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined && b === undefined) return undefined
+  return (a ?? 0) + (b ?? 0)
 }
 
 /**

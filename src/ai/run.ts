@@ -11,6 +11,7 @@ import {
   type AiTaskDef,
   type AiUsage,
 } from '@/ai/types'
+import { TextChannel } from '@/ai/anthropic'
 import { seoulDayStart } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
 import { requireWorkRole } from '@/server/access'
@@ -276,10 +277,21 @@ function splitConcurrencyFromEnv(): number | undefined {
 
 function addUsage(total: AiUsage, usage: AiUsage | undefined): AiUsage {
   if (!usage) return total
-  return {
+  const result: AiUsage = {
     inputTokens: total.inputTokens + usage.inputTokens,
     outputTokens: total.outputTokens + usage.outputTokens,
   }
+  const cacheRead = sumCache(total.cacheReadTokens, usage.cacheReadTokens)
+  const cacheWrite = sumCache(total.cacheWriteTokens, usage.cacheWriteTokens)
+  if (cacheRead !== undefined) result.cacheReadTokens = cacheRead
+  if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite
+  return result
+}
+
+/** Sum of two optional cache counts; undefined when neither side has the key. */
+function sumCache(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined && b === undefined) return undefined
+  return (a ?? 0) + (b ?? 0)
 }
 
 /**
@@ -297,6 +309,8 @@ export async function startAiStream(
   const timeoutMs = timeoutOverrideMs ?? meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS
   const { signal, deadline } = callSignals(meta, timeoutMs)
   let stream: ReturnType<AiClient['streamText']>
+  let firstTokenMs: number | undefined
+  const startedAt = Date.now()
   try {
     if (meta.signal?.aborted) throw cancelledError()
     stream = client.streamText({
@@ -318,29 +332,66 @@ export async function startAiStream(
     })
     throw aiError
   }
+  const pumped = pumpText(stream.textStream, startedAt, (ms) => {
+    firstTokenMs = ms
+  })
   const done = stream.final.then(
     async (result) => {
+      await pumped.settled
       await finishRun(db, runId, {
         status: 'done',
         usage: result.usage,
         model: result.model,
         output: { text: result.text },
+        firstTokenMs,
       })
       return result.text
     },
     async (error: unknown) => {
       const aiError = toRunError(error, meta.signal, deadline)
+      // Not awaiting the pump here: a source that failed or was aborted may never end.
       await finishRun(db, runId, {
         status: 'error',
         error: aiError.message,
         usage: usageFromError(error),
+        firstTokenMs,
       })
       throw aiError
     },
   )
   // Callers that only read the text stream should not trigger an unhandled rejection.
   done.catch(() => {})
-  return { runId, textStream: stream.textStream, done }
+  return { runId, textStream: pumped.textStream, done }
+}
+
+/**
+ * Reads the client's text stream from the start, whether or not the caller reads it, and hands each
+ * chunk on through a buffer, unchanged. The first non-empty chunk sets the first-token time when the
+ * model sent it. `settled` resolves once the source has ended (a failed source settles too), so on
+ * the success path that time is final. Only the success path waits for it.
+ */
+function pumpText(
+  source: AsyncIterable<string>,
+  startedAt: number,
+  onFirst: (ms: number) => void,
+): { textStream: AsyncIterable<string>; settled: Promise<void> } {
+  const channel = new TextChannel()
+  const settled = (async () => {
+    let seen = false
+    try {
+      for await (const chunk of source) {
+        if (!seen && chunk !== '') {
+          seen = true
+          onFirst(Date.now() - startedAt)
+        }
+        channel.push(chunk)
+      }
+      channel.close()
+    } catch (error) {
+      channel.fail(error)
+    }
+  })()
+  return { textStream: channel.iterable(), settled }
 }
 
 /** Sum of input and output tokens of the user's runs since Seoul midnight containing `now`. */
@@ -445,8 +496,14 @@ async function insertRun(
 }
 
 type RunOutcome =
-  | { status: 'done'; usage: AiUsage; model: string; output: unknown }
-  | { status: 'error'; error: string; usage?: AiUsage }
+  | {
+      status: 'done'
+      usage: AiUsage
+      model: string
+      output: unknown
+      firstTokenMs?: number
+    }
+  | { status: 'error'; error: string; usage?: AiUsage; firstTokenMs?: number }
 
 async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<void> {
   if (outcome.status === 'done') {
@@ -456,6 +513,9 @@ async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<vo
         status: 'done',
         inputTokens: outcome.usage.inputTokens,
         outputTokens: outcome.usage.outputTokens,
+        cacheReadTokens: outcome.usage.cacheReadTokens ?? 0,
+        cacheWriteTokens: outcome.usage.cacheWriteTokens ?? 0,
+        firstTokenMs: outcome.firstTokenMs ?? null,
         model: outcome.model,
         output: outcome.output,
         finishedAt: new Date(),
@@ -470,6 +530,9 @@ async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<vo
       error: outcome.error,
       inputTokens: outcome.usage?.inputTokens ?? 0,
       outputTokens: outcome.usage?.outputTokens ?? 0,
+      cacheReadTokens: outcome.usage?.cacheReadTokens ?? 0,
+      cacheWriteTokens: outcome.usage?.cacheWriteTokens ?? 0,
+      firstTokenMs: outcome.firstTokenMs ?? null,
       finishedAt: new Date(),
     })
     .where(eq(aiRuns.id, runId))
@@ -492,7 +555,10 @@ function usageFromError(error: unknown): AiUsage | undefined {
   if (!usage || !isTokenCount(usage.inputTokens) || !isTokenCount(usage.outputTokens)) {
     return undefined
   }
-  return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+  const billed: AiUsage = { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+  if (isTokenCount(usage.cacheReadTokens)) billed.cacheReadTokens = usage.cacheReadTokens
+  if (isTokenCount(usage.cacheWriteTokens)) billed.cacheWriteTokens = usage.cacheWriteTokens
+  return billed
 }
 
 function isTokenCount(value: unknown): value is number {

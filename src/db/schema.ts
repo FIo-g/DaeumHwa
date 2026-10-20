@@ -540,6 +540,10 @@ export const aiRuns = pgTable(
     model: text('model').notNull().default(''),
     inputTokens: integer('input_tokens').notNull().default(0),
     outputTokens: integer('output_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    /** Milliseconds from the stream call to the first non-empty text chunk. Null for non-streamed runs. */
+    firstTokenMs: integer('first_token_ms'),
     output: jsonb('output').$type<unknown>(),
     error: text('error'),
     createdAt: createdAtColumn(),

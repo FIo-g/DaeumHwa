@@ -3,7 +3,16 @@ import type { AiTaskName } from '@/db/types'
 
 export type AiEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
-export type AiUsage = { inputTokens: number; outputTokens: number }
+/**
+ * Tokens one call billed. `inputTokens` counts every input token the request processed, cached or
+ * not. The cache keys are present only when the provider reported them.
+ */
+export type AiUsage = {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+}
 
 export const AI_CANCELLED_MESSAGE = '취소했습니다.'
 export const AI_TIMEOUT_MESSAGE = 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.'
