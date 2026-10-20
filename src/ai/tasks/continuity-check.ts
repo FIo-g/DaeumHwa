@@ -82,8 +82,9 @@ function usableSuggestion(issue: ContinuityIssue): string {
 }
 
 /**
- * Age mismatches found in code (numeric-facts), as contradiction issues. They do not depend on the
- * model answer. A bug here must not fail the whole check, so any error gives no numeric issues.
+ * Numeric mismatches (age, year, floor count, headcount) found in code (numeric-facts), as
+ * contradiction issues. They do not depend on the model answer. A bug here must not fail the
+ * whole check, so any error gives no numeric issues.
  */
 function numericIssues(input: ContinuityInput): ContinuityIssue[] {
   try {
