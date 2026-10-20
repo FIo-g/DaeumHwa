@@ -749,6 +749,15 @@ const SuggestionsFileSchema = z.array(
 const ContinueFileSchema = z.object({
   reason: z.string(),
   failure: z.enum(['external-limit', 'external-network', 'model']),
+  // One entry per continuation failure of the attempt (stage 1b). Absent in the old single-record shape.
+  failures: z
+    .array(
+      z.object({
+        reason: z.string(),
+        failure: z.enum(['external-limit', 'external-network', 'model']),
+      }),
+    )
+    .optional(),
 })
 
 const ScenesCutFileSchema = z.object({
@@ -814,11 +823,14 @@ export function readSummaryInputs(dir: string): SummaryInputs {
     if (match) {
       const parsed = ContinueFileSchema.safeParse(readJsonFile(file))
       if (parsed.success) {
-        continueFailures.push({
-          chapter: String(Number(match[1])),
-          reason: parsed.data.reason,
-          failure: parsed.data.failure,
-        })
+        const entries = parsed.data.failures?.length ? parsed.data.failures : [parsed.data]
+        for (const entry of entries) {
+          continueFailures.push({
+            chapter: String(Number(match[1])),
+            reason: entry.reason,
+            failure: entry.failure,
+          })
+        }
       }
       continue
     }

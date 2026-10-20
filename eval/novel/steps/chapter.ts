@@ -109,24 +109,60 @@ const ContinueWarningSchema = z.object({
 })
 
 /**
- * The continuation failure in a draft run row (A's warning, spec 7), or null. Other warning kinds
- * are skipped. `reason` is an AppError code, 'UNKNOWN' or 'EMPTY'.
+ * Every continuation failure in a draft run row (A's warning, spec 7 and stage 1b's per-span
+ * warnings), in order. Other warning kinds are skipped. `reason` is an AppError code, 'UNKNOWN',
+ * 'EMPTY', 'COMMENTARY' or an expansion code; `detail` is text (story text for the refusals).
  */
-export function continueFailureOf(output: unknown): { reason: string; detail: string } | null {
+export function continueFailuresOf(output: unknown): { reason: string; detail: string }[] {
   const row = z.object({ warnings: z.array(z.unknown()) }).safeParse(output)
-  if (!row.success) return null
+  if (!row.success) return []
+  const found: { reason: string; detail: string }[] = []
   for (const warning of row.data.warnings) {
     const parsed = ContinueWarningSchema.safeParse(warning)
-    if (parsed.success) return { reason: parsed.data.reason, detail: parsed.data.detail }
+    if (parsed.success) found.push({ reason: parsed.data.reason, detail: parsed.data.detail })
   }
-  return null
+  return found
+}
+
+/** The first continuation failure in a draft run row, or null. */
+export function continueFailureOf(output: unknown): { reason: string; detail: string } | null {
+  return continueFailuresOf(output)[0] ?? null
+}
+
+/** Reasons whose detail is model text: a refused rewrite made no failed call, so it is a model failure. */
+const TEXT_REASONS = new Set(['EXPAND_REJECTED', 'COMMENTARY', 'EMPTY'])
+
+const SEVERITY: Record<FailureKind, number> = {
+  model: 0,
+  'external-network': 1,
+  'external-limit': 2,
 }
 
 /**
- * Records a continuation that failed, from the first run row. The draft keeps its first text, so
- * the attempt is not lost; the failure the client still holds for it is taken, so no later step
- * reads it as its own. An external limit or network failure pauses the run like any other external
- * failure (withModelRetry). Writes the attempt's continue.json, which the run summary counts.
+ * The kind of one recorded failure. A refusal of model text is 'model' and its text is never
+ * classified. An expansion's own error uses the client's held failure, or its AppError code in
+ * detail; other continuation codes use the held failure, or their detail's text.
+ */
+function failureKindOf(
+  failure: { reason: string; detail: string },
+  held: { kind: FailureKind } | null,
+): FailureKind {
+  if (
+    failure.reason === 'AI_LIMIT' ||
+    (failure.reason === 'EXPAND_ERROR' && failure.detail === 'AI_LIMIT')
+  ) {
+    return 'external-limit'
+  }
+  if (TEXT_REASONS.has(failure.reason)) return 'model'
+  return held?.kind ?? classifyError(new Error(failure.detail))
+}
+
+/**
+ * Records every continuation failure of a draft attempt, from its run row. The draft keeps its
+ * first text, so the attempt is not lost; the failure the client still holds for it is taken, so
+ * no later step reads it as its own. An external limit or network failure pauses the run like any
+ * other external failure (withModelRetry), with the held failure's message or the reason, never
+ * the story text. Writes the attempt's continue.json, which the run summary counts per entry.
  */
 export async function recordContinueFailure(
   ctx: RunContext,
@@ -135,15 +171,19 @@ export async function recordContinueFailure(
   attemptNo: number,
 ): Promise<void> {
   const [run] = await ctx.db.select().from(aiRuns).where(eq(aiRuns.id, runId)).limit(1)
-  const failed = continueFailureOf(run?.output)
-  if (!failed) return
+  const found = continueFailuresOf(run?.output)
+  if (found.length === 0) return
   // The client's own classification of the failed call (it saw the error itself, with its status,
   // cause codes and stream tag). Only when it holds none, the stored detail is judged by its text.
   const held = ctx.client.takeLastFailure()
-  const failure: FailureKind =
-    failed.reason === 'AI_LIMIT'
-      ? 'external-limit'
-      : (held?.kind ?? classifyError(new Error(failed.detail)))
+  const failures = found.map((item) => ({
+    reason: item.reason,
+    detail: item.detail,
+    failure: failureKindOf(item, held),
+  }))
+  const worst = [...failures.map((item) => item.failure), ...(held ? [held.kind] : [])].reduce(
+    (a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a),
+  )
   writeRunFile(
     ctx.dir,
     `chapters/${pad(n)}.attempt-${attemptNo}.continue.json`,
@@ -151,15 +191,19 @@ export async function recordContinueFailure(
       {
         kind: 'continue-failed',
         message: '이어쓰기 실패',
-        reason: failed.reason,
-        detail: failed.detail,
-        failure,
+        reason: failures[0]?.reason,
+        detail: failures[0]?.detail,
+        failure: worst,
+        failures,
       },
       null,
       2,
     )}\n`,
   )
-  if (failure !== 'model') throw new ExternalFailureError({ kind: failure, message: failed.detail })
+  if (worst === 'model') return
+  if (held?.kind === worst) throw new ExternalFailureError(held)
+  const message = failures.find((item) => item.failure === worst)?.reason ?? worst
+  throw new ExternalFailureError({ kind: worst, message })
 }
 
 const ScenesCutWarningSchema = z.object({
