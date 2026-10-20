@@ -23,7 +23,13 @@ import {
   PROOFREAD_MAX_PARTS,
   splitProofreadParts,
 } from '@/lib/korean/proofread-parts'
-import { locateAllQuotes, locateQuote, sentenceAt } from '@/lib/korean/sentences'
+import {
+  isWholeWordRange,
+  isWordChar,
+  locateAllQuotes,
+  locateQuote,
+  sentenceAt,
+} from '@/lib/korean/sentences'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
 import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
@@ -89,8 +95,6 @@ export const ruleSpellChecker: SpellChecker = {
 /** Max occurrences one quote expands to. */
 const MAX_QUOTE_EXPANSION = 20
 
-const isWordChar = (ch: string | undefined): boolean => ch !== undefined && /[\p{L}\p{N}]/u.test(ch)
-
 /** Whether the characters around a range are word characters: [before, after]. */
 function boundaryOf(text: string, range: { start: number; end: number }): [boolean, boolean] {
   return [isWordChar(text[range.start - 1]), isWordChar(text[range.end])]
@@ -98,14 +102,20 @@ function boundaryOf(text: string, range: { start: number; end: number }): [boole
 
 /**
  * Ranges where a model quote occurs. A quote of 2+ characters applies at every exact occurrence
- * (up to MAX_QUOTE_EXPANSION) whose surroundings match the first one: a quote found as a whole word
- * does not expand into a longer word ("할수" does not touch "할수록"). A shorter quote, or one only
- * found after whitespace is collapsed, maps to its first occurrence.
+ * (up to MAX_QUOTE_EXPANSION). When some occurrence is a whole word, only the whole-word ones are
+ * used, so "할수" does not map into "할수록" while a real "할수" elsewhere is skipped. When every
+ * occurrence sits inside a longer word, the occurrences whose surroundings match the first one are
+ * used. A shorter quote, or one only found after whitespace is collapsed, maps to its first
+ * occurrence.
  */
 function expandQuote(text: string, quote: string): { start: number; end: number }[] {
   if (quote.trim().length >= 2) {
     const all = locateAllQuotes(text, quote, Number.MAX_SAFE_INTEGER)
     if (all.length > 0) {
+      // Whole-word hits win over hits inside a longer word (P14).
+      const whole = all.filter((r) => isWholeWordRange(text, r))
+      if (whole.length > 0) return whole.slice(0, MAX_QUOTE_EXPANSION)
+      // Every hit sits inside a longer word: keep the rule from the first hit's surroundings.
       const [before, after] = boundaryOf(text, all[0])
       return all
         .filter((r) => {

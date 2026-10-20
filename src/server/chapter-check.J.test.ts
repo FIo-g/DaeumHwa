@@ -61,7 +61,7 @@ describe('runProofread AI quote expansion', () => {
       actor(owner.id),
       { chapterId: chapter.id, text, useAi: true },
       proofreadClient([
-        { quote: '어색해요', replacement: '어색합니다', kind: 'awkward', reason: '이유' },
+        { quote: '어색해요', replacement: '어색합니다', kind: 'spacing', reason: '이유' },
       ]),
     )
     const ai = result.suggestions.filter((s) => s.source === 'ai')
@@ -79,7 +79,7 @@ describe('runProofread AI quote expansion', () => {
       actor(owner.id),
       { chapterId: chapter.id, text, useAi: true },
       proofreadClient([
-        { quote: '어색해요', replacement: '어색합니다', kind: 'awkward', reason: '이유' },
+        { quote: '어색해요', replacement: '어색합니다', kind: 'spacing', reason: '이유' },
       ]),
     )
     expect(result.suggestions.filter((s) => s.source === 'ai')).toHaveLength(20)
@@ -123,7 +123,7 @@ describe('runProofread AI quote expansion', () => {
       { chapterId: chapter.id, text: '그는 서있다.', useAi: true },
       proofreadClient([
         { quote: '서있다', replacement: '서 있다', kind: 'spacing', reason: '띄어쓰기' },
-        { quote: '있다', replacement: '있어', kind: 'awkward', reason: '이유' },
+        { quote: '있다', replacement: '있어', kind: 'spacing', reason: '이유' },
       ]),
     )
     const ai = result.suggestions.filter((s) => s.source === 'ai')

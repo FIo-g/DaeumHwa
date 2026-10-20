@@ -108,6 +108,24 @@ export function locateAllQuotes(
   return ranges
 }
 
+/** Whether `ch` is a letter or a digit in any script (Hangul, Latin, ...). */
+export function isWordChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[\p{L}\p{N}]/u.test(ch)
+}
+
+/**
+ * Whether a non-empty range of `text` cuts no word at either edge. An edge cuts a word only when
+ * the character inside the range and the one outside are both letters or digits: `할수` inside
+ * `할수록` is cut at the end, `갔다.` before `그` is not (`.` is not a word character). Korean
+ * attaches particles and endings without a space, so a Hangul syllable next to a hit means the hit
+ * sits inside a longer eojeol.
+ */
+export function isWholeWordRange(text: string, range: { start: number; end: number }): boolean {
+  const cutsStart = isWordChar(text[range.start - 1]) && isWordChar(text[range.start])
+  const cutsEnd = isWordChar(text[range.end - 1]) && isWordChar(text[range.end])
+  return !cutsStart && !cutsEnd
+}
+
 /** Collapses whitespace runs to one space, remembering each output char's original index. */
 function collapseWhitespace(text: string): { norm: string; map: number[] } {
   let norm = ''

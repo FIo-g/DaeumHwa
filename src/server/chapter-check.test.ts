@@ -406,7 +406,7 @@ describe('runProofread', () => {
                 {
                   quote: '어색해요',
                   replacement: '어색합니다',
-                  kind: 'awkward',
+                  kind: 'spacing',
                   reason: '더 자연스럽게',
                 },
               ],

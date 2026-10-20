@@ -40,13 +40,13 @@ describe('proofreadTask', () => {
   it('postProcess drops suggestions whose replacement equals the quote', () => {
     const output = {
       suggestions: [
-        { quote: '어색해요', replacement: '어색해요', kind: 'awkward' as const, reason: '이유' },
-        { quote: '어색해요', replacement: '어색합니다', kind: 'awkward' as const, reason: '이유' },
+        { quote: '어색해요', replacement: '어색해요', kind: 'spacing' as const, reason: '이유' },
+        { quote: '어색해요', replacement: '어색합니다', kind: 'spacing' as const, reason: '이유' },
       ],
     }
     const processed = proofreadTask.postProcess?.(output, input)
     expect(processed?.suggestions).toEqual([
-      { quote: '어색해요', replacement: '어색합니다', kind: 'awkward', reason: '이유' },
+      { quote: '어색해요', replacement: '어색합니다', kind: 'spacing', reason: '이유' },
     ])
   })
 })
@@ -82,13 +82,13 @@ describe('proofread scope rules (track J)', () => {
     const text = '그건 어색해요. 저것도 어색해요.'
     const output = {
       suggestions: [
-        { quote: '어색해요', replacement: '어색합니다', kind: 'awkward' as const, reason: '이유' },
-        { quote: '어색해요', replacement: '어색하군요', kind: 'awkward' as const, reason: '이유' },
+        { quote: '어색해요', replacement: '어색합니다', kind: 'spacing' as const, reason: '이유' },
+        { quote: '어색해요', replacement: '어색하군요', kind: 'spacing' as const, reason: '이유' },
       ],
     }
     const processed = proofreadTask.postProcess?.(output, { text })
     expect(processed?.suggestions).toEqual([
-      { quote: '어색해요', replacement: '어색합니다', kind: 'awkward', reason: '이유' },
+      { quote: '어색해요', replacement: '어색합니다', kind: 'spacing', reason: '이유' },
     ])
   })
 })

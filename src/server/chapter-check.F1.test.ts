@@ -68,7 +68,7 @@ function recordingClient(
 }
 
 /** Suggestions for the quote `어색해요`, the only quote these tests use. */
-const AWKWARD = { quote: '어색해요', replacement: '어색합니다', kind: 'awkward', reason: '이유' }
+const AWKWARD = { quote: '어색해요', replacement: '어색합니다', kind: 'spacing', reason: '이유' }
 
 /** Answers `어색해요` whenever the part contains it. */
 function awkwardWhenPresent(text: string) {

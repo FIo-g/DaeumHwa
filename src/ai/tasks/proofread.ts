@@ -5,9 +5,16 @@ import { locateQuote } from '@/lib/korean/sentences'
 
 // Proofreading (F14): AI suggestions for spelling, spacing, grammar and awkward phrasing.
 // Rule-based checks run separately (src/lib/korean/spelling-rules.ts).
+// awkward is dropped in postProcess (see P14): the model may still answer it, the app never shows it.
 
 export const PROOFREAD_KINDS = ['spelling', 'spacing', 'grammar', 'awkward'] as const
 export type ProofreadKind = (typeof PROOFREAD_KINDS)[number]
+
+/**
+ * Kinds the app never shows. The model may still answer them (the schema accepts every kind, so
+ * such an answer is not a format failure); `postProcess` drops them.
+ */
+export const DROPPED_PROOFREAD_KINDS: readonly ProofreadKind[] = ['awkward']
 
 export const ProofreadSchema = z.object({
   suggestions: z.array(
@@ -46,6 +53,8 @@ export const proofreadTask: AiTaskDef<{ text: string }, ProofreadOutput> = {
     const suggestions: ProofreadOutput['suggestions'] = []
     const keptQuotes = new Set<string>()
     for (const s of output.suggestions) {
+      // First, so a dropped item never takes the quote slot below.
+      if (DROPPED_PROOFREAD_KINDS.includes(s.kind)) continue
       if (s.quote.trim() === '' || s.replacement === s.quote) continue
       const range = locateQuote(input.text, s.quote)
       if (!range) continue
