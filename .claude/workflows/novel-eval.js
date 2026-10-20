@@ -1,7 +1,7 @@
 export const meta = {
   name: 'novel-eval',
   description:
-    'Run the novel quality eval per model and language: advance each run, let author agents answer pending items, then write reviews and (optionally) a summary',
+    'Run the novel quality eval per model and language, with optional per-run init flags (runs[i].flags): advance each run, let author agents answer pending items, then write reviews and (optionally) a summary',
   whenToUse:
     'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. A run whose review.md already exists is not reviewed again unless args.rereview is true. Pass summary: true on a final invocation with runs: [] to write the cross-run summary. A run near the pass line (Q mean 3.65 to 3.85, or one failed threshold) also gets an independent second review; pass secondReview: false to turn that off. Optional args.repo is the absolute path of the checkout to run in, for example a worktree; the default is the main checkout.',
   phases: [
@@ -82,6 +82,33 @@ const runs = Array.isArray(args.runs)
   ? args.runs
   : ALL_MODELS.flatMap((model) => LANGS.map((lang) => ({ model, lang })))
 
+// The init flags a run may pass (runs[i].flags), each the exact text of one flag. The text goes into
+// a shell command, so anything not listed here is refused before any agent starts.
+const ALLOWED_RUN_FLAGS = [
+  '--deploy-settings',
+  '--directives on',
+  '--few-instructions',
+  '--product-limits',
+  '--speech on',
+  '--two-step on',
+  '--helper-think off',
+  '--helper-think low',
+  '--helper-think medium',
+  '--helper-think high',
+]
+// The init flags of one run as the text that follows --dir in the init command.
+function flagText(run) {
+  return (run.flags ?? []).map((flag) => ' ' + flag).join('')
+}
+const flagError = runs.reduce((error, run) => {
+  if (error) return error
+  const flags = run.flags ?? []
+  if (!Array.isArray(flags)) return 'flags must be a list of strings'
+  const bad = flags.find((flag) => !ALLOWED_RUN_FLAGS.includes(flag))
+  return bad === undefined ? null : `unknown flag: ${bad}`
+}, null)
+if (flagError) return { error: flagError }
+
 log(`repo root: ${REPO}`)
 if (runs.length > 4) {
   log(
@@ -148,7 +175,7 @@ function runnerPrompt(run, dir, first) {
   const initStep = first
     ? [
         'Step 1. Run this command once, from the repository root:',
-        `  cd ${REPO} && pnpm eval:novel init --model ${run.model} --lang ${run.lang} --chapters ${chapters} --dir ${dir}`,
+        `  cd ${REPO} && pnpm eval:novel init --model ${run.model} --lang ${run.lang} --chapters ${chapters} --dir ${dir}${flagText(run)}`,
         'If the command fails, or its JSON line has an "error" field, return status "error" with the error text as detail, and stop.',
         'Otherwise go to step 2.',
       ].join('\n')

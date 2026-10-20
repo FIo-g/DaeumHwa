@@ -23,6 +23,14 @@ Work from `root`. Every repo-relative path below (`eval/...`, `docs/...`) is rel
    - **T2 건수와 말투 모순 수**: give each review's own T2 figure. T2 counts only bible and wiki contradictions (criteria section 3.5); style-card violations and in-chapter inconsistencies are listed apart. If a review counted them inside T2 (reviews before 2026-10-19 may), keep its figure and add `(문체 카드 위반 포함)` or `(내부 모순 포함)`. Also give the number of `Characterization (voice)` rows.
    - **Per-feature gaps**: for each feature (interview, extraction, continuity check, proofread, reader simulation and advice, style, operations), where each local model (qwen3.8-27b, gpt-oss-20b, exaone3.5-32b) falls short of the Haiku (haiku-5.5) and Luna (luna-6) results. Cite the review documents for the numbers. Where a cloud run is missing, say so.
    - **속도** (Korean, a table with one row per run): model, lang, generation tok/s (median over all tasks), prompt tok/s (local runs only; "-" for cloud), draft first-token time (median of the `draft-chapter` tasks, from `byTask`), and median time per chapter (median of the `perChapterMs` values). Take these from each run's `run-summary.json` `speed` block (`dir` in `runs`, or the run directory named in the review document). If a run has no `speed` block, write "no data". Add a note under the table: local speeds come from Ollama's internal timings, cloud speeds from wall-clock time including network and thinking, so they are not directly comparable.
+   - **비용·시간·고칠 곳·요청 준수** (Korean, one row per run and chapter): model, lang, chapter `n`, and these columns, each from the run's `run-summary.json` or its review document:
+     - 한 화 비용 (달러): `harness.chapters[].usd`, four decimals (for example 0.0273). Write `—` when `usd` is null.
+     - 본문 첫 글자 (초): `harness.chapters[].firstCharMs` divided by 1000.
+     - 쓰기 시간 (초): `harness.chapters[].writeMs` divided by 1000.
+     - 저장 뒤 시간 (초): `harness.chapters[].afterSaveMs` divided by 1000.
+     - 고칠 곳 (1,000자당): the chapter's `mustFix` from the review's 'Verdict data' block, divided by `chars` (the chapter's character count with spaces) times 1000.
+     - 요청 준수: `directives.chapters[]` kept divided by (kept + broken), written as a fraction, for the chapters that have it.
+       Write `—` in a cell when its block is absent (older runs). Do not compute a value the file does not hold.
    - **Korean versus English diagnosis**: the difference between each model's ko and en runs, and the likely causes, with evidence from the reviews. State which causes are only guesses.
    - **Improvement candidates**: ordered by expected effect, highest first. Cover prompts, splitting the work into smaller steps, self-review, code-side validation, and settings. For each, say the expected effect and the evidence.
    - **Paused or blocked runs**: each with its `RESUME.md` path and its status.
