@@ -170,7 +170,7 @@
 
 **Interfaces:**
 - Consumes: `planDraftAction` (task 2), the draft route's `plan`, `planRunId`, `planEdits` (task 3), `SCENE_ROLE_LABELS`, `ENDING_DEVICE_LABELS`, `planWarnings` (task 1).
-- Produces: `DraftPlanCardView({ card, warnings, busy, onChange, onRevise, onWrite })` — `onChange(card, edit: 'removed' | 'moved' | 'textEdits')`, `onRevise(note: string)`, `onWrite()`.
+- Produces: `DraftPlanCardView({ card, warnings, busy, onChange, onRevise, onWrite })` — `onChange(card, edit: 'removed' | 'moved')`, `onRevise(note: string)`, `onWrite()`.
 
 Exact copy:
 - Instruction placeholder: `무슨 일이 일어나야 하나요? 비워 두면 위키와 지난 화를 보고 계획을 제안해요.`

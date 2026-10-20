@@ -101,6 +101,22 @@ export function normalizeCard(card: DraftPlanCard, targetChars: number): DraftPl
   return withSceneTargets(plan, targetChars)
 }
 
+/**
+ * How many scenes of `card` have a summary the plan did not have: `base` is the summaries the
+ * server sent. A multiset, so a repeated summary counts right; moves and removals count nothing.
+ */
+export function countTextEdits(card: DraftPlanCard, base: string[]): number {
+  const left = new Map<string, number>()
+  for (const summary of base) left.set(summary, (left.get(summary) ?? 0) + 1)
+  let edited = 0
+  for (const scene of card.scenes) {
+    const count = left.get(scene.summary) ?? 0
+    if (count > 0) left.set(scene.summary, count - 1)
+    else edited += 1
+  }
+  return edited
+}
+
 /** Warnings under the card heading: same beat twice in a row, and a last scene that is not the ending. */
 export function planWarnings(card: DraftPlanCard): string[] {
   const warnings: string[] = []

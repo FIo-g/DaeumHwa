@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { type DraftPlanCard, PLAN_TEXT_MAX } from '@/lib/draft-plan'
@@ -109,7 +110,7 @@ describe('DraftPlanCardView', () => {
     expect(edit).toBe('moved')
   })
 
-  it('reports one text edit per scene when the summary is left after changing it', () => {
+  it('reports a summary change to the panel without an edit kind', () => {
     const onChange = vi.fn()
     // A stateful wrapper: the card changes on every keystroke, as it does in the panel.
     function Harness() {
@@ -136,9 +137,12 @@ describe('DraftPlanCardView', () => {
     fireEvent.change(summary, { target: { value: '경비를 설득해 본다.' } })
     fireEvent.blur(summary)
 
-    const textEdits = onChange.mock.calls.filter((call) => call[1] === 'textEdits')
-    expect(textEdits).toHaveLength(1)
-    expect(textEdits[0][0].scenes[1].summary).toBe('경비를 설득해 본다.')
+    // A summary change is not an edit kind: the panel counts changed scenes from the card itself.
+    expect(onChange).toHaveBeenCalled()
+    for (const call of onChange.mock.calls) {
+      expect(call[1]).toBeUndefined()
+    }
+    expect(onChange.mock.calls.at(-1)?.[0].scenes[1].summary).toBe('경비를 설득해 본다.')
   })
 
   it('sends the revision note with 다시 계획', () => {
@@ -170,5 +174,83 @@ describe('DraftPlanCardView', () => {
     fireEvent.click(screen.getByRole('button', { name: '이 계획으로 쓰기' }))
 
     expect(onWrite).toHaveBeenCalledTimes(1)
+  })
+})
+
+function Harness({
+  onChange,
+  targetChars,
+}: {
+  onChange: (next: DraftPlanCard, edit?: string) => void
+  targetChars?: number | null
+}) {
+  const [card, setCard] = useState(makeCard())
+  return (
+    <DraftPlanCardView
+      card={card}
+      warnings={[]}
+      busy={false}
+      targetChars={targetChars}
+      onChange={(next, edit) => {
+        onChange(next, edit)
+        setCard(next)
+      }}
+      onRevise={vi.fn()}
+      onWrite={vi.fn()}
+    />
+  )
+}
+
+describe('DraftPlanCardView focus and lengths', () => {
+  it('keeps focus on the moved scene, so the next 아래로 moves that scene again', async () => {
+    const onChange = vi.fn()
+    render(<Harness onChange={onChange} />)
+    const user = userEvent.setup()
+
+    screen.getAllByRole('button', { name: '아래로' })[0].focus()
+    await user.keyboard('{Enter}')
+    await user.keyboard('{Enter}')
+
+    const summaries = screen
+      .getAllByLabelText('일어나는 일')
+      .map((el) => (el as HTMLTextAreaElement).value)
+    expect(summaries).toEqual(['경비와 맞선다.', '문이 열린다.', '성문 앞에 선다.'])
+    expect(onChange.mock.calls.map((call) => call[1])).toEqual(['moved', 'moved'])
+    const active = document.activeElement as HTMLElement
+    expect(active.closest('li')?.querySelector('textarea')?.value).toBe('성문 앞에 선다.')
+  })
+
+  it('moves focus to a control that still exists when 빼기 removes the last scene', async () => {
+    render(<Harness onChange={vi.fn()} />)
+    const user = userEvent.setup()
+
+    screen.getAllByRole('button', { name: '빼기' })[2].focus()
+    await user.keyboard('{Enter}')
+
+    expect(screen.getAllByLabelText('일어나는 일')).toHaveLength(2)
+    expect(document.activeElement).not.toBe(document.body)
+  })
+
+  it('removes a scene at the current chapter target, not at the summed card targets', () => {
+    const card = makeCard()
+    const onChange = vi.fn()
+    render(
+      <DraftPlanCardView
+        card={{ ...card, scenes: card.scenes.map((scene) => ({ ...scene, targetChars: 1667 })) }}
+        warnings={[]}
+        busy={false}
+        targetChars={5000}
+        onChange={onChange}
+        onRevise={vi.fn()}
+        onWrite={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getAllByRole('button', { name: '빼기' })[0])
+
+    const [next] = onChange.mock.calls[0]
+    expect(next.scenes.every((scene: { targetChars: number }) => scene.targetChars === 2500)).toBe(
+      true,
+    )
   })
 })

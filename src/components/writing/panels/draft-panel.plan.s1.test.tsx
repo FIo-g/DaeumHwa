@@ -205,3 +205,153 @@ describe('DraftPanel plan flow', () => {
     expect(body).not.toHaveProperty('planEdits')
   })
 })
+
+/** Focus, type and blur one scene summary, the way an author edits it. */
+function editSummary(index: number, value: string) {
+  const textarea = screen.getAllByLabelText('일어나는 일')[index]
+  fireEvent.focus(textarea)
+  fireEvent.change(textarea, { target: { value } })
+  fireEvent.blur(textarea)
+}
+
+function writeFromCard() {
+  fireEvent.click(screen.getByRole('button', { name: '이 계획으로 쓰기' }))
+}
+
+describe('DraftPanel plan edits', () => {
+  it('counts a scene edited in two focus sessions once', async () => {
+    vi.mocked(planDraftAction).mockResolvedValue(planResponse(makeCard()) as never)
+    vi.mocked(fetch).mockResolvedValue(draftResponse('완성된 초안입니다.'))
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: '계획 세우기' }))
+    await screen.findByText('이번 화 계획')
+    editSummary(1, '경비를 설득한다.')
+    editSummary(1, '경비를 설득해 본다.')
+    writeFromCard()
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(lastDraftBody().planEdits).toEqual({
+      revisions: 0,
+      removed: 0,
+      moved: 0,
+      textEdits: 1,
+    })
+  })
+
+  it('counts nothing for a scene whose summary is restored to the planned text', async () => {
+    vi.mocked(planDraftAction).mockResolvedValue(planResponse(makeCard()) as never)
+    vi.mocked(fetch).mockResolvedValue(draftResponse('완성된 초안입니다.'))
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: '계획 세우기' }))
+    await screen.findByText('이번 화 계획')
+    editSummary(1, '경비를 설득한다.')
+    editSummary(1, '경비와 맞선다.')
+    writeFromCard()
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(lastDraftBody().planEdits).toEqual({
+      revisions: 0,
+      removed: 0,
+      moved: 0,
+      textEdits: 0,
+    })
+  })
+
+  it('counts an edited scene once even when it is also moved', async () => {
+    vi.mocked(planDraftAction).mockResolvedValue(planResponse(makeCard()) as never)
+    vi.mocked(fetch).mockResolvedValue(draftResponse('완성된 초안입니다.'))
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: '계획 세우기' }))
+    await screen.findByText('이번 화 계획')
+    editSummary(0, '성문을 두드린다.')
+    fireEvent.click(screen.getAllByRole('button', { name: '아래로' })[0])
+    writeFromCard()
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(lastDraftBody().planEdits).toEqual({
+      revisions: 0,
+      removed: 0,
+      moved: 1,
+      textEdits: 1,
+    })
+  })
+
+  it('clears the revision note after 다시 계획 succeeds', async () => {
+    const revised = makeCard()
+    revised.scenes[1].summary = '윤서가 먼저 말을 건다.'
+    vi.mocked(planDraftAction)
+      .mockResolvedValueOnce(planResponse(makeCard()) as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { runId: 'plan-2', card: revised, warnings: [] },
+      } as never)
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: '계획 세우기' }))
+    await screen.findByText('이번 화 계획')
+    fireEvent.change(screen.getByPlaceholderText(REVISION_PLACEHOLDER), {
+      target: { value: '2장면에서 윤서가 먼저 말을 걸게' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '다시 계획' }))
+
+    await screen.findByDisplayValue('윤서가 먼저 말을 건다.')
+    expect(screen.getByPlaceholderText(REVISION_PLACEHOLDER)).toHaveValue('')
+    expect(screen.getByRole('button', { name: '다시 계획' })).toBeDisabled()
+  })
+
+  it('keeps the revision note when 다시 계획 fails', async () => {
+    vi.mocked(planDraftAction)
+      .mockResolvedValueOnce(planResponse(makeCard()) as never)
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { code: 'AI_FAILED', message: '다시 계획하지 못했습니다.' },
+      } as never)
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: '계획 세우기' }))
+    await screen.findByText('이번 화 계획')
+    fireEvent.change(screen.getByPlaceholderText(REVISION_PLACEHOLDER), {
+      target: { value: '윤서가 먼저' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '다시 계획' }))
+
+    await waitFor(() => expect(planDraftAction).toHaveBeenCalledTimes(2))
+    expect(screen.getByPlaceholderText(REVISION_PLACEHOLDER)).toHaveValue('윤서가 먼저')
+  })
+
+  it('shows the per-scene length of the current 목표 분량', async () => {
+    vi.mocked(planDraftAction).mockResolvedValue(planResponse(makeCard()) as never)
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: '계획 세우기' }))
+    await screen.findByText('이번 화 계획')
+    expect(screen.getByText('장면 1 · 도입 · 약 1,250자')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('목표 분량 (자)'), { target: { value: '4000' } })
+
+    expect(screen.getByText('장면 1 · 도입 · 약 2,000자')).toBeInTheDocument()
+  })
+
+  it('sends the quick-path body while a plan is on screen', async () => {
+    vi.mocked(planDraftAction).mockResolvedValue(planResponse(makeCard()) as never)
+    vi.mocked(fetch).mockResolvedValue(draftResponse('완성된 초안입니다.'))
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: '계획 세우기' }))
+    await screen.findByText('이번 화 계획')
+    fireEvent.click(screen.getAllByRole('button', { name: '빼기' })[0])
+    typeInstructions('주인공이 성문을 연다.')
+    fireEvent.click(screen.getByRole('button', { name: '바로 쓰기' }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(lastDraftBody()).toEqual({
+      chapterId: 'c1',
+      entryIds: [],
+      instructions: '주인공이 성문을 연다.',
+      targetChars: 2500,
+    })
+  })
+})

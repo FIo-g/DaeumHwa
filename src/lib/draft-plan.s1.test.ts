@@ -148,3 +148,17 @@ describe('planWarnings', () => {
     expect(planWarnings(card)).toEqual([])
   })
 })
+
+describe('plan card limits', () => {
+  it('rejects a card summary one character over the text limit', () => {
+    const card = withSceneTargets(plan, 2500)
+    const over = {
+      ...card,
+      scenes: [
+        { ...card.scenes[0], summary: '가'.repeat(PLAN_TEXT_MAX + 1) },
+        ...card.scenes.slice(1),
+      ],
+    }
+    expect(DraftPlanCardSchema.safeParse(over).success).toBe(false)
+  })
+})

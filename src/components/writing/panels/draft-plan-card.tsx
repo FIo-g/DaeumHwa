@@ -1,7 +1,7 @@
 'use client'
 
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,14 +14,16 @@ import {
   SCENE_ROLE_LABELS,
 } from '@/lib/draft-plan'
 
-export type PlanEditKind = 'removed' | 'moved' | 'textEdits'
+export type PlanEditKind = 'removed' | 'moved'
 
 type DraftPlanCardViewProps = {
   card: DraftPlanCard
   warnings: string[]
   /** True while a plan or a draft is running: every control is held. */
   busy: boolean
-  /** Called with the changed card. `edit` is set for a removal, a move or a finished text edit. */
+  /** The chapter target now in the input, or null when it is not a valid target. Sets the scene lengths. */
+  targetChars?: number | null
+  /** Called with the changed card. `edit` is set for a removal or a move; text changes are counted by the panel. */
   onChange(card: DraftPlanCard, edit?: PlanEditKind): void
   /** Called with the author's one-line note; the panel asks the server for a new card. */
   onRevise(note: string): void
@@ -38,14 +40,35 @@ export function DraftPlanCardView({
   card,
   warnings,
   busy,
+  targetChars = null,
   onChange,
   onRevise,
   onWrite,
 }: DraftPlanCardViewProps) {
   const [note, setNote] = useState('')
-  // The summary as it was when its textarea got focus. A text edit is counted once, on blur.
-  const focused = useRef<{ index: number; before: string } | null>(null)
   const lastIndex = card.scenes.length - 1
+  // Where keyboard focus goes after a move or a removal: the scene moved, or the row that took its place.
+  const listRef = useRef<HTMLOListElement>(null)
+  const pendingFocus = useRef<{ index: number; label: string } | null>(null)
+  // The per-scene length the server will use for the current target (normalizeCard), when there is one.
+  const sceneChars =
+    targetChars === null ? null : draftLengthPlan(targetChars, card.scenes.length).charsPerScene
+
+  useEffect(() => {
+    const pending = pendingFocus.current
+    if (!pending) return
+    pendingFocus.current = null
+    const row = listRef.current?.children[pending.index]
+    if (!row) return
+    // The same arrow for the moved scene; the opposite arrow when it sits at an edge; else its textarea.
+    const opposite =
+      pending.label === '위로' ? '아래로' : pending.label === '아래로' ? '위로' : null
+    const labels = opposite ? [pending.label, opposite] : [pending.label]
+    const control = labels
+      .map((label) => row.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`))
+      .find((button) => button && !button.disabled)
+    ;(control ?? row.querySelector<HTMLTextAreaElement>('textarea'))?.focus()
+  }, [card.scenes])
 
   function setScenes(scenes: DraftPlanCard['scenes'], edit?: PlanEditKind) {
     onChange({ ...card, scenes }, edit)
@@ -57,9 +80,10 @@ export function DraftPlanCardView({
 
   function remove(index: number) {
     const rest = card.scenes.filter((_, i) => i !== index)
-    // Keep the chapter target: the remaining scenes share the total of the removed card.
-    const total = card.scenes.reduce((sum, scene) => sum + scene.targetChars, 0)
+    // Keep the chapter target: the remaining scenes share the current target, as normalizeCard does.
+    const total = targetChars ?? card.scenes.reduce((sum, scene) => sum + scene.targetChars, 0)
     const perScene = draftLengthPlan(total, rest.length).charsPerScene
+    pendingFocus.current = { index: Math.min(index, rest.length - 1), label: '빼기' }
     setScenes(
       rest.map((scene) => ({ ...scene, targetChars: perScene })),
       'removed',
@@ -69,15 +93,8 @@ export function DraftPlanCardView({
   function move(index: number, to: number) {
     const scenes = [...card.scenes]
     ;[scenes[index], scenes[to]] = [scenes[to], scenes[index]]
+    pendingFocus.current = { index: to, label: to > index ? '아래로' : '위로' }
     setScenes(scenes, 'moved')
-  }
-
-  function finishTextEdit(index: number) {
-    const start = focused.current
-    focused.current = null
-    if (start && start.index === index && card.scenes[index].summary !== start.before) {
-      onChange(card, 'textEdits')
-    }
   }
 
   return (
@@ -91,12 +108,12 @@ export function DraftPlanCardView({
         ))}
       </div>
 
-      <ol className="grid gap-3">
+      <ol ref={listRef} className="grid gap-3">
         {card.scenes.map((scene, index) => (
           <li key={index} className="grid gap-2 rounded-md bg-muted/30 p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium">
-                {`장면 ${index + 1} · ${SCENE_ROLE_LABELS[scene.role]} · 약 ${scene.targetChars.toLocaleString('ko-KR')}자`}
+                {`장면 ${index + 1} · ${SCENE_ROLE_LABELS[scene.role]} · 약 ${(sceneChars ?? scene.targetChars).toLocaleString('ko-KR')}자`}
               </p>
               <div className="flex shrink-0 gap-1">
                 <Button
@@ -137,10 +154,6 @@ export function DraftPlanCardView({
                 rows={2}
                 maxLength={PLAN_TEXT_MAX}
                 disabled={busy}
-                onFocus={() => {
-                  focused.current = { index, before: scene.summary }
-                }}
-                onBlur={() => finishTextEdit(index)}
                 onChange={(event) => updateSummary(index, event.target.value)}
               />
             </div>

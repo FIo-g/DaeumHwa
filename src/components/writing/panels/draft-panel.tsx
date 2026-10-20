@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { runAction } from '@/lib/client/run-action'
 import { useAiRun } from '@/lib/client/use-ai-run'
-import { type DraftPlanCard, type PlanEdits, planWarnings } from '@/lib/draft-plan'
+import { countTextEdits, type DraftPlanCard, type PlanEdits, planWarnings } from '@/lib/draft-plan'
 import { parseDraftStream } from '@/lib/draft-stream'
 import {
   createChapterFromDraftAction,
@@ -53,6 +53,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   const [card, setCard] = useState<DraftPlanCard | null>(null)
   const [planRunId, setPlanRunId] = useState<string | null>(null)
   const [planEdits, setPlanEdits] = useState<PlanEdits>(NO_EDITS)
+  // The scene summaries the server sent with the current card: a summary that differs is a text edit.
+  const [baseSummaries, setBaseSummaries] = useState<string[]>([])
   const [planning, setPlanning] = useState(false)
   const ai = useAiRun()
   const [draft, setDraft] = useState<string | null>(null)
@@ -154,10 +156,21 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     )
     setPlanning(false)
     if (!result) return
+    // The text edits of the card being replaced are kept in the counts, as a revision adds to them.
+    const replacedEdits = revising && card ? countTextEdits(card, baseSummaries) : 0
     setCard(result.card)
     setPlanRunId(result.runId)
+    setBaseSummaries(result.card.scenes.map((scene) => scene.summary))
     // A new plan starts its own edit counts; a revision adds to the counts of the card it changes.
-    setPlanEdits((prev) => (revising ? { ...prev, revisions: prev.revisions + 1 } : NO_EDITS))
+    setPlanEdits((prev) =>
+      revising
+        ? {
+            ...prev,
+            revisions: prev.revisions + 1,
+            textEdits: prev.textEdits + replacedEdits,
+          }
+        : NO_EDITS,
+    )
   }
 
   function editPlan(next: DraftPlanCard, edit?: PlanEditKind) {
@@ -178,7 +191,16 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     const target = checkedTarget()
     if (target === null) return
     const planBody =
-      withPlan && card && planRunId ? { plan: card, planRunId, planEdits } : undefined
+      withPlan && card && planRunId
+        ? {
+            plan: card,
+            planRunId,
+            planEdits: {
+              ...planEdits,
+              textEdits: planEdits.textEdits + countTextEdits(card, baseSummaries),
+            },
+          }
+        : undefined
 
     setDraft('')
     setRunId(null)
@@ -233,6 +255,12 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   }
 
   const finished = !streaming && draft !== null && draft.length > 0
+  // The target as the card's scene lengths follow it; null while the input is not a valid target.
+  const parsedTarget = Number(targetChars)
+  const cardTarget =
+    Number.isInteger(parsedTarget) && parsedTarget >= TARGET_MIN && parsedTarget <= TARGET_MAX
+      ? parsedTarget
+      : null
 
   return (
     <section aria-label="AI 초안" className="grid gap-4">
@@ -285,9 +313,11 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
 
       {card && (
         <DraftPlanCardView
+          key={planRunId ?? 'plan'}
           card={card}
           warnings={planWarnings(card)}
           busy={planning || streaming}
+          targetChars={cardTarget}
           onChange={editPlan}
           onRevise={(note) => void plan(note)}
           onWrite={() => void write(true)}
