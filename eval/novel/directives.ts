@@ -41,7 +41,7 @@ const TIC_PHRASE: Record<'ko' | 'en', string> = {
 }
 
 const BANNED_1: Record<'ko' | 'en', RegExp> = {
-  ko: /고개를\s*(끄덕|주억)/,
+  ko: /고개[를만도]?\s*(?:[^\s.!?…"“”]{1,4}\s+){0,2}(끄덕|주억)/,
   en: /\bnod(s|ded|ding)?\b/i,
 }
 
@@ -50,17 +50,22 @@ const BANNED_2: Record<'ko' | 'en', RegExp> = {
   en: /\bfor a moment\b/i,
 }
 
-const OPENING_QUOTES = ['“', '"', '「', '『', '‘', "'"]
-const CLOSING_QUOTES = ['”', '"', '」', '』', '’', "'"]
+// Korean web novels use ‘ ’ for inner thoughts, so ko speech takes only double and corner brackets.
+const DIALOGUE_QUOTES: Record<'ko' | 'en', { openers: string[]; closers: string[] }> = {
+  ko: { openers: ['“', '"', '「', '『'], closers: ['”', '"', '」', '』'] },
+  en: {
+    openers: ['“', '"', '「', '『', '‘', "'"],
+    closers: ['”', '"', '」', '』', '’', "'"],
+  },
+}
 
 /** Whether the last non-empty line is a quoted line of dialogue. */
-function endsOnDialogue(text: string): boolean {
+function endsOnDialogue(text: string, lang: 'ko' | 'en'): boolean {
   const lines = text.split('\n').map((line) => line.trim())
   const last = lines.filter((line) => line !== '').at(-1) ?? ''
   if (last === '') return false
-  return (
-    OPENING_QUOTES.some((q) => last.startsWith(q)) && CLOSING_QUOTES.some((q) => last.endsWith(q))
-  )
+  const { openers, closers } = DIALOGUE_QUOTES[lang]
+  return openers.some((q) => last.startsWith(q)) && closers.some((q) => last.endsWith(q))
 }
 
 function checkOne(text: string, lang: 'ko' | 'en', id: DirectiveId): DirectiveStatus {
@@ -76,7 +81,7 @@ function checkOne(text: string, lang: 'ko' | 'en', id: DirectiveId): DirectiveSt
     case 'ban-2':
       return BANNED_2[lang].test(text) ? 'broken' : 'kept'
     case 'end-dialogue':
-      return endsOnDialogue(text) ? 'kept' : 'broken'
+      return endsOnDialogue(text, lang) ? 'kept' : 'broken'
   }
 }
 

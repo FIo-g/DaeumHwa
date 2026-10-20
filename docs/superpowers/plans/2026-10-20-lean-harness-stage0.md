@@ -100,9 +100,9 @@ The probes (exact text; they do not overlap the bible's style rules):
 | id | ko text | en text | check |
 |---|---|---|---|
 | tic | `도윤서는 대화를 마칠 때 꼭 "조심하십시오."라고 말한다.` | `Do Yunseo always ends a conversation by saying "Watch your step."` | `n/a` when neither name (`도윤서`, `윤서` / `Do Yunseo`, `Yunseo`) appears; else `kept` when the text contains `조심하십시오` / `watch your step` (case-insensitive), else `broken` |
-| ban-1 | `'고개를 끄덕이다'는 쓰지 않는다.` | `Never use the word "nod" (nod, nods, nodded, nodding).` | `broken` on `/고개를\s*(끄덕\|주억)/` / `/\bnod(s\|ded\|ding)?\b/i`, else `kept` |
+| ban-1 | `'고개를 끄덕이다'는 쓰지 않는다.` | `Never use the word "nod" (nod, nods, nodded, nodding).` | `broken` on `/고개[를만도]?\s*(?:[^\s.!?…"“”]{1,4}\s+){0,2}(끄덕\|주억)/` (up to two short words between 고개 and 끄덕; 끄떡없었다 is kept) / `/\bnod(s\|ded\|ding)?\b/i`, else `kept` |
 | ban-2 | `'입꼬리'라는 말은 쓰지 않는다.` | `Never use the phrase "for a moment".` | `broken` on `입꼬리` / `/\bfor a moment\b/i`, else `kept` |
-| end-dialogue | `회차는 인물의 대사 한 줄로 끝낸다.` | `End each chapter on a single line of dialogue.` | last non-empty line, trimmed: `kept` when it starts with one of `“ " 「 『 ‘ '` and ends with one of `” " 」 』 ’ '` (an end punctuation mark may sit inside the quote), else `broken` |
+| end-dialogue | `회차는 인물의 대사 한 줄로 끝낸다.` | `End each chapter on a single line of dialogue.` | last non-empty line, trimmed: `kept` when it starts with one of and ends with one of the language's quote marks, else `broken`. ko: openers `“ " 「 『`, closers `” " 」 』` (single quotes are inner thoughts, not dialogue). en: openers `“ " 「 『 ‘ '`, closers `” " 」 』 ’ '`. An end punctuation mark may sit inside the quote. |
 
 `directiveBlock('ko')` = `앞으로 모든 회차에서 지켜 주세요.` + one `- <text>` line per probe; `directiveBlock('en')` = `Keep these in every chapter from now on:` + the same lines.
 
