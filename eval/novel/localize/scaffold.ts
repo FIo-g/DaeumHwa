@@ -1,4 +1,5 @@
 import { BEATS_RULE } from '@/ai/tasks/draft-chapter'
+import { BEATS_STATE_RULE } from '@/ai/tasks/draft-beats'
 
 // Turns the Korean scaffolding that product prompt builders emit (labels, empty markers, persona
 // text, chapter numbers) into English. Content from the work itself is never matched by these rules,
@@ -144,9 +145,16 @@ const RULES: readonly Rule[] = [
     BEATS_RULE,
     'Keep the places, characters, object locations and event order of the scene list above exactly, and do not write a move to a place that is not in the list.',
   ],
+  // Decision and stake lines (brief P2). The whole-sentence rule comes before the label rules.
+  [
+    BEATS_STATE_RULE,
+    'If a scene has a "Decision state", do not reverse what the character decided in later sentences without a reason. Show "Expected and lost" through the character\'s gestures or the objects in their hands, without naming the emotion.',
+  ],
   [/장면 (\d+)(?![\d개])/g, 'Scene $1'],
   ['인물: ', 'Characters: '],
   ['물건: ', 'Objects: '],
+  ['결정 상태: ', 'Decision state: '],
+  ['기대한 것과 잃은 것: ', 'Expected and lost: '],
   ['장소: ', 'Place: '],
   ['순서:', 'Sequence:'],
   // Scene rewrite findings (brief D, scene-rewrite), in the same block.
