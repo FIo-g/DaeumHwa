@@ -30,7 +30,7 @@ Work from `root`. Every repo-relative path below (`eval/...`, `docs/...`) is rel
      - 저장 뒤 시간 (초): `harness.chapters[].afterSaveMs` divided by 1000.
      - 계획 시간(초): `harness.chapters[].planMs` divided by 1000. `0` for runs with `--quick` or older runs.
      - 계획 수정(번): `harness.chapters[].planEdits` (the number of author notes on the plan card). `0` for runs with `--quick` or older runs.
-     - 장면 분량 맞음(개/전체): `metrics/NN.json` `sceneLengths.within` over `sceneLengths.scenes`, written as a fraction (for example `3/4`). Write `—` when `within` is null (no plan).
+     - 장면 분량 맞음(개/전체): `metrics/NN.json` `sceneLengths.within` over `sceneLengths.targets.length` (the planned scene count, so missing scenes count as misses), written as a fraction (for example `3/4`). When `sceneLengths.scenes` differs from `sceneLengths.targets.length`, add the found count, for example `1/3 (장면 1개)`. Write `—` when `within` is null (no plan).
      - 고칠 곳 (1,000자당): the chapter's `mustFix` from the review's 'Verdict data' block, divided by `chars` (the chapter's character count with spaces) times 1000.
      - 요청 준수: `directives.chapters[]` kept divided by (kept + broken), written as a fraction, for the chapters that have it.
        Write `—` in a cell when its block is absent (older runs). Do not compute a value the file does not hold.

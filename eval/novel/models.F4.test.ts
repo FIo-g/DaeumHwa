@@ -8,6 +8,7 @@ import {
   helperThinkValue,
   MODEL_PROFILES,
   PROSE_TASKS,
+  retryThinkFor,
   thinkFor,
 } from './models'
 
@@ -59,6 +60,11 @@ describe('HELPER_TASKS', () => {
     expect(HELPER_TASKS).toContain('paragraph-trim')
     expect(HELPER_TASKS).toContain('draft-repair')
   })
+
+  it('keeps scene prose out of the helper tasks', () => {
+    expect(HELPER_TASKS).not.toContain('draft-scene')
+    expect(PROSE_TASKS).toContain('draft-scene')
+  })
 })
 
 describe('helperThinkValue', () => {
@@ -76,6 +82,10 @@ describe('thinkFor', () => {
     expect(thinkFor(qwen, 'draft-continue', 'off')).toBe(true)
     expect(thinkFor(qwen, 'proofread')).toBe(true)
     expect(thinkFor(MODEL_PROFILES.fake, 'proofread', 'off')).toBeNull()
+  })
+
+  it('keeps the profile think for scene prose', () => {
+    expect(thinkFor(MODEL_PROFILES['qwen3.8-27b'], 'draft-scene', 'off')).toBe(true)
   })
 })
 
@@ -134,5 +144,11 @@ describe('createModelClient helperThink', () => {
     expect(calls).toHaveLength(2)
     expect(calls[0].body.think).toBe(false)
     expect(calls[1].body.think).toBe(true)
+  })
+})
+
+describe('retryThinkFor prose', () => {
+  it('does not lower the think of scene prose', () => {
+    expect(retryThinkFor(MODEL_PROFILES['qwen3.8-27b'], 'draft-scene')).toBeNull()
   })
 })

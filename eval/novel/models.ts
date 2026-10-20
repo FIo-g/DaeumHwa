@@ -159,6 +159,7 @@ export const HELPER_THINKS: readonly HelperThink[] = ['off', 'low', 'medium', 'h
 export const PROSE_TASKS: readonly AiTaskName[] = [
   'draft-chapter',
   'draft-continue',
+  'draft-scene',
   'scene-rewrite',
 ]
 /** Every other AI task: the object calls and the prose-editing helpers. */

@@ -20,4 +20,9 @@ describe('novel-eval workflow stage 1 flags (static)', () => {
     expect(summaryPrompt).toContain('계획 수정(번)')
     expect(summaryPrompt).toContain('장면 분량 맞음(개/전체)')
   })
+
+  it('summary.md counts scene fit against the planned scene count', () => {
+    expect(summaryPrompt).toContain('sceneLengths.targets.length')
+    expect(summaryPrompt).not.toContain('over `sceneLengths.scenes`')
+  })
 })
