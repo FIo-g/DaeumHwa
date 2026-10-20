@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import path from 'node:path'
+import type { AiUsage } from '@/ai/types'
 import type { CallRecord } from './eval-client'
 import { MODEL_PROFILES } from './models'
 import { loadConfig } from './state'
@@ -30,7 +31,8 @@ export type BlindedCall = Omit<
   | 'retryBudget'
   | 'power'
   | 'ollama'
-> & { model: typeof BLIND_LABEL }
+  | 'usage'
+> & { model: typeof BLIND_LABEL; usage: { inputTokens: number; outputTokens: number } | null }
 
 const VARIANT_SUFFIX = /-(mlx|gguf)$/
 
@@ -103,7 +105,9 @@ function maskDeep(value: unknown): unknown {
  * One call record for the reviewer. The model field is replaced by the label, the profile
  * fingerprints (effort, think, token cap, timeout, speed), the machine power state and the Ollama
  * attempt block are dropped, and every string is masked.
- * wouldTimeOut stays, because the operations score needs it. The input is not changed.
+ * wouldTimeOut stays, because the operations score needs it. The usage keeps only inputTokens and
+ * outputTokens: the cache keys depend on the provider, so they would show which API answered.
+ * The input is not changed.
  */
 export function blindCallRecord(call: CallRecord): BlindedCall {
   // The ollama key is removed before masking: maskDeep masks keys too, so "ollama" would become
@@ -119,6 +123,10 @@ export function blindCallRecord(call: CallRecord): BlindedCall {
   delete masked.productTimeoutMs
   delete masked.speed
   delete masked.power
+  const usage = masked.usage as AiUsage | null | undefined
+  if (usage && typeof usage === 'object') {
+    masked.usage = { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+  }
   return { ...masked, model: BLIND_LABEL } as BlindedCall
 }
 
