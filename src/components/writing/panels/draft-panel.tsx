@@ -14,6 +14,7 @@ import { useAiRun } from '@/lib/client/use-ai-run'
 import { parseDraftStream } from '@/lib/draft-stream'
 import { createChapterFromDraftAction } from '@/server/actions/ai-features'
 import type { WorkspaceApi, WritingData } from '../types'
+import { DraftRefine } from './draft-refine'
 import { EDITOR_ONLY_NOTE, canEditChapter } from './shared'
 
 type DraftPanelProps = {
@@ -46,6 +47,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   const [stopped, setStopped] = useState(false)
   const [appended, setAppended] = useState(false)
   const [creating, setCreating] = useState(false)
+  // True while a 다듬기 preview is open; its buttons hold the append and new-chapter actions.
+  const [refineOpen, setRefineOpen] = useState(false)
   const streaming = ai.running
 
   function toggleCharacter(id: string, checked: boolean) {
@@ -118,6 +121,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     setComplete(false)
     setStopped(false)
     setAppended(false)
+    setRefineOpen(false)
     // Resolves null when the author cancels, false when the stream failed (a toast says why), and
     // true only when the whole draft arrived. Anything but true keeps the partial text as stopped.
     const completed = await ai.run((signal) =>
@@ -231,15 +235,28 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           {stopped && <p className="text-sm text-muted-foreground">중간에 멈춘 초안입니다.</p>}
           {finished && (
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={appendToChapter} disabled={appended}>
+              <Button variant="outline" onClick={appendToChapter} disabled={appended || refineOpen}>
                 {appended ? '원고 끝에 붙였습니다' : '현재 원고 끝에 붙이기'}
               </Button>
               {complete && runId && (
-                <Button variant="outline" onClick={() => void createChapter()} disabled={creating}>
+                <Button
+                  variant="outline"
+                  onClick={() => void createChapter()}
+                  disabled={creating || refineOpen}
+                >
                   새 회차로 만들기
                 </Button>
               )}
             </div>
+          )}
+          {finished && complete && runId && !appended && (
+            <DraftRefine
+              key={runId}
+              workId={data.workId}
+              runId={runId}
+              onPreviewChange={setRefineOpen}
+              onApplied={(text) => setDraft(text)}
+            />
           )}
         </div>
       )}
