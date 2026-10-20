@@ -158,6 +158,31 @@
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm vitest run --maxWorkers=2`, `pnpm build`.
 - [ ] Opus review of the stage 1b range along: stream framing and the panel, splice offsets on real drafts from `eval/results` (read-only), abort and budget handling, the expansion prompt as a model reads it in Korean and English, and cost. Skeptic per finding. Fix the confirmed findings, then gate again.
 
+## Task 5 (addendum after the review fixes): reach the floor, not just the share
+
+**Why (probe, 2026-10-21, haiku cloud, product prompt after the review fixes, `scratchpad/m0/expand-probe2.ts`):**
+- On four saved Korean first drafts (s1, s1r, s0fix, s0few run-04), picking spans under 90% and asking each for its share ended at 105%, 93%, 105% of the target. s1r stayed at 4,671 characters, under the 5,000 floor (T3), because its 91% span was not picked and its 652-character span only doubled.
+- Picking every span under its share and asking 1.1× the share ended at 101%, 111%, 96%, 99%, then 109% and 111% on a rerun. Expansions take 10–16 s each, with no banned phrase added and the span's last line kept in most cases.
+- 2 of 13 expansions came back as `note`. One ended with an echoed `</scene>` line around otherwise good text. The other did not reproduce.
+
+**Files:** `src/server/ai-features.ts`, `src/ai/tasks/draft-expand.ts`, `src/lib/draft-length.ts` (export only). Tests: `src/ai/tasks/draft-expand.fx5.s1b.test.ts`, `src/server/ai-features.expand-ask.s1b.test.ts`; update existing tests that pin the 90% pick or the share-sized ask.
+
+**Interfaces:**
+- `EXPAND_SHORT_RATIO = 1` (a span under its share is picked, when the whole draft is under target). `EXPAND_ASK_RATIO = 1.1`: a picked span's `<length>` asks `Math.round(share * 1.1)`, the middle of the draft's "target 이상, 1.2×target 이하" range. Picking order and `MAX_EXPAND_SPANS` stay.
+- `unwrapExpansion(text: string): string` in draft-expand.ts drops a first line that is exactly `<scene>` and a last line that is exactly `</scene>` (after trimming each line). `expandDraft` applies it to each expansion before `expansionRejection` and splicing. A tag anywhere else still rejects as `note`.
+- The expansion note check uses its own list: every `COMMENTARY_MARKERS` entry (exported from draft-length.ts, unchanged) except `/덧붙이지\s*않았/` and `/이어\s*쓰지\s*않았/`, which count only in the polite form (`/덧붙이지\s*않았습니다/`, `/이어\s*쓰지\s*않았습니다/`). Continue mode keeps the full list.
+- The announcing-line marker (`다음은|아래는|여기 … 장면|본문 … 입니다|이다`) is tested only against the first non-blank line of the expansion, not against every new sentence.
+
+- [ ] **Step 1: Write the failing tests:**
+  - A 3-span short draft whose span 0 is at 95% of its share now sends 3 `draft-expand` calls, and each prompt's `<length>` starts `공백 포함 약 ${Math.round(share * 1.1)}자`.
+  - An expansion wrapped as `<scene>\n…\n</scene>` is spliced without the tag lines; `…\n</scene>\n더 쓴 문장.` is still rejected as `note`.
+  - A new sentence `그는 아무것도 덧붙이지 않았다.` passes; a new `이어 쓸 내용이 없어 덧붙이지 않았습니다.` is `note`; `isContinuationCommentary('그는 아무것도 덧붙이지 않았다.')` is still true.
+  - `여기가 바로 그가 기다리던 장면이다.` as a middle sentence passes; `다음은 분량을 늘린 장면입니다.` as the first line is `note`.
+- [ ] **Step 2: Run** `pnpm vitest run src/ai/tasks/draft-expand.fx5.s1b.test.ts src/server/ai-features.expand-ask.s1b.test.ts --maxWorkers=2`. Expected: FAIL.
+- [ ] **Step 3: Implement** as in Interfaces.
+- [ ] **Step 4: Run** the new tests and `src/ai/tasks src/server/ai-features* src/lib/draft-length* eval/novel/run*`. Expected: PASS.
+- [ ] **Step 5: Commit:** `fix(draft): expand every short scene toward the middle of the range`.
+
 ## Measurement M1b (orchestrator)
 
 Worktree `../DaeumHwa-s1b` detached at the reviewed commit. Flags on every run: `--deploy-settings --directives on`.
