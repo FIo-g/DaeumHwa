@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { ExtractionSchema } from '@/ai/extraction'
 import type { AiClient, AiEffort, AiUsage } from '@/ai/types'
 import { MODEL_IDS, MODEL_PROFILES, createModelClient } from './novel/models'
+import { billedUsageOf } from './billed-usage'
 import { withEffort } from './effort-client'
 import { type ExtractionCompare, compareExtraction } from './replay-compare'
 
@@ -82,7 +83,7 @@ async function replayOne(
   } catch (error) {
     return {
       source: file,
-      usage: null,
+      usage: billedUsageOf(error),
       durationMs: Date.now() - started,
       output: null,
       error: error instanceof Error ? error.message : String(error),

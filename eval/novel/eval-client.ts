@@ -21,6 +21,7 @@ import {
 import type { AiTaskName } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { type HelperThink, type ModelProfile, thinkFor } from './models'
+import { billedUsageOf } from '../billed-usage'
 import { planRetry, type RetryBudget, type RetryHint, retryReasonOf } from './retry-budget'
 import { type PowerInfo, type PowerReader, UNKNOWN_POWER } from './power'
 import { EN_SYSTEMS } from './localize/en-systems'
@@ -175,22 +176,6 @@ function errorMessage(error: unknown): string {
     return String(error.message)
   }
   return String(error)
-}
-
-/**
- * Tokens a failed call was billed. The inner clients attach them to the AppError they throw, so a
- * call that failed after the server answered still counts in the run's totals.
- */
-function billedUsageOf(error: unknown): AiUsage | null {
-  if (!(error instanceof AppError)) return null
-  const usage = (error.details as { usage?: unknown } | undefined)?.usage
-  if (typeof usage !== 'object' || usage === null) return null
-  const { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens } = usage as Partial<AiUsage>
-  if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number') return null
-  const billed: AiUsage = { inputTokens, outputTokens }
-  if (typeof cacheReadTokens === 'number') billed.cacheReadTokens = cacheReadTokens
-  if (typeof cacheWriteTokens === 'number') billed.cacheWriteTokens = cacheWriteTokens
-  return billed
 }
 
 function errorField(error: unknown, key: 'status' | 'code' | 'cause'): unknown {

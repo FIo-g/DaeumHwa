@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { MAX_TOKENS_MESSAGE } from '@/ai/anthropic'
+import { AppError } from '@/lib/errors'
 import { FakeAiClient } from '@/test/fake-ai'
 import { replayCalls } from './replay-calls'
 
@@ -118,5 +120,74 @@ describe('replayCalls', () => {
     })
     expect(report.items).toHaveLength(3)
     expect(seen).toContain(16000)
+  })
+})
+
+describe('replayCalls failed calls', () => {
+  const validOutput = {
+    summary: null,
+    entries: [],
+    facts: [
+      {
+        subjectName: '서윤',
+        content: '서윤은 왼손잡이다',
+        evidence: '',
+        suggestedStatus: 'confirmed',
+        supersedesFactRef: null,
+      },
+    ],
+    threads: [],
+    relations: [],
+  }
+
+  it('counts the tokens a failed call was billed for', async () => {
+    let calls = 0
+    const client = new FakeAiClient({ overrides: { 'chapter-extract': () => validOutput } })
+    const original = client.generateObject.bind(client)
+    client.generateObject = async (args) => {
+      calls += 1
+      if (calls === 1) {
+        throw new AppError('AI_ERROR', MAX_TOKENS_MESSAGE, {
+          usage: { inputTokens: 100, outputTokens: 16000 },
+        })
+      }
+      return original(args)
+    }
+
+    const report = await replayCalls({
+      runs: [runDir],
+      task: 'chapter-extract',
+      effort: 'high',
+      client,
+      model: 'fake',
+    })
+
+    expect(report.items[0].usage).toEqual({ inputTokens: 100, outputTokens: 16000 })
+    expect(report.items[0].error).toBe(MAX_TOKENS_MESSAGE)
+    expect(report.items[0].compare).toBeNull()
+    const secondOutput = report.items[1].usage?.outputTokens ?? 0
+    expect(report.totals.outputTokens).toBe(16000 + secondOutput)
+  })
+
+  it('records null usage for an error that carries no billed tokens', async () => {
+    let calls = 0
+    const client = new FakeAiClient({ overrides: { 'chapter-extract': () => validOutput } })
+    const original = client.generateObject.bind(client)
+    client.generateObject = async (args) => {
+      calls += 1
+      if (calls === 1) throw new Error('x')
+      return original(args)
+    }
+
+    const report = await replayCalls({
+      runs: [runDir],
+      task: 'chapter-extract',
+      effort: 'high',
+      client,
+      model: 'fake',
+    })
+
+    expect(report.items[0].usage).toBeNull()
+    expect(report.items[0].error).toBe('x')
   })
 })
