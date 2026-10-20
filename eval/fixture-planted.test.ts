@@ -74,6 +74,7 @@ function plantedPack(): ContextPack {
     }),
   )
   return {
+    core: [],
     position: 4,
     entries,
     threads: [],

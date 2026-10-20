@@ -3,6 +3,7 @@ import type { ContextPack } from '@/ai/context'
 // Shared English sample inputs for the per-task prompt samples.
 
 export const pack: ContextPack = {
+  core: [],
   position: 3,
   entries: [
     {

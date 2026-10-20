@@ -11,6 +11,7 @@ import { fakeDraftBeats } from '@/test/ai-fakes/draft-beats'
 // P3: the eval-only scene location list (<scene_plan>) given to the continuity check.
 
 const pack: ContextPack = {
+  core: [],
   position: 1,
   entries: [
     {

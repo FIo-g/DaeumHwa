@@ -204,6 +204,7 @@ export type FactInput = {
   evidence?: string
   validFromPosition?: number | null
   validToPosition?: number | null
+  revealAtPosition?: number | null
 }
 
 export type FactPatch = Partial<
@@ -216,6 +217,7 @@ export type FactPatch = Partial<
     | 'sourceChapterId'
     | 'validFromPosition'
     | 'validToPosition'
+    | 'revealAtPosition'
   >
 >
 
@@ -239,6 +241,15 @@ function requireContent(content: string): string {
   const trimmed = content.trim()
   if (!trimmed) throw new AppError('VALIDATION', '사실 내용을 입력하세요.')
   return trimmed
+}
+
+/** The chapter from which a fact may be written in drafts (spoiler lock). Null or undefined pass through. */
+function requireReveal(position: number | null | undefined): number | null | undefined {
+  if (position === null || position === undefined) return position
+  if (!Number.isInteger(position) || position < 1) {
+    throw new AppError('VALIDATION', '공개 회차는 1 이상으로 적어 주세요.')
+  }
+  return position
 }
 
 export async function createFact(
@@ -278,6 +289,7 @@ export async function createFact(
         evidence: (input.evidence ?? '').trim(),
         validFromPosition: input.validFromPosition ?? null,
         validToPosition: input.validToPosition ?? null,
+        revealAtPosition: requireReveal(input.revealAtPosition) ?? null,
         createdByType: o.proposerType ?? 'author',
       })
       .returning()
@@ -320,6 +332,9 @@ export async function updateFact(
   }
   if (patch.validFromPosition !== undefined) set.validFromPosition = patch.validFromPosition
   if (patch.validToPosition !== undefined) set.validToPosition = patch.validToPosition
+  if (patch.revealAtPosition !== undefined) {
+    set.revealAtPosition = requireReveal(patch.revealAtPosition)
+  }
 
   return db.transaction(async (tx) => {
     const [row] = await tx

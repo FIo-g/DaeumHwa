@@ -15,6 +15,7 @@ import { READER_PERSONAS } from '@/ai/personas'
 import { respond } from './responders'
 
 const CONTINUITY_PACK: ContextPack = {
+  core: [],
   position: 2,
   entries: [
     {

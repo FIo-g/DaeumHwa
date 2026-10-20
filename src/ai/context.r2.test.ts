@@ -22,6 +22,7 @@ function thread(overrides: Partial<PackThread> & { ref: string; title: string })
 
 function packWith(threads: PackThread[]): ContextPack {
   return {
+    core: [],
     position: 3,
     entries: [],
     threads,

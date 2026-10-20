@@ -6,6 +6,7 @@ import type { IssueKind } from '@/db/types'
 import { fakeContinuity } from '@/test/ai-fakes/continuity-check'
 
 const pack: ContextPack = {
+  core: [],
   position: 1,
   entries: [
     {

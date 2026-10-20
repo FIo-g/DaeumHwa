@@ -35,6 +35,7 @@ function makePack(
     }),
   }))
   return {
+    core: [],
     position: 10,
     entries: packEntries,
     threads: [],

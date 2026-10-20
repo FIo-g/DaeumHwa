@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import type { AuthorDirectiveRow, EntryRow, FactRow, NamingRuleRow, StyleCardRow } from '@/db/types'
 import {
+  CONTEXT_TIERS,
   DIRECTIVE_KINDS,
   DIRECTIVE_SCOPES,
   DIRECTIVE_SOURCES,
@@ -36,6 +37,7 @@ const EntryFields = z.object({
     .array(z.object({ key: z.string().max(50), value: z.string().max(500) }))
     .max(30)
     .optional(),
+  contextTier: z.enum(CONTEXT_TIERS).optional(),
 })
 
 const CreateEntrySchema = EntryFields.extend({ workId: z.uuid() })
@@ -52,6 +54,7 @@ const FactFields = z.object({
   evidence: z.string().max(2000).optional(),
   validFromPosition: z.number().int().nullable().optional(),
   validToPosition: z.number().int().nullable().optional(),
+  revealAtPosition: z.number().int().nullable().optional(),
 })
 
 const CreateFactSchema = FactFields.extend({ workId: z.uuid() })

@@ -53,6 +53,8 @@ export type PackThread = {
 
 export type ContextPack = {
   position: number
+  /** Always-tier entries kept out of the budget (only with `splitCore`); see `renderCoreEntries`. */
+  core: PackEntry[]
   entries: PackEntry[]
   threads: PackThread[]
   relations: { sourceName: string; targetName: string; kind: string; description: string }[]
@@ -62,6 +64,8 @@ export type ContextPack = {
 }
 
 const DEFAULT_BUDGET_CHARS = 12_000
+/** Rendered size limit for core entries (always-tier cards in the cached prompt prefix). */
+export const CORE_BUDGET_CHARS = 4_000
 /** Budget for the continuity check (H). Named cards are kept over it by trimming their facts. */
 export const CONTINUITY_BUDGET_CHARS = 16_000
 const NAMED_SUMMARY_CAP = 200
@@ -119,6 +123,12 @@ interface Selection {
  * With `keepNamed`, a card whose name occurs anywhere in the text (even inside a compound such
  * as "종루지기") is also chosen, and it is never dropped: facts are trimmed instead, then its
  * summary is capped. Extra ids are dropped first.
+ *
+ * Context tiers: a `never` entry is not chosen by name (only through `extraEntryIds`), and an
+ * `always` entry is chosen even when the text does not name it. With `splitCore`, chosen `always`
+ * entries go to `core` in name order while they fit `CORE_BUDGET_CHARS`; the rest stay in
+ * `entries`. Core entries are outside the budget and are never cut. With `hideUnrevealed`, a fact
+ * whose `revealAtPosition` is after `position` is left out.
  */
 export async function buildContextPack(
   db: Db,
@@ -129,6 +139,8 @@ export async function buildContextPack(
     extraEntryIds?: string[]
     budgetChars?: number
     keepNamed?: boolean
+    hideUnrevealed?: boolean
+    splitCore?: boolean
   },
 ): Promise<ContextPack> {
   const position = input.position
@@ -152,7 +164,10 @@ export async function buildContextPack(
     .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
   const entryById = new Map(entryRows.map((e) => [e.id, e]))
 
-  const targets = entryRows.map((e) => ({ id: e.id, names: [e.name, ...e.aliases] }))
+  // `never` entries take no part in name matching.
+  const targets = entryRows
+    .filter((e) => e.contextTier !== 'never')
+    .map((e) => ({ id: e.id, names: [e.name, ...e.aliases] }))
   const mentions = findMentions(input.text, targets)
   const mentionCount = new Map(mentions.map((m) => [m.entryId, m.count]))
   const chosenIds: string[] = []
@@ -163,6 +178,10 @@ export async function buildContextPack(
     }
   }
   const namedIds = new Set(chosenIds)
+  const alwaysIds = new Set(entryRows.filter((e) => e.contextTier === 'always').map((e) => e.id))
+  for (const id of alwaysIds) {
+    if (!chosenIds.includes(id)) chosenIds.push(id)
+  }
   for (const id of input.extraEntryIds ?? []) {
     if (entryById.has(id) && !chosenIds.includes(id)) chosenIds.push(id)
   }
@@ -183,7 +202,12 @@ export async function buildContextPack(
   const selectedEntries: SelectedEntry[] = chosenIds.map((id) => {
     const entry = entryById.get(id) as (typeof entryRows)[number]
     const usable = factRows
-      .filter((f) => f.entryId === id && isFactValidAt(f, position))
+      .filter(
+        (f) =>
+          f.entryId === id &&
+          isFactValidAt(f, position) &&
+          !(input.hideUnrevealed && isUnrevealed(f, position)),
+      )
       .sort(
         (a, b) =>
           STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
@@ -294,15 +318,25 @@ export async function buildContextPack(
     .sort((a, b) => a.canonical.localeCompare(b.canonical) || a.id.localeCompare(b.id))
     .map((r) => ({ canonical: r.canonical, variants: r.variants }))
 
+  // Core entries are packed first and leave the budgeted selection, so they are never cut.
+  const core = input.splitCore
+    ? packCore(
+        selectedEntries
+          .filter((e) => alwaysIds.has(e.id))
+          .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+      )
+    : []
+  const coreIds = new Set(core.map((c) => c.id))
+
   const selection: Selection = {
-    entries: selectedEntries,
+    entries: selectedEntries.filter((e) => !coreIds.has(e.id)),
     threads: openThreads,
     relations: relationCandidates,
     previousSummaries,
     namingRules: rules,
   }
 
-  const measure = () => renderPack(assemble(position, selection, entryRows.length)).length
+  const measure = () => renderPack(assemble(position, selection, entryRows.length, core)).length
   if (input.keepNamed) {
     trimKeepingNamed(selection, budget, measure)
   } else {
@@ -324,9 +358,27 @@ export async function buildContextPack(
     }
   }
 
-  const pack = assemble(position, selection, entryRows.length)
+  const pack = assemble(position, selection, entryRows.length, core)
   pack.stats.approxChars = renderPack(pack).length
   return pack
+}
+
+/** Packs core candidates in the order given while their rendered size fits CORE_BUDGET_CHARS. Stops at the first that does not fit. */
+function packCore(candidates: SelectedEntry[]): PackEntry[] {
+  const core: PackEntry[] = []
+  let chars = 0
+  for (const candidate of candidates) {
+    const entry = toPackEntry(candidate, `E${core.length + 1}`, factCountOf(core))
+    const size = renderEntryLines(entry).join('\n').length + 1
+    if (chars + size > CORE_BUDGET_CHARS) break
+    chars += size
+    core.push(entry)
+  }
+  return core
+}
+
+function factCountOf(entries: PackEntry[]): number {
+  return entries.reduce((sum, entry) => sum + entry.facts.length, 0)
 }
 
 /**
@@ -396,15 +448,7 @@ export function renderContextPack(pack: ContextPack, options?: RenderContextPack
 
   lines.push('<entries>')
   if (pack.entries.length === 0) lines.push('(없음)')
-  for (const entry of pack.entries) {
-    lines.push(`[${entry.ref}] ${entry.name} (${ENTRY_KIND_LABEL[entry.kind]})`)
-    if (entry.aliases.length > 0) lines.push(`- 별칭: ${entry.aliases.join(', ')}`)
-    if (entry.summary) lines.push(`- 요약: ${entry.summary}`)
-    for (const key of Object.keys(entry.fields).sort()) {
-      lines.push(`- ${FIELD_LABELS[key] ?? key}: ${entry.fields[key]}`)
-    }
-    for (const fact of entry.facts) lines.push(`- ${renderFact(fact)}`)
-  }
+  for (const entry of pack.entries) lines.push(...renderEntryLines(entry))
   lines.push('</entries>', '')
 
   lines.push('<threads>')
@@ -440,7 +484,13 @@ export function renderContextPack(pack: ContextPack, options?: RenderContextPack
   return lines.join('\n')
 }
 
-/** Maps every ref in a pack back to its record. Facts also carry their entry id. */
+/** Core entries in the `<entries>` format, without a wrapper tag. `''` when there are none. */
+export function renderCoreEntries(pack: ContextPack): string {
+  if (pack.core.length === 0) return ''
+  return pack.core.flatMap((entry) => renderEntryLines(entry)).join('\n')
+}
+
+/** Maps every ref in a pack back to its record. Facts also carry their entry id. Core entries are included. */
 export function resolveRefs(pack: ContextPack): {
   facts: Map<string, PackFact & { entryId: string }>
   entries: Map<string, PackEntry>
@@ -448,7 +498,7 @@ export function resolveRefs(pack: ContextPack): {
 } {
   const factMap = new Map<string, PackFact & { entryId: string }>()
   const entryMap = new Map<string, PackEntry>()
-  for (const entry of pack.entries) {
+  for (const entry of [...pack.core, ...pack.entries]) {
     entryMap.set(entry.ref, entry)
     for (const fact of entry.facts) factMap.set(fact.ref, { ...fact, entryId: entry.id })
   }
@@ -456,28 +506,26 @@ export function resolveRefs(pack: ContextPack): {
   return { facts: factMap, entries: entryMap, threads: threadMap }
 }
 
-function assemble(position: number, selection: Selection, totalEntries: number): ContextPack {
-  let factCount = 0
-  const entries: PackEntry[] = selection.entries.map((entry, index) => ({
-    ref: `E${index + 1}`,
-    id: entry.id,
-    kind: entry.kind,
-    name: entry.name,
-    aliases: entry.aliases,
-    summary: entry.summary,
-    fields: entry.fields,
-    mentionCount: entry.mentionCount,
-    facts: entry.facts.map((fact) => {
-      factCount += 1
-      return { ...fact, ref: `F${factCount}` }
-    }),
-  }))
+/** Refs continue after the core entries: entries and facts are numbered from where core stops. */
+function assemble(
+  position: number,
+  selection: Selection,
+  totalEntries: number,
+  core: PackEntry[],
+): ContextPack {
+  let factCount = factCountOf(core)
+  const entries: PackEntry[] = selection.entries.map((entry, index) => {
+    const packed = toPackEntry(entry, `E${core.length + index + 1}`, factCount)
+    factCount += entry.facts.length
+    return packed
+  })
   const threadList: PackThread[] = selection.threads.map((thread, index) => ({
     ...thread,
     ref: `T${index + 1}`,
   }))
   return {
     position,
+    core,
     entries,
     threads: threadList,
     relations: selection.relations.map((r) => ({
@@ -488,8 +536,35 @@ function assemble(position: number, selection: Selection, totalEntries: number):
     })),
     previousSummaries: selection.previousSummaries,
     namingRules: selection.namingRules,
-    stats: { totalEntries, selectedEntries: entries.length, approxChars: 0 },
+    stats: { totalEntries, selectedEntries: core.length + entries.length, approxChars: 0 },
   }
+}
+
+/** Gives a selected entry its pack ref and numbers its facts from `firstFact + 1`. */
+function toPackEntry(entry: SelectedEntry, ref: string, firstFact: number): PackEntry {
+  return {
+    ref,
+    id: entry.id,
+    kind: entry.kind,
+    name: entry.name,
+    aliases: entry.aliases,
+    summary: entry.summary,
+    fields: entry.fields,
+    mentionCount: entry.mentionCount,
+    facts: entry.facts.map((fact, index) => ({ ...fact, ref: `F${firstFact + index + 1}` })),
+  }
+}
+
+/** The entry's block in `<entries>` form: a header line, then one line per field and fact. */
+function renderEntryLines(entry: PackEntry): string[] {
+  const lines = [`[${entry.ref}] ${entry.name} (${ENTRY_KIND_LABEL[entry.kind]})`]
+  if (entry.aliases.length > 0) lines.push(`- 별칭: ${entry.aliases.join(', ')}`)
+  if (entry.summary) lines.push(`- 요약: ${entry.summary}`)
+  for (const key of Object.keys(entry.fields).sort()) {
+    lines.push(`- ${FIELD_LABELS[key] ?? key}: ${entry.fields[key]}`)
+  }
+  for (const fact of entry.facts) lines.push(`- ${renderFact(fact)}`)
+  return lines
 }
 
 function renderPack(pack: ContextPack): string {
@@ -530,6 +605,11 @@ function isFactValidAt(
   if (fact.validFromPosition !== null && position < fact.validFromPosition) return false
   if (fact.validToPosition !== null && position > fact.validToPosition) return false
   return true
+}
+
+/** A fact with a reveal chapter is unknown to the author's reader until that chapter (spoiler lock). */
+function isUnrevealed(fact: { revealAtPosition: number | null }, position: number): boolean {
+  return fact.revealAtPosition !== null && fact.revealAtPosition > position
 }
 
 function isRelationValidAt(start: number | null, end: number | null, position: number): boolean {
