@@ -14,9 +14,11 @@ import {
 } from '@/ai/run'
 import type { ForeignSpan } from '@/ai/guards'
 import type { AiClient } from '@/ai/types'
+import { draftModeFromEnv, type DraftMode } from '@/ai/draft-mode'
 import {
   buildContinuationPrompt,
   buildDraftPrompt,
+  buildScenePrompt,
   CONTINUE_EFFORT,
   CONTINUE_MAX_TOKENS,
   DRAFT_EFFORT,
@@ -100,6 +102,8 @@ const DRAFT_TOTAL_BUDGET_MS = 290_000
 const MIN_FIRST_STREAM_MS = 10_000
 /** A continuation is not started with less time left than this. */
 const MIN_CONTINUATION_MS = 30_000
+/** Joins the scenes of a `scenes`-mode draft. The model is not asked to write it. */
+const SCENE_SEPARATOR = '\n\n***\n\n'
 /** Foreign-script repair (eval only): model calls at most, and sentences sent in one call. */
 const MAX_REPAIR_ROUNDS = 2
 const MAX_REPAIR_SENTENCES = 30
@@ -514,6 +518,8 @@ export async function startDraft(
     planRunId?: string
     /** How the author changed the card; counted as plan_edited. */
     planEdits?: PlanEdits
+    /** Comparison only: `scenes` writes one call per scene. Default from AI_DRAFT_MODE. Needs `plan`. */
+    mode?: DraftMode
   },
   client?: AiClient,
   signal?: AbortSignal,
@@ -580,6 +586,8 @@ export async function startDraft(
     MIN_FIRST_STREAM_MS,
     Math.min(STREAM_AI_TIMEOUT_MS, DRAFT_TOTAL_BUDGET_MS - (Date.now() - startedAt)),
   )
+  // Scenes mode: the first call writes the first scene only, and completeScenes writes the rest.
+  const scenesCard = card && (input.mode ?? draftModeFromEnv()) === 'scenes' ? card : null
   const first = await startAiStream(
     db,
     { userId: actor.userId, workId, chapterId, signal, timeoutMs: firstTimeoutMs },
@@ -589,7 +597,9 @@ export async function startDraft(
       effort: DRAFT_EFFORT,
       maxTokens: DRAFT_MAX_TOKENS,
       system: DRAFT_SYSTEM,
-      prompt: buildDraftPrompt(finalInput),
+      prompt: scenesCard
+        ? buildScenePrompt(finalInput, scenesCard, 0, '')
+        : buildDraftPrompt(finalInput),
     },
     client,
   )
@@ -625,11 +635,19 @@ export async function startDraft(
   }
 
   const pipe = createTextPipe()
-  const drafted = completeDraft(
-    { db, actor, workId, chapterId, promptInput: finalInput, client, signal, startedAt },
-    first,
-    pipe,
-  )
+  const ctx: DraftContext = {
+    db,
+    actor,
+    workId,
+    chapterId,
+    promptInput: finalInput,
+    client,
+    signal,
+    startedAt,
+  }
+  const drafted = scenesCard
+    ? completeScenes(ctx, first, pipe, scenesCard)
+    : completeDraft(ctx, first, pipe)
   // The plan joins the run output once the text is final, so the stored text is still the one streamed.
   // The text is already stored and streamed here, so a lost plan annotation must not fail the draft.
   const done = card
@@ -742,6 +760,112 @@ async function completeDraft(
   pipe.push(joined.slice(firstText.length))
   pipe.end()
   return joined
+}
+
+/**
+ * Writes a plan card one scene per call (`scenes` mode). The first scene is the draft run; each later
+ * scene is its own `draft-scene` run, streamed to `pipe` as it arrives. A later scene that fails or
+ * has too little time left ends the draft: the text written so far is kept, with a SCENES_CUT
+ * warning. Only a user abort rejects. Stored and streamed text are the same.
+ */
+async function completeScenes(
+  ctx: DraftContext,
+  first: { runId: string; textStream: AsyncIterable<string>; done: Promise<string> },
+  pipe: TextPipe,
+  card: DraftPlanCard,
+): Promise<string> {
+  const { db, actor, workId, chapterId, promptInput, client, signal } = ctx
+  // Everything pushed to the pipe so far. It is what gets stored.
+  const written = { text: '' }
+  try {
+    await streamScene(first.textStream, pipe, written, '')
+    await first.done
+  } catch (error) {
+    pipe.fail(error)
+    throw error
+  }
+
+  let scenesWritten = 1
+  let cut = false
+  for (let index = 1; index < card.scenes.length && !cut; index++) {
+    const remaining = Math.min(
+      DRAFT_TOTAL_BUDGET_MS - (Date.now() - ctx.startedAt),
+      STREAM_AI_TIMEOUT_MS,
+    )
+    // The abort check comes first, so an abort still rejects below instead of skipping.
+    if (!signal?.aborted && remaining < MIN_CONTINUATION_MS) {
+      cut = true
+      break
+    }
+    const before = written.text.length
+    try {
+      const scene = await startAiStream(
+        db,
+        { userId: actor.userId, workId, chapterId, signal, timeoutMs: remaining },
+        {
+          task: 'draft-scene',
+          input: { instructions: promptInput.instructions },
+          effort: DRAFT_EFFORT,
+          maxTokens: DRAFT_MAX_TOKENS,
+          system: DRAFT_SYSTEM,
+          prompt: buildScenePrompt(promptInput, card, index, written.text),
+        },
+        client,
+      )
+      await streamScene(scene.textStream, pipe, written, SCENE_SEPARATOR)
+      await scene.done
+    } catch (error) {
+      if (signal?.aborted) {
+        pipe.fail(error)
+        throw error
+      }
+      cut = true
+      break
+    }
+    // A scene that wrote nothing is a failed scene.
+    if (written.text.length === before) {
+      cut = true
+      break
+    }
+    scenesWritten = index + 1
+  }
+
+  try {
+    await replaceRunOutput(
+      db,
+      first.runId,
+      cut
+        ? { text: written.text, warnings: [{ code: 'SCENES_CUT', scenesWritten }] }
+        : { text: written.text },
+    )
+  } catch (error) {
+    pipe.fail(error)
+    throw error
+  }
+  pipe.end()
+  return written.text
+}
+
+/**
+ * Passes one scene's chunks on to `pipe` as they arrive and appends them to `written`. Leading
+ * whitespace of the scene is dropped, and `joint` goes out with the first kept chunk, so a scene
+ * that yields nothing adds nothing to the text.
+ */
+async function streamScene(
+  source: AsyncIterable<string>,
+  pipe: TextPipe,
+  written: { text: string },
+  joint: string,
+): Promise<void> {
+  let started = false
+  for await (const chunk of source) {
+    const piece = started ? chunk : chunk.trimStart()
+    if (piece === '') continue
+    const out = (started ? '' : joint) + piece
+    started = true
+    written.text += out
+    pipe.push(out)
+  }
 }
 
 /**

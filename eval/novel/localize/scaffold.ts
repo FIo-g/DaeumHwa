@@ -94,6 +94,12 @@ const RULES: readonly Rule[] = [
   ['일어나는 일: ', 'What happens: '],
   ['감정의 계기: ', 'Emotional trigger: '],
   ['움직일 떡밥: ', 'Threads to move: '],
+  // Scene call (scenes mode, buildScenePrompt). The whole line comes first: it carries the counts.
+  [
+    /장면 (\d+)만 쓰고 멈춘다\. 이 장면은 공백 포함 약 ([\d,]+)자\. 지금까지 ([\d,]+)자를 썼고 회차 목표까지 ([\d,]+)자 남았다\./g,
+    'Write only scene $1 and stop. This scene is about $2 characters including spaces. So far $3 characters are written, and $4 characters remain to the chapter target.',
+  ],
+  [' 이 장면이 마지막 장면이다.', ' This is the last scene.'],
   // Draft length lines (brief A). The continuation line comes first: its tail would otherwise match
   // the minimum-and-maximum rule below and leave Korean behind.
   [

@@ -4,6 +4,7 @@
 import { neutralizeDeep, neutralizeTags, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { continuationPlan, draftCharCount, draftLengthPlan } from '@/lib/draft-length'
 import { renderVoiceLines, type VoiceLine } from '@/ai/voice'
+import type { DraftPlanCard } from '@/lib/draft-plan'
 
 export const DRAFT_SYSTEM = `당신은 웹소설 작가의 초안 작성을 돕는 보조 작가다. 작가의 지시와 설정 위키, 문체 카드를 따라 회차 초안을 쓴다.
 규칙:
@@ -100,6 +101,31 @@ export function buildDraftPrompt(
     input.previousTail ?? '(없음)',
     '</previous_tail>',
     ...beatsSection(input.beats),
+  ].join('\n')
+}
+
+/**
+ * Prompt for one scene call in `scenes` mode: the draft prompt, then the text written so far and
+ * the scene's length line. `soFar` is the chapter text before this scene (empty for the first one).
+ */
+export function buildScenePrompt(
+  raw: DraftPromptInput,
+  card: DraftPlanCard,
+  index: number,
+  soFar: string,
+): string {
+  const scene = card.scenes[index]
+  const count = draftCharCount(soFar)
+  const remaining = Math.max(0, raw.targetChars - count)
+  const last = index === card.scenes.length - 1
+  const line = `장면 ${index + 1}만 쓰고 멈춘다. 이 장면은 공백 포함 약 ${scene.targetChars}자. 지금까지 ${count}자를 썼고 회차 목표까지 ${remaining}자 남았다.${last ? ' 이 장면이 마지막 장면이다.' : ''}`
+  return [
+    buildDraftPrompt(raw),
+    '',
+    '<draft_so_far>',
+    soFar === '' ? '(없음)' : neutralizeTags(soFar),
+    '</draft_so_far>',
+    `<scene_now>${line}</scene_now>`,
   ].join('\n')
 }
 
