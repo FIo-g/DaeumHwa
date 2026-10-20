@@ -1,4 +1,5 @@
 import { stripJosa } from '@/lib/korean/josa'
+import { koreanNumbersToDigits } from '@/lib/korean/numbers'
 import { bigramDice, normalizeForCompare } from './similarity'
 
 /** Bigram Dice at or above which two fact sentences count as the same fact. Calibrated on six saved runs in docs/eval/novel/2026-10-19-thresholds.md. */
@@ -18,17 +19,24 @@ export const FACT_DUPLICATE_DICE = 0.7
  *   the words enough to differ.
  * - English antonyms inside long sentences keep a high Dice (left-/right-handed and calm is
  *   about 0.83) and are reported as duplicates; the word check covers Hangul words only.
- * - No number or synonym normalization: `19` and `nineteen` score about 0.58, so they are not
- *   duplicates. Korean number words such as 열아홉 are not compared with digits.
- * - A different number always means a different fact (digit rule).
+ * - Korean number words directly before a counter are read as digits first (koreanNumbersToDigits:
+ *   열아홉 살 = 19살, 서른 닢 = 30닢, 구층 = 9층). Number words it does not read (no counter, a counter
+ *   outside its list, 열명 without a space) and English number words stay unnormalized: `19` and
+ *   `nineteen` score about 0.58, so they are not duplicates.
+ * - A different number always means a different fact (digit rule); the digit rule sees the digits
+ *   produced by the conversion.
  *
  * `minDice` exists for the threshold replay (eval/novel/thresholds.ts); product callers use the default.
  */
 export function isNearDuplicateFact(
-  a: string,
-  b: string,
+  rawA: string,
+  rawB: string,
   minDice: number = FACT_DUPLICATE_DICE,
 ): boolean {
+  // Read Korean number words as digits first, so 열아홉 살 and 19살 compare as one fact. The digit
+  // rule, Dice and the content-word check below all see the converted strings.
+  const a = koreanNumbersToDigits(rawA.normalize('NFC'))
+  const b = koreanNumbersToDigits(rawB.normalize('NFC'))
   const na = normalizeForCompare(a)
   const nb = normalizeForCompare(b)
   if (na === '' || nb === '') return false
