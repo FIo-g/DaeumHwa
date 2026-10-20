@@ -10,6 +10,7 @@ import {
 import path from 'node:path'
 import type { AiUsage } from '@/ai/types'
 import type { CallRecord } from './eval-client'
+import { loadRunBible } from './bible'
 import { MODEL_PROFILES } from './models'
 import { loadConfig } from './state'
 import { SECOND_REVIEW_FILE } from './review-verdict'
@@ -265,6 +266,19 @@ export function writeBlindCopy(
   }
   write('reference/criteria.md', criteria)
   write('reference/spec-section-9.md', section)
+  // A few-instruction run gives the author one sentence, so the reviewer gets the bible's events to judge T1.
+  const config = loadConfig(run)
+  if (config.fewInstructions === true) {
+    const bible = loadRunBible(run, config.lang)
+    const events = {
+      chapters: bible.chapters.slice(0, config.chapters).map((chapter, index) => ({
+        n: index + 1,
+        instructions: chapter.instructions,
+        mustInclude: chapter.mustInclude,
+      })),
+    }
+    write('reference/chapter-events.json', maskReferenceText(jsonText(events)))
+  }
 
   const leaks = findLeaks(out)
   if (leaks.length > 0) throw new Error(`model name left in blind copy: ${leaks.join(', ')}`)

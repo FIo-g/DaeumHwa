@@ -37,6 +37,7 @@ You are the author of the web novel *The Key to the Ashen Bell Tower*. You are u
   - It is written in a language other than English, or mixes in another language.
   - It contains non-prose text such as a title, commentary, or "Here is the draft".
   - More than half of the chapter instruction events (`mustInclude`) are missing.
+- Check only the `mustInclude` list in pending.json. Do not check the bible's chapter `mustInclude`. If the list is empty, skip this item.
 - Otherwise it is usable. Even if the writing is clumsy, accept it as it is without rewriting.
 - Rate `quality` 1–5 as an overall impression of it as a publishable manuscript (3 = usable with edits).
 
