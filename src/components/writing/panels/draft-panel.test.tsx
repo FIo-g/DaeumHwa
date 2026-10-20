@@ -103,7 +103,7 @@ function startDraft(instructions = '주인공이 성문을 연다.') {
   fireEvent.change(screen.getByLabelText('무슨 일이 일어나야 하나요?'), {
     target: { value: instructions },
   })
-  fireEvent.click(screen.getByRole('button', { name: '초안 쓰기' }))
+  fireEvent.click(screen.getByRole('button', { name: '바로 쓰기' }))
 }
 
 beforeEach(() => {

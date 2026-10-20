@@ -100,7 +100,7 @@ describe('DraftPanel usage notice (stage 0)', () => {
     fireEvent.change(screen.getByLabelText('무슨 일이 일어나야 하나요?'), {
       target: { value: '주인공이 성문을 연다.' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '초안 쓰기' }))
+    fireEvent.click(screen.getByRole('button', { name: '바로 쓰기' }))
     fireEvent.click(await screen.findByRole('button', { name: '현재 원고 끝에 붙이기' }))
 
     await waitFor(() =>

@@ -11,9 +11,15 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { runAction } from '@/lib/client/run-action'
 import { useAiRun } from '@/lib/client/use-ai-run'
+import { type DraftPlanCard, type PlanEdits, planWarnings } from '@/lib/draft-plan'
 import { parseDraftStream } from '@/lib/draft-stream'
-import { createChapterFromDraftAction, recordDraftUseAction } from '@/server/actions/ai-features'
+import {
+  createChapterFromDraftAction,
+  planDraftAction,
+  recordDraftUseAction,
+} from '@/server/actions/ai-features'
 import type { WorkspaceApi, WritingData } from '../types'
+import { DraftPlanCardView, type PlanEditKind } from './draft-plan-card'
 import { DraftRefine } from './draft-refine'
 import { EDITOR_ONLY_NOTE, canEditChapter } from './shared'
 
@@ -24,6 +30,9 @@ type DraftPanelProps = {
 
 const TARGET_MIN = 500
 const TARGET_MAX = 20000
+const INSTRUCTION_PLACEHOLDER =
+  '무슨 일이 일어나야 하나요? 비워 두면 위키와 지난 화를 보고 계획을 제안해요.'
+const NO_EDITS: PlanEdits = { revisions: 0, removed: 0, moved: 0, textEdits: 0 }
 const USAGE_NOTICE =
   '초안 품질을 높이려고 초안을 쓴 횟수와 고친 글자 비율 같은 숫자만 셉니다. 원고 내용은 모으지 않습니다.'
 
@@ -40,6 +49,11 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   const [instructions, setInstructions] = useState('')
   const [targetChars, setTargetChars] = useState(String(data.targetChars))
   const [entryIds, setEntryIds] = useState<string[]>([])
+  // The chapter plan card from 계획 세우기, and the author's edits to it. Null until a plan is made.
+  const [card, setCard] = useState<DraftPlanCard | null>(null)
+  const [planRunId, setPlanRunId] = useState<string | null>(null)
+  const [planEdits, setPlanEdits] = useState<PlanEdits>(NO_EDITS)
+  const [planning, setPlanning] = useState(false)
   const ai = useAiRun()
   const [draft, setDraft] = useState<string | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
@@ -63,7 +77,13 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
    */
   async function streamDraft(
     signal: AbortSignal,
-    body: { instructions: string; targetChars: number },
+    body: {
+      instructions: string
+      targetChars: number
+      plan?: DraftPlanCard
+      planRunId?: string
+      planEdits?: PlanEdits
+    },
   ): Promise<boolean> {
     try {
       const response = await fetch(`/api/works/${data.workId}/draft`, {
@@ -104,19 +124,61 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     }
   }
 
-  async function write() {
-    const trimmed = instructions.trim()
-    if (trimmed === '') {
-      toast.error('무슨 일이 일어나야 하는지 적어 주세요.')
-      return
-    }
+  /** The target length from the input, or null after a toast says what to fix. */
+  function checkedTarget(): number | null {
     const target = Number(targetChars)
     if (!Number.isInteger(target) || target < TARGET_MIN || target > TARGET_MAX) {
       toast.error(
         `목표 분량은 ${TARGET_MIN}자에서 ${TARGET_MAX.toLocaleString('ko-KR')}자 사이로 적어 주세요.`,
       )
+      return null
+    }
+    return target
+  }
+
+  /** Asks the server for a chapter plan card. A note revises the current card instead. */
+  async function plan(note?: string) {
+    const target = checkedTarget()
+    if (target === null) return
+    const revising = card !== null && note !== undefined
+    setPlanning(true)
+    const result = await runAction(
+      planDraftAction({
+        workId: data.workId,
+        chapterId: data.chapter.id,
+        instructions: instructions.trim(),
+        targetChars: target,
+        entryIds,
+        ...(revising ? { revision: { card, note } } : {}),
+      }),
+    )
+    setPlanning(false)
+    if (!result) return
+    setCard(result.card)
+    setPlanRunId(result.runId)
+    // A new plan starts its own edit counts; a revision adds to the counts of the card it changes.
+    setPlanEdits((prev) => (revising ? { ...prev, revisions: prev.revisions + 1 } : NO_EDITS))
+  }
+
+  function editPlan(next: DraftPlanCard, edit?: PlanEditKind) {
+    setCard(next)
+    if (edit) setPlanEdits((prev) => ({ ...prev, [edit]: prev[edit] + 1 }))
+  }
+
+  /**
+   * Writes the draft. `withPlan` sends the current card (the instruction may be empty then);
+   * without it this is the quick path, which needs an instruction.
+   */
+  async function write(withPlan: boolean) {
+    const trimmed = instructions.trim()
+    if (!withPlan && trimmed === '') {
+      toast.error('무슨 일이 일어나야 하는지 적어 주세요.')
       return
     }
+    const target = checkedTarget()
+    if (target === null) return
+    const planBody =
+      withPlan && card && planRunId ? { plan: card, planRunId, planEdits } : undefined
 
     setDraft('')
     setRunId(null)
@@ -127,7 +189,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     // Resolves null when the author cancels, false when the stream failed (a toast says why), and
     // true only when the whole draft arrived. Anything but true keeps the partial text as stopped.
     const completed = await ai.run((signal) =>
-      streamDraft(signal, { instructions: trimmed, targetChars: target }),
+      streamDraft(signal, { instructions: trimmed, targetChars: target, ...planBody }),
     )
     if (completed !== true) {
       setStopped(true)
@@ -179,6 +241,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         <Textarea
           id="draft-instructions"
           value={instructions}
+          placeholder={INSTRUCTION_PLACEHOLDER}
           onChange={(event) => setInstructions(event.target.value)}
           rows={4}
           maxLength={5000}
@@ -220,13 +283,33 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         </fieldset>
       )}
 
-      <div>
+      {card && (
+        <DraftPlanCardView
+          card={card}
+          warnings={planWarnings(card)}
+          busy={planning || streaming}
+          onChange={editPlan}
+          onRevise={(note) => void plan(note)}
+          onWrite={() => void write(true)}
+        />
+      )}
+
+      <div className="flex flex-wrap gap-2">
         {streaming ? (
           <AiRunStatus label="쓰는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
         ) : (
-          <Button onClick={() => void write()} disabled={instructions.trim() === ''}>
-            초안 쓰기
-          </Button>
+          <>
+            <Button onClick={() => void plan()} disabled={planning}>
+              계획 세우기
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void write(false)}
+              disabled={instructions.trim() === '' || planning}
+            >
+              바로 쓰기
+            </Button>
+          </>
         )}
       </div>
 
