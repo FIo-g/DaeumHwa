@@ -33,6 +33,9 @@ const TARGET_MAX = 20000
 const INSTRUCTION_PLACEHOLDER =
   '무슨 일이 일어나야 하나요? 비워 두면 위키와 지난 화를 보고 계획을 제안해요.'
 const NO_EDITS: PlanEdits = { revisions: 0, removed: 0, moved: 0, textEdits: 0 }
+// Shown while the stream is quiet for this long after the first text: the scenes are being expanded.
+const FILLING_NOTE_MS = 3000
+const FILLING_NOTE = '분량을 채우는 중'
 const USAGE_NOTICE =
   '초안 품질을 높이려고 초안을 쓴 횟수와 고친 글자 비율 같은 숫자만 셉니다. 원고 내용은 모으지 않습니다.'
 
@@ -64,6 +67,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   const [complete, setComplete] = useState(false)
   const [stopped, setStopped] = useState(false)
   const [appended, setAppended] = useState(false)
+  // True while the open stream has been quiet for FILLING_NOTE_MS after its first text.
+  const [filling, setFilling] = useState(false)
   const [creating, setCreating] = useState(false)
   // True while a 다듬기 preview is open; its buttons hold the append and new-chapter actions.
   const [refineOpen, setRefineOpen] = useState(false)
@@ -104,11 +109,25 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let raw = ''
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done || signal.aborted) break
-        raw += decoder.decode(value, { stream: true })
-        setDraft(parseDraftStream(raw).text)
+      let quiet: ReturnType<typeof setTimeout> | undefined
+      // Each new piece of text restarts the quiet timer. Only the stall after the first text shows.
+      const onText = () => {
+        clearTimeout(quiet)
+        setFilling(false)
+        quiet = setTimeout(() => setFilling(true), FILLING_NOTE_MS)
+      }
+      try {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done || signal.aborted) break
+          const piece = decoder.decode(value, { stream: true })
+          raw += piece
+          if (piece !== '') onText()
+          setDraft(parseDraftStream(raw).text)
+        }
+      } finally {
+        clearTimeout(quiet)
+        setFilling(false)
       }
       raw += decoder.decode()
       if (signal.aborted) return false
@@ -355,6 +374,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           >
             {draft === '' ? '초안을 기다리는 중입니다.' : draft}
           </div>
+          {filling && <p className="text-xs text-muted-foreground">{FILLING_NOTE}</p>}
           <p className="text-xs text-muted-foreground">
             AI 초안은 작가가 고치고 저장해야 원고가 됩니다.
           </p>

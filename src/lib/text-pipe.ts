@@ -2,8 +2,12 @@
 // chunks from the start, then either the normal end or the failure. A producer that never has a
 // reader is fine: the chunks simply stay in memory.
 
+import { draftReplaceRecord } from '@/lib/draft-stream'
+
 export type TextPipe = {
   push(chunk: string): void
+  /** Sends a replace record: readers take `text` as the whole draft from here on. */
+  replace(text: string): void
   end(): void
   fail(error: unknown): void
   iterable: AsyncIterable<string>
@@ -35,11 +39,16 @@ export function createTextPipe(): TextPipe {
     }
   }
 
+  const push = (chunk: string) => {
+    if (closed || failure) return
+    chunks.push(chunk)
+    wakeAll()
+  }
+
   return {
-    push(chunk) {
-      if (closed || failure) return
-      chunks.push(chunk)
-      wakeAll()
+    push,
+    replace(text) {
+      push(draftReplaceRecord(text))
     },
     end() {
       if (closed || failure) return

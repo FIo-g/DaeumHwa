@@ -957,6 +957,7 @@ async function expandDraft(
     pipe.fail(error)
     throw error
   }
+  pipe.replace(text)
   pipe.end()
   return text
 }

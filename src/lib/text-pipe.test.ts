@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { draftReplaceRecord } from '@/lib/draft-stream'
 import { createTextPipe } from '@/lib/text-pipe'
 
 async function collect(iterable: AsyncIterable<string>): Promise<string[]> {
@@ -56,5 +57,28 @@ describe('createTextPipe', () => {
       })(),
     ).rejects.toThrow('unread')
     expect(chunks).toEqual(['a'])
+  })
+
+  it('sends a replace record as an ordinary chunk', async () => {
+    const pipe = createTextPipe()
+    pipe.push('a')
+    pipe.replace('b')
+    pipe.end()
+    expect(await collect(pipe.iterable)).toEqual(['a', draftReplaceRecord('b')])
+  })
+
+  it('ignores a replace after end', async () => {
+    const pipe = createTextPipe()
+    pipe.push('a')
+    pipe.end()
+    pipe.replace('b')
+    expect(await collect(pipe.iterable)).toEqual(['a'])
+  })
+
+  it('ignores a replace after fail', async () => {
+    const pipe = createTextPipe()
+    pipe.fail(new Error('boom'))
+    pipe.replace('late')
+    await expect(collect(pipe.iterable)).rejects.toThrow('boom')
   })
 })
