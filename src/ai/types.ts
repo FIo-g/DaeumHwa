@@ -30,6 +30,10 @@ export interface GenerateObjectArgs<T> {
   model?: string
   signal?: AbortSignal
   timeoutMs?: number
+  /** 0–2 leading blocks sent ahead of `prompt`, cache-marked where the provider supports it. */
+  promptPrefix?: string[]
+  /** Routes requests of one work to the same provider cache. Not sent where unsupported. */
+  cacheKey?: string
 }
 
 export interface StreamTextArgs {
@@ -41,6 +45,10 @@ export interface StreamTextArgs {
   model?: string
   signal?: AbortSignal
   timeoutMs?: number
+  /** 0–2 leading blocks sent ahead of `prompt`, cache-marked where the provider supports it. */
+  promptPrefix?: string[]
+  /** Routes requests of one work to the same provider cache. Not sent where unsupported. */
+  cacheKey?: string
 }
 
 export interface AiClient {
@@ -63,6 +71,8 @@ export interface AiTaskDef<I, O> {
   maxTokens: number
   system: string
   buildPrompt(input: I): string
+  /** Leading blocks sent ahead of `buildPrompt`'s text: the part that stays the same across calls. */
+  buildPromptPrefix?(input: I): string[]
   schema: z.ZodType<O>
   postProcess?(output: O, input: I): O
   model?: () => string | undefined

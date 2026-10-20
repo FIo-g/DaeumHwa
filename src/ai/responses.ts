@@ -186,18 +186,30 @@ export class ResponsesAiClient implements AiClient {
 
   private requestBody(
     input: string,
-    args: { system: string; maxTokens: number; effort: AiEffort },
+    args: {
+      system: string
+      maxTokens: number
+      effort: AiEffort
+      promptPrefix?: string[]
+      cacheKey?: string
+    },
     model: string,
     mode: Mode,
   ): Record<string, unknown> {
+    // The prefix blocks come first, then the prompt; without a prefix this is one part, as before.
+    const parts = [...(args.promptPrefix ?? []), input].map((text) => ({
+      type: 'input_text',
+      text,
+    }))
     const body: Record<string, unknown> = {
       model,
       instructions: args.system,
-      input: [{ role: 'user', content: [{ type: 'input_text', text: input }] }],
+      input: [{ role: 'user', content: parts }],
       max_output_tokens: args.maxTokens,
       store: false,
     }
     if (mode.reasoning) body.reasoning = { effort: reasoningEffortFor(args.effort) }
+    if (args.cacheKey && isPromptCacheKeyEnabled()) body.prompt_cache_key = args.cacheKey
     return body
   }
 
@@ -302,6 +314,14 @@ export class ResponsesAiClient implements AiClient {
     channel.fail(aiError)
     throw aiError
   }
+}
+
+/**
+ * `AI_PROMPT_CACHE_KEY` set to 1, true or on sends `prompt_cache_key`. Off by default until the
+ * gateway is shown to accept the field (see `probe-gateway --cache-key`).
+ */
+export function isPromptCacheKeyEnabled(): boolean {
+  return /^(1|true|on)$/i.test(process.env.AI_PROMPT_CACHE_KEY?.trim() ?? '')
 }
 
 /** Maps OpenCode Go effort levels to the Responses reasoning effort. xhigh and max become high. */

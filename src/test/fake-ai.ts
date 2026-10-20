@@ -7,6 +7,14 @@ const CHUNK_CHARS = 40
 
 type FakeFn = (input: unknown) => unknown
 
+/** What the fake client was asked in one call. Prefix and cache key are kept for tests to read. */
+export interface FakeAiCall {
+  name: AiTaskName
+  prompt: string
+  promptPrefix?: string[]
+  cacheKey?: string
+}
+
 export interface FakeAiOptions {
   /** Per-test outputs that win over the fixed registry, keyed by task name. */
   overrides?: Partial<Record<AiTaskName, FakeFn>>
@@ -20,6 +28,8 @@ export class FakeAiClient implements AiClient {
   readonly provider = 'test'
   readonly defaultModel = 'fake'
   private readonly overrides: Partial<Record<AiTaskName, FakeFn>>
+  /** Every call made on this client, in order. */
+  readonly recorded: FakeAiCall[] = []
 
   constructor(options: FakeAiOptions = {}) {
     this.overrides = options.overrides ?? {}
@@ -27,12 +37,14 @@ export class FakeAiClient implements AiClient {
 
   async generateObject<T>(args: GenerateObjectArgs<T>) {
     const { name, input } = args.task
+    this.record(args)
     const object = args.schema.parse(this.structuredOutput(name, input))
     return { object, usage: { ...ZERO_USAGE }, model: args.model ?? this.defaultModel }
   }
 
   streamText(args: StreamTextArgs) {
     const { name, input } = args.task
+    this.record(args)
     const text = this.streamedText(name, input)
     const model = args.model ?? this.defaultModel
     const chunks = splitChunks(text, CHUNK_CHARS)
@@ -41,6 +53,15 @@ export class FakeAiClient implements AiClient {
     })()
     const final = Promise.resolve({ text, usage: { ...ZERO_USAGE }, model })
     return { textStream, final }
+  }
+
+  private record(args: GenerateObjectArgs<unknown> | StreamTextArgs): void {
+    this.recorded.push({
+      name: args.task.name,
+      prompt: args.prompt,
+      ...(args.promptPrefix ? { promptPrefix: args.promptPrefix } : {}),
+      ...(args.cacheKey ? { cacheKey: args.cacheKey } : {}),
+    })
   }
 
   private structuredOutput(name: AiTaskName, input: unknown): unknown {

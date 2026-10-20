@@ -131,7 +131,7 @@ export class AnthropicAiClient implements AiClient {
   ): Promise<ObjectResult<T>> {
     if (this.jsonFallback) return this.structuredThroughCreate(args, model)
     const system = systemBlocks(args.system)
-    const messages = [{ role: 'user' as const, content: args.prompt }]
+    const messages = [{ role: 'user' as const, content: userContent(args) }]
     if (this.usesServerFallback(model)) {
       const response = await this.sdk.beta.messages.parse(
         {
@@ -173,7 +173,7 @@ export class AnthropicAiClient implements AiClient {
         model,
         max_tokens: args.maxTokens,
         system: systemBlocks(args.system),
-        messages: [{ role: 'user' as const, content: args.prompt }],
+        messages: [{ role: 'user' as const, content: userContent(args) }],
         output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
       },
       requestOptions(args),
@@ -204,7 +204,7 @@ export class AnthropicAiClient implements AiClient {
           messages: [
             {
               role: 'user' as const,
-              content: `${args.prompt}\n\n${jsonInstruction(args.schema)}`,
+              content: userContent(args, `\n\n${jsonInstruction(args.schema)}`),
             },
           ],
         },
@@ -268,7 +268,7 @@ export class AnthropicAiClient implements AiClient {
       model,
       max_tokens: args.maxTokens,
       system: systemBlocks(args.system),
-      messages: [{ role: 'user' as const, content: args.prompt }],
+      messages: [{ role: 'user' as const, content: userContent(args) }],
       ...(sendEffort ? { output_config: { effort: args.effort } } : {}),
     }
     const options = requestOptions(args)
@@ -330,6 +330,26 @@ function requestOptions(args: { signal?: AbortSignal; timeoutMs?: number }) {
 
 export function systemBlocks(text: string) {
   return [{ type: 'text' as const, text, cache_control: { type: 'ephemeral' as const } }]
+}
+
+/**
+ * User message content. Without a prefix it is the plain text. With one, each prefix block gets a
+ * cache mark and the prompt comes last; `tail` (the JSON instruction in JSON mode) joins the prompt.
+ */
+export function userContent(
+  args: { prompt: string; promptPrefix?: string[] },
+  tail = '',
+): string | { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }[] {
+  const text = `${args.prompt}${tail}`
+  if (!args.promptPrefix?.length) return text
+  return [
+    ...args.promptPrefix.map((block) => ({
+      type: 'text' as const,
+      text: block,
+      cache_control: { type: 'ephemeral' as const },
+    })),
+    { type: 'text' as const, text },
+  ]
 }
 
 /**

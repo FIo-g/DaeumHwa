@@ -120,6 +120,8 @@ export function blindCallRecord(call: CallRecord): BlindedCall {
   delete masked.effortRule
   delete masked.thinkRequested
   delete masked.retryBudget
+  // Prompt prefix blocks are the request's text, not a measure; the blinded copy does not carry them.
+  delete masked.promptPrefix
   delete masked.maxTokens
   delete masked.productTimeoutMs
   delete masked.speed

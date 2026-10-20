@@ -42,6 +42,7 @@ export type ReplayReport = {
 const SavedRecordSchema = z.object({
   system: z.string(),
   prompt: z.string(),
+  promptPrefix: z.array(z.string()).optional(),
   taskMaxTokens: z.number().optional(),
   output: z.unknown(),
 })
@@ -68,6 +69,7 @@ async function replayOne(
       task: { name: o.task, input: { system: record.system, prompt: record.prompt } },
       system: record.system,
       prompt: record.prompt,
+      promptPrefix: record.promptPrefix,
       schema: ExtractionSchema,
       effort: o.effort,
       maxTokens: record.taskMaxTokens ?? DEFAULT_MAX_TOKENS,

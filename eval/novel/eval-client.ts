@@ -72,9 +72,11 @@ export type CallRecord = {
   wouldTimeOut: boolean
   system: string
   prompt: string
+  /** The prefix blocks as sent (translated on English runs). Present only on calls that had a prefix. */
+  promptPrefix?: string[]
   output: unknown | null
   usage: AiUsage | null
-  /** Hangul left in an English run's prompt; null for Korean runs, where it is the whole prompt. */
+  /** Hangul left in an English run's system, prefix and prompt; null for Korean runs, where it is the whole prompt. */
   hangulLeft: number | null
   contextOverflow: boolean
   error: { kind: FailureKind; message: string; status?: number } | null
@@ -332,6 +334,7 @@ type Prepared = {
   startedAt: string
   system: string
   prompt: string
+  promptPrefix?: string[]
   maxTokens: number
   /** The budget change of a repeat of a failed call, or null. */
   retry: RetryBudget | null
@@ -486,6 +489,7 @@ export class EvalClient implements AiClient {
         args.prompt,
         args.maxTokens,
         args.effort,
+        args.promptPrefix,
       )
       this.settle(call, { ok: false, error }, null, call.startedMs - requestedMs)
       throw error
@@ -498,6 +502,7 @@ export class EvalClient implements AiClient {
         args.prompt,
         args.maxTokens,
         args.effort,
+        args.promptPrefix,
       )
       const queueMs = local ? call.startedMs - requestedMs : 0
       if (call.promptKey) this.sentPrompts.add(call.promptKey)
@@ -508,6 +513,7 @@ export class EvalClient implements AiClient {
             ...args,
             system: call.system,
             prompt: call.prompt,
+            promptPrefix: call.promptPrefix,
             effort: call.effort,
             maxTokens: call.maxTokens,
             model: this.profile.model,
@@ -537,6 +543,7 @@ export class EvalClient implements AiClient {
       args.prompt,
       args.maxTokens,
       args.effort,
+      args.promptPrefix,
     )
     let inner: ReturnType<AiClient['streamText']>
     if (call.promptKey) this.sentPrompts.add(call.promptKey)
@@ -545,6 +552,7 @@ export class EvalClient implements AiClient {
         ...args,
         system: call.system,
         prompt: call.prompt,
+        promptPrefix: call.promptPrefix,
         effort: call.effort,
         maxTokens: call.maxTokens,
         model: this.profile.model,
@@ -624,6 +632,7 @@ export class EvalClient implements AiClient {
     productPrompt: string,
     productMaxTokens: number,
     productEffort: AiEffort,
+    productPromptPrefix?: string[],
   ): Prepared {
     // First, so the read is not part of durationMs; it shows in queueMs, since the call is not running yet.
     const power = this.samplePower()
@@ -631,6 +640,9 @@ export class EvalClient implements AiClient {
     const startedMs = this.now()
     const system = this.lang === 'en' ? EN_SYSTEMS[task] : productSystem
     const prompt = this.lang === 'en' ? translateScaffold(productPrompt) : productPrompt
+    const promptPrefix = productPromptPrefix?.length
+      ? productPromptPrefix.map((block) => (this.lang === 'en' ? translateScaffold(block) : block))
+      : undefined
     const taskTimeout = productTaskTimeout(task, this.provider)
     const fallback = kind === 'stream' ? STREAM_AI_TIMEOUT_MS : DEFAULT_AI_TIMEOUT_MS
     const maxTokensRule = this.productLimits ? 'product' : 'floor'
@@ -651,9 +663,12 @@ export class EvalClient implements AiClient {
             productLimits: this.productLimits,
           })
         : null
+    // Without a prefix the key is the same as before the prefix existed.
     const promptKey =
       this.profile.provider === 'ollama'
-        ? createHash('sha1').update(`${task}\u0000${system}\u0000${prompt}`).digest('hex')
+        ? createHash('sha1')
+            .update([task, system, ...(promptPrefix ?? []), prompt].join('\u0000'))
+            .digest('hex')
         : null
     return {
       seq,
@@ -664,6 +679,7 @@ export class EvalClient implements AiClient {
       startedAt: new Date(startedMs).toISOString(),
       system,
       prompt,
+      ...(promptPrefix ? { promptPrefix } : {}),
       maxTokens: retry?.maxTokens ?? maxTokens,
       retry,
       taskEffort: productEffort,
@@ -759,9 +775,13 @@ export class EvalClient implements AiClient {
       wouldTimeOut: durationMs > call.productTimeoutMs,
       system: call.system,
       prompt: call.prompt,
+      ...(call.promptPrefix ? { promptPrefix: call.promptPrefix } : {}),
       output: outcome.ok ? outcome.output : null,
       usage,
-      hangulLeft: this.lang === 'en' ? countHangul(`${call.system}\n${call.prompt}`) : null,
+      hangulLeft:
+        this.lang === 'en'
+          ? countHangul([call.system, ...(call.promptPrefix ?? []), call.prompt].join('\n'))
+          : null,
       contextOverflow,
       error,
       queueMs,

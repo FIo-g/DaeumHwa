@@ -20,7 +20,13 @@ const BATCH_NOTE_CHARS = 200
 const USER_AGENT = 'daeumhwa/0.1'
 const MODEL_CHOICES = ['haiku-5.5', 'luna-6'] as const
 
+/** The key the cache-key probe sends. Probe traffic only; product runs use the work's own key. */
+export const PROBE_CACHE_KEY = 'daeumhwa-probe'
+/** A 4xx whose body names the field means the gateway rejects `prompt_cache_key`. */
+const CACHE_KEY_FIELD = /prompt_cache_key/i
+
 export type CacheProbeCall = { usage: AiUsage; durationMs: number }
+export type CacheKeyProbeResult = { cacheKeyAccepted: boolean; status: number }
 export type CacheProbeResult = { calls: CacheProbeCall[]; cacheHit: boolean }
 export type BatchProbeItem = { url: string; status: number | null; note: string }
 
@@ -49,6 +55,36 @@ export async function probeCache(
   }
   const cacheHit = calls.slice(1).some((call) => (call.usage.cacheReadTokens ?? 0) > 0)
   return { calls, cacheHit }
+}
+
+/**
+ * One small Responses request that carries `prompt_cache_key`. The key counts as accepted unless
+ * the gateway answers with a 4xx whose body names the field. A network error is thrown.
+ */
+export async function probeCacheKey(
+  fetchImpl: typeof fetch,
+  o: { baseUrl: string; apiKey: string; model: string },
+): Promise<CacheKeyProbeResult> {
+  const body = {
+    model: o.model,
+    instructions: 'Answer briefly.',
+    input: [{ role: 'user', content: [{ type: 'input_text', text: PROBE_PROMPT }] }],
+    max_output_tokens: 16,
+    store: false,
+    prompt_cache_key: PROBE_CACHE_KEY,
+  }
+  const res = await fetchImpl(`${o.baseUrl.replace(/\/+$/, '')}/responses`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Authorization: `Bearer ${o.apiKey}`,
+      'User-Agent': USER_AGENT,
+    },
+    body: JSON.stringify(body),
+  })
+  const text = await res.text()
+  const rejected = res.status >= 400 && res.status < 500 && CACHE_KEY_FIELD.test(text)
+  return { cacheKeyAccepted: !rejected, status: res.status }
 }
 
 /**
@@ -112,15 +148,25 @@ async function main(): Promise<void> {
     `${process.env.OPENCODE_OPENAI_BASE_URL?.trim() || OPENCODE_OPENAI_BASE_URL}/batches`,
   ]
   const batch = await probeBatch(fetch, { urls: batchUrls, apiKey })
+  // Only with --cache-key: the Responses path is probed with prompt_cache_key.
+  const cacheKey = process.argv.includes('--cache-key')
+    ? await probeCacheKey(fetch, {
+        baseUrl: process.env.OPENCODE_OPENAI_BASE_URL?.trim() || OPENCODE_OPENAI_BASE_URL,
+        apiKey,
+        model: profile.model,
+      })
+    : undefined
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   mkdirSync(RESULTS_DIR, { recursive: true })
   const outFile = path.join(RESULTS_DIR, `probe-gateway-${modelId}-${stamp}.json`)
   writeFileSync(
     outFile,
-    `${JSON.stringify({ model: profile.model, createdAt: stamp, cache, batch }, null, 2)}\n`,
+    `${JSON.stringify({ model: profile.model, createdAt: stamp, cache, batch, ...(cacheKey ? { cacheKey } : {}) }, null, 2)}\n`,
   )
   console.log(`cache hit ${cache.cacheHit} · batch ${batch.map((b) => b.status).join(', ')}`)
+  if (cacheKey)
+    console.log(`cache key accepted ${cacheKey.cacheKeyAccepted} (HTTP ${cacheKey.status})`)
   console.log(`saved: ${outFile}`)
 }
 

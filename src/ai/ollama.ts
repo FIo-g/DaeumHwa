@@ -233,7 +233,7 @@ export class OllamaAiClient implements AiClient {
       const first = await this.chat({
         task: args.task.name,
         model,
-        messages: [system, { role: 'user', content: args.prompt }],
+        messages: [system, { role: 'user', content: ollamaUserText(args) }],
         format: z.toJSONSchema(args.schema),
         maxTokens: args.maxTokens,
         call,
@@ -250,7 +250,7 @@ export class OllamaAiClient implements AiClient {
         model,
         messages: [
           system,
-          { role: 'user', content: `${args.prompt}\n\n${jsonInstruction(args.schema)}` },
+          { role: 'user', content: ollamaUserText(args, `\n\n${jsonInstruction(args.schema)}`) },
         ],
         maxTokens: args.maxTokens,
         call,
@@ -292,7 +292,7 @@ export class OllamaAiClient implements AiClient {
           model,
           messages: [
             { role: 'system', content: args.system },
-            { role: 'user', content: args.prompt },
+            { role: 'user', content: ollamaUserText(args) },
           ],
           stream: true,
           maxTokens: args.maxTokens,
@@ -506,6 +506,14 @@ export class OllamaAiClient implements AiClient {
  * Visible part of a streamed answer so far, or undefined while it is still unclear whether a
  * think block starts the answer. Think text is never returned.
  */
+/**
+ * User text for Ollama: the prefix blocks, then the prompt (with `tail`, e.g. the JSON instruction),
+ * joined by blank lines. Without a prefix it is the prompt alone, as before.
+ */
+function ollamaUserText(args: { prompt: string; promptPrefix?: string[] }, tail = ''): string {
+  return [...(args.promptPrefix ?? []), `${args.prompt}${tail}`].join('\n\n')
+}
+
 function visibleText(raw: string): string | undefined {
   const trimmed = raw.trimStart()
   if (trimmed.startsWith(THINK_OPEN)) {

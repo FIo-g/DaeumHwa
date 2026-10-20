@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { aiRuns } from '@/db/schema'
@@ -60,6 +61,24 @@ export interface StreamRunArgs {
   system: string
   prompt: string
   model?: string
+  /** Leading blocks sent ahead of `prompt`; see AiTaskDef.buildPromptPrefix. */
+  promptPrefix?: string[]
+}
+
+/**
+ * Provider cache key for one work: the same work always gets the same key, and no work's text is
+ * sent in clear. 16 hex characters of a SHA-256 of the work id, prefixed with `w`.
+ */
+export function cacheKeyFor(workId: string): string {
+  return `w${createHash('sha256').update(workId).digest('hex').slice(0, 16)}`
+}
+
+/** Prefix and cache key for one call. Each is left out when there is nothing to send. */
+function cacheArgs(meta: AiRunMeta, promptPrefix: string[] | undefined) {
+  return {
+    ...(promptPrefix?.length ? { promptPrefix } : {}),
+    ...(meta.workId ? { cacheKey: cacheKeyFor(meta.workId) } : {}),
+  }
 }
 
 /**
@@ -99,6 +118,7 @@ export async function runAiTask<I, O>(
       task: { name: task.name, input },
       system: task.system,
       prompt: task.buildPrompt(input),
+      ...cacheArgs(meta, task.buildPromptPrefix?.(input)),
       schema: task.schema,
       effort: task.effort,
       maxTokens: task.maxTokens,
@@ -183,6 +203,7 @@ export async function runAiTaskSplit<I, O>(
     let deadline: AbortSignal | undefined
     try {
       const prompt = task.buildPrompt(part)
+      const promptPrefix = task.buildPromptPrefix?.(part)
       const partSignal = meta.signal
         ? AbortSignal.any([meta.signal, abortSiblings.signal])
         : abortSiblings.signal
@@ -195,6 +216,7 @@ export async function runAiTaskSplit<I, O>(
           task: { name: task.name, input: part },
           system: task.system,
           prompt,
+          ...cacheArgs(meta, promptPrefix),
           schema: task.schema,
           effort: task.effort,
           maxTokens: task.maxTokens,
@@ -317,6 +339,7 @@ export async function startAiStream(
       task: { name: args.task, input: args.input },
       system: args.system,
       prompt: args.prompt,
+      ...cacheArgs(meta, args.promptPrefix),
       effort: args.effort,
       maxTokens: args.maxTokens,
       model: args.model,
