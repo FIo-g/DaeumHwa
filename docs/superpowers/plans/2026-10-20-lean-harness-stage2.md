@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-20-lean-serial-harness-design.md` sections 6.3, 6.4 (context and cache), 6.5 item 1 (request checks only), 8 and the stage 2 row of section 9. Earlier plans: `docs/superpowers/plans/2026-10-20-lean-harness-stage0.md`, `docs/superpowers/plans/2026-10-20-lean-harness-stage1.md` (their interfaces are used here).
 
-**Branch:** `feat/lean-harness`, after stage 1's gate, review fixes and M1 decision (reverted stage 1 parts stay reverted; then skip the steps below that touch them).
+**Branch:** `feat/lean-harness`. Tasks 1–3 do not touch the plan flow and may start before the M1 decision; tasks 4–8 start after it (reverted stage 1 parts stay reverted; then skip the steps below that touch them).
 
 ## Global Constraints
 
@@ -43,7 +43,7 @@
 - Test: `src/server/directives.s2.test.ts`, `src/lib/directives.s2.test.ts`
 
 **Interfaces:**
-- Produces in `src/db/schema.ts`: table `author_directives` — `id` uuid pk, `work_id` (cascade), `entry_id` (→ `wiki_entries`, set null), `scope` text, `kind` text, `text` text, `pattern` text null, `speech_level` text null, `target_chars` integer null, `chapter_position` integer null, `source` text, `status` text default `'active'`, `created_by` (→ users, set null), `createdAtColumn`, `updatedAtColumn`, `archivedAtColumn()`, index on `work_id`. `wiki_entries.context_tier` text not null default `'mention'`. `facts.reveal_at_position` integer null.
+- Produces in `src/db/schema.ts`: table `author_directives` — `id` uuid pk, `work_id` (cascade), `entry_id` (→ `wiki_entries`, set null), `scope` text, `kind` text, `text` text, `pattern` text null, `speech_level` text null, `target_chars` integer null, `chapter_position` integer null, `source` text, `status` text default `'active'`, `created_by` text (→ `user.id`, set null, as `chapter_versions.created_by`), `createdAtColumn`, `updatedAtColumn`, `archivedAtColumn()`, index on `work_id`. `wiki_entries.context_tier` text not null default `'mention'`. `facts.reveal_at_position` integer null.
 - Produces in `src/db/types.ts`: `DIRECTIVE_SCOPES = ['work','character','chapter']`, `DIRECTIVE_KINDS = ['style','speech','ban','length','content']`, `DIRECTIVE_SOURCES = ['author','instruction','revision','suggested']`, `DIRECTIVE_STATUSES = ['active','off']`, `SPEECH_LEVELS = ['banmal','jondaet']`, `CONTEXT_TIERS = ['always','mention','never']`, their types, `AuthorDirectiveRow`.
 - Produces in `src/server/directives.ts`:
   - `type DirectiveInput = { workId: string; scope: DirectiveScope; kind: DirectiveKind; text: string; entryId?: string | null; chapterPosition?: number | null; pattern?: string | null; speechLevel?: SpeechLevel | null; targetChars?: number | null; source: DirectiveSource }`
