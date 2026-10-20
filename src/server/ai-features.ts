@@ -31,6 +31,7 @@ import {
   mergeReaderSim,
   type ReaderSimInput,
   type ReaderSimResult,
+  READER_SIM_CLOUD_TIMEOUT_MS,
   readerSimTask,
   splitReaderSimInput,
 } from '@/ai/tasks/reader-sim'
@@ -129,8 +130,8 @@ export async function runReaderSimulation(
   }
   const aiClient = client ?? getAiClient()
   // Local servers answer slowly, so one call per persona keeps each call inside the time limit; the
-  // result is still one run row. Cloud providers keep one call (spec section 8: local-only behavior
-  // is gated by provider).
+  // result is still one run row. Cloud providers keep one call with a longer limit (spec section 8:
+  // local-only behavior is gated by provider).
   const { output, runId } = isLocalProvider(aiClient.provider)
     ? await runAiTaskSplit(
         db,
@@ -140,7 +141,13 @@ export async function runReaderSimulation(
         mergeReaderSim,
         aiClient,
       )
-    : await runAiTask(db, meta, readerSimTask, readerInput, aiClient)
+    : await runAiTask(
+        db,
+        { ...meta, timeoutMs: READER_SIM_CLOUD_TIMEOUT_MS },
+        readerSimTask,
+        readerInput,
+        aiClient,
+      )
   return { runId, result: output }
 }
 

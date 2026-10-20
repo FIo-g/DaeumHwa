@@ -8,9 +8,9 @@ import { draftRepairTask } from '@/ai/tasks/draft-repair'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
 import { interviewQuestionTask } from '@/ai/tasks/interview-question'
 import { proofreadTask } from '@/ai/tasks/proofread'
-import { readerSimTask } from '@/ai/tasks/reader-sim'
+import { READER_SIM_CLOUD_TIMEOUT_MS, readerSimTask } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
-import { DEFAULT_AI_TIMEOUT_MS, STREAM_AI_TIMEOUT_MS } from '@/ai/run'
+import { DEFAULT_AI_TIMEOUT_MS, isLocalProvider, STREAM_AI_TIMEOUT_MS } from '@/ai/run'
 import type { AiClient, AiEffort, AiUsage, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import {
   OLLAMA_STREAM_FAILURE,
@@ -136,6 +136,15 @@ const SEVERITY: Record<FailureKind, number> = {
   model: 0,
   'external-network': 1,
   'external-limit': 2,
+}
+
+/**
+ * The time limit the product applies to a task on this provider. Mirrors `runReaderSimulation`: a
+ * cloud reader-sim call is one call with the longer limit; local per-persona calls keep the default.
+ */
+function productTaskTimeout(task: AiTaskName, provider: string): number | undefined {
+  if (task === 'reader-sim' && !isLocalProvider(provider)) return READER_SIM_CLOUD_TIMEOUT_MS
+  return TASK_DEFS.find((def) => def.name === task)?.timeoutMs
 }
 
 /** Task defs that set their own time limit. Tasks without one use the product default. */
@@ -580,7 +589,7 @@ export class EvalClient implements AiClient {
     const startedMs = this.now()
     const system = this.lang === 'en' ? EN_SYSTEMS[task] : productSystem
     const prompt = this.lang === 'en' ? translateScaffold(productPrompt) : productPrompt
-    const taskTimeout = TASK_DEFS.find((def) => def.name === task)?.timeoutMs
+    const taskTimeout = productTaskTimeout(task, this.provider)
     const fallback = kind === 'stream' ? STREAM_AI_TIMEOUT_MS : DEFAULT_AI_TIMEOUT_MS
     const maxTokensRule = this.productLimits ? 'product' : 'floor'
     const maxTokens = this.productLimits
