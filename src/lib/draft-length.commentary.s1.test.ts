@@ -30,6 +30,14 @@ describe('isContinuationCommentary', () => {
     ).toBe(true)
   })
 
+  it('flags an English refusal to continue', () => {
+    expect(
+      isContinuationCommentary(
+        "I can't write this continuation as requested: the chapter already closes on its final line.",
+      ),
+    ).toBe(true)
+  })
+
   it('keeps prose, including dialogue that sounds like a request', () => {
     const prose =
       '세린은 계단을 하나 더 올랐다. 차가운 난간이 손바닥에 붙었다.\n\n"원하시면 알려 주세요. 어느 쪽으로 가실지 골라 주세요."\n\n도윤서의 목소리가 안개 속에서 낮게 울렸다.'

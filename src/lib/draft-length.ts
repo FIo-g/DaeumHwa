@@ -70,6 +70,8 @@ const COMMENTARY_MARKERS = [
   /다시\s*작성하겠습니다/,
   /\b(?:I|I've)\s+(?:did not|didn't|will not|won't|have not|haven't)\s+(?:continue|continued)\b/i,
   /\bthe draft already\b/i,
+  /\bI\s+(?:can't|cannot|can not)\s+(?:write|continue)\b/i,
+  /\bthis continuation\b/i,
   /\blet me know\b/i,
   /\bwould you like\b/i,
 ]
