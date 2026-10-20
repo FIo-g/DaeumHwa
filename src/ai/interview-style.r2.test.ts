@@ -27,6 +27,12 @@ describe('STYLE_TOPIC and isStyleTopic (P11)', () => {
       '떡밥',
       'Main characters',
       '다음 전개',
+      'Combat style',
+      "Serin's fighting style",
+      'Speech style',
+      'Supporting character speech style',
+      'Lifestyle',
+      '세린의 말투와 문체',
       '',
     ]) {
       expect(isStyleTopic(topic)).toBe(false)

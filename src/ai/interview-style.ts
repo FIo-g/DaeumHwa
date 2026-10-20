@@ -1,5 +1,5 @@
 import { CORE_TOPICS } from '@/ai/tasks/interview-question'
-import { canonicalTopic, isUndecidedAnswer } from '@/lib/interview-plan'
+import { isUndecidedAnswer } from '@/lib/interview-plan'
 import { splitSentences } from '@/lib/korean/sentences'
 import type { ProposalPayloadMap } from '@/lib/proposal-payloads'
 
@@ -13,9 +13,34 @@ const NAME_CHARS = 40
 const FALLBACK_NAME = '작품 문체'
 const LIST_MARKER = /^[-*•·]\s+/
 
-/** True when an interview topic (in Korean or English) resolves to the style core topic. */
+/** Writing-style phrasings that do not start with 문체, compacted. */
+const STYLE_PHRASINGS = new Set([
+  'writingstyle',
+  'narrativestyle',
+  'narrationstyle',
+  'prosestyle',
+  'styleandpov',
+])
+
+/** Lowercase, with whitespace, punctuation and symbols removed (same rule as the topic planner). */
+function compactTopic(text: string): string {
+  return text.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '')
+}
+
+/**
+ * True when an interview topic (in Korean or English) is the writing-style topic itself. Only
+ * the core name, its aliases, a 문체 prefix and a short allow-list match. Other topics that
+ * merely contain "style" or "문체" (e.g. "Combat style") are character topics and stay out.
+ */
 export function isStyleTopic(topic: string): boolean {
-  return canonicalTopic(topic, CORE_TOPICS) === STYLE_TOPIC
+  const key = compactTopic(topic)
+  const styleEntry = CORE_TOPICS.find((entry) => entry.name === STYLE_TOPIC)
+  const exact = styleEntry
+    ? [styleEntry.name, ...styleEntry.aliases].map(compactTopic)
+    : [compactTopic(STYLE_TOPIC)]
+  if (exact.includes(key)) return true
+  if (key.startsWith(compactTopic(STYLE_TOPIC))) return true
+  return STYLE_PHRASINGS.has(key)
 }
 
 /**

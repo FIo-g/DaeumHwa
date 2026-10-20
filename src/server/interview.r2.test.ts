@@ -223,4 +223,19 @@ describe('answerTurn style topic (P11)', () => {
     const entries = await db.select().from(wikiEntries).where(eq(wikiEntries.workId, workId))
     expect(entries).toHaveLength(0)
   })
+
+  it("a non-style topic that contains 'style' still extracts", async () => {
+    const client = new RecordingAiClient({
+      overrides: {
+        'interview-question': () => ({ ...STYLE_QUESTION, topic: 'Speech style' }),
+      },
+    })
+    const session = await startInterview(db, owner, workId)
+    const turn = await askNextQuestion(db, owner, session.id, client)
+    client.tasks = []
+    await answerTurn(db, editor, { turnId: turn.id, answer: '서윤은 열일곱 살 검객이다.' }, client)
+    expect(client.tasks.filter((task) => task === 'interview-extract')).toHaveLength(1)
+    const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+    expect(rows.some((r) => r.type === 'style_card')).toBe(false)
+  })
 })
