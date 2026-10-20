@@ -15,6 +15,7 @@ import { replaceRunOutput } from '@/ai/run'
 import { repairableForeignSpans } from '@/ai/tasks/draft-repair'
 import { DraftBeatsSchema, renderBeatLocations } from '@/ai/tasks/draft-beats'
 import { MODEL_PROFILES, twoStepEnabled } from '../models'
+import { chapterInstructions } from '../instructions'
 import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
 import {
@@ -86,7 +87,7 @@ export const advice: StepFn = async (ctx, key, state) => {
       step: key,
       chapter: n,
       result: advised.result,
-      nextInstructions: chapterSpec(ctx, n).instructions,
+      nextInstructions: chapterInstructions(ctx.bible, n, ctx.config),
     }
   }
   const answer = consult(ctx, note) as Extract<Answer, { kind: 'advice_note' }> | null
@@ -255,6 +256,7 @@ export const draft: StepFn = async (ctx, key, state) => {
   const created = `ch${n}:chapter-created`
   if (isMarked(state, created)) return 'done'
   const spec = chapterSpec(ctx, n)
+  const instructions = chapterInstructions(ctx.bible, n, ctx.config)
   const workId = requireWorkId(state)
 
   // The chapter was saved before its mark was: adopt it, never draft it again.
@@ -279,7 +281,7 @@ export const draft: StepFn = async (ctx, key, state) => {
       const entries = await listEntries(ctx.db, ctx.actor, workId)
       const entryIds = selectDraftEntries(
         entries.map((entry) => ({ id: entry.id, name: entry.name, aliases: entry.aliases })),
-        spec.instructions,
+        instructions,
       )
       const generated = await withModelRetry(ctx, state, key, async () => {
         const run = await startDraft(
@@ -287,7 +289,7 @@ export const draft: StepFn = async (ctx, key, state) => {
           ctx.actor,
           {
             workId,
-            instructions: spec.instructions,
+            instructions,
             targetChars: ctx.bible.targetChars,
             entryIds,
             // The scene beat list is made first and goes into the prose. Local profiles always do it;
@@ -418,8 +420,9 @@ export const draft: StepFn = async (ctx, key, state) => {
       chapter: n,
       attempt: attemptNo,
       maxAttempts,
-      instructions: spec.instructions,
-      mustInclude: spec.mustInclude,
+      instructions,
+      // Few-instruction runs never list the bible's mustInclude items, so the author is not asked to judge them.
+      mustInclude: ctx.config.fewInstructions ? [] : spec.mustInclude,
       textFile,
       metrics: chapterMetrics(
         text,

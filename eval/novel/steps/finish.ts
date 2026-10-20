@@ -10,6 +10,7 @@ import { listStyleCards } from '@/server/styles'
 import { listThreads } from '@/server/threads'
 import { listEntries } from '@/server/wiki'
 import { packCoverage } from '../../coverage'
+import { directiveCounts, directiveResults, type DirectiveResults } from '../directives'
 import type { CallRecord, CallSpeed, FailureKind } from '../eval-client'
 import { interviewMetrics } from '../metrics-interview'
 import { type ProofreadStats, proofreadStats } from '../metrics-proofread'
@@ -237,6 +238,18 @@ export function mergedMs(intervals: [number, number][]): number {
 const CountSchema = z.number().int().nonnegative()
 const NullableNumberSchema = z.number().nullable()
 
+/** Planted directive counts per chapter (`--directives on`). Absent on runs without directives. */
+const DirectivesBlockSchema = z.object({
+  chapters: z.array(
+    z.object({
+      n: z.number().int().positive(),
+      kept: CountSchema,
+      broken: CountSchema,
+      na: CountSchema,
+    }),
+  ),
+})
+
 /** G2 stats and G1 dropped counters of one chapter extraction, and P10 weak-evidence counters. */
 export const ExtractionCountsSchema = z.object({
   fragmentNamesFixed: CountSchema,
@@ -446,6 +459,7 @@ export const RunSummarySchema = z.object({
   proofread: ProofreadBlockSchema.optional(),
   continuity: ContinuityBlockSchema.optional(),
   draft: DraftBlockSchema.optional(),
+  directives: DirectivesBlockSchema.optional(),
 })
 export type RunSummary = z.infer<typeof RunSummarySchema>
 /** What buildRunSummary produces today: always with the interview block, which old files lack. */
@@ -473,6 +487,8 @@ export type SummaryInputs = {
   contextHit?: { cards: CardInput[]; chapterTexts: Record<string, string> }
   continuityFixture?: ContinuityFixture
   continueFailures?: ContinueFailure[]
+  /** Planted directive results of the saved chapters (`--directives on`). */
+  directives?: DirectiveResults
 }
 
 // ---- Aggregators (pure) ----
@@ -818,7 +834,26 @@ export function readSummaryInputs(dir: string): SummaryInputs {
   const fixture = parseContinuityResults(readJsonFile(path.join(dir, 'continuity-eval.json')))
   if (fixture) inputs.continuityFixture = fixture
 
+  // Planted directives are checked on the saved chapters of a `--directives on` run.
+  const config = RunFlagsSchema.safeParse(readJsonFile(path.join(dir, 'config.json')))
+  if (config.success && config.data.directives === true) {
+    const chapters = Object.entries(chapterTexts).map(([n, text]) => ({ n: Number(n), text }))
+    inputs.directives = directiveResults(chapters, config.data.lang)
+  }
+
   return inputs
+}
+
+/** The config fields the summary reads. Other fields are ignored. */
+const RunFlagsSchema = z.object({
+  lang: z.enum(['ko', 'en']),
+  directives: z.boolean().optional(),
+})
+
+/** Writes directives.json when the run has directive results (`--directives on`). */
+export function writeDirectivesFile(dir: string, inputs: SummaryInputs): void {
+  if (!inputs.directives) return
+  writeRunFile(dir, 'directives.json', `${JSON.stringify(inputs.directives, null, 2)}\n`)
 }
 
 function readLine(line: string): unknown {
@@ -882,6 +917,10 @@ export function buildRunSummary(
     }
   }
 
+  if (inputs.directives) {
+    summary.directives = { chapters: inputs.directives.chapters.map(directiveCounts) }
+  }
+
   const failures = inputs.continueFailures ?? []
   if (failures.length > 0) {
     const byReason: Record<string, number> = {}
@@ -931,10 +970,12 @@ export const finish: StepFn = async (ctx, _key, state) => {
   )
 
   const calls = readCallRecords(ctx.dir)
+  const inputs = readSummaryInputs(ctx.dir)
+  writeDirectivesFile(ctx.dir, inputs)
   writeRunFile(
     ctx.dir,
     'run-summary.json',
-    `${JSON.stringify(buildRunSummary(calls, state, ctx.config.lang, readSummaryInputs(ctx.dir)), null, 2)}\n`,
+    `${JSON.stringify(buildRunSummary(calls, state, ctx.config.lang, inputs), null, 2)}\n`,
   )
   return 'done'
 }

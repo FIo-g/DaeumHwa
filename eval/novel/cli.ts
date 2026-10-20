@@ -157,6 +157,8 @@ export type InitOptions = {
   deploySettings?: boolean
   speech?: string
   twoStep?: string
+  directives?: boolean
+  fewInstructions?: boolean
 }
 
 /**
@@ -191,11 +193,15 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (refusal) throw new Error(refusal)
   }
   const twoStepSuffix = twoStep ? '-twostep' : ''
+  const directives = o.directives === true
+  const fewInstructions = o.fewInstructions === true
+  const directivesSuffix = directives ? '-directives' : ''
+  const fewSuffix = fewInstructions ? '-few' : ''
   const dir = path.resolve(
     o.dir ??
       path.join(
         RESULTS_DIR,
-        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${deploySuffix}`,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${deploySuffix}`,
       ),
   )
 
@@ -220,6 +226,15 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (twoStep && existing.twoStep !== true) {
       throw new Error(`run exists with another two-step setting: ${dir}`)
     }
+    if (o.directives !== undefined && directives !== (existing.directives ?? false)) {
+      throw new Error(`run exists with another directives: ${dir}`)
+    }
+    if (
+      o.fewInstructions !== undefined &&
+      fewInstructions !== (existing.fewInstructions ?? false)
+    ) {
+      throw new Error(`run exists with another fewInstructions: ${dir}`)
+    }
   } else {
     createRun(dir, {
       modelId: model,
@@ -233,6 +248,8 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       deploySettings: deploySettings || undefined,
       speech: speech || undefined,
       twoStep: twoStep || undefined,
+      directives: directives || undefined,
+      fewInstructions: fewInstructions || undefined,
     })
   }
   return { dir, status: loadState(dir).status }
@@ -280,6 +297,29 @@ export function deploySettingsFlag(flags: Flags): boolean | undefined {
   if (value === true || value === 'on') return true
   if (value === 'off') return false
   throw new Error(`unknown deploy-settings value: ${String(value)}`)
+}
+
+/**
+ * The --directives value, or undefined when the flag is absent. Only `on` is accepted; a bare flag
+ * is refused, so a directive run is never created silently without its setting.
+ */
+export function directivesFlag(flags: Flags): boolean | undefined {
+  const value = flags.directives
+  if (value === undefined) return undefined
+  if (value === 'on') return true
+  throw new Error(`unknown directives value: ${String(value)}`)
+}
+
+/**
+ * The --few-instructions value, or undefined when the flag is absent. A bare flag or `on` turns the
+ * option on, `off` turns it off; anything else is an error.
+ */
+export function fewInstructionsFlag(flags: Flags): boolean | undefined {
+  const value = flags['few-instructions']
+  if (value === undefined) return undefined
+  if (value === true || value === 'on') return true
+  if (value === 'off') return false
+  throw new Error(`unknown few-instructions value: ${String(value)}`)
 }
 
 /**
@@ -748,6 +788,8 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         deploySettings: deploySettingsFlag(flags),
         speech: speechFlag(flags),
         twoStep: twoStepFlag(flags),
+        directives: directivesFlag(flags),
+        fewInstructions: fewInstructionsFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {

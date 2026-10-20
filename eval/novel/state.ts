@@ -24,6 +24,10 @@ export type RunConfig = {
   speech?: boolean
   /** Two-step draft and scene rewrite also on a cloud profile (compare runs only). Absent means the profile's default. */
   twoStep?: boolean
+  /** Chapter 1's instructions get the planted author directives, and their kept/broken counts are measured (`--directives on`). Absent means off. */
+  directives?: boolean
+  /** Chapter instructions are only the first sentence and the draft review gets no mustInclude list (`--few-instructions`). Absent means off. */
+  fewInstructions?: boolean
 }
 
 export type RunStatus =

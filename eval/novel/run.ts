@@ -104,6 +104,8 @@ export type RunCreateOptions = {
   deploySettings?: boolean
   speech?: boolean
   twoStep?: boolean
+  directives?: boolean
+  fewInstructions?: boolean
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
@@ -125,6 +127,8 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     ...(o.deploySettings ? { deploySettings: true } : {}),
     ...(o.speech ? { speech: true } : {}),
     ...(o.twoStep ? { twoStep: true } : {}),
+    ...(o.directives ? { directives: true } : {}),
+    ...(o.fewInstructions ? { fewInstructions: true } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))
