@@ -44,7 +44,13 @@ const EN_TIME_FRAME =
 const RELATIVE_AFTER_NUMBER =
   /^\s*(?:더\s*)?(어리|어린|어려|많|위|아래|차이|터울|연상|연하|배기|짜리|남짓|쯤|정도|이 넘|가 넘)/
 const EN_APPROX_BEFORE =
-  /\b(?:about|around|nearly|almost|roughly|approximately|some|over|under|maybe|perhaps|barely)\s+$/i
+  /\b(?:about|around|nearly|almost|roughly|approximately|some|over|under|maybe|perhaps|barely|at least|at most|up to|no more than|no fewer than)\s+$/i
+// Korean rough or bound words before a number ("약 13층", "대략 13층"; not "계약 13층").
+const KO_APPROX_BEFORE = /(?:^|[\s,])(?:약|대략|얼추|거의|최소|적어도|최대|무려)\s*$/
+// Korean bound or distributive words after a number ("5명 이상", "5명 넘게", "2명씩", "413년경").
+// Not for the Korean 살 age form, which keeps its own rules (see the check below).
+const BOUND_AFTER_NUMBER =
+  /^\s*(?:이상|이하|미만|초과|넘게|넘는|넘었|넘어|씩|가량|안팎|내외|여(?![가-힣])|경(?![가-힣])|즈음)/
 const EN_SUBJECT_VERB =
   /^\s+(?:is|was|are|were|has|had|stood|stands|rose|rises|towered|towers|kept|keeps|numbered|held|holds)\b/i
 // An English age fact reads "X is sixteen years old" or "X, age 16"; it must not be about a time.
@@ -167,6 +173,10 @@ export function findNumericFactMismatches(input: {
       if (kind === 'age' && AGE_PAST_FRAME.test(text)) continue
       if (RELATIVE_AFTER_NUMBER.test(text.slice(quantity.end))) continue
       if (EN_APPROX_BEFORE.test(text.slice(0, quantity.start))) continue
+      if (kind !== 'age') {
+        if (KO_APPROX_BEFORE.test(text.slice(0, quantity.tokenStart))) continue
+        if (BOUND_AFTER_NUMBER.test(text.slice(quantity.end))) continue
+      }
 
       const named = entries.filter((entry) => namesOf(entry).some((name) => mentions(text, name)))
       if (named.length !== 1) continue

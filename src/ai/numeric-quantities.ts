@@ -94,7 +94,10 @@ const RANGE_BEFORE = new RegExp(
   'i',
 )
 
-type Pattern = { re: RegExp; needsSubject: boolean }
+// After "aged N": a duration ("had aged ten years") is a verb phrase, not an age. No g flag: .test().
+const AGED_DURATION_AFTER = /^\s+(?:years?|months?|weeks?|days?|decades?)\b/i
+
+type Pattern = { re: RegExp; needsSubject: boolean; skipAfter?: RegExp }
 const subjectPattern = (re: RegExp): Pattern => ({ re, needsSubject: true })
 
 // Every pattern has exactly two capturing groups and no others: group 1 is the text of the match
@@ -104,16 +107,20 @@ const PATTERNS: Record<QuantityKind, Pattern[]> = {
   age: [
     { re: /()(?<![\d,.])(\d{1,3})\s*살/g, needsSubject: false },
     subjectPattern(en(`\\b()(${EN_NUM})\\s+years?\\s+old\\b`)),
-    subjectPattern(en(`\\b(aged\\s+)(${EN_NUM})\\b`)),
+    { ...subjectPattern(en(`\\b(aged\\s+)(${EN_NUM})\\b`)), skipAfter: AGED_DURATION_AFTER },
   ],
   year: [
-    // 3-4 digits only (a two-digit "12년" is a duration), not "413년 동안", "413년 만에", "1990년대".
+    // 3-4 digits only (a two-digit "12년" is a duration), and only in an absolute position: the
+    // year is followed by 에, 의, 이다, 이었, 였, 입니다, 이며, a comma, a period or the end. So
+    // "413년 동안", "건국된 지 500년이 지났다", "건국 500년을 맞았다" and "1990년대" are not years.
     subjectPattern(
-      /()(?<![\d,.])(\d{3,4})\s*년(?!대)(?!\s*(?:전|뒤|후|간|동안|째|만에|쯤|가량|이상|이하|된|묵은|넘))/g,
+      /()(?<![\d,.])(\d{3,4})\s*년(?!대)(?!\s*(?:전|뒤|후|간|동안|째|만에|쯤|가량|이상|이하|된|묵은|넘))(?=에|의|이다|이었|였|입니다|이며|,|\.|\s*$)/g,
     ),
+    // The year must not be followed by a word ("built in 300 nights", "in 1204 men"). Connectors
+    // that keep it a year are allowed: "built in 1204 by the king", "in 1204 and".
     subjectPattern(
       en(
-        '\\b(in\\s+(?:the\\s+year\\s+)?)(?<![\\d,.])(\\d{3,4})\\b(?!\\s*(?:years?|days?|months?|weeks?|miles?|paces?|steps?|men|people|soldiers|coins|times)\\b)',
+        '\\b(in\\s+(?:the\\s+year\\s+)?)(?<![\\d,.])(\\d{3,4})\\b(?!\\s+(?!(?:by|and|under|during|after)\\b)[a-z])',
       ),
     ),
     subjectPattern(en('\\b(year\\s+)(?<![\\d,.])(\\d{3,4})\\b')),
@@ -146,12 +153,13 @@ const PATTERNS: Record<QuantityKind, Pattern[]> = {
  */
 export function readQuantities(text: string, kind: QuantityKind): Quantity[] {
   const byToken = new Map<number, Quantity>()
-  for (const { re, needsSubject } of PATTERNS[kind]) {
+  for (const { re, needsSubject, skipAfter } of PATTERNS[kind]) {
     for (const match of text.matchAll(re)) {
       const token = match[2]
       const value = /^\d+$/.test(token) ? Number(token) : parseEnglishNumber(token)
       if (value === null) continue
       const start = match.index ?? 0
+      if (skipAfter && skipAfter.test(text.slice(start + match[0].length))) continue
       const tokenStart = start + match[1].length
       const before = text.slice(0, tokenStart)
       if (RANGE_BEFORE.test(before)) continue

@@ -363,3 +363,55 @@ describe('findNumericFactMismatches: whole numbers, ranges and large number word
     expect(run('Harrow Keep was a hundred and two stories tall.', keep())).toEqual([])
   })
 })
+
+describe('findNumericFactMismatches: durations, bounds and aging (FX4)', () => {
+  it('a duration after an event word gives no year hit (F3)', () => {
+    const pack = kingdom()
+    for (const text of [
+      '잿빛 왕국은 건국된 지 500년이 지났다.',
+      '잿빛 왕국은 건국 500년을 맞았다.',
+      '잿빛 왕국은 건국 이래 300년을 버텼다.',
+      '잿빛 왕국은 건국되고 300년이 흘렀다.',
+    ]) {
+      expect(run(text, pack)).toEqual([])
+    }
+  })
+
+  it('a duration in the wiki fact is not a year (F3, reverse case)', () => {
+    expect(
+      run('잿빛 왕국은 412년에 건국되었다.', kingdom(['잿빛 왕국은 건국된 지 500년이 지났다.'])),
+    ).toEqual([])
+  })
+
+  it('an English duration after built in gives no year hit (F3)', () => {
+    expect(run('Harrow Keep was built in 300 nights.', keep())).toEqual([])
+  })
+
+  it('bounds and rough numbers are skipped (F5)', () => {
+    const cases: [string, ReturnType<typeof guard>][] = [
+      ['새벽 호위대는 모두 5명 이상이었다.', guard()],
+      ['새벽 호위대는 총 5명 넘게 모였다.', guard()],
+      ['새벽 호위대는 모두 2명씩 조를 짰다.', guard()],
+      ['새벽 호위대는 모두 9명 미만이었다.', guard()],
+      ['잿빛 왕국은 413년경 건국되었다.', kingdom()],
+      ['잿빛 왕국은 413년 즈음 건국되었다.', kingdom()],
+      ['은빛 등대는 약 13층 높이로 솟아 있었다.', tower()],
+      ['은빛 등대는 대략 13층 높이였다.', tower()],
+      ['Harrow Keep was at least seven stories tall.', keep()],
+    ]
+    for (const [text, pack] of cases) {
+      expect(run(text, pack)).toEqual([])
+    }
+  })
+
+  it('the Korean 살 age form keeps its behaviour (F5 guard)', () => {
+    const pack = makePack([{ name: '도윤서', facts: asFacts(['도윤서의 나이는 27살이다.']) }])
+    expect(run('도윤서는 약 25살이었다.', pack)).toEqual([])
+    expect(run('도윤서는 25살이다.', pack)).toEqual([['age', 27, 25, '도윤서는 27살이다.']])
+  })
+
+  it('a verb "had aged N years" is not an age (F9)', () => {
+    expect(run('Mara Voss had aged ten years overnight.', mara())).toEqual([])
+    expect(run('Mara Voss has aged ten years in a single night.', mara())).toEqual([])
+  })
+})

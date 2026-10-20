@@ -217,3 +217,32 @@ describe('readQuantities: whole numbers only', () => {
     expect(readQuantities('aged one hundred and five', 'age')).toEqual([])
   })
 })
+
+describe('readQuantities: durations, bounds and aging (FX4)', () => {
+  it('a duration after an event word is not a year (F3)', () => {
+    expect(readQuantities('잿빛 왕국은 건국된 지 500년이 지났다', 'year')).toEqual([])
+    expect(readQuantities('잿빛 왕국은 건국 500년을 맞았다', 'year')).toEqual([])
+    expect(readQuantities('잿빛 왕국은 건국 이래 300년을 버텼다', 'year')).toEqual([])
+    expect(readQuantities('잿빛 왕국은 건국되고 300년이 흘렀다', 'year')).toEqual([])
+  })
+
+  it('an absolute year still reads (F3 control)', () => {
+    expect(readQuantities('잿빛 왕국은 412년에 건국되었다.', 'year')[0]).toMatchObject({
+      value: 412,
+    })
+    expect(readQuantities('잿빛 왕국은 412년이었다.', 'year')[0]).toMatchObject({ value: 412 })
+  })
+
+  it('an English year followed by a noun is not a year (F3)', () => {
+    expect(readQuantities('Harrow Keep was built in 300 nights.', 'year')).toEqual([])
+    expect(readQuantities('Harrow Keep was built in 1204 by the king.', 'year')[0]).toMatchObject({
+      value: 1204,
+    })
+  })
+
+  it('"had aged N years" is not an age (F9)', () => {
+    expect(readQuantities('Mara Voss had aged twenty two years.', 'age')).toEqual([])
+    expect(readQuantities('Mara Voss has aged ten years in a single night.', 'age')).toEqual([])
+    expect(readQuantities('Mara Voss was aged twenty-two.', 'age')[0]).toMatchObject({ value: 22 })
+  })
+})
