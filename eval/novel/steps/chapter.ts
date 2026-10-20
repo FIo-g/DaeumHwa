@@ -4,12 +4,14 @@ import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   createChapterFromDraft,
+  planDraft,
   repairDraft,
   repairDraftForeignScript,
   runDirectionAdvice,
   runReaderSimulation,
   startDraft,
 } from '@/server/ai-features'
+import { type DraftPlanCard, renderPlanInstructions } from '@/lib/draft-plan'
 import { aiRuns } from '@/db/schema'
 import { replaceRunOutput } from '@/ai/run'
 import { repairableForeignSpans } from '@/ai/tasks/draft-repair'
@@ -29,7 +31,7 @@ import { listIssues, resolveIssue } from '@/server/issues'
 import { rewriteFlaggedScenes } from '@/server/scene-rewrite'
 import { listProposals } from '@/server/proposals'
 import { classifyError, type FailureKind } from '../eval-client'
-import { bibleExempt, chapterMetrics } from '../metrics'
+import { bibleExempt, chapterMetrics, planTargetsOf } from '../metrics'
 import type { Answer, Pending } from '../author-io'
 import type { RunContext, StepFn } from '../run'
 import type { DraftAttempt, RunState } from '../state'
@@ -251,6 +253,110 @@ async function trimStage(
   return trimmed.text
 }
 
+/** Few-instruction runs: the author's notes on a plan card before the card is final. */
+const MAX_PLAN_NOTES = 3
+
+/** Plans the chapter card once. Null when the planner gave no usable card (its failure is recorded). */
+async function planCard(
+  ctx: RunContext,
+  state: RunState,
+  key: string,
+  workId: string,
+  instructions: string,
+  revision?: { card: DraftPlanCard; note: string },
+): Promise<{ runId: string; card: DraftPlanCard } | null> {
+  const entries = await listEntries(ctx.db, ctx.actor, workId)
+  const entryIds = selectDraftEntries(
+    entries.map((entry) => ({ id: entry.id, name: entry.name, aliases: entry.aliases })),
+    instructions,
+  )
+  return withModelRetry(ctx, state, key, async () => {
+    const planned = await planDraft(
+      ctx.db,
+      ctx.actor,
+      {
+        workId,
+        instructions,
+        targetChars: ctx.bible.targetChars,
+        entryIds,
+        ...(revision ? { revision } : {}),
+      },
+      ctx.client,
+    )
+    return { runId: planned.runId, card: planned.card }
+  })
+}
+
+/**
+ * The approved plan card of chapter n (stage 1). Null for a quick run. Planned once per chapter and
+ * kept in state, so a resumed worker continues from it. A few-instruction run posts a plan_review:
+ * each note re-plans the card, and after MAX_PLAN_NOTES notes the last card is used. A note whose
+ * re-plan fails keeps the card it had. 'pending' while the author has not answered; 'failed' when
+ * no card could be planned.
+ */
+async function approvedPlan(
+  ctx: RunContext,
+  state: RunState,
+  key: string,
+  n: number,
+  workId: string,
+  instructions: string,
+): Promise<NonNullable<RunState['data']['plans']>[number] | 'pending' | 'failed' | null> {
+  if (ctx.config.quick) return null
+  const plans = (state.data.plans ??= {})
+  let entry = plans[n]
+  if (!entry) {
+    const planned = await planCard(ctx, state, key, workId, instructions)
+    if (!planned) return 'failed'
+    entry = { runId: planned.runId, card: planned.card, notes: [] }
+    plans[n] = entry
+    persist(ctx, state)
+  }
+  // The approval is marked, so a later entry into the draft step does not ask the author again.
+  const approvedMark = `ch${n}:plan-approved`
+  if (!ctx.config.fewInstructions || isMarked(state, approvedMark)) return entry
+
+  for (;;) {
+    if (entry.notes.length >= MAX_PLAN_NOTES) break
+    const review: Pending = {
+      kind: 'plan_review',
+      step: key,
+      chapter: n,
+      card: renderPlanInstructions('', entry.card),
+      intention: chapterSpec(ctx, n).instructions,
+      // Few-instruction runs never list mustInclude (see the draft review below).
+      mustInclude: [],
+      round: entry.notes.length + 1,
+    }
+    const verdict = consult(ctx, review) as Extract<Answer, { kind: 'plan_review' }> | null
+    if (!verdict) {
+      persist(ctx, state)
+      return 'pending'
+    }
+    if (verdict.approve) {
+      settle(ctx, review, verdict)
+      break
+    }
+
+    // The re-plan runs before the note counts. A pause during it leaves the review pending with its
+    // answer, so the resumed worker repeats the re-plan with the same note.
+    const note = verdict.note ?? ''
+    const replanned = await planCard(ctx, state, key, workId, instructions, {
+      card: entry.card,
+      note,
+    })
+    entry.notes.push(note)
+    if (replanned) {
+      entry.runId = replanned.runId
+      entry.card = replanned.card
+    }
+    persist(ctx, state)
+    settle(ctx, review, verdict)
+  }
+  mark(ctx, state, approvedMark)
+  return entry
+}
+
 export const draft: StepFn = async (ctx, key, state) => {
   const n = chapterOf(key)
   const created = `ch${n}:chapter-created`
@@ -270,6 +376,11 @@ export const draft: StepFn = async (ctx, key, state) => {
   const attempts = (state.data.drafts[n] ??= [])
   const maxAttempts = ctx.config.maxDraftAttempts
 
+  // Stage 1: the approved card comes before the first attempt. A quick run has none (null).
+  const plan = await approvedPlan(ctx, state, key, n, workId, instructions)
+  if (plan === 'pending') return 'pending'
+  if (plan === 'failed') return 'done'
+
   for (;;) {
     const last = attempts.at(-1)
     // A verdict that ends the attempts is final: a rerun never drafts again for it.
@@ -283,6 +394,20 @@ export const draft: StepFn = async (ctx, key, state) => {
         entries.map((entry) => ({ id: entry.id, name: entry.name, aliases: entry.aliases })),
         instructions,
       )
+      // The card is the draft's instructions; a quick run sends none of these keys.
+      const planInput = plan
+        ? {
+            plan: plan.card,
+            planRunId: plan.runId,
+            planEdits: {
+              revisions: plan.notes.length,
+              removed: 0,
+              moved: 0,
+              textEdits: 0,
+            },
+            mode: ctx.config.draftMode ?? 'single',
+          }
+        : {}
       const generated = await withModelRetry(ctx, state, key, async () => {
         const run = await startDraft(
           ctx.db,
@@ -294,7 +419,9 @@ export const draft: StepFn = async (ctx, key, state) => {
             entryIds,
             // The scene beat list is made first and goes into the prose. Local profiles always do it;
             // cloud profiles only with --two-step on, so their default baseline stays comparable.
-            twoStep: twoStepOn(ctx),
+            // A plan card already sets the scenes, so the beat list is not made on top of it.
+            twoStep: plan ? false : twoStepOn(ctx),
+            ...planInput,
           },
           ctx.client,
         )
@@ -430,6 +557,7 @@ export const draft: StepFn = async (ctx, key, state) => {
         ctx.bible.targetChars,
         [ctx.bible.workStyle.examples],
         bibleExempt(ctx.bible),
+        planTargetsOf(state.data.plans?.[n]),
       ),
     }
     const verdict = consult(ctx, review) as Extract<Answer, { kind: 'draft_review' }> | null
@@ -546,6 +674,7 @@ export const proofread: StepFn = async (ctx, key, state) => {
         ctx.bible.targetChars,
         [ctx.bible.workStyle.examples],
         bibleExempt(ctx.bible),
+        planTargetsOf(state.data.plans?.[n]),
       ),
       null,
       2,
@@ -558,8 +687,11 @@ export const check: StepFn = async (ctx, key, state) => {
   const n = chapterOf(key)
   const chapterId = state.data.chapterIds[n]
   if (!chapterId || isMarked(state, key)) return 'done'
-  // P3: two-step runs give the check the chosen draft's location list. Other runs send no plan.
-  const scenePlan = twoStepOn(ctx) ? sceneLocationsOf(ctx.dir, state.data.drafts[n] ?? [], n) : null
+  // P3: two-step runs give the check the chosen draft's location list; a plan card gives its scenes'
+  // places. Other runs send no plan.
+  const card = state.data.plans?.[n]?.card
+  const scenePlan =
+    twoStepOn(ctx) || card ? sceneLocationsOf(ctx.dir, state.data.drafts[n] ?? [], n, card) : null
   const checked = await withModelRetry(ctx, state, key, () =>
     runChapterCheck(
       ctx.db,
@@ -587,10 +719,17 @@ export const check: StepFn = async (ctx, key, state) => {
 
 /**
  * Location list of the chosen draft attempt for the continuity check (P3, two-step eval runs). The
- * chosen attempt is the one the `draft` step saved (pickAttempt). Null when there is no attempt, no
- * beats file (a one-step draft) or the file does not parse: the check then runs as before. Never throws.
+ * chosen attempt is the one the `draft` step saved (pickAttempt). With a plan card (stage 1), the
+ * list is the card's scenes' places and people. Null when there is no attempt, no beats file (a
+ * one-step draft without a card) or the file does not parse: the check then runs as before. Never throws.
  */
-export function sceneLocationsOf(dir: string, attempts: DraftAttempt[], n: number): string | null {
+export function sceneLocationsOf(
+  dir: string,
+  attempts: DraftAttempt[],
+  n: number,
+  card?: DraftPlanCard,
+): string | null {
+  if (card) return renderCardLocations(card)
   if (attempts.length === 0) return null
   const attemptNo = attempts.indexOf(pickAttempt(attempts)) + 1
   const file = `chapters/${pad(n)}.attempt-${attemptNo}.beats.json`
@@ -601,6 +740,17 @@ export function sceneLocationsOf(dir: string, attempts: DraftAttempt[], n: numbe
   } catch {
     return null
   }
+}
+
+/** The card's scenes as the check reads them: place and people, the same lines as the beat list. */
+function renderCardLocations(card: DraftPlanCard): string {
+  if (card.scenes.length === 0) return '(없음)'
+  return card.scenes
+    .map((scene, index) => {
+      const people = scene.characters.length > 0 ? scene.characters.join(', ') : '(없음)'
+      return [`장면 ${index + 1}`, `장소: ${scene.place || '(없음)'}`, `인물: ${people}`].join('\n')
+    })
+    .join('\n\n')
 }
 
 /** The local queue profiles run C's foreign-script repair; cloud ones do not. */
@@ -677,6 +827,7 @@ async function rewriteStage(
         ctx.bible.targetChars,
         [ctx.bible.workStyle.examples],
         bibleExempt(ctx.bible),
+        planTargetsOf(state.data.plans?.[n]),
       ),
       null,
       2,

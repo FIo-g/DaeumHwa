@@ -172,7 +172,14 @@ export function readCallRecords(dir: string): CallRecord[] {
 
 /** Identity of a pending item: the same key means the same question is still waiting. */
 export function pendingKey(p: Pending): string {
-  const id = p.kind === 'interview_answer' ? p.turnId : p.kind === 'draft_review' ? p.attempt : ''
+  const id =
+    p.kind === 'interview_answer'
+      ? p.turnId
+      : p.kind === 'draft_review'
+        ? p.attempt
+        : p.kind === 'plan_review'
+          ? p.round
+          : ''
   return [p.step, p.kind, String(id)].join('|')
 }
 

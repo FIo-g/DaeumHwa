@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { HelperThink, ModelId } from './models'
 import type { InterviewTurnStat } from './metrics-interview'
+import type { DraftPlanCard } from '@/lib/draft-plan'
 
 // Run config and resumable progress for one novel eval run. Both files live in the run directory.
 
@@ -28,6 +29,10 @@ export type RunConfig = {
   directives?: boolean
   /** Chapter instructions are only the first sentence and the draft review gets no mustInclude list (`--few-instructions`). Absent means off. */
   fewInstructions?: boolean
+  /** No plan card: the draft is written at once, as before stage 1 (`--quick`). Absent means off. */
+  quick?: boolean
+  /** Comparison only: `scenes` writes one call per scene (`--draft-mode scenes`). Absent means `single`. */
+  draftMode?: 'single' | 'scenes'
 }
 
 export type RunStatus =
@@ -59,6 +64,11 @@ export type RunData = {
   focusCounts: Record<string, number>
   /** One entry per answered or skipped interview turn; optional so state files from before resume. */
   interviewTurns?: InterviewTurnStat[]
+  /**
+   * The approved plan card of chapter n, with the run id of the plan call and the author's notes
+   * (few-instruction runs). Optional so state files from before stage 1 load.
+   */
+  plans?: Record<number, { runId: string; card: DraftPlanCard; notes: string[] }>
 }
 
 export type RunState = {

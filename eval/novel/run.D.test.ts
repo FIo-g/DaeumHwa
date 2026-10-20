@@ -36,6 +36,8 @@ function makeRun(
     questions: 2,
     maxDraftAttempts: 2,
     commit: 'test',
+    // The beat list of these tests is the pre-stage-1 path: no plan card.
+    quick: true,
   })
 }
 

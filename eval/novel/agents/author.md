@@ -19,6 +19,7 @@ Resolve every repo-relative path below (for example `eval/fixtures/novel/<lang>/
 3. Read the story bible: `<dir>/bible.json` when that file exists (it is this run's copy and replaces the fixture), otherwise `eval/fixtures/novel/<lang>/bible.json`. Then read the author guide `eval/fixtures/novel/<lang>/author-guide.md`. Follow the guide's judgment rules for the kind.
 4. If the kind needs chapter text, read the file the pending names (resolved against `<dir>`):
    - `draft_review`, `proofread`, `continuity`: read `textFile`.
+   - `plan_review`: the plan card is in `pending.json` (`card`). Read nothing else.
    - `proposals` with `source` = `post_chapter`: read `chapterFile` when it is not null.
    - `interview_answer`, `proposals` from `interview` or `style`, `advice_note`: the pending file carries the material you need. Do not look for more than pending.json and, for these two kinds, author-context.json.
    - `interview_answer` and `proposals` (every `source`): also read `<dir>/author-context.json` if it exists (see "Reading author-context.json" below). If it is missing, judge without it. A `post_chapter` proposal needs both `chapterFile` and `author-context.json`.
@@ -38,12 +39,14 @@ Write exactly these fields. Extra fields are not allowed. Every `id` in a `decis
 | `proofread`        | `{"kind":"proofread","decisions":[{"id":"<string>","accept":true or false,"reason":"<string>"}, ...]}`  |
 | `continuity`       | `{"kind":"continuity","decisions":[{"id":"<string>","valid":true or false,"reason":"<string>"}, ...]}`  |
 | `advice_note`      | `{"kind":"advice_note","matchingOption":<integer or null>,"note":"<string>"}`                           |
+| `plan_review`      | `{"kind":"plan_review","approve":true}` or `{"kind":"plan_review","approve":false,"note":"<string>"}`   |
 
 Field notes:
 
 - `interview_answer`: `answer` is the text you give to the app's question. `bankKeys` lists the `key` values of the answer-bank entries you used. Use an empty array when you used none.
 - `draft_review`: `quality` is an integer from 1 to 5. Three means usable with edits.
 - `advice_note`: `matchingOption` is the number of the advice option that matches the next chapter's fixed instructions, or `null` when none does. `note` is one sentence.
+- `plan_review`: `note` is 1 to 150 characters, and only when `approve` is `false`. Leave it out when `approve` is `true`.
 
 ## Reading author-context.json
 
@@ -65,6 +68,7 @@ Field notes:
 - `proofread`: accept only fixes of real spelling, spacing or grammar errors. Reject style or meaning changes.
 - `continuity`: a flag is valid only when the text really contradicts the bible or approved wiki. A change explained by a validity range is a false alarm.
 - `advice_note`: the next chapter's instructions are fixed. Match the advice option that goes the same way; otherwise `null`.
+- `plan_review`: treat `intention` and `mustInclude` in `pending.json` as what you, the author, want in this chapter. Approve when the card (`card`) covers them in a sensible order and nothing in it contradicts them. Otherwise write one note of at most 150 characters asking for the single most important fix. Do not ask for style changes.
 
 ## Rules
 

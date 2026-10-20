@@ -2,6 +2,7 @@ import { countChars } from '@/lib/korean/chars'
 import { foreignScriptRuns } from '@/ai/guards'
 import { countRepeatedWords, findSampleCopies } from '@/lib/korean/style-copy'
 import { overlongParagraphs } from '@/lib/korean/paragraphs'
+import { splitScenes } from '@/lib/scene'
 import type { Bible } from './bible'
 import { countParagraphOpeners, type ParagraphOpeners } from './metrics-openers'
 
@@ -29,6 +30,18 @@ export type ChapterMetrics = {
   overlongParagraphs: number
   // P8: first words of the non-dialogue paragraphs. Informational for Q7, not a T threshold.
   paragraphOpeners: ParagraphOpeners
+  // Stage 1: chars of each scene against the plan's per-scene targets. Null targets without a plan.
+  sceneLengths: SceneLengths
+}
+
+export type SceneLengths = {
+  scenes: number
+  /** The plan's per-scene targets, or null when the run had no plan. */
+  targets: number[] | null
+  /** Chars (with spaces) of each scene, in text order. */
+  chars: number[]
+  /** Scenes whose chars are 70 to 130 percent of their target; null without a plan. */
+  within: number | null
 }
 
 export const META_PATTERNS: RegExp[] = [
@@ -60,12 +73,33 @@ export function bibleExempt(bible: Bible): string[] {
   ])
 }
 
+/** Per-scene chars of a text, checked against the plan's targets when the run had a plan. */
+export function sceneLengthsOf(text: string, targets: readonly number[] | null): SceneLengths {
+  const chars = splitScenes(text).map((scene) => countChars(scene).withSpaces)
+  const within =
+    targets === null
+      ? null
+      : chars.filter((count, i) => {
+          const target = targets[i]
+          return target !== undefined && count >= target * 0.7 && count <= target * 1.3
+        }).length
+  return { scenes: chars.length, targets: targets ? [...targets] : null, chars, within }
+}
+
+/** The per-scene targets of a stored plan, or null when the run has none (quick runs, old runs). */
+export function planTargetsOf(
+  plan: { card: { scenes: { targetChars: number }[] } } | undefined,
+): number[] | null {
+  return plan ? plan.card.scenes.map((scene) => scene.targetChars) : null
+}
+
 export function chapterMetrics(
   text: string,
   lang: 'ko' | 'en',
   targetChars: number,
   styleExamples: readonly string[] = [],
   exempt: readonly string[] = [],
+  sceneTargets: readonly number[] | null = null,
 ): ChapterMetrics {
   const trimmed = text.trim()
   // Same "공백 포함" definition the editor shows: line breaks are not counted.
@@ -115,5 +149,6 @@ export function chapterMetrics(
     repeatedWords,
     overlongParagraphs: overlong,
     paragraphOpeners: countParagraphOpeners(narrationLines),
+    sceneLengths: sceneLengthsOf(trimmed, sceneTargets),
   }
 }

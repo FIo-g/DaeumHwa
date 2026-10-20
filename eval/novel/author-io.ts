@@ -12,7 +12,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { AdviceSchema } from '@/ai/tasks/direction-advice'
 import { ISSUE_KINDS, PROPOSAL_TYPES, type ProposalType, SEVERITIES } from '@/db/types'
-import type { ChapterMetrics } from './metrics'
+import type { ChapterMetrics, SceneLengths } from './metrics'
 
 // File protocol between the eval runner and the human (or fake) author. The runner writes
 // pending.json and waits for answer.json; a bad answer is moved aside and the pending item stays.
@@ -45,6 +45,15 @@ const MetricsSchema: z.ZodType<ChapterMetrics, unknown> = z.object({
       top: z.array(z.object({ word: z.string(), count: z.number() })),
     })
     .default({ counted: 0, repeated: 0, top: [] }),
+  // Stage 1 lengths; saved runs from before stage 1 lack this key.
+  sceneLengths: z
+    .object({
+      scenes: z.number(),
+      targets: z.array(z.number()).nullable(),
+      chars: z.array(z.number()),
+      within: z.number().nullable(),
+    })
+    .default({ scenes: 0, targets: null, chars: [], within: null }) as z.ZodType<SceneLengths>,
 })
 
 const ProposalItemSchema = z.object({
@@ -102,6 +111,15 @@ export const PendingSchema = z.discriminatedUnion('kind', [
     metrics: MetricsSchema,
   }),
   z.object({
+    kind: z.literal('plan_review'),
+    step: z.string(),
+    chapter: z.number().int(),
+    card: z.string(),
+    intention: z.string(),
+    mustInclude: z.array(z.string()),
+    round: z.number().int(),
+  }),
+  z.object({
     kind: z.literal('proofread'),
     step: z.string(),
     chapter: z.number().int(),
@@ -155,6 +173,12 @@ export const AnswerSchema = z.discriminatedUnion('kind', [
     matchingOption: z.number().int().nullable(),
     note: z.string(),
   }),
+  // approve false needs a note of 1 to 150 characters; answerProblems checks that.
+  z.object({
+    kind: z.literal('plan_review'),
+    approve: z.boolean(),
+    note: z.string().max(150).optional(),
+  }),
 ])
 
 export type Answer = z.infer<typeof AnswerSchema>
@@ -176,6 +200,9 @@ function answerIds(a: Answer): string[] {
 
 /** Returns every problem with the answer, or an empty list when it is usable. */
 function answerProblems(answer: Answer, p: Pending): string[] {
+  if (answer.kind === 'plan_review' && !answer.approve && !(answer.note ?? '').trim()) {
+    return ['note is required when approve is false']
+  }
   const expected = itemIds(p)
   if (!expected) return []
   const given = answerIds(answer)

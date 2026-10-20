@@ -35,6 +35,8 @@ function makeRun(dir: string, modelId: 'qwen3.8-27b' | 'haiku-5.5', twoStep = fa
     questions: 2,
     maxDraftAttempts: 2,
     commit: 'test',
+    // The beat-list path these tests cover is the pre-stage-1 one: no plan card.
+    quick: true,
     ...(twoStep ? { twoStep: true } : {}),
   })
 }

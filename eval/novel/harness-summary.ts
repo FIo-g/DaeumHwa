@@ -12,6 +12,8 @@ export type HarnessInput = {
   drafts: Record<number, DraftAttempt[]>
   /** The chapter's instruction text, as the author got it. */
   instructions: (n: number) => string
+  /** The author's plan notes per chapter (few-instruction runs). Absent or empty means no edits. */
+  plans?: Record<number, { notes: string[] }>
   price?: ModelPrice
   settings: 'deploy' | 'eval'
 }
@@ -35,6 +37,11 @@ export const HarnessSummarySchema = z.object({
       usd: UsdSchema,
       firstCharMs: MsSchema.nullable(),
       writeMs: MsSchema,
+      // Stage 1: the plan call's time (apart from writeMs), the author's plan edits and their length.
+      // Saved runs from before stage 1 lack these keys; they read as 0.
+      planMs: MsSchema.default(0),
+      planEdits: CountSchema.default(0),
+      planEditChars: CountSchema.default(0),
       afterSaveMs: MsSchema,
       totalMs: MsSchema,
       regenerations: CountSchema,
@@ -148,8 +155,13 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
     const writes = mine.filter((call) => isWriteCall(call, n))
     const afterSave = mine.filter((call) => !isWriteCall(call, n))
     const all = tally(mine, o.price)
-    const writeMs = writes.reduce((sum, call) => sum + call.durationMs, 0)
+    // The plan call is timed apart from the write, so writeMs is the draft's own calls only.
+    const planCalls = writes.filter((call) => call.task === PLAN_TASK)
+    const planMs = planCalls.reduce((sum, call) => sum + call.durationMs, 0)
+    const drafting = writes.filter((call) => call.task !== PLAN_TASK)
+    const writeMs = drafting.reduce((sum, call) => sum + call.durationMs, 0)
     const afterSaveMs = afterSave.reduce((sum, call) => sum + call.durationMs, 0)
+    const notes = o.plans?.[n]?.notes ?? []
     chapters.push({
       n,
       calls: all.calls,
@@ -161,8 +173,11 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
       usd: all.usd,
       firstCharMs: firstCharMs(writes),
       writeMs,
+      planMs,
+      planEdits: notes.length,
+      planEditChars: notes.reduce((sum, note) => sum + Array.from(note).length, 0),
       afterSaveMs,
-      totalMs: writeMs + afterSaveMs,
+      totalMs: writeMs + planMs + afterSaveMs,
       regenerations: Math.max(0, (o.drafts[n]?.length ?? 0) - 1),
       instructionChars: Array.from(o.instructions(n)).length,
     })

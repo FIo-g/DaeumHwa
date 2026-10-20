@@ -16,7 +16,7 @@ import { seoulToday } from '@/lib/dates'
 import { readPending } from './author-io'
 import { loadBible } from './bible'
 import { publishReview, secondBlindDir, writeBlindCopy } from './blind'
-import { bibleExempt, chapterMetrics } from './metrics'
+import { bibleExempt, chapterMetrics, planTargetsOf } from './metrics'
 import { type PowerInfo, type PowerReader, lowPowerWarning, readPowerInfo } from './power'
 import {
   checkHelperThink,
@@ -159,6 +159,8 @@ export type InitOptions = {
   twoStep?: string
   directives?: boolean
   fewInstructions?: boolean
+  quick?: boolean
+  draftMode?: string
 }
 
 /**
@@ -197,11 +199,15 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
   const fewInstructions = o.fewInstructions === true
   const directivesSuffix = directives ? '-directives' : ''
   const fewSuffix = fewInstructions ? '-few' : ''
+  const quick = o.quick === true
+  const quickSuffix = quick ? '-quick' : ''
+  const draftMode = o.draftMode === undefined ? 'single' : parseDraftMode(o.draftMode)
+  const scenesSuffix = draftMode === 'scenes' ? '-scenes' : ''
   const dir = path.resolve(
     o.dir ??
       path.join(
         RESULTS_DIR,
-        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${deploySuffix}`,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${quickSuffix}${scenesSuffix}${deploySuffix}`,
       ),
   )
 
@@ -235,6 +241,12 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     ) {
       throw new Error(`run exists with another fewInstructions: ${dir}`)
     }
+    if (o.quick !== undefined && quick !== (existing.quick ?? false)) {
+      throw new Error(`run exists with another quick setting: ${dir}`)
+    }
+    if (o.draftMode !== undefined && draftMode !== (existing.draftMode ?? 'single')) {
+      throw new Error(`run exists with another draft mode: ${dir}`)
+    }
   } else {
     createRun(dir, {
       modelId: model,
@@ -250,6 +262,8 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       twoStep: twoStep || undefined,
       directives: directives || undefined,
       fewInstructions: fewInstructions || undefined,
+      quick: quick || undefined,
+      draftMode: draftMode === 'scenes' ? 'scenes' : undefined,
     })
   }
   return { dir, status: loadState(dir).status }
@@ -297,6 +311,28 @@ export function deploySettingsFlag(flags: Flags): boolean | undefined {
   if (value === true || value === 'on') return true
   if (value === 'off') return false
   throw new Error(`unknown deploy-settings value: ${String(value)}`)
+}
+
+/** The --draft-mode value: `scenes` or `single`. Anything else is an error. */
+function parseDraftMode(value: string): 'single' | 'scenes' {
+  if (value === 'scenes' || value === 'single') return value
+  throw new Error(`unknown draft mode: ${value}`)
+}
+
+/** The --quick value. A bare flag turns the plan off; a value is an error. */
+export function quickFlag(flags: Flags): boolean | undefined {
+  const value = flags.quick
+  if (value === undefined) return undefined
+  if (value === true) return true
+  throw new Error(`unknown quick value: ${String(value)}`)
+}
+
+/** The --draft-mode value, or undefined when the flag is absent. Checked by initRun. */
+export function draftModeFlag(flags: Flags): string | undefined {
+  const value = flags['draft-mode']
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') throw new Error('--draft-mode needs a value')
+  return value
 }
 
 /**
@@ -660,27 +696,30 @@ export function resummarizeRun(dir: string): ResummarizeResult {
     : []
   mkdirSync(path.join(dir, 'metrics'), { recursive: true })
   // The same metric arguments for every copy, so the before and after numbers come from one code version.
-  const measure = (text: string) =>
+  const measure = (text: string, sceneTargets: number[] | null) =>
     chapterMetrics(
       text,
       config.lang,
       bible.targetChars,
       [bible.workStyle.examples],
       bibleExempt(bible),
+      sceneTargets,
     )
   for (const file of chapterFiles) {
     const chapterNo = file.slice(0, 2)
     const text = readFileSync(path.join(chaptersDir, file), 'utf8')
+    // The plan's scene targets give the scene lengths (stage 1); a run without a plan has none.
+    const sceneTargets = planTargetsOf(state.data.plans?.[Number(chapterNo)])
     writeFileSync(
       path.join(dir, 'metrics', `${chapterNo}.json`),
-      `${JSON.stringify(measure(text), null, 2)}\n`,
+      `${JSON.stringify(measure(text, sceneTargets), null, 2)}\n`,
     )
     // The copy the D scene rewrite saved before it ran; its metrics are recomputed too.
     const preFile = path.join(chaptersDir, `${chapterNo}.pre-rewrite.md`)
     if (existsSync(preFile)) {
       writeFileSync(
         path.join(dir, 'metrics', `${chapterNo}.pre-rewrite.json`),
-        `${JSON.stringify(measure(readFileSync(preFile, 'utf8')), null, 2)}\n`,
+        `${JSON.stringify(measure(readFileSync(preFile, 'utf8'), sceneTargets), null, 2)}\n`,
       )
     }
   }
@@ -790,6 +829,8 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         twoStep: twoStepFlag(flags),
         directives: directivesFlag(flags),
         fewInstructions: fewInstructionsFlag(flags),
+        quick: quickFlag(flags),
+        draftMode: draftModeFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {

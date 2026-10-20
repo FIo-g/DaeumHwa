@@ -27,6 +27,16 @@ export function sceneRangeAt(text: string, start: number, end: number): SceneRan
 }
 
 /**
+ * The scene texts of a chapter: the trimmed segments between its break lines. A text with no break
+ * line is one scene. Used for the per-scene lengths of the eval (stage 1).
+ */
+export function splitScenes(text: string): string[] {
+  const segments = breakSegments(text)
+  if (segments === null) return [text.trim()]
+  return segments.map((segment) => text.slice(segment.start, segment.end))
+}
+
+/**
  * The trimmed segments between break lines, including the one before the first and the one after
  * the last break line. Null when the text has no break line.
  */

@@ -957,7 +957,11 @@ export function buildRunSummary(
   }
 
   if (inputs.harness) {
-    summary.harness = harnessSummary(calls, { ...inputs.harness, drafts: state.data.drafts })
+    summary.harness = harnessSummary(calls, {
+      ...inputs.harness,
+      drafts: state.data.drafts,
+      plans: state.data.plans,
+    })
   }
 
   const failures = inputs.continueFailures ?? []

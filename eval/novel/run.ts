@@ -106,6 +106,8 @@ export type RunCreateOptions = {
   twoStep?: boolean
   directives?: boolean
   fewInstructions?: boolean
+  quick?: boolean
+  draftMode?: 'single' | 'scenes'
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
@@ -129,6 +131,8 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     ...(o.twoStep ? { twoStep: true } : {}),
     ...(o.directives ? { directives: true } : {}),
     ...(o.fewInstructions ? { fewInstructions: true } : {}),
+    ...(o.quick ? { quick: true } : {}),
+    ...(o.draftMode === 'scenes' ? { draftMode: 'scenes' as const } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))
