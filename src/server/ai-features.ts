@@ -333,6 +333,9 @@ async function collectDialogueSamples(db: Db, workId: string, names: string[]): 
 /**
  * The draft context of a chapter: the previous chapter's tail and summary, the style cards, the
  * context pack and the prompt input. Shared by startDraft and planDraft. Does not check the role.
+ * The wiki entries are picked by name from `packText` (default: the instructions). With
+ * `seedPackFromPrevious` and no packText, an empty instruction line is replaced by the previous
+ * chapter's summary and tail, so the cast already in play reaches the pack.
  */
 export async function buildDraftContext(
   db: Db,
@@ -343,6 +346,8 @@ export async function buildDraftContext(
     instructions: string
     targetChars?: number
     entryIds: string[]
+    packText?: string
+    seedPackFromPrevious?: boolean
   },
 ): Promise<{
   promptInput: DraftPromptInput
@@ -404,8 +409,12 @@ export async function buildDraftContext(
       examples: card.examples,
     }))
 
+  const seeded =
+    input.seedPackFromPrevious && instructions === ''
+      ? [previousSummary, previousTail].filter((part) => part !== null).join('\n')
+      : instructions
   const pack = await buildContextPack(db, workId, {
-    text: instructions,
+    text: input.packText ?? seeded,
     position,
     extraEntryIds: input.entryIds,
   })
@@ -452,6 +461,7 @@ export async function planDraft(
     instructions: input.instructions.trim(),
     targetChars: input.targetChars,
     entryIds: input.entryIds,
+    seedPackFromPrevious: true,
   })
   const revision = input.revision ?? null
   const { output, runId } = await runAiTask(
@@ -546,6 +556,10 @@ export async function startDraft(
     instructions,
     targetChars: input.targetChars,
     entryIds: input.entryIds,
+    // With a plan, the entries are picked from the rendered card (scene characters, places,
+    // summaries, ending, threads) as well as the author line. Only names are matched, so the
+    // per-scene targets of the client card do not matter here.
+    packText: input.plan ? renderPlanInstructions(instructions, input.plan) : undefined,
   })
   const { chapterId, targetChars } = context
   // The plan is the instruction: its scenes, threads and the author line become <instructions>.

@@ -7,7 +7,13 @@ import { renderPlanInstructions, withSceneTargets } from '@/lib/draft-plan'
 import { FakeAiClient } from '@/test/fake-ai'
 import { fakeDraftPlan } from '@/test/ai-fakes/draft-plan'
 import { createTestDb } from '@/test/db'
-import { createTestThread, createTestUser, createTestWork } from '@/test/factories'
+import {
+  createTestEntry,
+  createTestFact,
+  createTestThread,
+  createTestUser,
+  createTestWork,
+} from '@/test/factories'
 import { planDraft, startDraft } from '@/server/ai-features'
 
 async function readAll(stream: AsyncIterable<string>): Promise<string> {
@@ -111,6 +117,34 @@ describe('startDraft from an approved plan card', () => {
       prompt.indexOf('</instructions>'),
     )
     expect(instructions).toContain('편지 봉인')
+  })
+
+  it('picks wiki entries from the approved card, not only from the author line', async () => {
+    const entry = await createTestEntry(db, workId, { name: '윤서', summary: '왼손을 다친 검사' })
+    await createTestFact(db, workId, { entryId: entry.id, content: '윤서는 왼손을 쓰지 못한다' })
+    const client = new FakeAiClient()
+    const spy = vi.spyOn(client, 'streamText')
+    const base = withSceneTargets(fakeDraftPlan(), 5000)
+    const card = {
+      ...base,
+      scenes: base.scenes.map((scene, i) =>
+        i === 0 ? { ...scene, summary: '윤서가 검을 든다.', characters: ['윤서'] } : scene,
+      ),
+    }
+
+    const { done } = await startDraft(
+      db,
+      actor,
+      { workId, instructions: '', entryIds: [], targetChars: 5000, plan: card },
+      client,
+    )
+    await done
+
+    const prompt = spy.mock.calls[0][0].prompt
+    const wiki = prompt.slice(prompt.indexOf('<wiki>'), prompt.indexOf('</wiki>'))
+    expect(wiki).toContain('윤서는 왼손을 쓰지 못한다')
+    // The card is still what the draft reads as its instructions.
+    expect(prompt).toContain(`<instructions>\n${renderPlanInstructions('', card)}\n</instructions>`)
   })
 
   it('stores the text with the plan and plan run id, and records one plan_edited event', async () => {
