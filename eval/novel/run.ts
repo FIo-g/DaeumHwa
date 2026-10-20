@@ -108,6 +108,7 @@ export type RunCreateOptions = {
   fewInstructions?: boolean
   quick?: boolean
   draftMode?: 'single' | 'scenes'
+  lengthMode?: 'continue'
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
@@ -133,6 +134,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     ...(o.fewInstructions ? { fewInstructions: true } : {}),
     ...(o.quick ? { quick: true } : {}),
     ...(o.draftMode === 'scenes' ? { draftMode: 'scenes' as const } : {}),
+    ...(o.lengthMode === 'continue' ? { lengthMode: 'continue' as const } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))
@@ -182,6 +184,10 @@ export async function openRun(
   // puts the previous value back.
   const previousSpeechStyle = process.env.AI_SPEECH_STYLE
   process.env.AI_SPEECH_STYLE = config.speech === true ? 'on' : ''
+  // The draft's short-length path follows the run's config, not the shell: absent means expand. close()
+  // puts the previous value back.
+  const previousLengthMode = process.env.AI_DRAFT_LENGTH_MODE
+  process.env.AI_DRAFT_LENGTH_MODE = config.lengthMode === 'continue' ? 'continue' : 'expand'
   return {
     dir,
     config,
@@ -197,6 +203,8 @@ export async function openRun(
       else process.env.AI_DAILY_TOKEN_LIMIT = previousDailyLimit
       if (previousSpeechStyle === undefined) delete process.env.AI_SPEECH_STYLE
       else process.env.AI_SPEECH_STYLE = previousSpeechStyle
+      if (previousLengthMode === undefined) delete process.env.AI_DRAFT_LENGTH_MODE
+      else process.env.AI_DRAFT_LENGTH_MODE = previousLengthMode
       await pg.close()
     },
   }

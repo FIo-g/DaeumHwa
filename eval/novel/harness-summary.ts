@@ -46,6 +46,8 @@ export const HarnessSummarySchema = z.object({
       totalMs: MsSchema,
       regenerations: CountSchema,
       instructionChars: CountSchema,
+      // Stage 1b: expansion calls of the chapter's draft (their time is already in writeMs). Saved runs from before stage 1b read as 0.
+      expandCalls: CountSchema.default(0),
     }),
   ),
   interview: z.object({
@@ -128,6 +130,9 @@ function isWriteCall(call: CallRecord, n: number): boolean {
  */
 const PLAN_TASK: string = 'draft-plan'
 
+/** The stage 1b expansion call of a short draft's scenes; counted in writeMs like the draft's calls. */
+const EXPAND_TASK: string = 'draft-expand'
+
 /**
  * Milliseconds from the start of the draft to the first character: the write calls before the
  * first chapter stream, minus the stage 1 plan call, plus that stream's first token time. Null when
@@ -180,6 +185,7 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
       totalMs: writeMs + planMs + afterSaveMs,
       regenerations: Math.max(0, (o.drafts[n]?.length ?? 0) - 1),
       instructionChars: Array.from(o.instructions(n)).length,
+      expandCalls: drafting.filter((call) => call.task === EXPAND_TASK).length,
     })
   }
 

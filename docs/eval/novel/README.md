@@ -154,6 +154,7 @@ pnpm eval:novel resummarize --date 2026-10-18                               # �
    - 시험용 작가 요청을 넣으려면 `--directives on`을 쓴다. 1화 지시에 요청 4개(도윤서의 말버릇, 금지어 2개, 회차를 대사 한 줄로 끝내기)를 한 번만 넣고, 회차마다 지켰는지 센다(`directives.json`과 실행 요약의 `directives` 블록). 값은 `on`뿐이고 만들 때 정한다. 기본 폴더 이름에 `-directives`가 붙는다.
    - 회차 지시를 줄이려면 `--few-instructions`를 쓴다. 회차 지시는 설정집 지시의 첫 문장만 주고, 작가 검토에는 `mustInclude` 목록을 주지 않는다. 기본 폴더 이름에 `-few`가 붙는다. 값은 `on`(또는 값 없이)이고 만들 때 정한다.
    - 기본 흐름은 계획 카드 뒤 본문 쓰기다. 초안 전에 `draft-plan` 호출이 장면 카드를 만들고, 그 카드가 초안의 지시가 된다. `--quick`은 계획 없이 바로 쓴다(이전 방식과 같다). `--draft-mode scenes`는 장면마다 따로 쓴다(비교용, 기본은 `single`). 기본 폴더 이름에 `-quick`, `-scenes`가 붙는다.
+   - 첫 초안이 목표보다 짧으면 기본은 짧은 장면을 골라 장면마다 따로 늘려 쓴다(`draft-expand`, 낮은 effort, 병렬). 이어 쓰기 방식으로 되돌리려면 `--length-mode continue`를 쓴다. 값은 `continue`만 받고, 만들 때 정한다. 기본 폴더 이름에 `-cont`가 붙는다. 늘리기 호출 수는 `run-summary.json`의 `harness`에 `expandCalls`로 남고, 그 시간은 `writeMs`에 든다.
    - 적은 지시 실행(`--few-instructions`)에서는 작가 에이전트가 계획 카드를 한 줄씩 고친다(최대 3번). 고칠 때마다 계획을 다시 세운다. 3번째 메모 뒤에는 마지막 카드로 바로 쓴다. 메모 수와 메모 글자 수, 계획 호출 시간은 `run-summary.json`의 `harness`에 `planEdits`, `planEditChars`, `planMs`로 남는다. 장 지표의 `sceneLengths`는 장면 글자 수와 계획의 장면 분량(70~130%) 안에 든 장면 수를 적는다.
 
    - 그다음 스킬을 같은 `date`와 `chapters: 1`로 부른다. 스킬의 init은 그 폴더만 이어 쓴다. 폴더가 다르면 생각 설정이 없는 새 실행이 만들어진다.

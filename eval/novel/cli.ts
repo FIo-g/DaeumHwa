@@ -161,6 +161,7 @@ export type InitOptions = {
   fewInstructions?: boolean
   quick?: boolean
   draftMode?: string
+  lengthMode?: 'continue'
 }
 
 /**
@@ -203,11 +204,13 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
   const quickSuffix = quick ? '-quick' : ''
   const draftMode = o.draftMode === undefined ? 'single' : parseDraftMode(o.draftMode)
   const scenesSuffix = draftMode === 'scenes' ? '-scenes' : ''
+  const continueLength = o.lengthMode === 'continue'
+  const lengthSuffix = continueLength ? '-cont' : ''
   const dir = path.resolve(
     o.dir ??
       path.join(
         RESULTS_DIR,
-        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${quickSuffix}${scenesSuffix}${deploySuffix}`,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${quickSuffix}${scenesSuffix}${lengthSuffix}${deploySuffix}`,
       ),
   )
 
@@ -247,6 +250,9 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (o.draftMode !== undefined && draftMode !== (existing.draftMode ?? 'single')) {
       throw new Error(`run exists with another draft mode: ${dir}`)
     }
+    if (o.lengthMode !== undefined && continueLength !== (existing.lengthMode === 'continue')) {
+      throw new Error(`run exists with another length mode: ${dir}`)
+    }
   } else {
     createRun(dir, {
       modelId: model,
@@ -264,6 +270,7 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       fewInstructions: fewInstructions || undefined,
       quick: quick || undefined,
       draftMode: draftMode === 'scenes' ? 'scenes' : undefined,
+      lengthMode: continueLength ? 'continue' : undefined,
     })
   }
   return { dir, status: loadState(dir).status }
@@ -325,6 +332,17 @@ export function quickFlag(flags: Flags): boolean | undefined {
   if (value === undefined) return undefined
   if (value === true) return true
   throw new Error(`unknown quick value: ${String(value)}`)
+}
+
+/**
+ * The --length-mode value, or undefined when the flag is absent. Only `continue` is accepted (the
+ * append path); a bare flag is refused, so a run is never created silently in the other mode.
+ */
+export function lengthModeFlag(flags: Flags): 'continue' | undefined {
+  const value = flags['length-mode']
+  if (value === undefined) return undefined
+  if (value === 'continue') return 'continue'
+  throw new Error(`unknown length mode: ${String(value)}`)
 }
 
 /** The --draft-mode value, or undefined when the flag is absent. Checked by initRun. */
@@ -831,6 +849,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         fewInstructions: fewInstructionsFlag(flags),
         quick: quickFlag(flags),
         draftMode: draftModeFlag(flags),
+        lengthMode: lengthModeFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {

@@ -33,6 +33,8 @@ export type RunConfig = {
   quick?: boolean
   /** Comparison only: `scenes` writes one call per scene (`--draft-mode scenes`). Absent means `single`. */
   draftMode?: 'single' | 'scenes'
+  /** A short draft is filled by the append continuation instead of scene expansion (`--length-mode continue`). Absent means expand. */
+  lengthMode?: 'continue'
 }
 
 export type RunStatus =

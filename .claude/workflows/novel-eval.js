@@ -89,6 +89,7 @@ const ALLOWED_RUN_FLAGS = [
   '--directives on',
   '--draft-mode scenes',
   '--few-instructions',
+  '--length-mode continue',
   '--product-limits',
   '--quick',
   '--speech on',

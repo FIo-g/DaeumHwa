@@ -34,6 +34,8 @@ function makeRun(dir: string): void {
     questions: 2,
     maxDraftAttempts: 2,
     commit: 'test',
+    // These tests cover the append continuation, so the run is made in continue mode.
+    lengthMode: 'continue',
   })
 }
 
