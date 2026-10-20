@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { getDb } from '@/db/client'
+import { DraftPlanCardSchema } from '@/ai/tasks/draft-plan'
 import { draftErrorRecord, DRAFT_FAILED_MESSAGE } from '@/lib/draft-stream'
 import { type ErrorCode, isAppError } from '@/lib/errors'
 import { startDraft } from '@/server/ai-features'
@@ -13,11 +14,22 @@ import { getSessionUser } from '@/server/session'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
+const PlanEditsSchema = z.object({
+  revisions: z.number().int().min(0).max(1000),
+  removed: z.number().int().min(0).max(1000),
+  moved: z.number().int().min(0).max(1000),
+  textEdits: z.number().int().min(0).max(1000),
+})
+
 const DraftBodySchema = z.object({
   chapterId: z.uuid().nullable().optional(),
   instructions: z.string().max(5000),
   targetChars: z.number().int().min(500).max(20000).optional(),
   entryIds: z.array(z.uuid()).max(50),
+  // The approved plan card, re-checked by DraftPlanCardSchema; its targets are recomputed by the service.
+  plan: DraftPlanCardSchema.optional(),
+  planRunId: z.uuid().optional(),
+  planEdits: PlanEditsSchema.optional(),
 })
 
 const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {

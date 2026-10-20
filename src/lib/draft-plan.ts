@@ -10,6 +10,9 @@ export type DraftPlanCard = Omit<DraftPlan, 'scenes'> & {
   scenes: (DraftPlan['scenes'][number] & { targetChars: number })[]
 }
 
+/** How the author changed the card before writing: counted per edit, stored with the draft run. */
+export type PlanEdits = { revisions: number; removed: number; moved: number; textEdits: number }
+
 /** First line of the rendered plan: tells the draft how to follow the card. Shared with the English scaffold. */
 export const PLAN_INTRO_RULE =
   '아래 회차 계획을 따라 쓴다. 장면이 바뀔 때는 빈 줄, *** 한 줄, 빈 줄을 둔다. 장면마다 적힌 분량을 채운다. 마지막 장면은 요약이나 교훈으로 닫지 말고 "회차 끝"에 적힌 장면으로 끝낸다.'
@@ -34,6 +37,28 @@ export function withSceneTargets(plan: DraftPlan, targetChars: number): DraftPla
     ...plan,
     scenes: plan.scenes.map((scene) => ({ ...scene, targetChars: perScene })),
   }
+}
+
+/**
+ * Cleans a card that came from the client (already checked by DraftPlanCardSchema): trims the text,
+ * drops empty names and threads, and recomputes every per-scene target from the chapter target.
+ */
+export function normalizeCard(card: DraftPlanCard, targetChars: number): DraftPlanCard {
+  const plan: DraftPlan = {
+    scenes: card.scenes.map((scene) => ({
+      summary: scene.summary.trim(),
+      goal: scene.goal.trim(),
+      decision: scene.decision.trim(),
+      stake: scene.stake.trim(),
+      trigger: scene.trigger.trim(),
+      role: scene.role,
+      place: scene.place.trim(),
+      characters: scene.characters.map((name) => name.trim()).filter((name) => name !== ''),
+    })),
+    ending: { device: card.ending.device, line: card.ending.line.trim() },
+    threads: card.threads.map((title) => title.trim()).filter((title) => title !== ''),
+  }
+  return withSceneTargets(plan, targetChars)
 }
 
 /** Warnings under the card heading: same beat twice in a row, and a last scene that is not the ending. */

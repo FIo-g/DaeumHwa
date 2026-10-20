@@ -53,7 +53,14 @@ import {
   draftCharCount,
   draftLengthPlan,
 } from '@/lib/draft-length'
-import { planWarnings, type DraftPlanCard, withSceneTargets } from '@/lib/draft-plan'
+import {
+  normalizeCard,
+  planWarnings,
+  type DraftPlanCard,
+  type PlanEdits,
+  renderPlanInstructions,
+  withSceneTargets,
+} from '@/lib/draft-plan'
 import { AppError, isAppError } from '@/lib/errors'
 import { chapterLabel } from '@/lib/labels'
 import { type DraftFlag, findDraftFlags } from '@/lib/korean/style-copy'
@@ -487,6 +494,8 @@ async function latestAdviceText(db: Db, actor: Actor, workId: string): Promise<s
 /**
  * Starts a streamed chapter draft. The caller reads `textStream`; `done` resolves with the full
  * text once the run is stored. Nothing is written to the manuscript here. Editor role.
+ * With `plan` (an approved card), the card is the draft's instructions and its scene count sets
+ * the scene budget; empty instructions are then allowed. The run output keeps the card.
  */
 export async function startDraft(
   db: Db,
@@ -499,6 +508,12 @@ export async function startDraft(
     entryIds: string[]
     /** Eval only: ask for a scene beat list first (draft-beats) and pass it into the prose prompt. */
     twoStep?: boolean
+    /** The approved plan card from planDraft, as the author left it. Re-checked and re-targeted here. */
+    plan?: DraftPlanCard
+    /** Run id of the planDraft call that proposed the card. */
+    planRunId?: string
+    /** How the author changed the card; counted as plan_edited. */
+    planEdits?: PlanEdits
   },
   client?: AiClient,
   signal?: AbortSignal,
@@ -514,16 +529,28 @@ export async function startDraft(
   const startedAt = Date.now()
   const { workId } = input
   const instructions = input.instructions.trim()
-  if (!instructions) throw new AppError('VALIDATION', '무슨 일이 일어나야 하는지 적어 주세요.')
+  if (!instructions && !input.plan) {
+    throw new AppError('VALIDATION', '무슨 일이 일어나야 하는지 적어 주세요.')
+  }
   await requireWorkRole(db, workId, actor.userId, 'editor')
 
-  const { promptInput, chapterId, targetChars } = await buildDraftContext(db, actor, {
+  const context = await buildDraftContext(db, actor, {
     workId,
     chapterId: input.chapterId,
     instructions,
     targetChars: input.targetChars,
     entryIds: input.entryIds,
   })
+  const { chapterId, targetChars } = context
+  // The plan is the instruction: its scenes, threads and the author line become <instructions>.
+  const card = input.plan ? normalizeCard(input.plan, targetChars) : null
+  const promptInput: DraftPromptInput = card
+    ? {
+        ...context.promptInput,
+        instructions: renderPlanInstructions(instructions, card),
+        sceneCount: card.scenes.length,
+      }
+    : context.promptInput
 
   // Two-step draft (eval only): the beat list is made before the prose and goes into both prose
   // calls. A failed beat call rejects here, before any prose run exists. The beat call runs before
@@ -581,13 +608,40 @@ export async function startDraft(
   } catch (error) {
     console.warn('usage event draft_started failed', error)
   }
+  if (card) {
+    const edits = input.planEdits ?? { revisions: 0, removed: 0, moved: 0, textEdits: 0 }
+    try {
+      await recordUsageEvent(db, actor, {
+        workId,
+        chapterId,
+        runId: first.runId,
+        kind: 'plan_edited',
+        value: edits.revisions + edits.removed + edits.moved + edits.textEdits,
+        extra: { ...edits },
+      })
+    } catch (error) {
+      console.warn('usage event plan_edited failed', error)
+    }
+  }
 
   const pipe = createTextPipe()
-  const done = completeDraft(
+  const drafted = completeDraft(
     { db, actor, workId, chapterId, promptInput: finalInput, client, signal, startedAt },
     first,
     pipe,
   )
+  // The plan joins the run output once the text is final, so the stored text is still the one streamed.
+  // The text is already stored and streamed here, so a lost plan annotation must not fail the draft.
+  const done = card
+    ? drafted.then(async (text) => {
+        try {
+          await keepPlanInRun(db, first.runId, card, input.planRunId)
+        } catch (error) {
+          console.warn('plan merge into the draft run failed', error)
+        }
+        return text
+      })
+    : drafted
   // Callers that only read the text stream must not see an unhandled rejection.
   done.catch(() => {})
   return {
@@ -688,6 +742,25 @@ async function completeDraft(
   pipe.push(joined.slice(firstText.length))
   pipe.end()
   return joined
+}
+
+/**
+ * Adds the approved card and its plan run id to a finished draft run. The other keys of the output
+ * (text, warnings) are kept as they are.
+ */
+async function keepPlanInRun(
+  db: Db,
+  runId: string,
+  card: DraftPlanCard,
+  planRunId: string | undefined,
+): Promise<void> {
+  const [row] = await db
+    .select({ output: aiRuns.output })
+    .from(aiRuns)
+    .where(eq(aiRuns.id, runId))
+    .limit(1)
+  const output = row?.output && typeof row.output === 'object' ? row.output : {}
+  await replaceRunOutput(db, runId, { ...output, plan: card, planRunId: planRunId ?? null })
 }
 
 /** Keeps the first text in the first run row with the warning. Best effort: never throws. */
