@@ -112,7 +112,7 @@ export const DRAFT_PLAN_SYSTEM = `당신은 웹소설 한 회차의 계획을 �
 - role은 opening, turn, rise, ending 중 하나다. 첫 장면은 opening, 마지막 장면은 ending으로 쓴다. 같은 role을 두 장면 연속으로 쓰지 않는다.
 - ending.device는 question, crisis, twist 중 하나다. ending.line은 마지막 장면이 어떻게 끝나는지 한 문장으로, 요약이나 교훈이 아니라 장면 안의 한 순간으로 쓴다.
 - threads에는 이 회차가 움직이는 <wiki> 떡밥의 제목만 쓴다. 위키에 있는 제목만 쓴다.
-- <wiki>의 떡밥 중 "지시에 있을 때만 쓴다"로 표시된 것은 작가의 지시(<instructions>)에 그 떡밥이 나올 때만 계획과 threads에 넣는다.
+- <wiki>의 떡밥 중 "지시에 있을 때만 쓴다"로 표시된 것은 작가의 지시(<instructions>)나 <revision>의 작가 메모에 그 떡밥이 나올 때만 계획과 threads에 넣는다.
 - 위키에 없는 중요한 설정(새 능력, 새 관계, 죽음 등)을 지어내지 않는다.
 - <revision>이 있으면 "현재 계획"을 작가 메모대로만 고친다. 메모가 건드리지 않는 장면은 그대로 둔다.
 - 인물과 장소의 이름은 위키에 적힌 그대로 쓴다.

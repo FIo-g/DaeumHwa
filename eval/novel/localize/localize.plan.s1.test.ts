@@ -42,6 +42,14 @@ describe('draft-plan English scaffold (stage 1)', () => {
     expect(findHangul(EN_SYSTEMS['draft-plan'])).toEqual([])
   })
 
+  it('lets the author note in <revision> bring in an instructed-only thread', () => {
+    const line = EN_SYSTEMS['draft-plan']
+      .split('\n')
+      .find((l) => l.includes('use only if the instructions mention it'))
+    expect(line).toBeTruthy()
+    expect(line).toContain('<revision>')
+  })
+
   it('translates the plan prompt sample without Hangul', () => {
     expect(findHangul(translateScaffold(draftPlanSample))).toEqual([])
   })

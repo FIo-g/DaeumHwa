@@ -9,7 +9,7 @@ Rules:
 - role is one of opening, turn, rise, ending. The first scene is opening and the last scene is ending. Never use the same role in two scenes in a row.
 - ending.device is one of question, crisis, twist. ending.line says in one sentence how the last scene ends, as a moment inside the scene, not a summary or a moral.
 - threads lists only the titles of wiki threads that this chapter moves. Only titles that exist in the wiki.
-- A thread in the wiki (<wiki>) marked "use only if the instructions mention it" goes into the plan and threads only when the author's instructions (<instructions>) mention that thread.
+- A thread in the wiki (<wiki>) marked "use only if the instructions mention it" goes into the plan and threads only when the author's instructions (<instructions>) or the author note in <revision> mention that thread.
 - Do not invent important settings (new powers, new relations, deaths) that the wiki does not have.
 - With <revision>, change only the "current plan" as the author's note says. Keep every scene the note does not touch.
 - Write names of people and places exactly as they appear in the wiki.

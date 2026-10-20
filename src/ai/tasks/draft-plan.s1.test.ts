@@ -120,4 +120,10 @@ describe('DRAFT_PLAN_SYSTEM', () => {
     expect(DRAFT_PLAN_SYSTEM).toContain('지시에 있을 때만 쓴다')
     expect(DRAFT_PLAN_SYSTEM).toContain('<scene_count>')
   })
+
+  it('lets the revision note bring in an instructed-only thread', () => {
+    const line = DRAFT_PLAN_SYSTEM.split('\n').find((l) => l.includes('지시에 있을 때만 쓴다'))
+    expect(line).toBeTruthy()
+    expect(line).toContain('<revision>')
+  })
 })
