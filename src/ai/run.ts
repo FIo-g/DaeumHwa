@@ -43,7 +43,9 @@ export function setAiTimeoutOverride(ms: number | null): void {
 
 /**
  * `signal` cancels the call (the run is recorded as `error` with 취소했습니다.). `timeoutMs`
- * overrides the task's own limit.
+ * overrides the task's own limit. `subRun` marks a run that belongs to another run which already
+ * passed the cap (the expansions of one draft): it still checks the daily token limit but is not
+ * refused for the number of runs in flight, and the caller keeps its own parallelism small.
  */
 export type AiRunMeta = {
   userId: string
@@ -51,6 +53,7 @@ export type AiRunMeta = {
   chapterId?: string | null
   signal?: AbortSignal
   timeoutMs?: number
+  subRun?: true
 }
 
 export interface StreamRunArgs {
@@ -106,7 +109,7 @@ export async function runAiTask<I, O>(
   input: I,
   client: AiClient = getAiClient(),
 ): Promise<{ output: O; runId: string }> {
-  await assertCanStartRun(db, meta.userId)
+  await assertCanStartRun(db, meta)
   const taskModel = task.model?.()
   const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
   let usage: AiUsage | undefined
@@ -170,7 +173,7 @@ export async function runAiTaskSplit<I, O>(
   },
 ): Promise<{ output: O; runId: string }> {
   if (parts.length === 0) throw new AppError('VALIDATION', '실행할 항목이 없습니다.')
-  await assertCanStartRun(db, meta.userId)
+  await assertCanStartRun(db, meta)
   const taskModel = task.model?.()
   const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
   const timeoutMs = resolveSplitTimeoutMs(meta, task)
@@ -326,7 +329,7 @@ export async function startAiStream(
   args: StreamRunArgs,
   client: AiClient = getAiClient(),
 ): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
-  await assertCanStartRun(db, meta.userId)
+  await assertCanStartRun(db, meta)
   const runId = await insertRun(db, meta, args.task, args.model ?? client.defaultModel)
   const timeoutMs = timeoutOverrideMs ?? meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS
   const { signal, deadline } = callSignals(meta, timeoutMs)
@@ -443,12 +446,14 @@ export async function assertWithinLimit(db: Db, userId: string): Promise<void> {
 }
 
 /**
- * Checks both the daily token limit and the per-user concurrency cap before a run starts.
- * The concurrency error uses CONFLICT, not AI_LIMIT, so import jobs do not pause on it.
+ * Checks both the daily token limit and the per-user concurrency cap before a run starts. A
+ * `subRun` skips the concurrency cap only. The concurrency error uses CONFLICT, not AI_LIMIT, so
+ * import jobs do not pause on it.
  */
-async function assertCanStartRun(db: Db, userId: string): Promise<void> {
-  await assertWithinLimit(db, userId)
-  const running = await countRunningRuns(db, userId)
+async function assertCanStartRun(db: Db, meta: AiRunMeta): Promise<void> {
+  await assertWithinLimit(db, meta.userId)
+  if (meta.subRun) return
+  const running = await countRunningRuns(db, meta.userId)
   if (running >= MAX_RUNNING_RUNS) throw new AppError('CONFLICT', CONCURRENCY_MESSAGE)
 }
 

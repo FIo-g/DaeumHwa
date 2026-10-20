@@ -317,6 +317,29 @@ describe('concurrent runs', () => {
     const { output } = await runAiTask(db, { userId, workId }, task, { q: 'ok' }, taskClient())
     expect(output).toEqual({ text: '답: ok' })
   })
+
+  it('lets a sub-run start past the cap but still checks the daily limit', async () => {
+    const { db, userId, workId } = await setup()
+    for (let i = 0; i < 3; i++)
+      await insertRun(db, userId, { inputTokens: 0, outputTokens: 0, status: 'running' })
+    const args = {
+      task: 'draft-expand' as const,
+      effort: 'low' as const,
+      maxTokens: 500,
+      system: 's',
+      prompt: 'p',
+      input: { instructions: '' },
+    }
+    const client = new FakeAiClient({ overrides: { 'draft-expand': () => '확장' } })
+    const stream = await startAiStream(db, { userId, workId, subRun: true }, args, client)
+    expect(await stream.done).toBe('확장')
+
+    process.env.AI_DAILY_TOKEN_LIMIT = '100'
+    await insertRun(db, userId, { inputTokens: 60, outputTokens: 50 })
+    await expect(
+      startAiStream(db, { userId, workId, subRun: true }, args, client),
+    ).rejects.toMatchObject({ code: 'AI_LIMIT' })
+  })
 })
 
 describe('getTodayUsage', () => {

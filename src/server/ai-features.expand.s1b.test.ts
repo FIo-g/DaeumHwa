@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { and, eq } from 'drizzle-orm'
-import { FakeAiClient } from '@/test/fake-ai'
+import { FakeAiClient, type FakeAiOptions } from '@/test/fake-ai'
+import { startAiStream } from '@/ai/run'
+import type { StreamTextArgs } from '@/ai/types'
 import type { Db } from '@/db/client'
 import { aiRuns } from '@/db/schema'
 import { normalizeCard } from '@/lib/draft-plan'
@@ -13,7 +15,43 @@ const BREAK = '\n\n***\n\n'
 const SCENE_A = '서윤은 문을 열었다. 바람이 차가웠다. '.repeat(53).trim()
 const SCENE_B = '민준은 편지를 읽었다. 종이가 젖어 있었다. '.repeat(53).trim()
 const SCENE_C = '도윤은 창을 닫았다. 밖에서 비가 내렸다. '.repeat(53).trim()
+const SCENE_D = '하린은 장부를 덮었다. 촛불이 흔들렸다. '.repeat(53).trim()
 const DRAFT = [SCENE_A, SCENE_B, SCENE_C].join(BREAK)
+// With a 6000 target the default plan has four scenes, each short of its 1500 share.
+const DRAFT_FOUR = [SCENE_A, SCENE_B, SCENE_C, SCENE_D].join(BREAK)
+
+/**
+ * Fake client whose `draft-expand` answers arrive after `delayMs`, so the runs stay `running` for a
+ * while. It counts the expansions in flight, which is what the pool of two is meant to bound.
+ */
+class SlowExpandClient extends FakeAiClient {
+  inFlight = 0
+  maxInFlight = 0
+  private readonly delayMs: number
+
+  constructor(options: FakeAiOptions, delayMs: number) {
+    super(options)
+    this.delayMs = delayMs
+  }
+
+  override streamText(args: StreamTextArgs): ReturnType<FakeAiClient['streamText']> {
+    const base = super.streamText(args)
+    if (args.task.name !== 'draft-expand') return base
+    this.inFlight += 1
+    this.maxInFlight = Math.max(this.maxInFlight, this.inFlight)
+    const final = new Promise<Awaited<typeof base.final>>((resolve) => {
+      setTimeout(() => {
+        this.inFlight -= 1
+        resolve(base.final)
+      }, this.delayMs)
+    })
+    return { textStream: base.textStream, final }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 /** A longer span whose sentences are all different, so it passes acceptExpansion. */
 function grown(label: string, count = 60): string {
@@ -66,6 +104,35 @@ describe('draft expansion', () => {
     let text = ''
     for await (const chunk of stream) text += chunk
     return text
+  }
+
+  async function runningExpansions(): Promise<number> {
+    const rows = await db
+      .select({ id: aiRuns.id })
+      .from(aiRuns)
+      .where(
+        and(
+          eq(aiRuns.workId, workId),
+          eq(aiRuns.task, 'draft-expand'),
+          eq(aiRuns.status, 'running'),
+        ),
+      )
+    return rows.length
+  }
+
+  /** The most `draft-expand` rows seen `running` at once, sampled until `settled` finishes. */
+  async function peakRunningExpansions(settled: Promise<unknown>): Promise<number> {
+    let over = false
+    void settled.then(
+      () => (over = true),
+      () => (over = true),
+    )
+    let peak = 0
+    while (!over) {
+      peak = Math.max(peak, await runningExpansions())
+      await sleep(15)
+    }
+    return peak
   }
 
   it('expands each short scene and stores the spliced text', async () => {
@@ -251,5 +318,156 @@ describe('draft expansion', () => {
     const row = await outputOf(runId)
     expect(row.output).toEqual({ text: DRAFT })
     expect(row.output).not.toHaveProperty('warnings')
+  })
+
+  it('runs the expansions two at a time and splices every span when the user has other runs going', async () => {
+    for (let i = 0; i < 2; i++) {
+      await db.insert(aiRuns).values({
+        userId: actor.userId,
+        workId,
+        task: 'proofread',
+        status: 'running',
+        model: 'test',
+      })
+    }
+    const expansions = [grown('가'), grown('나'), grown('다'), grown('라')]
+    let call = 0
+    const client = new SlowExpandClient(
+      {
+        overrides: {
+          'draft-chapter': () => DRAFT_FOUR,
+          'draft-expand': () => expansions[call++],
+        },
+      },
+      200,
+    )
+    const { runId, textStream, done } = await startDraft(
+      db,
+      actor,
+      draftInput({ targetChars: 6000 }),
+      client,
+    )
+    const peak = peakRunningExpansions(done)
+    await readAll(textStream)
+    const text = await done
+
+    // All four spans are spliced and none was refused by the run cap.
+    expect(text.split(BREAK).sort()).toEqual([...expansions].sort())
+    const row = await outputOf(runId)
+    expect(row.output).toEqual({ text })
+    expect(await peak).toBeLessThanOrEqual(2)
+    expect(client.maxInFlight).toBe(2)
+    const expandRows = await runsOf('draft-expand')
+    expect(expandRows).toHaveLength(4)
+    expect(expandRows.every((item) => item.status === 'done')).toBe(true)
+  })
+
+  it('accepts another AI run by the same user while the expansions are in flight', async () => {
+    const expansions = [grown('가'), grown('나'), grown('다')]
+    let call = 0
+    const client = new SlowExpandClient(
+      {
+        overrides: {
+          'draft-chapter': () => DRAFT,
+          'draft-expand': () => expansions[call++],
+        },
+      },
+      300,
+    )
+    const { textStream, done } = await startDraft(db, actor, draftInput(), client)
+    const streamed = readAll(textStream)
+    while (client.inFlight < 2) await sleep(10)
+    await sleep(50)
+
+    const other = await startAiStream(
+      db,
+      { userId: actor.userId, workId },
+      {
+        task: 'draft-chapter',
+        input: { instructions: '다른 글' },
+        effort: 'low',
+        maxTokens: 100,
+        system: 's',
+        prompt: 'p',
+      },
+      new FakeAiClient({ overrides: { 'draft-chapter': () => '다른 글' } }),
+    )
+    expect(await other.done).toBe('다른 글')
+    await streamed
+    const text = await done
+    expect(text.split(BREAK).sort()).toEqual([...expansions].sort())
+  })
+
+  it('does not start the second wave of expansions when the budget runs out, and records no warning', async () => {
+    let offset = 0
+    const base = Date.now()
+    vi.spyOn(Date, 'now').mockImplementation(() => base + offset)
+    const expansions = [grown('가'), grown('나'), grown('다'), grown('라')]
+    let call = 0
+    const client = new SlowExpandClient(
+      {
+        overrides: {
+          'draft-chapter': () => DRAFT_FOUR,
+          'draft-expand': () => {
+            // The first wave has already read the clock; only later starts see the jump.
+            offset = 270_000
+            return expansions[call++]
+          },
+        },
+      },
+      100,
+    )
+    const { runId, textStream, done } = await startDraft(
+      db,
+      actor,
+      draftInput({ targetChars: 6000 }),
+      client,
+    )
+    await readAll(textStream)
+    const text = await done
+
+    expect(await runsOf('draft-expand')).toHaveLength(2)
+    const pieces = text.split(BREAK)
+    const originals = [SCENE_A, SCENE_B, SCENE_C, SCENE_D]
+    expect(pieces).toHaveLength(4)
+    // Two spans were rewritten, the two that never started keep their text.
+    expect(pieces.filter((piece) => originals.includes(piece))).toHaveLength(2)
+    expect(pieces.filter((piece) => expansions.includes(piece))).toHaveLength(2)
+    const row = await outputOf(runId)
+    expect(row.output).toEqual({ text })
+    expect(row.output).not.toHaveProperty('warnings')
+  })
+
+  it('starts no further expansion once the author aborts', async () => {
+    const controller = new AbortController()
+    const expansions = [grown('가'), grown('나'), grown('다'), grown('라')]
+    let call = 0
+    const client = new SlowExpandClient(
+      {
+        overrides: {
+          'draft-chapter': () => DRAFT_FOUR,
+          'draft-expand': () => {
+            controller.abort()
+            return expansions[call++]
+          },
+        },
+      },
+      50,
+    )
+    const { runId, textStream, done } = await startDraft(
+      db,
+      actor,
+      draftInput({ targetChars: 6000 }),
+      client,
+      controller.signal,
+    )
+    const streamed = readAll(textStream)
+    await expect(done).rejects.toThrow()
+    await expect(streamed).rejects.toThrow()
+
+    // Only the first wave of two was started; the other spans were never begun.
+    expect(await runsOf('draft-expand')).toHaveLength(2)
+    const row = await outputOf(runId)
+    expect(row.output).toEqual({ text: DRAFT_FOUR })
   })
 })

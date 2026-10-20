@@ -115,6 +115,11 @@ const MIN_FIRST_STREAM_MS = 10_000
 const MIN_CONTINUATION_MS = 30_000
 /** Expansion: at most this many short spans are rewritten in one draft. */
 const MAX_EXPAND_SPANS = 4
+/**
+ * Expansion: spans in flight at once. Two keeps one run slot of the author free and matches
+ * DEFAULT_CLOUD_SPLIT_CONCURRENCY.
+ */
+const EXPAND_CONCURRENCY = 2
 /** A span under this share of its target is short enough to rewrite. */
 const EXPAND_SHORT_RATIO = 0.9
 /** Joins the scenes of a `scenes`-mode draft. The model is not asked to write it. */
@@ -832,12 +837,20 @@ async function continueDraft(
   return joined
 }
 
+/** What became of one picked span: it never started, or its expansion text or its error. */
+type ExpandOutcome =
+  | { status: 'skipped' }
+  | { status: 'fulfilled'; value: string }
+  | { status: 'rejected'; reason: unknown }
+
 /**
  * The expand path (default). The first text is split into scene spans (sceneSpans). Each span under
- * 90% of its share of the target is rewritten in place, all at once, with the end of the span before
- * and the start of the span after as context. An expansion that passes acceptExpansion is spliced in;
- * any other span keeps its text and records a warning. The spliced text is stored in the first run
- * row. Only a user abort rejects, and then nothing is stored.
+ * 90% of its share of the target is rewritten in place, EXPAND_CONCURRENCY at a time, with the end
+ * of the span before and the start of the span after as context. A span is not started with less
+ * than MIN_CONTINUATION_MS of the budget left; it keeps its text and records no warning. An
+ * expansion that passes acceptExpansion is spliced in; any other span keeps its text and records a
+ * warning. The spliced text is stored in the first run row. Only a user abort rejects, and then
+ * nothing is stored and no further span is started.
  */
 async function expandDraft(
   ctx: DraftContext,
@@ -883,43 +896,67 @@ async function expandDraft(
     return firstText
   }
 
-  const settled = await Promise.allSettled(
-    picked.map(async ({ index, text, share }) => {
-      const before =
-        index > 0
-          ? splitParagraphs(spanText(index - 1))
-              .slice(-2)
-              .map((paragraph) => paragraph.text)
-              .join('\n\n')
-          : ''
-      const after =
-        index + 1 < spans.length ? (splitParagraphs(spanText(index + 1))[0]?.text ?? '') : ''
-      const expansion = await startAiStream(
-        db,
-        { userId: actor.userId, workId, chapterId, signal, timeoutMs: remaining },
-        {
-          task: 'draft-expand',
-          input: { instructions: promptInput.instructions },
-          effort: EXPAND_EFFORT,
-          maxTokens: EXPAND_MAX_TOKENS,
-          system: DRAFT_EXPAND_SYSTEM,
-          prompt: buildExpandPrompt({
-            before,
-            scene: text,
-            after,
-            targetChars: share,
-            styleCards: promptInput.styleCards,
-          }),
-        },
-        client,
+  // Expansions are sub-runs of this draft, which already passed the run cap. They run in a small
+  // pool, and the clock is read again before each span starts. `skipped` covers a span that never
+  // started (no time left, or the author aborted): it keeps its text and records no warning.
+  const settled: ExpandOutcome[] = picked.map(() => ({ status: 'skipped' }))
+  let nextPicked = 0
+  const worker = async (): Promise<void> => {
+    while (nextPicked < picked.length) {
+      const k = nextPicked
+      nextPicked += 1
+      if (signal?.aborted) return
+      const left = Math.min(
+        DRAFT_TOTAL_BUDGET_MS - (Date.now() - ctx.startedAt),
+        STREAM_AI_TIMEOUT_MS,
       )
-      return (await expansion.done).trim()
-    }),
+      // Time only runs out, so no later span can start either.
+      if (left < MIN_CONTINUATION_MS) return
+      const { index, text, share } = picked[k]
+      try {
+        const before =
+          index > 0
+            ? splitParagraphs(spanText(index - 1))
+                .slice(-2)
+                .map((paragraph) => paragraph.text)
+                .join('\n\n')
+            : ''
+        const after =
+          index + 1 < spans.length ? (splitParagraphs(spanText(index + 1))[0]?.text ?? '') : ''
+        const expansion = await startAiStream(
+          db,
+          { userId: actor.userId, workId, chapterId, signal, timeoutMs: left, subRun: true },
+          {
+            task: 'draft-expand',
+            input: { instructions: promptInput.instructions },
+            effort: EXPAND_EFFORT,
+            maxTokens: EXPAND_MAX_TOKENS,
+            system: DRAFT_EXPAND_SYSTEM,
+            prompt: buildExpandPrompt({
+              before,
+              scene: text,
+              after,
+              targetChars: share,
+              styleCards: promptInput.styleCards,
+            }),
+          },
+          client,
+        )
+        settled[k] = { status: 'fulfilled', value: (await expansion.done).trim() }
+      } catch (reason) {
+        settled[k] = { status: 'rejected', reason }
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(EXPAND_CONCURRENCY, picked.length) }, () => worker()),
   )
 
   // An abort rejects whatever else happened, so nothing half-spliced is stored.
   if (signal?.aborted) {
-    const failed = settled.find((item): item is PromiseRejectedResult => item.status === 'rejected')
+    const failed = settled.find(
+      (item): item is Extract<ExpandOutcome, { status: 'rejected' }> => item.status === 'rejected',
+    )
     const error = failed ? failed.reason : signal.reason
     pipe.fail(error)
     throw error
@@ -929,6 +966,7 @@ async function expandDraft(
   const warnings: DraftWarning[] = []
   settled.forEach((outcome, k) => {
     const { index, text } = picked[k]
+    if (outcome.status === 'skipped') return
     if (outcome.status === 'rejected') {
       const error = outcome.reason
       const detail = isAppError(error)
