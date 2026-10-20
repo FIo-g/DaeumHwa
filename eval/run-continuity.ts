@@ -6,7 +6,7 @@ import { getAiClient } from '@/ai'
 import { buildContextPack, CONTINUITY_BUDGET_CHARS, renderContextPack } from '@/ai/context'
 import { FakeAiClient } from '@/test/fake-ai'
 import { runAiTask } from '@/ai/run'
-import type { AiClient } from '@/ai/types'
+import type { AiClient, AiEffort } from '@/ai/types'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
 import type { Db } from '@/db/client'
 import { chapters, namingRules, threads } from '@/db/schema'
@@ -28,6 +28,7 @@ import {
   createTestUser,
   createTestWork,
 } from '@/test/factories'
+import { withEffort } from './effort-client'
 import { type CoverageCard, packCoverage } from './coverage'
 import {
   type ExpectedIssue,
@@ -44,6 +45,7 @@ import {
 //   pnpm eval:continuity --fake    deterministic fake client, checks the run flow only
 //   --fixture <name>               a set under eval/fixtures (default: continuity)
 //   --budget <n>                   continuity context budget in characters (default: CONTINUITY_BUDGET_CHARS)
+//   --effort <low|medium|high>     run every call at this effort (default: each task's own effort)
 
 const RESULTS_DIR = path.resolve(process.cwd(), 'eval/results')
 const SKIP_MESSAGE =
@@ -137,6 +139,18 @@ function parseBudget(): number {
   if (!Number.isInteger(value) || value <= 0)
     throw new Error(`--budget 값이 올바르지 않습니다: ${raw}`)
   return value
+}
+
+const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high']
+
+/** The --effort value, or 'task' when the flag is absent (each task keeps its own effort). */
+function parseEffort(): AiEffort | 'task' {
+  const raw = argValue('--effort')
+  if (raw === undefined) return 'task'
+  if (!(EFFORTS as readonly string[]).includes(raw)) {
+    throw new Error(`--effort 값이 올바르지 않습니다: ${raw}`)
+  }
+  return raw as AiEffort
 }
 
 function parseFixtureDir(): string {
@@ -346,6 +360,7 @@ async function main(): Promise<void> {
   const useFake = process.argv.includes('--fake')
   const fixtureDir = parseFixtureDir()
   const budgetChars = parseBudget()
+  const effort = parseEffort()
   if (!useFake && getAiProvider() === null) {
     console.log(SKIP_MESSAGE)
     return
@@ -357,14 +372,15 @@ async function main(): Promise<void> {
   checkAnswers(answers, bodies)
   const cards: CoverageCard[] = work.entries.map((e) => ({ name: e.name, aliases: e.aliases }))
 
-  const client: AiClient = useFake ? new FakeAiClient() : getAiClient()
+  const baseClient: AiClient = useFake ? new FakeAiClient() : getAiClient()
+  const client: AiClient = effort === 'task' ? baseClient : withEffort(baseClient, effort)
   const db = await createTestDb()
   const owner = await createTestUser(db)
   const workRow = await createTestWork(db, owner.id, { title: work.title })
   const chapterRows = await loadWork(db, workRow.id, work, bodies)
 
   console.log(
-    `${work.title} · ${bodies.length}화 · 모델 ${client.defaultModel}${useFake ? ' (--fake, 가짜 응답)' : ''} · 예산 ${budgetChars}자`,
+    `${work.title} · ${bodies.length}화 · 모델 ${client.defaultModel}${useFake ? ' (--fake, 가짜 응답)' : ''} · 예산 ${budgetChars}자 · 노력 ${effort}`,
   )
 
   const runs: ChapterRun[] = []
@@ -422,6 +438,7 @@ async function main(): Promise<void> {
         createdAt: new Date().toISOString(),
         fixture: path.basename(fixtureDir),
         budgetChars,
+        effort,
         expected,
         notDefects: answers.notDefects,
         totals,
