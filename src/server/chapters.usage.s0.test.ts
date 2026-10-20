@@ -75,6 +75,92 @@ describe('saveChapter usage counting (stage 0)', () => {
     expect(rows[0].value).toBeLessThan(1)
   })
 
+  describe('with a draft_used event planted from another work', () => {
+    const FOREIGN_TEXT = '다른 작품의 초안 문장이다. 이 글은 길이가 꽤 다르다. 아주 다르다.'
+
+    async function setupTwoWorks() {
+      const [run] = await db
+        .insert(aiRuns)
+        .values({
+          workId,
+          userId: actor.userId,
+          task: 'draft-chapter',
+          status: 'done',
+          output: { text: AI_TEXT },
+        })
+        .returning()
+      const created = await createChapterFromDraft(db, actor, { workId, runId: run.id })
+
+      const attacker = await createTestUser(db, { name: '침입자', email: 'attacker@example.com' })
+      const attackerWork = await createTestWork(db, attacker.id, { title: '다른 작품' })
+      const [attackerRun] = await db
+        .insert(aiRuns)
+        .values({
+          workId: attackerWork.id,
+          userId: attacker.id,
+          task: 'draft-chapter',
+          status: 'done',
+          output: { text: FOREIGN_TEXT },
+        })
+        .returning()
+      const plant = () =>
+        db.insert(aiUsageEvents).values({
+          workId: attackerWork.id,
+          userId: attacker.id,
+          chapterId: created.id,
+          runId: attackerRun.id,
+          kind: 'draft_used',
+          value: FOREIGN_TEXT.length,
+          extra: { mode: 1, priorChars: 0 },
+          createdAt: new Date(Date.now() + 60_000),
+        })
+      return { run, created, plant }
+    }
+
+    async function ratioRows() {
+      return db.select().from(aiUsageEvents).where(eq(aiUsageEvents.kind, 'draft_edit_ratio'))
+    }
+
+    it('computes the ratio from the work own run', async () => {
+      const { run, created, plant } = await setupTwoWorks()
+      await plant()
+
+      await saveChapter(db, actor, {
+        chapterId: created.id,
+        body: EDITED,
+        expectedVersion: created.version,
+      })
+
+      const rows = await ratioRows()
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ workId, userId: actor.userId, runId: run.id })
+      expect(rows[0].extra).toMatchObject({ aiChars: AI_TEXT.length })
+    })
+
+    it('keeps the existing ratio row of the work', async () => {
+      const { run, created, plant } = await setupTwoWorks()
+      const first = await saveChapter(db, actor, {
+        chapterId: created.id,
+        body: EDITED,
+        expectedVersion: created.version,
+      })
+      const before = await ratioRows()
+      expect(before).toHaveLength(1)
+      await plant()
+
+      await saveChapter(db, actor, {
+        chapterId: created.id,
+        body: `${EDITED} 한 줄 더.`,
+        expectedVersion: first.version,
+      })
+
+      const rows = await ratioRows()
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ id: before[0].id, workId, runId: run.id })
+      expect(rows[0].extra).toMatchObject({ aiChars: AI_TEXT.length })
+    })
+  })
+
   it('saves a chapter created from a draft over 40,000 characters and writes no ratio', async () => {
     const [run] = await db
       .insert(aiRuns)

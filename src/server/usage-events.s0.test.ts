@@ -62,6 +62,40 @@ describe('usage events (stage 0)', () => {
     expect(await rowsOf(db, 'draft_started')).toHaveLength(0)
   })
 
+  it('rejects a chapter of another work with NOT_FOUND and writes no event', async () => {
+    const other = await createTestUser(db, { name: '다른 작가', email: 'other@example.com' })
+    const otherWork = await createTestWork(db, other.id, { title: '다른 작품' })
+    const otherChapter = await createTestChapter(db, otherWork.id, { body: EDITED_BODY })
+    const runId = await insertDraftRun(db, actor.userId, workId, AI_TEXT)
+
+    await expect(
+      recordDraftUse(db, actor, { workId, chapterId: otherChapter.id, runId, priorChars: 0 }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(
+      recordUsageEvent(db, actor, {
+        workId,
+        chapterId: otherChapter.id,
+        kind: 'draft_started',
+        value: 1,
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(await db.select().from(aiUsageEvents)).toHaveLength(0)
+  })
+
+  it('rejects a chapter id that does not exist with NOT_FOUND, not a database error', async () => {
+    const runId = await insertDraftRun(db, actor.userId, workId, AI_TEXT)
+
+    await expect(
+      recordDraftUse(db, actor, {
+        workId,
+        chapterId: '00000000-0000-4000-8000-000000000001',
+        runId,
+        priorChars: 0,
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(await db.select().from(aiUsageEvents)).toHaveLength(0)
+  })
+
   it('rejects extra fields that are not numbers', async () => {
     await expect(
       recordUsageEvent(db, actor, {
@@ -78,13 +112,13 @@ describe('usage events (stage 0)', () => {
     const runId = await insertDraftRun(db, actor.userId, workId, AI_TEXT)
     await recordDraftUse(db, actor, { workId, chapterId, runId, priorChars: 0 })
 
-    await updateDraftEditRatio(db, chapterId, EDITED_BODY)
+    await updateDraftEditRatio(db, workId, chapterId, EDITED_BODY)
     const first = await rowsOf(db, 'draft_edit_ratio')
     expect(first).toHaveLength(1)
     expect(first[0].value).toBeGreaterThan(0)
     expect(first[0].value).toBeLessThan(1)
 
-    await updateDraftEditRatio(db, chapterId, AI_TEXT)
+    await updateDraftEditRatio(db, workId, chapterId, AI_TEXT)
     const second = await rowsOf(db, 'draft_edit_ratio')
     expect(second).toHaveLength(1)
     expect(second[0].id).toBe(first[0].id)
@@ -95,7 +129,7 @@ describe('usage events (stage 0)', () => {
     const runId = await insertDraftRun(db, actor.userId, workId, AI_TEXT)
     await recordDraftUse(db, actor, { workId, chapterId, runId, priorChars: 5 })
 
-    await updateDraftEditRatio(db, chapterId, EDITED_BODY)
+    await updateDraftEditRatio(db, workId, chapterId, EDITED_BODY)
     expect(await rowsOf(db, 'draft_edit_ratio')).toHaveLength(0)
   })
 
@@ -106,7 +140,7 @@ describe('usage events (stage 0)', () => {
       runId: '00000000-0000-4000-8000-000000000000',
       priorChars: 0,
     })
-    await updateDraftEditRatio(db, chapterId, EDITED_BODY)
+    await updateDraftEditRatio(db, workId, chapterId, EDITED_BODY)
     expect(await rowsOf(db, 'draft_used')).toHaveLength(0)
     expect(await rowsOf(db, 'draft_edit_ratio')).toHaveLength(0)
   })
@@ -128,7 +162,25 @@ describe('usage events (stage 0)', () => {
       extra: { mode: 0, priorChars: 0 },
     })
 
-    await expect(updateDraftEditRatio(db, chapterId, EDITED_BODY)).resolves.toBeUndefined()
+    await expect(updateDraftEditRatio(db, workId, chapterId, EDITED_BODY)).resolves.toBeUndefined()
+    expect(await rowsOf(db, 'draft_edit_ratio')).toHaveLength(0)
+  })
+
+  it('ignores a draft_used event of another work and writes no edit ratio', async () => {
+    const other = await createTestUser(db, { name: '다른 작가', email: 'other@example.com' })
+    const otherWork = await createTestWork(db, other.id, { title: '다른 작품' })
+    const runId = await insertDraftRun(db, other.id, otherWork.id, AI_TEXT)
+    await db.insert(aiUsageEvents).values({
+      workId: otherWork.id,
+      userId: other.id,
+      chapterId,
+      runId,
+      kind: 'draft_used',
+      value: AI_TEXT.length,
+      extra: { mode: 1, priorChars: 0 },
+    })
+
+    await updateDraftEditRatio(db, workId, chapterId, EDITED_BODY)
     expect(await rowsOf(db, 'draft_edit_ratio')).toHaveLength(0)
   })
 
@@ -136,7 +188,7 @@ describe('usage events (stage 0)', () => {
     const runId = await insertDraftRun(db, actor.userId, workId, '가'.repeat(40001))
     await recordDraftUse(db, actor, { workId, chapterId, runId, priorChars: 0 })
 
-    await expect(updateDraftEditRatio(db, chapterId, EDITED_BODY)).resolves.toBeUndefined()
+    await expect(updateDraftEditRatio(db, workId, chapterId, EDITED_BODY)).resolves.toBeUndefined()
     expect(await rowsOf(db, 'draft_edit_ratio')).toHaveLength(0)
   })
 
@@ -144,7 +196,9 @@ describe('usage events (stage 0)', () => {
     const runId = await insertDraftRun(db, actor.userId, workId, AI_TEXT)
     await recordDraftUse(db, actor, { workId, chapterId, runId, priorChars: 0 })
 
-    await expect(updateDraftEditRatio(db, chapterId, '가'.repeat(40001))).resolves.toBeUndefined()
+    await expect(
+      updateDraftEditRatio(db, workId, chapterId, '가'.repeat(40001)),
+    ).resolves.toBeUndefined()
     expect(await rowsOf(db, 'draft_edit_ratio')).toHaveLength(0)
   })
 })

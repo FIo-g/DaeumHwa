@@ -351,18 +351,6 @@ export async function startDraft(
 
   const work = await getWork(db, actor, workId)
   const targetChars = input.targetChars ?? resolveWorkSettings(work.settings).targetChars
-  // Usage counting must never block a draft: a failed count is only logged.
-  try {
-    await recordUsageEvent(db, actor, {
-      workId,
-      chapterId: input.chapterId ?? null,
-      kind: 'draft_started',
-      value: instructions.length,
-      extra: { targetChars },
-    })
-  } catch (error) {
-    console.warn('usage event draft_started failed', error)
-  }
   const all = await listChapters(db, actor, workId)
 
   let position: number
@@ -471,6 +459,21 @@ export async function startDraft(
     },
     client,
   )
+
+  // Counted once the run row exists, so a start blocked by the limit, the concurrency cap or the
+  // chapter check is not a draft start. A failed count is only logged and never blocks the draft.
+  try {
+    await recordUsageEvent(db, actor, {
+      workId,
+      chapterId,
+      runId: first.runId,
+      kind: 'draft_started',
+      value: instructions.length,
+      extra: { targetChars },
+    })
+  } catch (error) {
+    console.warn('usage event draft_started failed', error)
+  }
 
   const pipe = createTextPipe()
   const done = completeDraft(

@@ -1,10 +1,11 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import type { Db } from '@/db/client'
-import { aiRuns, aiUsageEvents } from '@/db/schema'
+import { aiRuns, aiUsageEvents, chapters } from '@/db/schema'
 import type { Actor, UsageEventKind } from '@/db/types'
 import { diffStats, diffTexts } from '@/lib/diff'
 import { requireWorkRole } from '@/server/access'
+import { AppError } from '@/lib/errors'
 
 // Usage events (stage 0): counts and ratios only. Nothing here stores manuscript or instruction
 // text, so the rows are safe to keep for the harness numbers.
@@ -14,7 +15,10 @@ const MAX_RATIO_CHARS = 40_000
 
 const ExtraSchema = z.record(z.string(), z.number())
 
-/** Records one usage event. Editor role. Throws NOT_FOUND for non-members. */
+/**
+ * Records one usage event. Editor role. Throws NOT_FOUND for non-members and for a chapter that
+ * is missing or belongs to another work.
+ */
 export async function recordUsageEvent(
   db: Db,
   actor: Actor,
@@ -28,6 +32,16 @@ export async function recordUsageEvent(
   },
 ): Promise<void> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
+  if (input.chapterId) {
+    const [chapter] = await db
+      .select({ workId: chapters.workId })
+      .from(chapters)
+      .where(eq(chapters.id, input.chapterId))
+      .limit(1)
+    if (!chapter || chapter.workId !== input.workId) {
+      throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    }
+  }
   const extra = ExtraSchema.parse(input.extra ?? {})
   await db.insert(aiUsageEvents).values({
     workId: input.workId,
@@ -69,18 +83,31 @@ export async function recordDraftUse(
  * the author changed, in code points over the AI text length. Runs after a save, so it is best
  * effort: callers catch its errors. Skips texts over the size limit.
  */
-export async function updateDraftEditRatio(db: Db, chapterId: string, body: string): Promise<void> {
+export async function updateDraftEditRatio(
+  db: Db,
+  workId: string,
+  chapterId: string,
+  body: string,
+): Promise<void> {
+  // Only events of the chapter's own work count: a stray event must not decide the ratio.
   const used = await db
     .select()
     .from(aiUsageEvents)
-    .where(and(eq(aiUsageEvents.chapterId, chapterId), eq(aiUsageEvents.kind, 'draft_used')))
+    .where(
+      and(
+        eq(aiUsageEvents.workId, workId),
+        eq(aiUsageEvents.chapterId, chapterId),
+        eq(aiUsageEvents.kind, 'draft_used'),
+      ),
+    )
     .orderBy(desc(aiUsageEvents.createdAt))
   // The latest draft_used of a new chapter (priorChars 0) is the draft the chapter came from.
   const event = used.find((row) => row.extra.priorChars === 0)
   if (!event || !event.runId) return
 
   const [run] = await db.select().from(aiRuns).where(eq(aiRuns.id, event.runId)).limit(1)
-  const aiText = run ? draftTextOf(run.output) : null
+  if (!run || run.workId !== workId) return
+  const aiText = draftTextOf(run.output)
   if (aiText === null) return
   if (aiText.length > MAX_RATIO_CHARS || body.length > MAX_RATIO_CHARS) return
 
@@ -91,7 +118,13 @@ export async function updateDraftEditRatio(db: Db, chapterId: string, body: stri
   const [existing] = await db
     .select({ id: aiUsageEvents.id })
     .from(aiUsageEvents)
-    .where(and(eq(aiUsageEvents.chapterId, chapterId), eq(aiUsageEvents.kind, 'draft_edit_ratio')))
+    .where(
+      and(
+        eq(aiUsageEvents.workId, workId),
+        eq(aiUsageEvents.chapterId, chapterId),
+        eq(aiUsageEvents.kind, 'draft_edit_ratio'),
+      ),
+    )
     .limit(1)
   if (existing) {
     await db.update(aiUsageEvents).set({ value, extra }).where(eq(aiUsageEvents.id, existing.id))

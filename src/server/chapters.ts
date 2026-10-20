@@ -376,7 +376,7 @@ export async function saveChapter(
   })
   // Usage counting runs after the save and never fails it.
   try {
-    await updateDraftEditRatio(db, saved.id, saved.body)
+    await updateDraftEditRatio(db, saved.workId, saved.id, saved.body)
   } catch (error) {
     console.warn('usage event draft_edit_ratio failed', error)
   }
