@@ -1,0 +1,103 @@
+import { describe, expect, it } from 'vitest'
+import type { DraftPlan } from '@/ai/tasks/draft-plan'
+import {
+  type DraftPlanCard,
+  planWarnings,
+  renderPlanInstructions,
+  withSceneTargets,
+} from '@/lib/draft-plan'
+
+const plan: DraftPlan = {
+  scenes: [
+    {
+      summary: '세린이 편지를 찾는다',
+      goal: '편지의 주인을 알아낸다',
+      decision: '편지를 숨기기로 한다',
+      stake: '들키면 잃는 것이 많다',
+      trigger: '윤서의 발소리',
+      role: 'opening',
+      place: '도서관',
+      characters: ['세린', '윤서'],
+    },
+    {
+      summary: '윤서가 문을 연다',
+      goal: '문 밖을 확인한다',
+      decision: '',
+      stake: '',
+      trigger: '',
+      role: 'ending',
+      place: '복도',
+      characters: [],
+    },
+  ],
+  ending: { device: 'crisis', line: '문이 열린다' },
+  threads: ['편지 봉인'],
+}
+
+const role = (r: DraftPlan['scenes'][number]['role']) => ({
+  summary: '장면',
+  goal: '목표',
+  decision: '',
+  stake: '',
+  trigger: '',
+  role: r,
+  place: '복도',
+  characters: [],
+})
+
+describe('withSceneTargets', () => {
+  it('gives every scene an equal share of the target', () => {
+    const four: DraftPlan = {
+      ...plan,
+      scenes: [plan.scenes[0], plan.scenes[1], plan.scenes[0], plan.scenes[1]],
+    }
+    const card = withSceneTargets(four, 5000)
+    expect(card.scenes.map((s) => s.targetChars)).toEqual([1250, 1250, 1250, 1250])
+  })
+})
+
+describe('renderPlanInstructions', () => {
+  it('renders the plan card as the draft instructions', () => {
+    const card: DraftPlanCard = withSceneTargets(plan, 2500)
+    expect(renderPlanInstructions('세린이 먼저 묻는다', card)).toBe(
+      [
+        '작가 메모: 세린이 먼저 묻는다',
+        '아래 회차 계획을 따라 쓴다. 장면이 바뀔 때는 빈 줄, *** 한 줄, 빈 줄을 둔다. 장면마다 적힌 분량을 채운다. 마지막 장면은 요약이나 교훈으로 닫지 말고 "회차 끝"에 적힌 장면으로 끝낸다.',
+        '장면 1 (도입, 공백 포함 약 1,250자)',
+        '- 일어나는 일: 세린이 편지를 찾는다',
+        '- 목표: 편지의 주인을 알아낸다',
+        '- 결정 상태: 편지를 숨기기로 한다',
+        '- 기대한 것과 잃은 것: 들키면 잃는 것이 많다',
+        '- 감정의 계기: 윤서의 발소리',
+        '- 장소: 도서관 / 인물: 세린, 윤서',
+        '장면 2 (회차 끝, 공백 포함 약 1,250자)',
+        '- 일어나는 일: 윤서가 문을 연다',
+        '- 목표: 문 밖을 확인한다',
+        '- 장소: 복도 / 인물: (없음)',
+        '회차 끝 (위기): 문이 열린다',
+        '움직일 떡밥: 편지 봉인',
+      ].join('\n'),
+    )
+  })
+})
+
+describe('planWarnings', () => {
+  it('warns about two scenes of the same beat and a last scene that is not the ending', () => {
+    const card = withSceneTargets(
+      { ...plan, scenes: [role('opening'), role('rise'), role('rise')] },
+      3000,
+    )
+    expect(planWarnings(card)).toEqual([
+      "장면 2과 3이 둘 다 '고조'입니다. 같은 박자가 이어질 수 있어요.",
+      "마지막 장면이 '회차 끝'이 아닙니다.",
+    ])
+  })
+
+  it('gives no warning for a clean beat order', () => {
+    const card = withSceneTargets(
+      { ...plan, scenes: [role('opening'), role('turn'), role('ending')] },
+      3000,
+    )
+    expect(planWarnings(card)).toEqual([])
+  })
+})

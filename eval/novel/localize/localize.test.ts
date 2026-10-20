@@ -13,6 +13,7 @@ import { directionAdviceSample } from './samples/direction-advice'
 import { draftBeatsSample } from './samples/draft-beats'
 import { draftSample } from './samples/draft-chapter'
 import { draftContinueSample } from './samples/draft-continue'
+import { draftPlanSample } from './samples/draft-plan'
 import { draftRepairSample } from './samples/draft-repair'
 import { interviewExtractSample } from './samples/interview-extract'
 import { interviewQuestionSample } from './samples/interview-question'
@@ -41,6 +42,9 @@ const PROMPTS: Record<AiTaskName, string> = {
   'paragraph-trim': paragraphTrimSample,
   'draft-repair': draftRepairSample,
   'draft-beats': draftBeatsSample,
+  'draft-plan': draftPlanSample,
+  // Scene calls are built on the draft prompt (stage 1, draft-scene); the sample is the draft prompt.
+  'draft-scene': draftSample,
   'scene-rewrite': sceneRewriteSample,
   'chapter-extract-facts': chapterExtractFactsSample,
   'chapter-extract-threads': chapterExtractThreadsSample,

@@ -1,5 +1,6 @@
 import { BEATS_RULE } from '@/ai/tasks/draft-chapter'
 import { BEATS_STATE_RULE } from '@/ai/tasks/draft-beats'
+import { PLAN_INTRO_RULE } from '@/lib/draft-plan'
 import { SCENE_PLAN_RULE } from '@/ai/tasks/continuity-check'
 
 // Turns the Korean scaffolding that product prompt builders emit (labels, empty markers, persona
@@ -63,6 +64,36 @@ const RULES: readonly Rule[] = [
   [/~(\d+)화/g, 'up to Chapter $1'],
   // Planned-thread mark (brief P5). The label is printed on planned threads in the draft's wiki block.
   ['지시에 있을 때만 쓴다', 'use only if the instructions mention it'],
+  // Plan card (stage 1, draft-plan). Before the length and topic rules below: the scene header
+  // carries a length, and "떡밥" in a label would otherwise be rewritten word by word.
+  [
+    PLAN_INTRO_RULE,
+    'Write by the chapter plan below. Put an empty line, a single *** line and an empty line where the scene changes. Fill the length given for each scene. End the last scene with the scene named in the "Ending" line, not with a summary or a lesson.',
+  ],
+  [
+    /장면 (\d+) \(도입, 공백 포함 약 ([\d,]+)자\)/g,
+    'Scene $1 (opening, about $2 characters including spaces)',
+  ],
+  [
+    /장면 (\d+) \(전환, 공백 포함 약 ([\d,]+)자\)/g,
+    'Scene $1 (turn, about $2 characters including spaces)',
+  ],
+  [
+    /장면 (\d+) \(고조, 공백 포함 약 ([\d,]+)자\)/g,
+    'Scene $1 (rise, about $2 characters including spaces)',
+  ],
+  [
+    /장면 (\d+) \(회차 끝, 공백 포함 약 ([\d,]+)자\)/g,
+    'Scene $1 (ending, about $2 characters including spaces)',
+  ],
+  ['회차 끝 (질문): ', 'Ending (question): '],
+  ['회차 끝 (위기): ', 'Ending (crisis): '],
+  ['회차 끝 (반전): ', 'Ending (twist): '],
+  ['작가 메모: ', 'Author note: '],
+  ['현재 계획:', 'Current plan:'],
+  ['일어나는 일: ', 'What happens: '],
+  ['감정의 계기: ', 'Emotional trigger: '],
+  ['움직일 떡밥: ', 'Threads to move: '],
   // Draft length lines (brief A). The continuation line comes first: its tail would otherwise match
   // the minimum-and-maximum rule below and leave Korean behind.
   [

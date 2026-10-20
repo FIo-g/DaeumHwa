@@ -1,0 +1,91 @@
+// Pure helpers for the chapter plan card (stage 1 of the lean harness): per-scene targets, the
+// warnings the card view shows, and the instruction text the draft receives from an approved card.
+
+import type { DraftPlan, EndingDevice, SceneRole } from '@/ai/tasks/draft-plan'
+import { draftLengthPlan } from '@/lib/draft-length'
+
+// Omit before the intersection: a plain DraftPlan & { scenes } would intersect the two scene arrays
+// and hide targetChars from each scene.
+export type DraftPlanCard = Omit<DraftPlan, 'scenes'> & {
+  scenes: (DraftPlan['scenes'][number] & { targetChars: number })[]
+}
+
+/** First line of the rendered plan: tells the draft how to follow the card. Shared with the English scaffold. */
+export const PLAN_INTRO_RULE =
+  '아래 회차 계획을 따라 쓴다. 장면이 바뀔 때는 빈 줄, *** 한 줄, 빈 줄을 둔다. 장면마다 적힌 분량을 채운다. 마지막 장면은 요약이나 교훈으로 닫지 말고 "회차 끝"에 적힌 장면으로 끝낸다.'
+
+export const SCENE_ROLE_LABELS: Record<SceneRole, string> = {
+  opening: '도입',
+  turn: '전환',
+  rise: '고조',
+  ending: '회차 끝',
+}
+
+export const ENDING_DEVICE_LABELS: Record<EndingDevice, string> = {
+  question: '질문',
+  crisis: '위기',
+  twist: '반전',
+}
+
+/** Gives every scene an equal share of the chapter target (spaces included). */
+export function withSceneTargets(plan: DraftPlan, targetChars: number): DraftPlanCard {
+  const perScene = draftLengthPlan(targetChars, plan.scenes.length).charsPerScene
+  return {
+    ...plan,
+    scenes: plan.scenes.map((scene) => ({ ...scene, targetChars: perScene })),
+  }
+}
+
+/** Warnings under the card heading: same beat twice in a row, and a last scene that is not the ending. */
+export function planWarnings(card: DraftPlanCard): string[] {
+  const warnings: string[] = []
+  card.scenes.forEach((scene, i) => {
+    const next = card.scenes[i + 1]
+    if (next && next.role === scene.role) {
+      const label = SCENE_ROLE_LABELS[scene.role]
+      warnings.push(
+        `장면 ${i + 1}과 ${i + 2}이 둘 다 '${label}'입니다. 같은 박자가 이어질 수 있어요.`,
+      )
+    }
+  })
+  const last = card.scenes[card.scenes.length - 1]
+  if (last && last.role !== 'ending') {
+    warnings.push("마지막 장면이 '회차 끝'이 아닙니다.")
+  }
+  return warnings
+}
+
+/**
+ * The text the draft receives as <instructions> for an approved card. The author line comes first;
+ * each scene lists its state lines (decision, stake and trigger are left out when empty).
+ */
+export function renderPlanInstructions(authorLine: string, card: DraftPlanCard): string {
+  const lines = [`작가 메모: ${authorLine.trim() === '' ? '(없음)' : authorLine}`, PLAN_INTRO_RULE]
+  card.scenes.forEach((scene, i) => {
+    lines.push(
+      `장면 ${i + 1} (${SCENE_ROLE_LABELS[scene.role]}, 공백 포함 약 ${formatCount(scene.targetChars)}자)`,
+      `- 일어나는 일: ${orNone(scene.summary)}`,
+      `- 목표: ${orNone(scene.goal)}`,
+    )
+    if (scene.decision.trim() !== '') lines.push(`- 결정 상태: ${scene.decision}`)
+    if (scene.stake.trim() !== '') lines.push(`- 기대한 것과 잃은 것: ${scene.stake}`)
+    if (scene.trigger.trim() !== '') lines.push(`- 감정의 계기: ${scene.trigger}`)
+    lines.push(
+      `- 장소: ${orNone(scene.place)} / 인물: ${scene.characters.length > 0 ? scene.characters.join(', ') : '(없음)'}`,
+    )
+  })
+  lines.push(
+    `회차 끝 (${ENDING_DEVICE_LABELS[card.ending.device]}): ${orNone(card.ending.line)}`,
+    `움직일 떡밥: ${card.threads.length > 0 ? card.threads.join(', ') : '(없음)'}`,
+  )
+  return lines.join('\n')
+}
+
+function orNone(text: string): string {
+  return text.trim() === '' ? '(없음)' : text
+}
+
+/** 1250 becomes "1,250". */
+function formatCount(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}

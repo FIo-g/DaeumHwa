@@ -11,6 +11,7 @@ import { CHAPTER_EXTRACT_RELATIONS_SYSTEM } from './en/chapter-extract-relations
 import { CONTINUITY_SYSTEM } from './en/continuity-check'
 import { DIRECTION_ADVICE_SYSTEM } from './en/direction-advice'
 import { DRAFT_BEATS_SYSTEM } from './en/draft-beats'
+import { DRAFT_PLAN_SYSTEM } from './en/draft-plan'
 import { DRAFT_CHAPTER_SYSTEM } from './en/draft-chapter'
 import { DRAFT_REPAIR_SYSTEM } from './en/draft-repair'
 import { buildEnInterviewExtractSystem } from './en/interview-extract'
@@ -44,6 +45,9 @@ export const EN_SYSTEMS: Record<AiTaskName, string> = {
   'paragraph-trim': PARAGRAPH_TRIM_SYSTEM,
   'draft-repair': DRAFT_REPAIR_SYSTEM,
   'draft-beats': DRAFT_BEATS_SYSTEM,
+  'draft-plan': DRAFT_PLAN_SYSTEM,
+  // Scene calls of the scenes draft mode share the English draft-chapter system, like draft-continue.
+  'draft-scene': DRAFT_CHAPTER_SYSTEM,
   'scene-rewrite': SCENE_REWRITE_SYSTEM,
   'chapter-extract-facts': CHAPTER_EXTRACT_FACTS_SYSTEM,
   'chapter-extract-threads': CHAPTER_EXTRACT_THREADS_SYSTEM,
