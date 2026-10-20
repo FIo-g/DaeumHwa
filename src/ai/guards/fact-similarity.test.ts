@@ -6,8 +6,8 @@ import { bigramDice } from './similarity'
 // handled. The tests under "documented limit" lock in the current misses. When antonym or
 // number handling lands, invert those expectations instead of deleting them.
 describe('isNearDuplicateFact', () => {
-  it('uses the spec threshold of 0.8', () => {
-    expect(FACT_DUPLICATE_DICE).toBe(0.8)
+  it('uses the calibrated threshold of 0.7', () => {
+    expect(FACT_DUPLICATE_DICE).toBe(0.7)
   })
 
   it('treats the same fact after spacing and a final period as a duplicate', () => {

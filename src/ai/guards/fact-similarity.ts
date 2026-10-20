@@ -1,8 +1,8 @@
 import { stripJosa } from '@/lib/korean/josa'
 import { bigramDice, normalizeForCompare } from './similarity'
 
-/** Bigram Dice at or above which two fact sentences count as the same fact (spec section 8). */
-export const FACT_DUPLICATE_DICE = 0.8
+/** Bigram Dice at or above which two fact sentences count as the same fact. Calibrated on six saved runs in docs/eval/novel/2026-10-19-thresholds.md. */
+export const FACT_DUPLICATE_DICE = 0.7
 
 /**
  * True when two fact sentences are probably the same fact re-proposed. One pair per call.

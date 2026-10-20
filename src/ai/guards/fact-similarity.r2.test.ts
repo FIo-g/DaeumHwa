@@ -42,3 +42,34 @@ describe('isNearDuplicateFact minDice (R2 replay knob)', () => {
     expect(isNearDuplicateFact(a, b, 0.8)).toBe(false)
   })
 })
+
+// Commit 3 (R2 M7): the default threshold moves from 0.8 to 0.7 on the six saved 2026-10-18 runs.
+describe('isNearDuplicateFact at the calibrated default (R2 M7)', () => {
+  it('saved-run pair at Dice 0.77 is a duplicate by default', () => {
+    expect(isNearDuplicateFact(SCRATCH_A, SCRATCH_B)).toBe(true)
+  })
+
+  it('saved-run Korean pair at Dice 0.74 is a duplicate by default', () => {
+    expect(
+      isNearDuplicateFact(
+        '종루의 봉인을 연구하다가 3년 전에 종루 지하로 내려간 뒤 실종됐다.',
+        '3년 전에 종루 지하로 내려간 뒤 실종됐다.',
+      ),
+    ).toBe(true)
+  })
+
+  it('the highest unlabeled saved-run pair stays apart', () => {
+    expect(
+      isNearDuplicateFact(
+        "Serin's central goal is to get beneath the Bell Tower; she gathers the key's rule and the rumors to find the entrance",
+        'The central conflict is between Serin, who wants to get beneath the Bell Tower, and the warden Baek Jiwon, who stops her.',
+      ),
+    ).toBe(false)
+  })
+
+  it('documented limit: a short English antonym pair is a duplicate at 0.7', () => {
+    // English has no content-word check; revisit with P15.
+    expect(isNearDuplicateFact('Serin is left handed.', 'Serin is right handed.')).toBe(true)
+    expect(isNearDuplicateFact('Serin trusts Yunseo.', 'Serin does not trust Yunseo.')).toBe(false)
+  })
+})
