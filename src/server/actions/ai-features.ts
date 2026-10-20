@@ -14,6 +14,7 @@ import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import type { AppliedRefinement } from '@/lib/draft-refine'
 import type { ActionResult } from '@/lib/result'
 import { applyDraftRefinement } from '@/server/draft-refine'
+import { recordDraftUse } from '@/server/usage-events'
 
 const ReaderSimulationSchema = z.object({
   chapterId: z.uuid(),
@@ -29,6 +30,13 @@ const CreateChapterFromDraftSchema = z.object({
 const RepairDraftSchema = z.object({
   workId: z.uuid(),
   runId: z.uuid(),
+})
+
+const RecordDraftUseSchema = z.object({
+  workId: z.uuid(),
+  chapterId: z.uuid(),
+  runId: z.uuid(),
+  priorChars: z.number().int().min(0),
 })
 
 const ApplyDraftRefinementSchema = z.object({
@@ -66,6 +74,14 @@ export async function repairDraftAction(input: unknown): Promise<ActionResult<Re
     const result = await repairDraft(db, actor, data)
     revalidateWork(data.workId)
     return result
+  })
+}
+
+/** Counts one draft use (numbers only). The panel calls it when the author appends a draft. */
+export async function recordDraftUseAction(input: unknown): Promise<ActionResult<void>> {
+  return withAction(async (db, actor) => {
+    const data = RecordDraftUseSchema.parse(input)
+    await recordDraftUse(db, actor, data)
   })
 }
 

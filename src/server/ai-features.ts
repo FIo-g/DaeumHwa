@@ -72,6 +72,7 @@ import { isSpeechStyleEnabled, selectMainVoices } from '@/ai/voice'
 import { listStyleCards } from '@/server/styles'
 import { listThreads } from '@/server/threads'
 import { getWork } from '@/server/works'
+import { recordUsageEvent } from '@/server/usage-events'
 
 // AI features on top of the wiki (spec F11, F12, F13). Each AI call is recorded in ai_runs.
 // Nothing here writes wiki tables: style cards go through proposals, drafts become chapters only
@@ -350,6 +351,18 @@ export async function startDraft(
 
   const work = await getWork(db, actor, workId)
   const targetChars = input.targetChars ?? resolveWorkSettings(work.settings).targetChars
+  // Usage counting must never block a draft: a failed count is only logged.
+  try {
+    await recordUsageEvent(db, actor, {
+      workId,
+      chapterId: input.chapterId ?? null,
+      kind: 'draft_started',
+      value: instructions.length,
+      extra: { targetChars },
+    })
+  } catch (error) {
+    console.warn('usage event draft_started failed', error)
+  }
   const all = await listChapters(db, actor, workId)
 
   let position: number
@@ -621,12 +634,25 @@ export async function createChapterFromDraft(
   if (input.body !== undefined && input.body.trim() === '') {
     throw new AppError('VALIDATION', '본문이 비어 있습니다.')
   }
-  return createChapter(db, actor, {
+  const chapter = await createChapter(db, actor, {
     workId: input.workId,
     title: input.title,
     body: input.body ?? text,
     versionSource: 'ai_draft',
   })
+  try {
+    await recordUsageEvent(db, actor, {
+      workId: input.workId,
+      chapterId: chapter.id,
+      runId: input.runId,
+      kind: 'draft_used',
+      value: text.length,
+      extra: { mode: 0, priorChars: 0 },
+    })
+  } catch (error) {
+    console.warn('usage event draft_used failed', error)
+  }
+  return chapter
 }
 
 export type RepairDraftResult = { runId: string; text: string; flagged: number; applied: number }

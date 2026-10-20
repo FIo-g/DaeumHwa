@@ -17,6 +17,7 @@ import { chapterLabel, stripEpisodePrefix } from '@/lib/labels'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { recomputeAppearances } from '@/server/appearances'
 import { recordChange } from '@/server/changes'
+import { updateDraftEditRatio } from '@/server/usage-events'
 
 // Chapters, their saved versions (history), and the summary field. Every write that changes
 // chapter text goes through saveChapter, which handles optimistic concurrency and history.
@@ -323,7 +324,7 @@ export async function saveChapter(
   actor: Actor,
   input: SaveChapterInput,
 ): Promise<ChapterRow> {
-  return db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, input.chapterId, 'editor')
     await requireWorkRole(tx, chapter.workId, actor.userId, 'editor')
     assertNotArchived(chapter)
@@ -373,6 +374,13 @@ export async function saveChapter(
     await recomputeAppearances(tx, chapter.id)
     return updated
   })
+  // Usage counting runs after the save and never fails it.
+  try {
+    await updateDraftEditRatio(db, saved.id, saved.body)
+  } catch (error) {
+    console.warn('usage event draft_edit_ratio failed', error)
+  }
+  return saved
 }
 
 /** Sets the publishing status. Editor role. Does not bump the text version. */

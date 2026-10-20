@@ -8,6 +8,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -37,6 +38,7 @@ import type {
   Severity,
   ThreadEventKind,
   ThreadStatus,
+  UsageEventKind,
   VersionSource,
   WorkSettings,
 } from './types'
@@ -550,6 +552,30 @@ export const aiRuns = pgTable(
     finishedAt: timestamp('finished_at', { withTimezone: true }),
   },
   (t) => [index('ai_runs_user_created_idx').on(t.userId, t.createdAt)],
+)
+
+/** Numbers-only usage events. Never stores manuscript or instruction text. */
+export const aiUsageEvents = pgTable(
+  'ai_usage_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workId: uuid('work_id')
+      .notNull()
+      .references(() => works.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'set null' }),
+    runId: uuid('run_id').references(() => aiRuns.id, { onDelete: 'set null' }),
+    kind: text('kind').$type<UsageEventKind>().notNull(),
+    value: real('value').notNull().default(0),
+    extra: jsonb('extra')
+      .$type<Record<string, number>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [index('ai_usage_events_work_kind_created_idx').on(t.workId, t.kind, t.createdAt)],
 )
 
 export const userWorkState = pgTable(

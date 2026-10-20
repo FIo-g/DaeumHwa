@@ -18,6 +18,7 @@ vi.mock('sonner', () => ({
 vi.mock('@/server/actions/ai-features', () => ({
   createChapterFromDraftAction: vi.fn(),
   applyDraftRefinementAction: vi.fn(),
+  recordDraftUseAction: vi.fn(),
 }))
 
 const encoder = new TextEncoder()

@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { runAction } from '@/lib/client/run-action'
 import { useAiRun } from '@/lib/client/use-ai-run'
 import { parseDraftStream } from '@/lib/draft-stream'
-import { createChapterFromDraftAction } from '@/server/actions/ai-features'
+import { createChapterFromDraftAction, recordDraftUseAction } from '@/server/actions/ai-features'
 import type { WorkspaceApi, WritingData } from '../types'
 import { DraftRefine } from './draft-refine'
 import { EDITOR_ONLY_NOTE, canEditChapter } from './shared'
@@ -24,6 +24,8 @@ type DraftPanelProps = {
 
 const TARGET_MIN = 500
 const TARGET_MAX = 20000
+const USAGE_NOTICE =
+  '초안 품질을 높이려고 초안을 쓴 횟수와 고친 글자 비율 같은 숫자만 셉니다. 원고 내용은 모으지 않습니다.'
 
 /**
  * AI draft (F13). Streams a chapter from the author's instructions, the story cards and the
@@ -141,6 +143,15 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     const separator = current === '' || current.endsWith('\n') ? '' : '\n\n'
     api.appendText(separator + draft)
     setAppended(true)
+    // Numbers only: how often a draft was used and how long the manuscript was before the append.
+    if (runId) {
+      void recordDraftUseAction({
+        workId: data.workId,
+        chapterId: data.chapter.id,
+        runId,
+        priorChars: current.length,
+      })
+    }
     toast.success('원고 끝에 붙였습니다. 저장은 자동으로 됩니다.')
   }
 
@@ -218,6 +229,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           </Button>
         )}
       </div>
+
+      <p className="text-xs text-muted-foreground">{USAGE_NOTICE}</p>
 
       {draft !== null && (
         <div className="grid gap-3">

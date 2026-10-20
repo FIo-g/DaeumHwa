@@ -36,6 +36,13 @@
       "when": 1792490215952,
       "tag": "0004_silent_darkstar",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792493951821,
+      "tag": "0005_eager_frog_thor",
+      "breakpoints": true
     }
   ]
 }
