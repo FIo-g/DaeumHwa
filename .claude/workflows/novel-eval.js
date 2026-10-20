@@ -139,7 +139,7 @@ function pendingKeyOf(detail) {
   try {
     const parsed = JSON.parse(detail)
     return `${parsed.step}|${parsed.pendingKind}`
-  } catch (err) {
+  } catch {
     return detail
   }
 }
