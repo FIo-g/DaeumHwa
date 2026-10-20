@@ -65,6 +65,8 @@ export type CallRecord = {
   taskMaxTokens?: number
   /** How `maxTokens` was chosen. */
   maxTokensRule?: 'floor' | 'product'
+  /** How `effortRequested` was chosen: the profile's effort, or the task's own with `--deploy-settings`. */
+  effortRule?: 'profile' | 'task'
   productTimeoutMs: number
   wouldTimeOut: boolean
   system: string
@@ -100,6 +102,8 @@ export interface EvalClientOptions {
   helperThink?: HelperThink
   /** Send the task's own maxTokens, without the profile floor (`--product-limits`). Effort is not affected. */
   productLimits?: boolean
+  /** Send the task's own effort and maxTokens, as the product does (`--deploy-settings`). Implies productLimits. */
+  deploySettings?: boolean
   /** Reads the machine power state. Used for local profiles only; see the constructor. */
   readPower?: PowerReader
   /** Client used for a retry whose think is lowered; built by `createRetryClient`. Without it only the output cap can change. */
@@ -349,6 +353,9 @@ type Prepared = {
   taskEffort: AiEffort
   taskMaxTokens: number
   maxTokensRule: 'floor' | 'product'
+  /** The effort the inner client receives. */
+  effort: AiEffort
+  effortRule: 'profile' | 'task'
   productTimeoutMs: number
   power?: PowerInfo
   /** Local calls only: a hash of task, system and prompt. Null on other providers. */
@@ -411,6 +418,7 @@ export class EvalClient implements AiClient {
   private readonly now: () => number
   private readonly helperThink: HelperThink | undefined
   private readonly productLimits: boolean
+  private readonly deploySettings: boolean
   /** Set only for local profiles, so cloud and fake runs never read power. */
   private readonly readPower: PowerReader | undefined
   private readonly retryInner: AiClient | undefined
@@ -426,7 +434,8 @@ export class EvalClient implements AiClient {
     this.provider = `eval:${o.inner.provider}`
     this.defaultModel = o.profile.model
     this.helperThink = o.helperThink
-    this.productLimits = o.productLimits === true
+    this.deploySettings = o.deploySettings === true
+    this.productLimits = o.productLimits === true || this.deploySettings
     this.readPower = o.profile.queue === 'local' ? o.readPower : undefined
   }
 
@@ -514,7 +523,7 @@ export class EvalClient implements AiClient {
             ...args,
             system: call.system,
             prompt: call.prompt,
-            effort: this.profile.effort,
+            effort: call.effort,
             maxTokens: call.maxTokens,
             model: this.profile.model,
           })
@@ -551,7 +560,7 @@ export class EvalClient implements AiClient {
         ...args,
         system: call.system,
         prompt: call.prompt,
-        effort: this.profile.effort,
+        effort: call.effort,
         maxTokens: call.maxTokens,
         model: this.profile.model,
       })
@@ -640,6 +649,8 @@ export class EvalClient implements AiClient {
     const taskTimeout = productTaskTimeout(task, this.provider)
     const fallback = kind === 'stream' ? STREAM_AI_TIMEOUT_MS : DEFAULT_AI_TIMEOUT_MS
     const maxTokensRule = this.productLimits ? 'product' : 'floor'
+    const effort = this.deploySettings ? productEffort : this.profile.effort
+    const effortRule = this.deploySettings ? 'task' : 'profile'
     const maxTokens = this.productLimits
       ? productMaxTokens
       : Math.max(productMaxTokens, this.profile.maxTokensFloor)
@@ -673,6 +684,8 @@ export class EvalClient implements AiClient {
       taskEffort: productEffort,
       taskMaxTokens: productMaxTokens,
       maxTokensRule,
+      effort,
+      effortRule,
       productTimeoutMs: taskTimeout ?? fallback,
       power,
       promptKey,
@@ -751,11 +764,12 @@ export class EvalClient implements AiClient {
         promptCacheSuspected,
       }),
       model: this.profile.model,
-      effortRequested: this.profile.effort,
+      effortRequested: call.effort,
       maxTokens: call.maxTokens,
       taskEffort: call.taskEffort,
       taskMaxTokens: call.taskMaxTokens,
       maxTokensRule: call.maxTokensRule,
+      effortRule: call.effortRule,
       productTimeoutMs: call.productTimeoutMs,
       wouldTimeOut: durationMs > call.productTimeoutMs,
       system: call.system,

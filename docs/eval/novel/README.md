@@ -149,6 +149,8 @@ pnpm eval:novel resummarize --date 2026-10-18                               # �
      pnpm eval:novel init --model haiku-5.5 --lang en --product-limits --chapters 1 --dir eval/results/novel/2026-10-19-r2limits/run-04-en
      ```
 
+   - 제품이 보내는 값 그대로 재려면 `--deploy-settings`를 쓴다. 각 작업의 effort와 출력 한도를 그대로 보내고(`--product-limits`를 포함한다), 프로필 effort와 하한 32,000을 쓰지 않는다. 단계 0 이후 비교는 모두 이 모드로 한다. `--helper-think`와 함께 쓸 수 없다. 기본 폴더 이름에 `-deploy`가 붙는다. 만들 때 정한 값이라, 이 옵션 없이 만든 실행과는 이어 쓸 수 없다.
+
    - 그다음 스킬을 같은 `date`와 `chapters: 1`로 부른다. 스킬의 init은 그 폴더만 이어 쓴다. 폴더가 다르면 생각 설정이 없는 새 실행이 만들어진다.
    - 실행의 화 수는 만들 때 정해진다. `--chapters 1`을 빼면 5화로 만들어진다.
 

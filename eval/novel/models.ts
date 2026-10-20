@@ -28,8 +28,9 @@ export type ModelProfile = {
   queue: 'local' | 'cloud' | 'test'
   provider: 'ollama' | 'opencode' | 'fake'
   model: string
+  /** Effort the eval sends on every call. Under `--deploy-settings` each task's own effort is sent instead. */
   effort: AiEffort
-  /** Output-token floor the eval applies to every call. Skipped under `--product-limits`. */
+  /** Output-token floor the eval applies to every call. Skipped under `--product-limits` and `--deploy-settings`. */
   maxTokensFloor: number
   timeoutMs: number
   ollama?: Omit<OllamaOptions, 'model' | 'fetch' | 'baseUrl'>

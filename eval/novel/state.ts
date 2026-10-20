@@ -18,6 +18,8 @@ export type RunConfig = {
   helperThink?: HelperThink
   /** Send the task's own maxTokens (compare runs only). Absent means the profile floor applies. */
   productLimits?: boolean
+  /** The task's own effort and maxTokens are sent, as the product sends them (`--deploy-settings`). Absent means off. */
+  deploySettings?: boolean
   /** Speech feature on for this run, with its bible copy (compare runs only). Absent means off. */
   speech?: boolean
   /** Two-step draft and scene rewrite also on a cloud profile (compare runs only). Absent means the profile's default. */

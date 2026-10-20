@@ -154,6 +154,7 @@ export type InitOptions = {
   dir?: string
   helperThink?: string
   productLimits?: boolean
+  deploySettings?: boolean
   speech?: string
   twoStep?: string
 }
@@ -169,13 +170,20 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
   const chapters = positiveInt(o.chapters ?? 5, 'chapters')
   const questions = positiveInt(o.questions ?? 12, 'questions')
   const helperThink = o.helperThink === undefined ? undefined : parseHelperThink(o.helperThink)
+  // Deploy settings send the product's own effort and limits; a helper think would change them, so they are refused together.
+  const deploySettings = o.deploySettings === true
+  if (deploySettings && helperThink !== undefined) {
+    throw new Error('--deploy-settings cannot be combined with --helper-think')
+  }
   if (helperThink !== undefined) {
     const refusal = checkHelperThink(MODEL_PROFILES[model], helperThink)
     if (refusal) throw new Error(refusal)
   }
+  const productLimits = deploySettings ? true : o.productLimits
   const speech = o.speech === undefined ? false : parseSpeech(o.speech)
   const helperSuffix = helperThink === undefined ? '' : `-helper-${helperThink}`
-  const limitsSuffix = o.productLimits ? '-product-limits' : ''
+  const limitsSuffix = productLimits ? '-product-limits' : ''
+  const deploySuffix = deploySettings ? '-deploy' : ''
   const speechSuffix = speech ? '-speech' : ''
   const twoStep = o.twoStep === undefined ? false : parseTwoStep(o.twoStep)
   if (twoStep) {
@@ -187,7 +195,7 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     o.dir ??
       path.join(
         RESULTS_DIR,
-        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}`,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${deploySuffix}`,
       ),
   )
 
@@ -201,6 +209,10 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     }
     if (o.productLimits !== undefined && (existing.productLimits ?? false) !== o.productLimits) {
       throw new Error(`run exists with another productLimits: ${dir}`)
+    }
+    // Checked without the flag too, so a deploy run is never resumed as a plain one.
+    if (deploySettings !== (existing.deploySettings ?? false)) {
+      throw new Error(`run exists with another deploySettings: ${dir}`)
     }
     if (speech && existing.speech !== true) {
       throw new Error(`run exists with another speech setting: ${dir}`)
@@ -217,7 +229,8 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       maxDraftAttempts: 3,
       commit: gitCommit(),
       helperThink,
-      productLimits: o.productLimits,
+      productLimits,
+      deploySettings: deploySettings || undefined,
       speech: speech || undefined,
       twoStep: twoStep || undefined,
     })
@@ -255,6 +268,18 @@ export function speechFlag(flags: Flags): string | undefined {
   const value = flags.speech
   if (value === true) throw new Error('unknown speech value: true')
   return value
+}
+
+/**
+ * The --deploy-settings value, or undefined when the flag is absent. A bare flag or `on` turns the
+ * option on, `off` turns it off; anything else is an error.
+ */
+export function deploySettingsFlag(flags: Flags): boolean | undefined {
+  const value = flags['deploy-settings']
+  if (value === undefined) return undefined
+  if (value === true || value === 'on') return true
+  if (value === 'off') return false
+  throw new Error(`unknown deploy-settings value: ${String(value)}`)
 }
 
 /**
@@ -720,6 +745,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         dir: typeof flags.dir === 'string' ? flags.dir : undefined,
         helperThink: helperThinkFlag(flags),
         productLimits: productLimitsFlag(flags),
+        deploySettings: deploySettingsFlag(flags),
         speech: speechFlag(flags),
         twoStep: twoStepFlag(flags),
       })

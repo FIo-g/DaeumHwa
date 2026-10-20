@@ -112,6 +112,7 @@ export function blindCallRecord(call: CallRecord): BlindedCall {
   delete copy.ollama
   const masked = maskDeep(copy) as Record<string, unknown>
   delete masked.effortRequested
+  delete masked.effortRule
   delete masked.thinkRequested
   delete masked.retryBudget
   delete masked.maxTokens

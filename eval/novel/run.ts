@@ -101,6 +101,7 @@ export type RunCreateOptions = {
   commit: string
   helperThink?: HelperThink
   productLimits?: boolean
+  deploySettings?: boolean
   speech?: boolean
   twoStep?: boolean
 }
@@ -121,6 +122,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     commit: o.commit,
     ...(o.helperThink ? { helperThink: o.helperThink } : {}),
     ...(o.productLimits ? { productLimits: true } : {}),
+    ...(o.deploySettings ? { deploySettings: true } : {}),
     ...(o.speech ? { speech: true } : {}),
     ...(o.twoStep ? { twoStep: true } : {}),
   }
@@ -160,6 +162,7 @@ export async function openRun(
     startSeq: Math.max(1, state.nextSeq),
     helperThink: config.helperThink,
     productLimits: config.productLimits,
+    deploySettings: config.deploySettings,
     readPower: o.readPower,
   })
   setAiTimeoutOverride(profile.timeoutMs)
