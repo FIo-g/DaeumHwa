@@ -102,6 +102,27 @@ function stateLine(label: string, value: string | undefined): string[] {
   return text === '' ? [] : [`${label}${text}`]
 }
 
+/**
+ * Location list of the beat scenes for the continuity check (P3, local two-step eval runs). Per scene:
+ * place, people and objects only. The event order and the state lines are left out on purpose: the
+ * check needs where things are, not the story beats.
+ */
+export function renderBeatLocations(beats: DraftBeats): string {
+  if (beats.scenes.length === 0) return '(없음)'
+  return beats.scenes
+    .map((scene, index) => {
+      const people = scene.characters.length > 0 ? scene.characters.join(', ') : '(없음)'
+      const objects = scene.objects.length > 0 ? scene.objects.join('; ') : '(없음)'
+      return [
+        `장면 ${index + 1}`,
+        `장소: ${scene.place}`,
+        `인물: ${people}`,
+        `물건: ${objects}`,
+      ].join('\n')
+    })
+    .join('\n\n')
+}
+
 export const draftBeatsTask: AiTaskDef<DraftPromptInput, DraftBeats> = {
   name: 'draft-beats',
   effort: 'medium',

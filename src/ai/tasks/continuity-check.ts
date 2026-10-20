@@ -32,7 +32,16 @@ export type ContinuityInput = {
   chapterPosition: number
   chapterTitle: string
   pack: ContextPack
+  /** Local eval only: place, people and object locations of the draft's scenes, already rendered. Empty or null adds no section. */
+  scenePlan?: string | null
 }
+
+/**
+ * Prompt rule for the scene location list (P3). It sits outside the tag on purpose: CONTINUITY_SYSTEM
+ * ends with TAG_DATA_RULE, which says text inside tags is data, so the rule must not be inside it.
+ */
+export const SCENE_PLAN_RULE =
+  '아래 장면 목록은 이 원고의 초안을 쓸 때 만든 계획이다. 위키가 아니다. 장면마다 장소와 그 자리의 인물, 물건의 위치를 위키와 견주는 데만 쓰고, 목록과 원고가 다르다는 이유만으로는 지적하지 않는다. 지적에는 위키 근거가 있어야 한다.'
 
 /** An issue after post-processing: quote located in the chapter, refs resolved to record ids. */
 export type ResolvedContinuityIssue = {
@@ -159,6 +168,11 @@ export function resolveContinuityIssues(
   }))
 }
 
+function scenePlanSection(plan: ContinuityInput['scenePlan']): string[] {
+  if (!plan) return []
+  return ['', SCENE_PLAN_RULE, '<scene_plan>', plan, '</scene_plan>']
+}
+
 export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> = {
   name: 'continuity-check',
   effort: 'high',
@@ -172,6 +186,7 @@ export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> =
       `<manuscript position="${input.chapterPosition}" title="${input.chapterTitle.replace(/"/g, "'")}">`,
       input.chapterText,
       '</manuscript>',
+      ...scenePlanSection(input.scenePlan),
     ].join('\n')
   },
   schema: ContinuitySchema,

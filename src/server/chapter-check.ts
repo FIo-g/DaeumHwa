@@ -231,7 +231,8 @@ async function loadEditableChapter(
 export async function runChapterCheck(
   db: Db,
   actor: Actor,
-  input: { chapterId: string },
+  /** scenePlan: eval only, two-step runs (see eval/novel/steps/chapter.ts). The product never passes it. */
+  input: { chapterId: string; scenePlan?: string | null },
   client?: AiClient,
   signal?: AbortSignal,
 ): Promise<ChapterCheckResult> {
@@ -275,7 +276,13 @@ export async function runChapterCheck(
       db,
       meta,
       continuityCheckTask,
-      { chapterText: text, chapterPosition: chapter.position, chapterTitle: chapter.title, pack },
+      {
+        chapterText: text,
+        chapterPosition: chapter.position,
+        chapterTitle: chapter.title,
+        pack,
+        ...(input.scenePlan ? { scenePlan: input.scenePlan } : {}),
+      },
       client,
     ).catch((error: unknown) => {
       sibling.abort()

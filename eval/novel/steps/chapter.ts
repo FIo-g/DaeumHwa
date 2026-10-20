@@ -13,6 +13,7 @@ import {
 import { aiRuns } from '@/db/schema'
 import { replaceRunOutput } from '@/ai/run'
 import { repairableForeignSpans } from '@/ai/tasks/draft-repair'
+import { DraftBeatsSchema, renderBeatLocations } from '@/ai/tasks/draft-beats'
 import { MODEL_PROFILES, twoStepEnabled } from '../models'
 import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
@@ -30,7 +31,7 @@ import { classifyError, type FailureKind } from '../eval-client'
 import { bibleExempt, chapterMetrics } from '../metrics'
 import type { Answer, Pending } from '../author-io'
 import type { RunContext, StepFn } from '../run'
-import type { RunState } from '../state'
+import type { DraftAttempt, RunState } from '../state'
 import {
   applyProposalDecisions,
   applySuggestions,
@@ -554,8 +555,15 @@ export const check: StepFn = async (ctx, key, state) => {
   const n = chapterOf(key)
   const chapterId = state.data.chapterIds[n]
   if (!chapterId || isMarked(state, key)) return 'done'
+  // P3: two-step runs give the check the chosen draft's location list. Other runs send no plan.
+  const scenePlan = twoStepOn(ctx) ? sceneLocationsOf(ctx.dir, state.data.drafts[n] ?? [], n) : null
   const checked = await withModelRetry(ctx, state, key, () =>
-    runChapterCheck(ctx.db, ctx.actor, { chapterId }, ctx.client),
+    runChapterCheck(
+      ctx.db,
+      ctx.actor,
+      { chapterId, ...(scenePlan ? { scenePlan } : {}) },
+      ctx.client,
+    ),
   )
   if (checked) {
     if (checked.extraction) {
@@ -572,6 +580,24 @@ export const check: StepFn = async (ctx, key, state) => {
     mark(ctx, state, key)
   }
   return 'done'
+}
+
+/**
+ * Location list of the chosen draft attempt for the continuity check (P3, two-step eval runs). The
+ * chosen attempt is the one the `draft` step saved (pickAttempt). Null when there is no attempt, no
+ * beats file (a one-step draft) or the file does not parse: the check then runs as before. Never throws.
+ */
+export function sceneLocationsOf(dir: string, attempts: DraftAttempt[], n: number): string | null {
+  if (attempts.length === 0) return null
+  const attemptNo = attempts.indexOf(pickAttempt(attempts)) + 1
+  const file = `chapters/${pad(n)}.attempt-${attemptNo}.beats.json`
+  if (!existsSync(path.join(dir, file))) return null
+  try {
+    const parsed = DraftBeatsSchema.safeParse(JSON.parse(readRunFile(dir, file)))
+    return parsed.success ? renderBeatLocations(parsed.data) : null
+  } catch {
+    return null
+  }
 }
 
 /** The local queue profiles run C's foreign-script repair; cloud ones do not. */

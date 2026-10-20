@@ -1,5 +1,6 @@
 import { BEATS_RULE } from '@/ai/tasks/draft-chapter'
 import { BEATS_STATE_RULE } from '@/ai/tasks/draft-beats'
+import { SCENE_PLAN_RULE } from '@/ai/tasks/continuity-check'
 
 // Turns the Korean scaffolding that product prompt builders emit (labels, empty markers, persona
 // text, chapter numbers) into English. Content from the work itself is never matched by these rules,
@@ -10,6 +11,12 @@ type Rule = readonly [pattern: string | RegExp, replacement: string]
 // Ordered: every rule runs in sequence, so longer and more specific fragments come first. A bare
 // label rule can also rewrite Hangul inside leaked Korean text, so the Hangul count is a lower bound.
 const RULES: readonly Rule[] = [
+  // Scene plan rule (brief P3, continuity check). The whole sentence comes first: it names places,
+  // people and objects, which the bare label rules below would rewrite word by word.
+  [
+    SCENE_PLAN_RULE,
+    "The scene list below is the plan made when this manuscript was drafted. It is not the wiki. Use it only to compare each scene's place, the people there and where objects are with the wiki. Do not flag a difference between the list and the manuscript on its own. Every flag still needs wiki grounds.",
+  ],
   // Reader personas (src/ai/personas.ts), whole sentences first.
   [
     '이번 화부터 처음 읽는다. 설명 없는 인물과 용어에 헷갈린다.',
