@@ -16,6 +16,7 @@ vi.mock('@/server/actions/ai-features', () => ({
 
 const PREVIEW: DraftRefinePreview = {
   runId: 'run-1',
+  token: 'token-1',
   changed: true,
   parts: [
     { type: 'equal', value: '민아는 ' },
@@ -105,7 +106,11 @@ describe('DraftRefine', () => {
     fireEvent.click(screen.getByRole('button', { name: '적용' }))
 
     await waitFor(() => expect(onApplied).toHaveBeenCalledWith('새 본문'))
-    expect(applyDraftRefinementAction).toHaveBeenCalledWith({ workId: 'work-1', runId: 'run-1' })
+    expect(applyDraftRefinementAction).toHaveBeenCalledWith({
+      workId: 'work-1',
+      runId: 'run-1',
+      token: 'token-1',
+    })
     expect(screen.queryByRole('region', { name: '다듬기 미리보기' })).toBeNull()
     expect(onPreviewChange).toHaveBeenLastCalledWith(false)
     expect(toast.success).toHaveBeenCalledWith('다듬은 초안으로 바꿨습니다.')

@@ -34,6 +34,7 @@ const RepairDraftSchema = z.object({
 const ApplyDraftRefinementSchema = z.object({
   workId: z.uuid(),
   runId: z.uuid(),
+  token: z.string(),
 })
 
 export async function runReaderSimulationAction(

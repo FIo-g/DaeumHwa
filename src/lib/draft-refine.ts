@@ -7,6 +7,8 @@ export type RefineRepairState = 'none' | 'done' | 'skipped' | 'failed'
 
 export type DraftRefinePreview = {
   runId: string
+  /** Names the stored candidate; apply must send the token of the preview the author saw. */
+  token: string
   changed: boolean
   /** [] when !changed. Equal + delete parts join to the stored draft; equal + insert to the refined text. */
   parts: DiffPart[]

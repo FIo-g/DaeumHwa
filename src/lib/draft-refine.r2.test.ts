@@ -4,6 +4,7 @@ import { type DraftRefinePreview, refineRepairNote, refineSummary } from '@/lib/
 function preview(overrides: Partial<DraftRefinePreview> = {}): DraftRefinePreview {
   return {
     runId: 'run-1',
+    token: 'token-1',
     changed: true,
     parts: [],
     paragraphsBefore: 0,

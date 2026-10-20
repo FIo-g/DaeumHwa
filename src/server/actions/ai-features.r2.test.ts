@@ -48,7 +48,7 @@ describe('applyDraftRefinementAction', () => {
   })
 
   /** Makes a finished draft and a candidate for it, with the same fake client for both. */
-  async function previewed(text: string): Promise<string> {
+  async function previewed(text: string): Promise<{ runId: string; token: string }> {
     const db = state.db as Db
     const client = new FakeAiClient({ overrides: { 'draft-chapter': () => text } })
     const run = await startDraft(
@@ -58,14 +58,19 @@ describe('applyDraftRefinementAction', () => {
       client,
     )
     await run.done
-    await previewDraftRefinement(db, { userId: ownerId }, { workId, runId: run.runId }, client)
-    return run.runId
+    const preview = await previewDraftRefinement(
+      db,
+      { userId: ownerId },
+      { workId, runId: run.runId },
+      client,
+    )
+    return { runId: run.runId, token: preview.token }
   }
 
   it('applyDraftRefinementAction applies a stored candidate', async () => {
-    const runId = await previewed(`${SHORT}\n\n${FIVE}`)
+    const { runId, token } = await previewed(`${SHORT}\n\n${FIVE}`)
 
-    const result = await applyDraftRefinementAction({ workId, runId })
+    const result = await applyDraftRefinementAction({ workId, runId, token })
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -74,13 +79,36 @@ describe('applyDraftRefinementAction', () => {
   })
 
   it('returns VALIDATION for ids that are not uuids', async () => {
-    const result = await applyDraftRefinementAction({ workId: 'not-a-uuid', runId: 'x' })
+    const result = await applyDraftRefinementAction({
+      workId: 'not-a-uuid',
+      runId: 'x',
+      token: 'token',
+    })
     expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } })
+  })
+
+  it('returns VALIDATION when the candidate token is missing', async () => {
+    const { runId } = await previewed(`${SHORT}\n\n${FIVE}`)
+    const result = await applyDraftRefinementAction({ workId, runId })
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } })
+  })
+
+  it('returns BAD_STATE when the token is not the stored candidate', async () => {
+    const { runId } = await previewed(`${SHORT}\n\n${FIVE}`)
+    const result = await applyDraftRefinementAction({ workId, runId, token: 'not-the-token' })
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'BAD_STATE', message: '다듬기 결과가 바뀌었습니다. 다시 다듬어 주세요.' },
+    })
   })
 
   it('returns UNAUTHENTICATED when signed out', async () => {
     state.user = null
-    const result = await applyDraftRefinementAction({ workId, runId: crypto.randomUUID() })
+    const result = await applyDraftRefinementAction({
+      workId,
+      runId: crypto.randomUUID(),
+      token: 'token',
+    })
     expect(result).toMatchObject({ ok: false, error: { code: 'UNAUTHENTICATED' } })
   })
 
@@ -94,7 +122,11 @@ describe('applyDraftRefinementAction', () => {
     )
     await run.done
 
-    const result = await applyDraftRefinementAction({ workId, runId: run.runId })
+    const result = await applyDraftRefinementAction({
+      workId,
+      runId: run.runId,
+      token: 'token',
+    })
 
     expect(result).toMatchObject({
       ok: false,

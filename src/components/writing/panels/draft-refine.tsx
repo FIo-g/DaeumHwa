@@ -47,10 +47,14 @@ export function DraftRefine({ workId, runId, onApplied, onPreviewChange }: Draft
   }
 
   async function apply() {
+    if (!preview) return
     setApplying(true)
-    const applied = await runAction(applyDraftRefinementAction({ workId, runId }), {
-      success: '다듬은 초안으로 바꿨습니다.',
-    })
+    const applied = await runAction(
+      applyDraftRefinementAction({ workId, runId, token: preview.token }),
+      {
+        success: '다듬은 초안으로 바꿨습니다.',
+      },
+    )
     setApplying(false)
     // A failure keeps the preview open; the toast carries the server's reason.
     if (!applied) return

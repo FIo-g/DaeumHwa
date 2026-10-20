@@ -6,6 +6,7 @@ import { aiRuns } from '@/db/schema'
 import type { Actor } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { replaceRunOutput } from '@/ai/run'
+import type { GenerateObjectArgs } from '@/ai/types'
 import { createTestDb } from '@/test/db'
 import { addTestMember, createTestUser, createTestWork } from '@/test/factories'
 import { createChapterFromDraft, startDraft } from '@/server/ai-features'
@@ -43,6 +44,48 @@ async function draftOf(
   )
   await run.done
   return { runId: run.runId, client }
+}
+
+/** Same as draftOf, with a client the test built itself. */
+async function draftWith(s: Setup, client: FakeAiClient): Promise<string> {
+  const run = await startDraft(
+    s.db,
+    s.actor,
+    { workId: s.workId, instructions: INSTRUCTIONS, targetChars: 10, entryIds: [] },
+    client,
+  )
+  await run.done
+  return run.runId
+}
+
+/** A client that holds its first draft-repair call until release(); entered resolves once held. */
+function gatedClient(overrides: Record<string, (input: unknown) => unknown>) {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let enter: () => void = () => {}
+  const entered = new Promise<void>((resolve) => (enter = resolve))
+  let repairCalls = 0
+  class GatedClient extends FakeAiClient {
+    override async generateObject<T>(args: GenerateObjectArgs<T>) {
+      if (args.task.name === 'draft-repair') {
+        repairCalls += 1
+        if (repairCalls === 1) {
+          enter()
+          await gate
+        }
+      }
+      return super.generateObject(args)
+    }
+  }
+  return { client: new GatedClient({ overrides }), entered, release }
+}
+
+/** Resolves to the rejection of a promise, or null when it resolves. */
+function settle(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(
+    () => null,
+    (error: unknown) => error,
+  )
 }
 
 async function outputOf(db: Db, runId: string): Promise<Record<string, unknown>> {
@@ -281,10 +324,14 @@ describe('applyDraftRefinement', () => {
     const stored = `${SHORT}\n\n${FIVE}`
     const { runId, client } = await draftOf(s, stored)
     await replaceRunOutput(s.db, runId, { text: stored, warnings: [{ kind: 'kept' }] })
-    await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    const preview = await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
     const refined = ((await outputOf(s.db, runId)).refinement as { text: string }).text
 
-    const applied = await applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId })
+    const applied = await applyDraftRefinement(s.db, s.actor, {
+      workId: s.workId,
+      runId,
+      token: preview.token,
+    })
 
     expect(applied).toEqual({ runId, text: refined })
     const output = await outputOf(s.db, runId)
@@ -305,10 +352,10 @@ describe('applyDraftRefinement', () => {
     await replaceRunOutput(s.db, runId, {
       text: BASE,
       originalText: 'first original',
-      refinement: { base: BASE, text: REFINED, paragraphs: 1, sentences: 0 },
+      refinement: { base: BASE, text: REFINED, paragraphs: 1, sentences: 0, token: 'seed-token' },
     })
 
-    await applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId })
+    await applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId, token: 'seed-token' })
 
     const output = await outputOf(s.db, runId)
     expect(output.text).toBe(REFINED)
@@ -317,11 +364,12 @@ describe('applyDraftRefinement', () => {
 
   it('apply fails without a candidate and on a second apply', async () => {
     const { runId, client } = await draftOf(s, `${SHORT}\n\n${FIVE}`)
-    await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
-    await applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId })
+    const preview = await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    const token = preview.token
+    await applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId, token })
 
     const second = await captureError(
-      applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId }),
+      applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId, token }),
     )
 
     expect(second).toMatchObject({
@@ -330,7 +378,7 @@ describe('applyDraftRefinement', () => {
     })
     const none = await draftOf(s, SHORT)
     const missing = await captureError(
-      applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId: none.runId }),
+      applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId: none.runId, token: 'any' }),
     )
     expect(missing).toMatchObject({
       code: 'BAD_STATE',
@@ -340,13 +388,13 @@ describe('applyDraftRefinement', () => {
 
   it('apply fails when the stored text changed after the preview', async () => {
     const { runId, client } = await draftOf(s, `${SHORT}\n\n${FIVE}`)
-    await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    const preview = await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
     const output = await outputOf(s.db, runId)
     await replaceRunOutput(s.db, runId, { ...output, text: 'another draft' })
     const changed = await outputOf(s.db, runId)
 
     const error = await captureError(
-      applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId }),
+      applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId, token: preview.token }),
     )
 
     expect(error).toMatchObject({
@@ -358,19 +406,158 @@ describe('applyDraftRefinement', () => {
 
   it('apply checks the role', async () => {
     const { runId, client } = await draftOf(s, `${SHORT}\n\n${FIVE}`)
-    await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    const { token } = await previewDraftRefinement(
+      s.db,
+      s.actor,
+      { workId: s.workId, runId },
+      client,
+    )
     const viewer = await createTestUser(s.db, { email: 'viewer@example.com' })
     await addTestMember(s.db, s.workId, viewer.id, 'viewer')
     const stranger = await createTestUser(s.db, { email: 'stranger@example.com' })
 
     const asViewer = await captureError(
-      applyDraftRefinement(s.db, { userId: viewer.id }, { workId: s.workId, runId }),
+      applyDraftRefinement(s.db, { userId: viewer.id }, { workId: s.workId, runId, token }),
     )
     const asStranger = await captureError(
-      applyDraftRefinement(s.db, { userId: stranger.id }, { workId: s.workId, runId }),
+      applyDraftRefinement(s.db, { userId: stranger.id }, { workId: s.workId, runId, token }),
     )
 
     expect(asViewer.code).toBe('FORBIDDEN')
     expect(asStranger.code).toBe('NOT_FOUND')
+  })
+})
+
+describe('overlapping previews', () => {
+  let s: Setup
+
+  beforeEach(async () => {
+    s = await setup()
+    await createStyleCard(s.db, s.actor, { workId: s.workId, name: '작품 문체', examples: SAMPLE })
+  })
+
+  it('an older preview that lands after apply keeps the applied text', async () => {
+    const original = `${SHORT}\n\n${SAMPLE}`
+    const { client, entered, release } = gatedClient({
+      'draft-chapter': () => original,
+      'draft-repair': () => ({ edits: [{ quote: SAMPLE, replacement: NEW_SENTENCE }] }),
+    })
+    const runId = await draftWith(s, client)
+    // Request 1 hangs in the repair call: the author cancelled, but the server never saw it.
+    const first = settle(previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client))
+    await entered
+    const second = await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    const applied = await applyDraftRefinement(s.db, s.actor, {
+      workId: s.workId,
+      runId,
+      token: second.token,
+    })
+    release()
+    const late = await first
+
+    const output = await outputOf(s.db, runId)
+    expect(output.text).toBe(applied.text)
+    expect(applied.text).toContain(NEW_SENTENCE)
+    expect(output.originalText).toBe(original)
+    expect(output.refined).toEqual({ paragraphs: 0, sentences: 1 })
+    expect(output).not.toHaveProperty('refinement')
+    const chapter = await createChapterFromDraft(s.db, s.actor, { workId: s.workId, runId })
+    expect(chapter.body).toBe(applied.text)
+    expect(late).toBeInstanceOf(AppError)
+    expect(late).toMatchObject({
+      code: 'BAD_STATE',
+      message: '초안이 바뀌어 다듬기 결과를 버렸습니다. 다시 다듬어 주세요.',
+    })
+  })
+
+  it('an older preview that finds nothing does not put the old draft back after apply', async () => {
+    const original = `${SHORT}\n\n${SAMPLE}`
+    let calls = 0
+    const { client, entered, release } = gatedClient({
+      'draft-chapter': () => original,
+      // The gate holds request 1 before its fake runs, so request 2's call is the first one the
+      // fake sees: it rewrites the flagged sentence, and request 1 (released later) makes no edit.
+      'draft-repair': () => {
+        calls += 1
+        return { edits: calls === 1 ? [{ quote: SAMPLE, replacement: NEW_SENTENCE }] : [] }
+      },
+    })
+    const runId = await draftWith(s, client)
+    // A candidate from an even earlier preview is stored, so the held preview will drop it.
+    await replaceRunOutput(s.db, runId, {
+      text: original,
+      refinement: { base: original, text: 'old', paragraphs: 0, sentences: 0, token: 'stale' },
+    })
+    const first = settle(previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client))
+    await entered
+    const second = await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    const applied = await applyDraftRefinement(s.db, s.actor, {
+      workId: s.workId,
+      runId,
+      token: second.token,
+    })
+    release()
+    const late = await first
+
+    const output = await outputOf(s.db, runId)
+    expect(output.text).toBe(applied.text)
+    expect(applied.text).toContain(NEW_SENTENCE)
+    expect(output.originalText).toBe(original)
+    expect(late).toMatchObject({ code: 'BAD_STATE' })
+  })
+
+  it('apply refuses a candidate the author did not see', async () => {
+    const original = `${SHORT}\n\n${SAMPLE}`
+    let n = 0
+    const { client, entered, release } = gatedClient({
+      'draft-chapter': () => original,
+      'draft-repair': () => {
+        n += 1
+        return { edits: [{ quote: SAMPLE, replacement: `고친 문장 ${n}이다.` }] }
+      },
+    })
+    const runId = await draftWith(s, client)
+    const first = previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    const firstSettled = settle(first)
+    await entered
+    // Request 2 finishes first: this is the preview the author sees.
+    const second = await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    // Request 1 lands before the author presses 적용 and takes the stored candidate.
+    release()
+    await firstSettled
+    const firstPreview = await first
+
+    expect(firstPreview.token).not.toBe(second.token)
+    const error = await captureError(
+      applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId, token: second.token }),
+    )
+
+    expect(error).toMatchObject({
+      code: 'BAD_STATE',
+      message: '다듬기 결과가 바뀌었습니다. 다시 다듬어 주세요.',
+    })
+    expect((await outputOf(s.db, runId)).text).toBe(original)
+    const applied = await applyDraftRefinement(s.db, s.actor, {
+      workId: s.workId,
+      runId,
+      token: firstPreview.token,
+    })
+    expect(applied.text).toContain('고친 문장 2이다.')
+  })
+
+  it('apply refuses a token that is not the stored candidate', async () => {
+    const { runId, client } = await draftOf(s, `${SHORT}\n\n${FIVE}`)
+    await previewDraftRefinement(s.db, s.actor, { workId: s.workId, runId }, client)
+    const before = await outputOf(s.db, runId)
+
+    const error = await captureError(
+      applyDraftRefinement(s.db, s.actor, { workId: s.workId, runId, token: 'not-the-token' }),
+    )
+
+    expect(error).toMatchObject({
+      code: 'BAD_STATE',
+      message: '다듬기 결과가 바뀌었습니다. 다시 다듬어 주세요.',
+    })
+    expect(await outputOf(s.db, runId)).toEqual(before)
   })
 })

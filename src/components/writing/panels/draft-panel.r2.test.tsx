@@ -24,6 +24,7 @@ const encoder = new TextEncoder()
 
 const PREVIEW: DraftRefinePreview = {
   runId: 'run-1',
+  token: 'token-1',
   changed: true,
   parts: [
     { type: 'delete', value: '원래 ' },
