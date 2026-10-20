@@ -11,7 +11,9 @@ import {
   runReaderSimulation,
 } from '@/server/ai-features'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
+import type { AppliedRefinement } from '@/lib/draft-refine'
 import type { ActionResult } from '@/lib/result'
+import { applyDraftRefinement } from '@/server/draft-refine'
 
 const ReaderSimulationSchema = z.object({
   chapterId: z.uuid(),
@@ -25,6 +27,11 @@ const CreateChapterFromDraftSchema = z.object({
 })
 
 const RepairDraftSchema = z.object({
+  workId: z.uuid(),
+  runId: z.uuid(),
+})
+
+const ApplyDraftRefinementSchema = z.object({
   workId: z.uuid(),
   runId: z.uuid(),
 })
@@ -58,5 +65,16 @@ export async function repairDraftAction(input: unknown): Promise<ActionResult<Re
     const result = await repairDraft(db, actor, data)
     revalidateWork(data.workId)
     return result
+  })
+}
+
+export async function applyDraftRefinementAction(
+  input: unknown,
+): Promise<ActionResult<AppliedRefinement>> {
+  return withAction(async (db, actor) => {
+    const data = ApplyDraftRefinementSchema.parse(input)
+    const applied = await applyDraftRefinement(db, actor, data)
+    revalidateWork(data.workId)
+    return applied
   })
 }
