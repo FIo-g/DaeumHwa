@@ -69,7 +69,7 @@ export function planWarnings(card: DraftPlanCard): string[] {
     if (next && next.role === scene.role) {
       const label = SCENE_ROLE_LABELS[scene.role]
       warnings.push(
-        `장면 ${i + 1}과 ${i + 2}이 둘 다 '${label}'입니다. 같은 박자가 이어질 수 있어요.`,
+        `${i + 1}번째와 ${i + 2}번째 장면이 둘 다 '${label}'입니다. 같은 박자가 이어질 수 있어요.`,
       )
     }
   })

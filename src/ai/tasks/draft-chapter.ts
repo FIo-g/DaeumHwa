@@ -22,7 +22,7 @@ export const DRAFT_SYSTEM = `당신은 웹소설 작가의 초안 작성을 돕�
 ${TAG_DATA_RULE}
 - 제목이나 설명 없이 본문만 출력한다.`
 
-export const DRAFT_MAX_TOKENS = 16000
+export const DRAFT_MAX_TOKENS = 32000
 export const DRAFT_EFFORT = 'high' as const
 /** The continuation is shorter and reuses the draft's system prompt, so it runs with low effort. */
 export const CONTINUE_EFFORT = 'low' as const

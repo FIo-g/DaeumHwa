@@ -55,7 +55,8 @@ describe('run productLimits', () => {
     for (const record of records) {
       expect(record.maxTokensRule).toBe('floor')
       expect(record.maxTokens).toBe(32000)
-      expect(record.taskMaxTokens).toBeLessThan(32000)
+      // The draft and its continuation have their own 32000 cap since stage 0; others are lower.
+      expect(record.taskMaxTokens).toBeLessThanOrEqual(32000)
     }
     const summary = JSON.parse(readFileSync(join(dir, 'run-summary.json'), 'utf8'))
     expect(summary.outputCap.mode).toBe('floor')

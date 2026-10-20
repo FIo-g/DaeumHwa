@@ -85,7 +85,7 @@
 움직일 떡밥: <threads joined by ', ', or (없음)>
 ```
 
-`planWarnings` (exact copy): for each `i` where scenes `i` and `i+1` have the same role, `장면 ${i+1}과 ${i+2}이 둘 다 '${label}'입니다. 같은 박자가 이어질 수 있어요.`; when the last scene's role is not `ending`, `마지막 장면이 '회차 끝'이 아닙니다.`
+`planWarnings` (exact copy): for each `i` where scenes `i` and `i+1` have the same role, `${i+1}번째와 ${i+2}번째 장면이 둘 다 '${label}'입니다. 같은 박자가 이어질 수 있어요.` (changed after task 1: the number's particle depends on how it is read, so the copy avoids one); when the last scene's role is not `ending`, `마지막 장면이 '회차 끝'이 아닙니다.`
 
 - [ ] **Step 1: Write the failing tests**
   - `draft-plan.s1.test.ts`: the task has name `'draft-plan'`, effort `'low'`, maxTokens 4000; `buildPrompt` contains `<scene_count>3</scene_count>`, `<direction_advice>\n(없음)` when advice is null, no `<target_length>`, and, with a revision, `작가 메모: 2장면에서 윤서가 먼저 말을 건다`; `DraftPlanSchema` rejects 0 and 9 scenes and an unknown role; the system text contains `지시에 있을 때만 쓴다` and `<scene_count>`.
@@ -231,6 +231,11 @@ Written by the orchestrator after the M0 effort tests, as a short addendum to th
 - Continuity: hits not lower than `high` minus 1 over the three fixtures together, trap false positives not higher, coverage unchanged.
 - Extraction: matched facts at least 85% of the `high` replay's count against the reference on average, threads at least 80%.
 - If no lower effort passes, the task keeps its value and the addendum says so.
+
+**Addendum (2026-10-20, after M0; numbers in `docs/eval/harness/2026-10-20-stage0-baseline.md` section 6):**
+- `continuity-check`: `low`. Hits over the three fixtures: haiku low 22, medium 20, high 21; luna low 20, medium 19, high 20. Trap false positives 0 everywhere, coverage 100%. Low passes the rule on both models; ordinary false positives rose by one or two.
+- `chapter-extract`: stays `medium`. Low fails the rule (haiku: 1 matched fact against 9 at high). Medium is also under 85% of high on haiku (7 of 9 facts, 7 of 10 threads), but two items cannot carry a raise to high (luna matched more threads at medium than at high), so the value is kept.
+- Also from M0, outside this rule: `DRAFT_MAX_TOKENS` 16000 → 32000. At 16000, haiku's high-effort draft ran out of tokens before any text in 8 of 13 calls; medium effort avoided that but raised must-fix counts and added a T2 failure, so the effort stays high.
 
 ---
 

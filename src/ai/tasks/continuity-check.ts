@@ -176,7 +176,9 @@ function scenePlanSection(plan: ContinuityInput['scenePlan']): string[] {
 
 export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> = {
   name: 'continuity-check',
-  effort: 'high',
+  // Stage 0 effort tests (docs/eval/harness/2026-10-20-stage0-baseline.md): low found as many
+  // planted contradictions as high on both models, with no trap false positives.
+  effort: 'low',
   maxTokens: 16000,
   system: CONTINUITY_SYSTEM,
   buildPrompt: (raw) => {
