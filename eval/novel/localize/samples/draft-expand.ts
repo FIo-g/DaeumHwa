@@ -6,6 +6,8 @@ export const draftExpandSample = buildExpandPrompt({
   scene: 'Mina stood at the gate. She counted the bells.',
   after: 'Jun opened the gate.',
   targetChars: 2000,
+  instructions:
+    'Mina waits at the gate. Do not use the word "smirk". End the chapter on one line of dialogue.',
   styleCards: [
     {
       name: 'Mina Park speech',

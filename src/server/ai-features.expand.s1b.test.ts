@@ -188,10 +188,61 @@ describe('draft expansion', () => {
       {
         kind: 'continue-failed',
         reason: 'EXPAND_REJECTED',
-        detail: '짧다.',
+        detail: 'short: 짧다.',
         message: '이어쓰기 실패',
       },
     ])
+  })
+
+  it('names the failed check and keeps 300 characters of the rewrite in the warning', async () => {
+    const note = `${grown('가')}\n\n다음은 분량을 늘린 장면입니다.`
+    const client = new FakeAiClient({
+      overrides: {
+        'draft-chapter': () => DRAFT,
+        'draft-expand': () => note,
+      },
+    })
+    const { runId, textStream, done } = await startDraft(db, actor, draftInput(), client)
+    await readAll(textStream)
+    await done
+
+    const output = (await outputOf(runId)).output as {
+      warnings: { reason: string; detail: string }[]
+    }
+    expect(output.warnings.length).toBeGreaterThan(0)
+    for (const warning of output.warnings) {
+      expect(warning.reason).toBe('EXPAND_REJECTED')
+      expect(warning.detail).toBe(`note: ${note.slice(0, 300)}`)
+    }
+  })
+
+  it('sends the author instructions in every expansion prompt', async () => {
+    const instructions = "'입꼬리'라는 말은 쓰지 않는다. 회차는 대사 한 줄로 끝낸다."
+    const client = new FakeAiClient({
+      overrides: {
+        'draft-chapter': () => DRAFT,
+        'draft-expand': () => grown('가'),
+      },
+    })
+    const spy = vi.spyOn(client, 'streamText')
+    const { textStream, done } = await startDraft(
+      db,
+      actor,
+      { ...draftInput(), instructions },
+      client,
+    )
+    await readAll(textStream)
+    await done
+
+    const prompts = spy.mock.calls
+      .filter((c) => c[0].task.name === 'draft-expand')
+      .map((c) => c[0].prompt)
+    expect(prompts).toHaveLength(3)
+    for (const prompt of prompts) {
+      expect(prompt).toContain(`<instructions>\n${instructions}\n</instructions>`)
+      expect(prompt.indexOf('</style_cards>')).toBeLessThan(prompt.indexOf('<instructions>'))
+      expect(prompt.indexOf('</instructions>')).toBeLessThan(prompt.indexOf('<before>'))
+    }
   })
 
   it('records EXPAND_ERROR for a thrown expansion and keeps the other spans', async () => {

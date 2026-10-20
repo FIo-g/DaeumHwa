@@ -77,7 +77,7 @@ const COMMENTARY_MARKERS = [
 ]
 
 // Quoted spans are dialogue, where a character may well say "알려 주시면" or "let me know".
-const QUOTED = /"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』/g
+export const QUOTED = /"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』/g
 
 /** True when a continuation answer is a note to the author rather than story text. */
 export function isContinuationCommentary(text: string): boolean {
@@ -104,14 +104,19 @@ export type DraftWarning = {
  * `reason` is the AppError code, 'UNKNOWN' for a non-AppError, 'EMPTY' for an empty answer, or
  * 'COMMENTARY' for a note to the author instead of story text. A scene expansion (stage 1b) uses
  * 'EXPAND_ERROR' for a failed span (`detail` holds the AppError code or the message) and
- * 'EXPAND_REJECTED' for a rewrite that acceptExpansion did not pass (`detail` holds the rewrite).
- * `detail` is cut to 300 characters.
+ * 'EXPAND_REJECTED' for a rewrite that acceptExpansion did not pass (`detail` is the failed check,
+ * a colon and a space, then the first 300 characters of the rewrite; the caller cuts it and passes
+ * `maxChars` to keep the prefix). Any other `detail` is cut to 300 characters.
  */
-export function continueFailedWarning(reason: string, detail: string): DraftWarning {
+export function continueFailedWarning(
+  reason: string,
+  detail: string,
+  maxChars: number = DETAIL_MAX_CHARS,
+): DraftWarning {
   return {
     kind: 'continue-failed',
     reason,
-    detail: detail.slice(0, DETAIL_MAX_CHARS),
+    detail: detail.slice(0, maxChars),
     message: '이어쓰기 실패',
   }
 }

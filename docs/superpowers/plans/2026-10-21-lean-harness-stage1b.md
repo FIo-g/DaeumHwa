@@ -48,8 +48,8 @@
 **Interfaces:**
 - `sceneSpans(text: string, fallbackCount: number): SceneRange[]`: spans between break lines (break lines and the blank lines around them excluded); with none, the paragraphs (blank-line separated) split into `max(1, fallbackCount)` runs of nearly equal paragraph counts, earlier runs one larger; spans are in order and cover every paragraph exactly once.
 - `spliceSpans(text: string, replacements: { span: SceneRange; text: string }[]): string`: applies back to front; everything outside the given spans is unchanged.
-- `type DraftExpandInput = { before: string; scene: string; after: string; targetChars: number; styleCards: DraftPromptInput['styleCards'] }`.
-- `DRAFT_EXPAND_SYSTEM`: the probe's system text, verbatim:
+- `type DraftExpandInput = { before: string; scene: string; after: string; targetChars: number; styleCards: DraftPromptInput['styleCards']; instructions: string }`.
+- `DRAFT_EXPAND_SYSTEM`: the probe's system text (the last line stays last), with the added lines below:
 
 ```
 너는 웹소설 장면을 늘려 다시 쓰는 보조 작가다.
@@ -61,14 +61,15 @@
 - 해설이나 질문 없이 늘린 장면 본문만 출력한다.
 ```
 
-  Plus one line placed before the last line: `- <style_cards>가 있으면 그 말투와 규칙을 지킨다.`
-- `buildExpandPrompt(input)`: `<style_cards>` (rendered as the draft renders them, `(없음)` when empty), `<before>` (the last two paragraphs of the previous span, or `(없음)`), `<scene>`, `<after>` (the first paragraph of the next span, or `(없음)`), `<length>공백 포함 약 {targetChars}자 (지금 {draftCharCount(scene)}자)</length>`, joined by blank lines, every block neutralized.
+  Plus these lines placed before the last line, in this order: `- <style_cards>가 있으면 그 말투와 규칙을 지킨다.`; `- <instructions>는 작가가 이 회차 전체에 준 지시다. 금지 표현, 말투, 회차 끝 방식 같은 규칙을 지킨다. <instructions>에 있어도 <scene>에 없는 사건은 더하지 않는다.`; the shared `TAG_DATA_RULE`. (Review fix F10: the author's instructions reach the expansion.)
+- `buildExpandPrompt(input)`: `<style_cards>` (rendered as the draft renders them, `(없음)` when empty), `<instructions>` (`(없음)` when empty), `<before>` (the last two paragraphs of the previous span, or `(없음)`), `<scene>`, `<after>` (the first paragraph of the next span, or `(없음)`), `<length>공백 포함 약 {targetChars}자 (지금 {draftCharCount(scene)}자)</length>`, joined by blank lines, every block neutralized.
 - Constants: `EXPAND_EFFORT = 'low'`, `EXPAND_MAX_TOKENS = 8000`.
-- `acceptExpansion(original: string, expanded: string): boolean`. It is false when any of these holds:
-  - `expanded` is not longer than `original` by at least 5%;
-  - it holds a break line;
-  - `isContinuationCommentary(expanded)`;
-  - any sentence of 8 or more characters appears twice in `expanded` but at most once in `original`.
+- `expansionRejection(original, expanded): null | 'short' | 'break' | 'note' | 'repeat'`, the first check that fails, in this order; `acceptExpansion(original, expanded): boolean` is `expansionRejection(...) === null`:
+  - `'short'`: `expanded` is not longer than `original` by at least 5%;
+  - `'break'`: it holds a break line;
+  - `'note'`: a note to the author, read only in the sentences of `expanded` that are not sentences of `original`, outside quoted dialogue: `isContinuationCommentary` or a local `EXPAND_NOTE_MARKERS` (echoed input tags, a line announcing the text, a bare length note, the English forms). The shared `COMMENTARY_MARKERS` are unchanged;
+  - `'repeat'`: any sentence of 8 or more characters appears twice in `expanded` but at most once in `original`.
+  The EXPAND_REJECTED warning's `detail` is `"<check>: "` plus the first 300 characters of the rewrite. (Review fixes F2, F3.)
 
 - [ ] **Step 1: Write the failing tests:**
   - spans with two `***` lines give three spans without the break lines;

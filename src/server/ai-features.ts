@@ -40,11 +40,11 @@ import {
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
 import { draftPlanTask, PLAN_MAX_SCENES } from '@/ai/tasks/draft-plan'
 import {
-  acceptExpansion,
   buildExpandPrompt,
   DRAFT_EXPAND_SYSTEM,
   EXPAND_EFFORT,
   EXPAND_MAX_TOKENS,
+  expansionRejection,
 } from '@/ai/tasks/draft-expand'
 import type { Db } from '@/db/client'
 import { aiRuns, chapters } from '@/db/schema'
@@ -122,6 +122,8 @@ const MAX_EXPAND_SPANS = 4
 const EXPAND_CONCURRENCY = 2
 /** A span under this share of its target is short enough to rewrite. */
 const EXPAND_SHORT_RATIO = 0.9
+/** Characters of a refused rewrite kept in its EXPAND_REJECTED warning, after the failed check. */
+const REJECTED_PREVIEW_CHARS = 300
 /** Joins the scenes of a `scenes`-mode draft. The model is not asked to write it. */
 const SCENE_SEPARATOR = '\n\n***\n\n'
 /** Foreign-script repair (eval only): model calls at most, and sentences sent in one call. */
@@ -849,8 +851,8 @@ type ExpandOutcome =
  * of the span before and the start of the span after as context. A span is not started with less
  * than MIN_CONTINUATION_MS of the budget left; it keeps its text and records no warning. An
  * expansion that passes acceptExpansion is spliced in; any other span keeps its text and records a
- * warning. The spliced text is stored in the first run row. Only a user abort rejects, and then
- * nothing is stored and no further span is started.
+ * warning whose detail starts with the failed check. The spliced text is stored in the first run
+ * row. Only a user abort rejects, and then nothing is stored and no further span is started.
  */
 async function expandDraft(
   ctx: DraftContext,
@@ -938,6 +940,7 @@ async function expandDraft(
               after,
               targetChars: share,
               styleCards: promptInput.styleCards,
+              instructions: promptInput.instructions,
             }),
           },
           client,
@@ -975,10 +978,15 @@ async function expandDraft(
           ? error.message
           : String(error)
       warnings.push(continueFailedWarning('EXPAND_ERROR', detail))
-    } else if (!acceptExpansion(text, outcome.value)) {
-      warnings.push(continueFailedWarning('EXPAND_REJECTED', outcome.value))
     } else {
-      replacements.push({ span: spans[index], text: outcome.value })
+      const rejection = expansionRejection(text, outcome.value)
+      if (rejection === null) {
+        replacements.push({ span: spans[index], text: outcome.value })
+      } else {
+        // The check name goes in front of the rewrite, so the warning says why it was refused.
+        const detail = `${rejection}: ${outcome.value.slice(0, REJECTED_PREVIEW_CHARS)}`
+        warnings.push(continueFailedWarning('EXPAND_REJECTED', detail, detail.length))
+      }
     }
   })
 
