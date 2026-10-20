@@ -874,10 +874,10 @@ type ExpandOutcome =
 
 /**
  * The expand path (default). The first text is split into scene spans (sceneSpans). Each span under
- * under its share of the target is rewritten in place, asked for EXPAND_ASK_RATIO times the share,
+ * its share of the target is rewritten in place, asked for EXPAND_ASK_RATIO times the share,
  * EXPAND_CONCURRENCY at a time, with the end of the span before and the start of the span after as
- * context. A span is not started with less
- * than MIN_CONTINUATION_MS of the budget left; it keeps its text and records no warning. An
+ * context. A span is not started with less than MIN_CONTINUATION_MS of the budget left; it keeps
+ * its text and records no warning. An
  * expansion that passes acceptExpansion is spliced in; any other span keeps its text and records a
  * warning whose detail starts with the failed check. The spliced text is stored in the first run
  * row. Only a user abort rejects, and then nothing is stored and no further span is started.
