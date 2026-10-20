@@ -26,6 +26,7 @@ const DOMAIN_TABLES = [
   'relations',
   'naming_rules',
   'style_cards',
+  'author_directives',
   'proposals',
   'change_log',
   'issues',

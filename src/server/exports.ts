@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import {
   aiRuns,
+  authorDirectives,
   changeLog,
   chapterVersions,
   chapters,
@@ -152,6 +153,11 @@ export async function buildExportPayload(
         .from(styleCards)
         .where(eq(styleCards.workId, workId))
         .orderBy(asc(styleCards.createdAt), asc(styleCards.id))
+      const authorDirectiveRows = await tx
+        .select()
+        .from(authorDirectives)
+        .where(eq(authorDirectives.workId, workId))
+        .orderBy(asc(authorDirectives.createdAt), asc(authorDirectives.id))
       const changeRows = await tx
         .select()
         .from(changeLog)
@@ -178,6 +184,7 @@ export async function buildExportPayload(
         relations: relationRows,
         namingRules: namingRuleRows,
         styleCards: styleCardRows,
+        authorDirectives: authorDirectiveRows,
         comments: commentRows,
         issues: issueRows,
         proposals: proposalRows,

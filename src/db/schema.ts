@@ -21,6 +21,11 @@ import type {
   ChangeAction,
   ChangeTargetTable,
   ChapterStatus,
+  ContextTier,
+  DirectiveKind,
+  DirectiveScope,
+  DirectiveSource,
+  DirectiveStatus,
   EntryKind,
   FactSourceType,
   FactStatus,
@@ -36,6 +41,7 @@ import type {
   Role,
   ScheduleKind,
   Severity,
+  SpeechLevel,
   ThreadEventKind,
   ThreadStatus,
   UsageEventKind,
@@ -164,6 +170,7 @@ export const wikiEntries = pgTable(
       .notNull()
       .default(sql`'[]'::jsonb`),
     createdByType: text('created_by_type').$type<ProposerType>().notNull().default('author'),
+    contextTier: text('context_tier').$type<ContextTier>().notNull().default('mention'),
     archivedAt: archivedAtColumn(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
@@ -203,6 +210,7 @@ export const facts = pgTable(
     evidence: text('evidence').notNull().default(''),
     validFromPosition: integer('valid_from_position'),
     validToPosition: integer('valid_to_position'),
+    revealAtPosition: integer('reveal_at_position'),
     supersededByFactId: uuid('superseded_by_fact_id'),
     createdByType: text('created_by_type').$type<ProposerType>().notNull().default('author'),
     archivedAt: archivedAtColumn(),
@@ -327,6 +335,31 @@ export const styleCards = pgTable(
     updatedAt: updatedAtColumn(),
   },
   (t) => [index('style_cards_work_idx').on(t.workId)],
+)
+
+export const authorDirectives = pgTable(
+  'author_directives',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workId: uuid('work_id')
+      .notNull()
+      .references(() => works.id, { onDelete: 'cascade' }),
+    entryId: uuid('entry_id').references(() => wikiEntries.id, { onDelete: 'set null' }),
+    scope: text('scope').$type<DirectiveScope>().notNull(),
+    kind: text('kind').$type<DirectiveKind>().notNull(),
+    text: text('text').notNull(),
+    pattern: text('pattern'),
+    speechLevel: text('speech_level').$type<SpeechLevel>(),
+    targetChars: integer('target_chars'),
+    chapterPosition: integer('chapter_position'),
+    source: text('source').$type<DirectiveSource>().notNull(),
+    status: text('status').$type<DirectiveStatus>().notNull().default('active'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    archivedAt: archivedAtColumn(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (t) => [index('author_directives_work_idx').on(t.workId)],
 )
 
 export const proposals = pgTable(

@@ -1,10 +1,25 @@
 'use server'
 
 import { z } from 'zod'
-import type { EntryRow, FactRow, NamingRuleRow, StyleCardRow } from '@/db/types'
-import { ENTRY_KINDS, FACT_SOURCE_TYPES, FACT_STATUSES } from '@/db/types'
+import type { AuthorDirectiveRow, EntryRow, FactRow, NamingRuleRow, StyleCardRow } from '@/db/types'
+import {
+  DIRECTIVE_KINDS,
+  DIRECTIVE_SCOPES,
+  DIRECTIVE_SOURCES,
+  DIRECTIVE_STATUSES,
+  ENTRY_KINDS,
+  FACT_SOURCE_TYPES,
+  FACT_STATUSES,
+  SPEECH_LEVELS,
+} from '@/db/types'
 import type { ActionResult } from '@/lib/result'
 import { revalidateWork, withAction } from '@/server/action-helpers'
+import {
+  archiveDirective,
+  createDirective,
+  listDirectives,
+  updateDirective,
+} from '@/server/directives'
 import { archiveFact, createFact, supersedeFact, updateFact } from '@/server/facts'
 import { archiveNamingRule, createNamingRule, updateNamingRule } from '@/server/naming'
 import { archiveStyleCard, createStyleCard, updateStyleCard } from '@/server/styles'
@@ -74,6 +89,27 @@ const StyleCardFields = z.object({
 const CreateStyleCardSchema = StyleCardFields.extend({ workId: z.uuid() })
 const UpdateStyleCardSchema = StyleCardFields.partial().extend({ cardId: z.uuid() })
 const CardIdSchema = z.object({ cardId: z.uuid() })
+
+const DirectiveFields = z.object({
+  scope: z.enum(DIRECTIVE_SCOPES),
+  kind: z.enum(DIRECTIVE_KINDS),
+  text: z.string().max(300),
+  entryId: z.uuid().nullable().optional(),
+  chapterPosition: z.number().int().nullable().optional(),
+  pattern: z.string().max(100).nullable().optional(),
+  speechLevel: z.enum(SPEECH_LEVELS).nullable().optional(),
+  targetChars: z.number().int().nullable().optional(),
+})
+
+const CreateDirectiveSchema = DirectiveFields.extend({
+  workId: z.uuid(),
+  source: z.enum(DIRECTIVE_SOURCES),
+})
+const UpdateDirectiveSchema = DirectiveFields.partial().extend({
+  directiveId: z.uuid(),
+  status: z.enum(DIRECTIVE_STATUSES).optional(),
+})
+const DirectiveIdSchema = z.object({ directiveId: z.uuid() })
 
 // ---- Entries ----
 
@@ -210,5 +246,49 @@ export async function archiveStyleCardAction(input: unknown): Promise<ActionResu
     const card = await archiveStyleCard(db, actor, cardId)
     revalidateWork(card.workId)
     return card
+  })
+}
+
+// ---- Author requests ----
+
+export async function listDirectivesAction(
+  input: unknown,
+): Promise<ActionResult<(AuthorDirectiveRow & { entryName: string | null })[]>> {
+  return withAction(async (db, actor) => {
+    const { workId } = z.object({ workId: z.uuid() }).parse(input)
+    return listDirectives(db, actor, workId)
+  })
+}
+
+export async function createDirectiveAction(
+  input: unknown,
+): Promise<ActionResult<AuthorDirectiveRow>> {
+  return withAction(async (db, actor) => {
+    const data = CreateDirectiveSchema.parse(input)
+    const row = await createDirective(db, actor, data)
+    revalidateWork(row.workId)
+    return row
+  })
+}
+
+export async function updateDirectiveAction(
+  input: unknown,
+): Promise<ActionResult<AuthorDirectiveRow>> {
+  return withAction(async (db, actor) => {
+    const { directiveId, ...patch } = UpdateDirectiveSchema.parse(input)
+    const row = await updateDirective(db, actor, directiveId, patch)
+    revalidateWork(row.workId)
+    return row
+  })
+}
+
+export async function archiveDirectiveAction(
+  input: unknown,
+): Promise<ActionResult<AuthorDirectiveRow>> {
+  return withAction(async (db, actor) => {
+    const { directiveId } = DirectiveIdSchema.parse(input)
+    const row = await archiveDirective(db, actor, directiveId)
+    revalidateWork(row.workId)
+    return row
   })
 }

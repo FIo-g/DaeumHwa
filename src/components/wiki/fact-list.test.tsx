@@ -39,6 +39,7 @@ function fact(overrides: Partial<FactView>): FactView {
     evidence: '검을 뽑았다',
     validFromPosition: null,
     validToPosition: null,
+    revealAtPosition: null,
     supersededByFactId: null,
     createdByType: 'author',
     archivedAt: null,

@@ -18,6 +18,7 @@ export const CHANGE_TARGET_LABEL: Record<ChangeTargetTable, string> = {
   naming_rules: '표기',
   style_cards: '문체 카드',
   chapters: '회차 요약',
+  author_directives: '작가 요청',
 }
 
 export const PROPOSER_LABEL: Record<ProposerType, string> = {

@@ -43,6 +43,13 @@
       "when": 1792493951821,
       "tag": "0005_eager_frog_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792511594357,
+      "tag": "0006_bright_guardian",
+      "breakpoints": true
     }
   ]
 }
