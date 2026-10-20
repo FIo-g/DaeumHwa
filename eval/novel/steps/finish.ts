@@ -497,6 +497,19 @@ export function timeoutSummary(calls: CallRecord[]): {
 }
 
 /**
+ * Output tokens of one response. A call can hold several Ollama attempts (the plain-JSON retry), and
+ * its usage is their sum. The largest attempt is used when every attempt reports evalCount; otherwise
+ * the call usage. Null when the call has no usage.
+ */
+function responseOutputTokens(call: CallRecord): number | null {
+  const attempts = call.ollama?.attempts ?? []
+  if (attempts.length > 0 && attempts.every((a) => a.evalCount !== null)) {
+    return Math.max(...attempts.map((a) => a.evalCount ?? 0))
+  }
+  return call.usage?.outputTokens ?? null
+}
+
+/**
  * Calls cut off by the output cap, and calls whose output went over the task's own cap, per task.
  * Only calls that record their task limits count; older records are skipped. Null when none does.
  */
@@ -515,7 +528,8 @@ export function outputCapSummary(calls: CallRecord[]): {
       cutOff.total += 1
       cutOff.byTask[call.task] = (cutOff.byTask[call.task] ?? 0) + 1
     }
-    if (call.usage !== null && call.usage.outputTokens > taskCap) {
+    const response = responseOutputTokens(call)
+    if (response !== null && response > taskCap) {
       overTaskCap.total += 1
       overTaskCap.byTask[call.task] = (overTaskCap.byTask[call.task] ?? 0) + 1
     }

@@ -87,6 +87,38 @@ describe('outputCapSummary', () => {
     expect(summary?.cutOff.total).toBe(0)
   })
 
+  it('compares each Ollama attempt to the task cap, not the summed retries', () => {
+    // A plain-JSON retry adds its tokens to the call usage. Each response stayed under 2000.
+    const attempt = (n: number, evalCount: number) => ({
+      task: 'interview-question',
+      model: 'qwen',
+      attempt: n,
+      done: true,
+      doneReason: 'stop',
+      loadMs: null,
+      promptEvalMs: null,
+      evalMs: null,
+      totalMs: null,
+      otherMs: null,
+      promptEvalCount: null,
+      evalCount,
+      thinkingChunks: 0,
+      thinkingChars: 0,
+    })
+    const retried = {
+      task: 'interview-question',
+      taskMaxTokens: 2000,
+      usage: { inputTokens: 1, outputTokens: 2300 },
+      ollama: {
+        attempts: [attempt(1, 1200), attempt(2, 1100)],
+        unaccountedMs: null,
+        promptCacheSuspected: false,
+      },
+    } as Partial<CallRecord>
+    expect(outputCapSummary([call(retried)])?.overTaskCap.total).toBe(0)
+    expect(outputCapSummary([call({ ...retried, ollama: undefined })])?.overTaskCap.total).toBe(1)
+  })
+
   it('a call with null usage is not counted as over', () => {
     const summary = outputCapSummary([call({ error: CUT, usage: null })])
     expect(summary?.cutOff.total).toBe(1)
