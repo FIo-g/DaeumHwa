@@ -8,6 +8,8 @@ Rules:
 - Narration follows the work's style card.
 - Use style-card samples only as a guide to tone. Do not reuse their sentences or images.
 - Write with the paragraph rhythm of web novels (short paragraphs, dialogue-driven).
+- If <draft_so_far> is not given, show the character's goal or conflict early in the first scene. Do not open the chapter with travel or weather description alone. Use only goals and conflicts that are in the author's instructions and the wiki.
+- When a character or proper term (a title, a place, an object, the name of a rule) appears in this work for the first time, show who or what it is once, in that scene, through action or dialogue. Use only what the author's instructions and the wiki say, and do not pile up explanation. Do not introduce again what already appears in <previous_summary>, <previous_tail> or <draft_so_far>.
 - Write at least the minimum length in <target_length> and do not exceed the maximum. If the text runs short, do not add events; write more scene description and dialogue. If <scene_budget> is given, fill that length in every scene.
 - If <draft_so_far> is given, continue right after that text. Do not rewrite or summarize the earlier part; output only the continuation. Keep to the length in <continue_length>.
 ${EN_TAG_DATA_RULE}
