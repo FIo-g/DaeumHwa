@@ -84,9 +84,15 @@ export function parseEnglishNumber(raw: string): number | null {
 
 // 1-3 digits or an English number word 0-99. Teens come before the units so "sixteen" is not "six".
 const EN_NUM =
-  '(?:\\d{1,3}|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\\s](?:one|two|three|four|five|six|seven|eight|nine))?' +
+  '(?:(?<![\\d,.])\\d{1,3}|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\\s](?:one|two|three|four|five|six|seven|eight|nine))?' +
   '|nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|twelve|eleven|ten|nine|eight|seven|six|five|four|three|two|one|zero)'
 const en = (source: string) => new RegExp(source, 'gi')
+// A number that is the first end of a range: "12~13", "12에서 13", "nine or ten". The number after
+// it is then not a single value, so it is skipped. No g flag: used with .test().
+const RANGE_BEFORE = new RegExp(
+  '(?:\\b' + EN_NUM + ')\\s*(?:[~〜～–—-]|,|에서|부터|\\s(?:or|to|and)\\s)\\s*$',
+  'i',
+)
 
 type Pattern = { re: RegExp; needsSubject: boolean }
 const subjectPattern = (re: RegExp): Pattern => ({ re, needsSubject: true })
@@ -96,25 +102,27 @@ const subjectPattern = (re: RegExp): Pattern => ({ re, needsSubject: true })
 // flag or named groups (tsconfig target is ES2017). Every pattern is global (matchAll).
 const PATTERNS: Record<QuantityKind, Pattern[]> = {
   age: [
-    { re: /()(\d{1,3})\s*살/g, needsSubject: false },
+    { re: /()(?<![\d,.])(\d{1,3})\s*살/g, needsSubject: false },
     subjectPattern(en(`\\b()(${EN_NUM})\\s+years?\\s+old\\b`)),
     subjectPattern(en(`\\b(aged\\s+)(${EN_NUM})\\b`)),
   ],
   year: [
     // 3-4 digits only (a two-digit "12년" is a duration), not "413년 동안", "413년 만에", "1990년대".
     subjectPattern(
-      /()(\d{3,4})\s*년(?!대)(?!\s*(?:전|뒤|후|간|동안|째|만에|쯤|가량|이상|이하|된|묵은|넘))/g,
+      /()(?<![\d,.])(\d{3,4})\s*년(?!대)(?!\s*(?:전|뒤|후|간|동안|째|만에|쯤|가량|이상|이하|된|묵은|넘))/g,
     ),
     subjectPattern(
       en(
-        '\\b(in\\s+(?:the\\s+year\\s+)?)(\\d{3,4})\\b(?!\\s*(?:years?|days?|months?|weeks?|miles?|paces?|steps?|men|people|soldiers|coins|times)\\b)',
+        '\\b(in\\s+(?:the\\s+year\\s+)?)(?<![\\d,.])(\\d{3,4})\\b(?!\\s*(?:years?|days?|months?|weeks?|miles?|paces?|steps?|men|people|soldiers|coins|times)\\b)',
       ),
     ),
-    subjectPattern(en('\\b(year\\s+)(\\d{3,4})\\b')),
+    subjectPattern(en('\\b(year\\s+)(?<![\\d,.])(\\d{3,4})\\b')),
   ],
   floor: [
-    subjectPattern(/()(\d{1,3})\s*층(?:짜리|\s*높이|\s*규모|으로\s*(?:솟|이루어|지어|되어|된))/g),
-    subjectPattern(/((?:모두|전부|총|통틀어)\s*)(\d{1,3})\s*층/g),
+    subjectPattern(
+      /()(?<![\d,.])(\d{1,3})\s*층(?:짜리|\s*높이|\s*규모|으로\s*(?:솟|이루어|지어|되어|된))/g,
+    ),
+    subjectPattern(/((?:모두|전부|총|통틀어)\s*)(?<![\d,.])(\d{1,3})\s*층/g),
     subjectPattern(en(`\\b()(${EN_NUM})-stor(?:y|ey)\\b`)),
     subjectPattern(en(`\\b()(${EN_NUM})\\s+(?:stories|storeys|floors|levels)\\s+(?:tall|high)\\b`)),
     subjectPattern(
@@ -122,8 +130,8 @@ const PATTERNS: Record<QuantityKind, Pattern[]> = {
     ),
   ],
   person: [
-    subjectPattern(/((?:모두|전부|총|통틀어)\s*)(\d{1,3})\s*명/g),
-    subjectPattern(/()(\d{1,3})\s*명(?:뿐|밖에)/g),
+    subjectPattern(/((?:모두|전부|총|통틀어)\s*)(?<![\d,.])(\d{1,3})\s*명/g),
+    subjectPattern(/()(?<![\d,.])(\d{1,3})\s*명(?:뿐|밖에)/g),
     subjectPattern(
       en(
         `\\b((?:all|only|exactly|just|a\\s+total\\s+of|total\\s+of)\\s+)(${EN_NUM})\\s+(?:people|persons|men|women|members|soldiers|guards)\\b`,
@@ -145,6 +153,13 @@ export function readQuantities(text: string, kind: QuantityKind): Quantity[] {
       if (value === null) continue
       const start = match.index ?? 0
       const tokenStart = start + match[1].length
+      const before = text.slice(0, tokenStart)
+      if (RANGE_BEFORE.test(before)) continue
+      // A part of a longer number: "hundred and twenty", "1,200", "one hundred and five".
+      if (/\b(?:hundred|thousand|million)(?:\s+and)?[\s-]*$/i.test(before)) continue
+      if (/\d[,.]$/.test(before)) continue
+      if (/^[\s-]+(?:hundred|thousand|million)\b/i.test(text.slice(tokenStart + token.length)))
+        continue
       const quantity: Quantity = {
         kind,
         value,

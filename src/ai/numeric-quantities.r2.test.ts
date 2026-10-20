@@ -181,3 +181,39 @@ describe('QUANTITY_LABEL', () => {
     expect(QUANTITY_LABEL.person).toEqual({ label: '인원', unit: '명' })
   })
 })
+
+describe('readQuantities: whole numbers only', () => {
+  it('does not read a token that starts inside a longer number', () => {
+    expect(readQuantities('새벽 호위대는 3000명뿐이었다.', 'person')).toEqual([])
+    expect(readQuantities('새벽 호위대는 1,000명밖에 없었다.', 'person')).toEqual([])
+    expect(readQuantities('잿빛 왕국은 1,412년에 건국되었다.', 'year')).toEqual([])
+    expect(readQuantities('잿빛 왕국은 12345년에 건국되었다.', 'year')).toEqual([])
+    expect(readQuantities('Mara Voss was 1,020 years old.', 'age')).toEqual([])
+    expect(readQuantities('마라는 1020살이다.', 'age')).toEqual([])
+  })
+
+  it('still reads the whole number', () => {
+    expect(readQuantities('잿빛 왕국은 1412년에 건국되었다.', 'year')[0]).toMatchObject({
+      value: 1412,
+      token: '1412',
+    })
+    expect(readQuantities('새벽 호위대는 900명뿐이었다.', 'person')[0].value).toBe(900)
+  })
+
+  it('gives no single value for a range', () => {
+    expect(readQuantities('은빛 등대는 12~13층 높이로 솟아 있었다.', 'floor')).toEqual([])
+    expect(readQuantities('은빛 등대는 12에서 13층 높이였다.', 'floor')).toEqual([])
+    expect(readQuantities('잿빛 왕국은 412~413년 사이에 건국되었다.', 'year')).toEqual([])
+    expect(readQuantities('새벽 호위대는 7~8명뿐이었다.', 'person')).toEqual([])
+    expect(readQuantities('Harrow Keep was nine or ten stories tall.', 'floor')).toEqual([])
+    expect(readQuantities('Harrow Keep was nine to ten stories tall.', 'floor')).toEqual([])
+  })
+
+  it('does not read a number of a hundred or more written in words', () => {
+    expect(readQuantities('Mara Voss was a hundred and twenty years old.', 'age')).toEqual([])
+    expect(readQuantities('Mara Voss was one hundred and twenty years old.', 'age')).toEqual([])
+    expect(readQuantities('Harrow Keep was a hundred and two stories tall.', 'floor')).toEqual([])
+    expect(readQuantities('three hundred twenty years old', 'age')).toEqual([])
+    expect(readQuantities('aged one hundred and five', 'age')).toEqual([])
+  })
+})

@@ -327,3 +327,39 @@ describe('through continuityCheckTask.postProcess', () => {
     })
   })
 })
+
+describe('findNumericFactMismatches: whole numbers, ranges and large number words', () => {
+  it('a range gives no hit, whatever value it contains', () => {
+    expect(run('은빛 등대는 12~13층 높이로 솟아 있었다.', tower())).toEqual([])
+    expect(run('잿빛 왕국은 412~413년 사이에 건국되었다.', kingdom())).toEqual([])
+    expect(run('새벽 호위대는 7~8명뿐이었다.', guard())).toEqual([])
+    expect(run('Harrow Keep was nine or ten stories tall.', keep())).toEqual([])
+  })
+
+  it('a number inside a longer number gives no hit', () => {
+    expect(run('새벽 호위대는 3000명뿐이었다.', guard())).toEqual([])
+    expect(
+      run('잿빛 왕국은 1,412년에 건국되었다.', kingdom(['잿빛 왕국은 1412년에 건국되었다.'])),
+    ).toEqual([])
+    expect(
+      run(
+        '새벽 호위대는 모두 12명이었다.',
+        makePack([
+          {
+            name: '새벽 호위대',
+            aliases: ['호위대'],
+            facts: asFacts(['새벽 호위대는 2,000명뿐이다.']),
+          },
+        ]),
+      ),
+    ).toEqual([])
+  })
+
+  it('a hundred or more in English words gives no hit', () => {
+    const pack = mara(['Mara Voss is 120 years old.'])
+    expect(run('Mara Voss was a hundred and twenty years old.', pack)).toEqual([])
+    const wordPack = mara(['Mara Voss is one hundred and twenty years old.'])
+    expect(run('Mara Voss was 120 years old.', wordPack)).toEqual([])
+    expect(run('Harrow Keep was a hundred and two stories tall.', keep())).toEqual([])
+  })
+})
