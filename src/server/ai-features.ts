@@ -78,6 +78,7 @@ import { createSceneEdgeFilter, sceneSpans, type SceneRange, spliceSpans } from 
 import { type DraftFlag, findDraftFlags } from '@/lib/korean/style-copy'
 import { sentenceIn, splitSentences } from '@/lib/korean/sentences'
 import { splitParagraphs } from '@/lib/korean/paragraphs'
+import { DRAFT_ERROR_MARK, DRAFT_REPLACE_MARK } from '@/lib/draft-stream'
 import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
 import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
@@ -126,6 +127,8 @@ const EXPAND_SHORT_RATIO = 0.9
 const REJECTED_PREVIEW_CHARS = 300
 /** Joins the scenes of a `scenes`-mode draft. The model is not asked to write it. */
 const SCENE_SEPARATOR = '\n\n***\n\n'
+/** The two marks of the draft stream (src/lib/draft-stream.ts). They never belong in draft text. */
+const STREAM_MARKS = new RegExp(`[${DRAFT_REPLACE_MARK}${DRAFT_ERROR_MARK}]`, 'g')
 /** Foreign-script repair (eval only): model calls at most, and sentences sent in one call. */
 const MAX_REPAIR_ROUNDS = 2
 const MAX_REPAIR_SENTENCES = 30
@@ -555,6 +558,12 @@ export async function startDraft(
     planEdits?: PlanEdits
     /** Comparison only: `scenes` writes one call per scene. Default from AI_DRAFT_MODE. Needs `plan`. */
     mode?: DraftMode
+    /**
+     * Whether a short draft is filled by rewriting its short scenes (the default). The route sets it
+     * to false for a client that did not ask for the replace record: nothing is expanded then, and
+     * the stream ends after the first text. It does not touch the `continue` length mode.
+     */
+    expandLength?: boolean
   },
   client?: AiClient,
   signal?: AbortSignal,
@@ -684,6 +693,7 @@ export async function startDraft(
     signal,
     startedAt,
     card,
+    expandLength: input.expandLength ?? true,
   }
   const drafted = scenesCard
     ? completeScenes(ctx, first, pipe, scenesCard)
@@ -722,6 +732,13 @@ type DraftContext = {
   startedAt: number
   /** The approved plan card of this draft, or null without one. */
   card: DraftPlanCard | null
+  /** False skips the expand path (the client cannot show a replace record). */
+  expandLength: boolean
+}
+
+/** Removes the stream marks from model text, so the draft framing cannot be confused with prose. */
+function stripStreamMarks(text: string): string {
+  return text.replace(STREAM_MARKS, '')
 }
 
 /** How a short draft is filled (spec 6.4): `expand` by default, `continue` for the append path. */
@@ -746,14 +763,21 @@ async function completeDraft(
 ): Promise<string> {
   let firstText: string
   try {
-    for await (const chunk of first.textStream) pipe.push(chunk)
-    firstText = await first.done
+    for await (const chunk of first.textStream) pipe.push(stripStreamMarks(chunk))
+    const stored = await first.done
+    firstText = stripStreamMarks(stored)
+    // Stored, streamed and (later) replaced text must match, so the run row gets the stripped text.
+    if (firstText !== stored) await replaceRunOutput(ctx.db, first.runId, { text: firstText })
   } catch (error) {
     pipe.fail(error)
     throw error
   }
 
   if (draftLengthModeFromEnv() === 'continue') return continueDraft(ctx, first, pipe, firstText)
+  if (!ctx.expandLength) {
+    pipe.end()
+    return firstText
+  }
   return expandDraft(ctx, first, pipe, firstText)
 }
 
@@ -795,7 +819,7 @@ async function continueDraft(
       },
       client,
     )
-    addition = await cont.done
+    addition = stripStreamMarks(await cont.done)
   } catch (error) {
     if (signal?.aborted) {
       pipe.fail(error)
@@ -1119,7 +1143,7 @@ async function streamScene(
     written.text += out
     pipe.push(out)
   }
-  for await (const chunk of source) send(edges.push(chunk))
+  for await (const chunk of source) send(edges.push(stripStreamMarks(chunk)))
   send(edges.end())
 }
 

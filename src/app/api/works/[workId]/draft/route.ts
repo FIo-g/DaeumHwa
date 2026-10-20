@@ -30,6 +30,9 @@ const DraftBodySchema = z.object({
   plan: DraftPlanCardSchema.optional(),
   planRunId: z.uuid().optional(),
   planEdits: PlanEditsSchema.optional(),
+  // Set by a client that can show the replace record (see src/lib/draft-stream.ts). Without it the
+  // draft is not expanded, so an older panel build never receives a record it cannot read.
+  acceptsReplace: z.boolean().optional(),
 })
 
 const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
@@ -70,6 +73,8 @@ export async function POST(
     return Response.json({ error: '입력값이 올바르지 않습니다.' }, { status: 400 })
   }
 
+  const { acceptsReplace, ...draftInput } = parsed.data
+
   // Aborted by the browser (request.signal) or by the body stream being cancelled.
   const abort = new AbortController()
   const stopOnRequestAbort = () => abort.abort()
@@ -80,7 +85,7 @@ export async function POST(
     const { runId, textStream, done } = await startDraft(
       getDb(),
       { userId: user.id },
-      { workId, ...parsed.data },
+      { workId, ...draftInput, expandLength: acceptsReplace === true },
       undefined,
       abort.signal,
     )

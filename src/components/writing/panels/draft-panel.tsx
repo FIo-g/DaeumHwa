@@ -96,7 +96,12 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       const response = await fetch(`/api/works/${data.workId}/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chapterId: data.chapter.id, entryIds, ...body }),
+        body: JSON.stringify({
+          chapterId: data.chapter.id,
+          entryIds,
+          acceptsReplace: true,
+          ...body,
+        }),
         signal,
       })
       if (!response.ok || !response.body) {

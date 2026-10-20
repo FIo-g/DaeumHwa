@@ -4,6 +4,7 @@
 import { continuityCheckTask } from '@/ai/tasks/continuity-check'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { DRAFT_SYSTEM } from '@/ai/tasks/draft-chapter'
+import { DRAFT_EXPAND_SYSTEM } from '@/ai/tasks/draft-expand'
 import { draftRepairTask } from '@/ai/tasks/draft-repair'
 import { directionAdviceTask } from '@/ai/tasks/direction-advice'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
@@ -44,6 +45,7 @@ const ANSWERS: { task: string; system: string; answer: Answer }[] = [
   { task: 'direction-advice', system: directionAdviceTask.system, answer: adviceAnswer },
   { task: 'style-suggest', system: styleSuggestTask.system, answer: styleAnswer },
   { task: 'draft-chapter', system: DRAFT_SYSTEM, answer: draftAnswer },
+  { task: 'draft-expand', system: DRAFT_EXPAND_SYSTEM, answer: expandAnswer },
   { task: 'draft-repair', system: draftRepairTask.system, answer: () => ({ edits: [] }) },
 ]
 
@@ -53,6 +55,16 @@ const CONTINUE_TEXT = '바람은 밤새 잦아들었다. 아침 빛이 문틈으
 /** The continuation shares the draft system prompt, so it is told apart by its <draft_so_far> section. */
 function draftAnswer(prompt: string): string {
   return prompt.includes('<draft_so_far>') ? CONTINUE_TEXT : DRAFT_TEXT
+}
+
+/** New sentences, all different, that an expansion adds after the scene it was given. */
+const EXPAND_ADDITION =
+  '서윤은 문고리를 잡은 손에 힘을 주었다. 낡은 경첩이 낮게 울었다. 복도 끝에서 희미한 불빛이 흔들렸다.'
+
+/** The scene text followed by a few new sentences, so it grows and passes acceptExpansion. */
+function expandAnswer(prompt: string): string {
+  const scene = section(prompt, 'scene').trim()
+  return `${scene} ${EXPAND_ADDITION}`
 }
 
 /** Answers one request. Throws UnknownSystemError when the system prompt is not a known task. */

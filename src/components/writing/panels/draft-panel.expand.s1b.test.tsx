@@ -109,6 +109,16 @@ afterEach(() => {
 })
 
 describe('DraftPanel with a replaced draft', () => {
+  it('tells the server it understands the replace record', async () => {
+    vi.mocked(fetch).mockResolvedValue(draftResponse(partsStream(['첫 글'])))
+    render(<DraftPanel data={makeData()} api={makeApi()} />)
+    startDraft()
+
+    await screen.findByRole('region', { name: 'AI 초안 미리보기' })
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ acceptsReplace: true })
+  })
+
   it('shows the replaced text after the stream ends', async () => {
     vi.mocked(fetch).mockResolvedValue(
       draftResponse(partsStream(['첫 글', draftReplaceRecord('바뀐 글')])),

@@ -79,6 +79,13 @@ describe('createTextPipe', () => {
     const pipe = createTextPipe()
     pipe.fail(new Error('boom'))
     pipe.replace('late')
-    await expect(collect(pipe.iterable)).rejects.toThrow('boom')
+    // The reader gets every chunk buffered before the failure, so the chunks show what was ignored.
+    const chunks: string[] = []
+    await expect(
+      (async () => {
+        for await (const chunk of pipe.iterable) chunks.push(chunk)
+      })(),
+    ).rejects.toThrow('boom')
+    expect(chunks).toEqual([])
   })
 })

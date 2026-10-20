@@ -350,6 +350,7 @@ describe('DraftPanel plan edits', () => {
     expect(lastDraftBody()).toEqual({
       chapterId: 'c1',
       entryIds: [],
+      acceptsReplace: true,
       instructions: '주인공이 성문을 연다.',
       targetChars: 2500,
     })
