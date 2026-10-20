@@ -47,6 +47,10 @@ describe('isNearDuplicateFact: Korean number words read as digits (P15)', () => 
     ],
     ['잿빛 종루는 구층 석조 종탑이다', '잿빛 종루는 팔층 석조 종탑이다'],
     ['세린은 하루에 두 번 종루에 오른다', '세린은 하루에 세 번 종루에 오른다'],
+    ['종루에는 서른 두 명의 감시관이 있다', '종루에는 2명의 감시관이 있다'],
+    ['잿빛 왕국의 군대는 삼천 오백 명이다', '잿빛 왕국의 군대는 500명이다'],
+    ['잿빛 왕국은 이천 이백 년 동안 이어졌다', '잿빛 왕국은 200년 동안 이어졌다'],
+    ['도윤서는 스물 일곱 살 검사이다', '도윤서는 7살 검사이다'],
   ])('keeps different numbers apart: %s / %s', (a, b) => {
     expect(both(a, b)).toEqual({ ab: false, ba: false })
   })
@@ -64,6 +68,7 @@ describe('isNearDuplicateFact: Korean number words read as digits (P15)', () => 
     ['서윤은 열일곱 살이다.', '서윤은 17세이다.'],
     ['잿빛 종루는 삼 층 석조 종탑이다', '잿빛 종루는 3층 석조 종탑이다'],
     ['종루에는 열명의 감시관이 있다', '종루에는 10명의 감시관이 있다'],
+    ['서윤은 스물 한 살이다.', '서윤은 21살이다.'],
   ])('documented limit, not a duplicate yet: %s / %s', (a, b) => {
     expect(both(a, b)).toEqual({ ab: false, ba: false })
   })

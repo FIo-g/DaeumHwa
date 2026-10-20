@@ -141,6 +141,11 @@ describe('koreanNumbersToDigits', () => {
     ['3층과 19살'],
     ['1화는 입춘 아침'],
     ['한서연은 3년 전에 사라졌다'],
+    ['서른 두 명'],
+    ['스물 일곱 살'],
+    ['스물 한 살'],
+    ['삼천 오백 명'],
+    ['이천 이백 년'],
   ])('keeps text that is not a number before a counter: %s', (input) => {
     expect(koreanNumbersToDigits(input)).toBe(input)
   })

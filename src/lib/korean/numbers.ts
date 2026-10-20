@@ -63,8 +63,11 @@ const NATIVE_PATTERN =
   `|(?:${alternation(NATIVE_UNITS.keys())})`
 const SINO_PATTERN = `[${[...SINO_DIGITS.keys(), ...SINO_UNITS.keys()].join('')}]+`
 // Native first: 일곱 and 일흔 must not be read as the Sino digit 일.
+// The second lookbehind leaves a misspaced compound ("서른 두 명", "삼천 오백 명") as written: a
+// number word followed by a space right before the match is a half-converted compound, not a number.
 const NUMBER_BEFORE_COUNTER = new RegExp(
-  `(?<![가-힣\\d])(${NATIVE_PATTERN}|${SINO_PATTERN}|\\d+)(\\s*)(${alternation(COUNTERS)})`,
+  `(?<![가-힣\\d])(?<!(?:^|[^가-힣])(?:${alternation(NATIVE_TENS.keys())}|${SINO_PATTERN})\\s+)` +
+    `(${NATIVE_PATTERN}|${SINO_PATTERN}|\\d+)(\\s*)(${alternation(COUNTERS)})`,
   'gu',
 )
 

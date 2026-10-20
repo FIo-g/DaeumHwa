@@ -21,7 +21,8 @@ export const FACT_DUPLICATE_DICE = 0.7
  *   about 0.83) and are reported as duplicates; the word check covers Hangul words only.
  * - Korean number words directly before a counter are read as digits first (koreanNumbersToDigits:
  *   열아홉 살 = 19살, 서른 닢 = 30닢, 구층 = 9층). Number words it does not read (no counter, a counter
- *   outside its list, 열명 without a space) and English number words stay unnormalized: `19` and
+ *   outside its list, 열명 without a space, a misspaced compound such as 서른 두 명) stay unnormalized,
+ *   and English number words too: `19` and
  *   `nineteen` score about 0.58, so they are not duplicates.
  * - A different number always means a different fact (digit rule); the digit rule sees the digits
  *   produced by the conversion.
