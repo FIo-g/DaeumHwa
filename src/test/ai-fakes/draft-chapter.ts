@@ -32,3 +32,11 @@ export function fakeDraft(input: { instructions: string }): string {
 export function fakeDraftContinue(): string {
   return `(데모 이어쓰기) ${[...FILLER, ...FILLER, ...FILLER, ...FILLER].join('\n\n')}`
 }
+
+/**
+ * Demo scene for 'draft-scene': two filler paragraphs, so a scenes-mode draft with the demo plan
+ * writes every scene instead of stopping after the first.
+ */
+export function fakeDraftScene(): string {
+  return `(데모 장면) ${FILLER.slice(0, 2).join('\n\n')}`
+}

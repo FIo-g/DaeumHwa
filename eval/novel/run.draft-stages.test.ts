@@ -2,8 +2,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { FORMAT_MESSAGE } from '@/ai/anthropic'
 import type { AiClient, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import type { AiTaskName } from '@/db/types'
+import { AppError } from '@/lib/errors'
 import { FakeAiClient } from '@/test/fake-ai'
 import { fakeAnswer } from './fake-author'
 import { loadBible } from './bible'
@@ -269,5 +271,101 @@ describe('draft step: repeated-word metric (finding 9)', () => {
       repeatedWords: { word: string }[]
     }
     expect(final.repeatedWords.map((hit) => hit.word)).not.toContain(name)
+  }, 120_000)
+})
+
+describe('draft step: scenes-mode cut (F5, F8)', () => {
+  function makeScenesRun(dir: string): void {
+    createRun(dir, {
+      modelId: 'fake',
+      lang: 'ko',
+      chapters: 1,
+      questions: 2,
+      maxDraftAttempts: 2,
+      commit: 'test',
+      draftMode: 'scenes',
+    })
+  }
+
+  it('pauses on a 429 in scene 2, then a resumed draft writes every scene', async () => {
+    const dir = newDir()
+    makeScenesRun(dir)
+    const first = faultyClient([{ task: 'draft-scene', error: tooManyRequests }], {
+      overrides: { 'draft-chapter': () => SHORT },
+    })
+    const ctx1 = await open(dir, { inner: first, autoAuthor: true })
+    const paused = await runUntilBlocked(ctx1)
+
+    expect(paused.status).toBe('paused-limit')
+    expect(paused.plan[paused.cursor]).toBe('ch1:draft')
+    expect(paused.pauses['ch1:draft']).toBe(1)
+    expect(existsSync(join(dir, 'chapters/01.attempt-1.md'))).toBe(false)
+    expect(JSON.parse(read(dir, 'chapters/01.attempt-1.scenes-cut.json'))).toMatchObject({
+      kind: 'scenes-cut',
+      scenesWritten: 1,
+      planned: 3,
+      failure: 'external-limit',
+    })
+    // The pause took the failure; none is left for a later step to misread.
+    expect(ctx1.client.takeLastFailure()).toBeNull()
+    await opened.pop()?.close()
+
+    // Resumed draft: the scene calls work, so the abandoned cut goes and all three scenes are written.
+    const ctx2 = await open(dir, { inner: new FakeAiClient({}), autoAuthor: true })
+    const done = await runUntilBlocked(ctx2)
+    expect(done.status).toBe('done')
+    expect(existsSync(join(dir, 'chapters/01.attempt-1.scenes-cut.json'))).toBe(false)
+    const metrics = JSON.parse(read(dir, 'metrics/01.json')) as {
+      sceneLengths: { scenes: number }
+    }
+    expect(metrics.sceneLengths.scenes).toBe(3)
+  }, 120_000)
+
+  it('records a model failure in scene 2 without pausing and leaves no held failure', async () => {
+    const dir = newDir()
+    makeScenesRun(dir)
+    const inner = faultyClient(
+      [{ task: 'draft-scene', error: () => new AppError('AI_ERROR', FORMAT_MESSAGE) }],
+      { overrides: { 'draft-chapter': () => SHORT } },
+    )
+    const ctx = await open(dir, { inner, autoAuthor: true })
+    const state = await runUntilBlocked(ctx)
+
+    expect(state.status).toBe('done')
+    expect(JSON.parse(read(dir, 'chapters/01.attempt-1.scenes-cut.json'))).toMatchObject({
+      kind: 'scenes-cut',
+      scenesWritten: 1,
+      planned: 3,
+      failure: 'model',
+    })
+    expect(ctx.client.takeLastFailure()).toBeNull()
+  }, 120_000)
+
+  it('records a cut that no call failed (budget) with failure budget and does not pause', async () => {
+    const dir = newDir()
+    makeScenesRun(dir)
+    // An empty scene 2 is a cut with no error behind it.
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => SHORT, 'draft-scene': () => '' },
+    })
+    const ctx = await open(dir, { inner, autoAuthor: true })
+    const state = await runUntilBlocked(ctx)
+
+    expect(state.status).toBe('done')
+    expect(JSON.parse(read(dir, 'chapters/01.attempt-1.scenes-cut.json'))).toMatchObject({
+      scenesWritten: 1,
+      planned: 3,
+      failure: 'budget',
+      message: null,
+    })
+  }, 120_000)
+
+  it('writes no scenes-cut file when every scene is written', async () => {
+    const dir = newDir()
+    makeScenesRun(dir)
+    const ctx = await open(dir, { inner: new FakeAiClient({}), autoAuthor: true })
+    const state = await runUntilBlocked(ctx)
+    expect(state.status).toBe('done')
+    expect(existsSync(join(dir, 'chapters/01.attempt-1.scenes-cut.json'))).toBe(false)
   }, 120_000)
 })

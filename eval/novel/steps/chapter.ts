@@ -162,6 +162,62 @@ export async function recordContinueFailure(
   if (failure !== 'model') throw new ExternalFailureError({ kind: failure, message: failed.detail })
 }
 
+const ScenesCutWarningSchema = z.object({
+  code: z.literal('SCENES_CUT'),
+  scenesWritten: z.number().int().nonnegative(),
+})
+
+/**
+ * The scenes-mode cut in a draft run row (the SCENES_CUT warning of completeScenes), or null. Other
+ * warning kinds are skipped, as continueFailureOf skips this one.
+ */
+export function scenesCutOf(output: unknown): { scenesWritten: number } | null {
+  const row = z.object({ warnings: z.array(z.unknown()) }).safeParse(output)
+  if (!row.success) return null
+  for (const warning of row.data.warnings) {
+    const parsed = ScenesCutWarningSchema.safeParse(warning)
+    if (parsed.success) return { scenesWritten: parsed.data.scenesWritten }
+  }
+  return null
+}
+
+/**
+ * Records a scenes-mode draft that stopped before its last planned scene, from the first run row.
+ * The draft keeps the scenes it has, so the failure of the scene call that ended it is still held by
+ * the client: it is always taken, so no later step reads it as its own. An external limit or network
+ * failure pauses the run like a continuation failure does, so the draft is redone instead of being
+ * measured short. A model failure, or a cut with no failed call (time budget, empty scene), is only
+ * recorded. Writes the attempt's scenes-cut.json, which the run summary counts.
+ */
+export async function recordScenesCut(
+  ctx: RunContext,
+  runId: string,
+  n: number,
+  attemptNo: number,
+  planned: number,
+): Promise<void> {
+  const [run] = await ctx.db.select().from(aiRuns).where(eq(aiRuns.id, runId)).limit(1)
+  const cut = scenesCutOf(run?.output)
+  if (!cut) return
+  const held = ctx.client.takeLastFailure()
+  writeRunFile(
+    ctx.dir,
+    `chapters/${pad(n)}.attempt-${attemptNo}.scenes-cut.json`,
+    `${JSON.stringify(
+      {
+        kind: 'scenes-cut',
+        scenesWritten: cut.scenesWritten,
+        planned,
+        failure: held?.kind ?? 'budget',
+        message: held?.message ?? null,
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  if (held && held.kind !== 'model') throw new ExternalFailureError(held)
+}
+
 /**
  * Runs a draft repair that must never fail the draft (spec 7). A model failure, or an error with no
  * failure recorded, keeps `fallback` (the unrepaired text) and lists the repair in `failed`, so the
@@ -443,6 +499,7 @@ export const draft: StepFn = async (ctx, key, state) => {
       for (const stale of [
         'beats.json',
         'continue.json',
+        'scenes-cut.json',
         'trim.json',
         'draft.trimmed.txt',
         'draft.foreign-repaired.txt',
@@ -456,6 +513,10 @@ export const draft: StepFn = async (ctx, key, state) => {
       }
       // Taken before the trim stage, whose own takeLastFailure would discard it.
       await recordContinueFailure(ctx, generated.runId, n, attemptNo)
+      // A scenes-mode draft that stopped early: its failure is taken here for the same reason.
+      if (plan && ctx.config.draftMode === 'scenes') {
+        await recordScenesCut(ctx, generated.runId, n, attemptNo, plan.card.scenes.length)
+      }
       // E1 then E2, each stage on the text the previous one returned (spec 7).
       const trimmedText = await trimStage(
         ctx,

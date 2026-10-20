@@ -411,6 +411,15 @@ const DraftBlockSchema = z.object({
     byReason: z.record(z.string(), CountSchema),
     byChapter: z.record(z.string(), CountSchema),
   }),
+  // Scenes-mode drafts that stopped before their last planned scene. Absent when none did.
+  scenesCut: z
+    .object({
+      total: CountSchema,
+      external: CountSchema,
+      byFailure: z.record(z.string(), CountSchema),
+      byChapter: z.record(z.string(), CountSchema),
+    })
+    .optional(),
 })
 
 /** Machine power over the sampled calls of a local run (track M1). Absent when nothing was sampled. */
@@ -481,6 +490,9 @@ type CardInput = { name: string; aliases: string[]; createdAt: string }
 /** A continuation that failed, as `chapters/NN.attempt-K.continue.json` records it. */
 export type ContinueFailure = { chapter: string; reason: string; failure: FailureKind }
 
+/** A scenes-mode draft that was cut short, as `chapters/NN.attempt-K.scenes-cut.json` records it. */
+export type ScenesCut = { chapter: string; failure: FailureKind | 'budget' }
+
 export type SummaryInputs = {
   /** Key: chapter number as a string. */
   extraction?: Record<string, ExtractionCounts>
@@ -492,6 +504,7 @@ export type SummaryInputs = {
   contextHit?: { cards: CardInput[]; chapterTexts: Record<string, string> }
   continuityFixture?: ContinuityFixture
   continueFailures?: ContinueFailure[]
+  scenesCuts?: ScenesCut[]
   /** Planted directive results of the saved chapters (`--directives on`). */
   directives?: DirectiveResults
   /** Cost and time inputs from the run config and its bible copy. Absent when the config is unreadable. */
@@ -738,6 +751,10 @@ const ContinueFileSchema = z.object({
   failure: z.enum(['external-limit', 'external-network', 'model']),
 })
 
+const ScenesCutFileSchema = z.object({
+  failure: z.enum(['external-limit', 'external-network', 'model', 'budget']),
+})
+
 const DecisionLineSchema = z.object({
   step: z.string(),
   kind: z.literal('proofread'),
@@ -768,6 +785,7 @@ export function readSummaryInputs(dir: string): SummaryInputs {
   // The chapter text before a scene rewrite, which is the text the continuity check saw.
   const preRewriteTexts: Record<string, string> = {}
   const continueFailures: ContinueFailure[] = []
+  const scenesCuts: ScenesCut[] = []
   for (const name of names) {
     const file = path.join(chaptersDir, name)
     let match = /^(\d{2})\.extraction\.json$/.exec(name)
@@ -802,10 +820,19 @@ export function readSummaryInputs(dir: string): SummaryInputs {
           failure: parsed.data.failure,
         })
       }
+      continue
+    }
+    match = /^(\d{2})\.attempt-(\d+)\.scenes-cut\.json$/.exec(name)
+    if (match) {
+      const parsed = ScenesCutFileSchema.safeParse(readJsonFile(file))
+      if (parsed.success) {
+        scenesCuts.push({ chapter: String(Number(match[1])), failure: parsed.data.failure })
+      }
     }
   }
   if (Object.keys(extraction).length > 0) inputs.extraction = extraction
   if (continueFailures.length > 0) inputs.continueFailures = continueFailures
+  if (scenesCuts.length > 0) inputs.scenesCuts = scenesCuts
 
   // The last decision line of each proofread step wins: a redo logs the step again.
   const decisions: Record<string, { id: string; accept: boolean }[]> = {}
@@ -965,7 +992,8 @@ export function buildRunSummary(
   }
 
   const failures = inputs.continueFailures ?? []
-  if (failures.length > 0) {
+  const cuts = inputs.scenesCuts ?? []
+  if (failures.length > 0 || cuts.length > 0) {
     const byReason: Record<string, number> = {}
     const byChapter: Record<string, number> = {}
     for (const failure of failures) {
@@ -979,6 +1007,23 @@ export function buildRunSummary(
         byReason,
         byChapter,
       },
+    }
+    if (cuts.length > 0) {
+      const byFailure: Record<string, number> = {}
+      const cutByChapter: Record<string, number> = {}
+      for (const cut of cuts) {
+        byFailure[cut.failure] = (byFailure[cut.failure] ?? 0) + 1
+        cutByChapter[cut.chapter] = (cutByChapter[cut.chapter] ?? 0) + 1
+      }
+      summary.draft.scenesCut = {
+        total: cuts.length,
+        // A budget cut is not an external failure: no call failed.
+        external: cuts.filter(
+          (c) => c.failure === 'external-limit' || c.failure === 'external-network',
+        ).length,
+        byFailure,
+        byChapter: cutByChapter,
+      }
     }
   }
   return summary
