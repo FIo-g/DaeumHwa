@@ -145,3 +145,37 @@ describe('groundingTexts', () => {
     ])
   })
 })
+
+describe('P12 whole-word names with non-ASCII letters or inner capitals', () => {
+  it('keeps an accented name whole when the wiki has it', () => {
+    expect(findUngroundedNames('Why does Chloé fear the sea?', ['Chloé is a sailor.'])).toEqual([])
+  })
+
+  it('keeps an inner-capital name whole when the wiki has it', () => {
+    expect(
+      findUngroundedNames('Why does McAllister hide the key?', ['McAllister keeps the key.']),
+    ).toEqual([])
+  })
+
+  it('keeps a name with a diacritic in the first letter whole', () => {
+    expect(findUngroundedNames('Why does Björn sail at night?', ['Björn is a sailor.'])).toEqual([])
+  })
+
+  it('reads a Korean question with a Latin accented name as grounded', () => {
+    expect(findUngroundedNames('클로에가 왜 Chloé라고 불리나요?', ['Chloé'])).toEqual([])
+  })
+
+  it('reports an ungrounded accented name whole, not a fragment', () => {
+    expect(findUngroundedNames('Why does Chloé fear the sea?', ['Serin is a sailor.'])).toEqual([
+      'Chloé',
+    ])
+  })
+
+  it('still reads plain Latin names as before', () => {
+    expect(
+      findUngroundedNames('Why does Serin trust Do Yunseo at the Ashen Bell Tower?', [
+        'Serin lives here.',
+      ]),
+    ).toEqual(['Do Yunseo', 'Ashen Bell Tower'])
+  })
+})

@@ -32,8 +32,9 @@ const NOT_NAMES: ReadonlySet<string> = new Set([
   'sir',
 ])
 
-const CAP_WORD = "[A-Z][a-z]+(?:-[A-Za-z]+)*(?:['’]s)?"
-const CAP_SEQUENCE = new RegExp(`${CAP_WORD}(?: ${CAP_WORD})*`, 'g')
+// Unicode letters, so 'Chloé', 'Björn' and inner capitals ('McAllister') stay whole words.
+const CAP_WORD = String.raw`\p{Lu}[\p{Ll}\p{M}]+(?:\p{Lu}[\p{Ll}\p{M}]+)*(?:-[\p{L}\p{M}]+)*(?:['’]s)?`
+const CAP_SEQUENCE = new RegExp(`${CAP_WORD}(?: ${CAP_WORD})*`, 'gu')
 const POSSESSIVE = /['’]s$/
 /** Text before a match that makes the match start a sentence or a quoted phrase. */
 const SENTENCE_END = /[.!?:;—–…\n]$/

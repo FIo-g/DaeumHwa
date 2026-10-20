@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import type { Db } from '@/db/client'
-import { interviewTurns, works } from '@/db/schema'
+import { aiRuns, interviewTurns, works } from '@/db/schema'
 import type { Actor } from '@/db/types'
 import { isAppError } from '@/lib/errors'
 import type { InterviewQuestionInput } from '@/ai/tasks/interview-question'
@@ -220,5 +220,57 @@ describe('askNextQuestion name check (P12)', () => {
       'CANCELLED',
     )
     expect(await turnRows(session.id)).toHaveLength(0)
+  })
+})
+
+describe('P12 names-only re-ask and the run cap', () => {
+  /** Inserts three running rows for the owner after the first question call has finished. */
+  function fillRunCapAfterFirstCall(client: FakeAiClient) {
+    const real = client.generateObject.bind(client)
+    let calls = 0
+    Object.assign(client, {
+      generateObject: async (args: unknown) => {
+        calls += 1
+        const result = await real(args as never)
+        if (calls === 1) {
+          await db.insert(aiRuns).values(
+            [1, 2, 3].map(() => ({
+              workId,
+              userId: owner.userId,
+              task: 'interview-question' as const,
+              status: 'running' as const,
+            })),
+          )
+        }
+        return result
+      },
+    })
+    return client
+  }
+
+  it('keeps the first question when a names-only re-ask hits the run cap', async () => {
+    const session = await startInterview(db, owner, workId)
+    const { client, inputs } = recordQuestions(() => q('Who is Gwak Duseok to Serin?'))
+    const stored = await askNextQuestion(db, owner, session.id, fillRunCapAfterFirstCall(client))
+
+    expect(inputs).toHaveLength(1)
+    expect(stored.question).toBe('Who is Gwak Duseok to Serin?')
+  })
+
+  it('still throws CONFLICT when a repeat re-ask hits the run cap', async () => {
+    const session = await startInterview(db, owner, workId)
+    await db.insert(interviewTurns).values({
+      sessionId: session.id,
+      focus: 'setting',
+      topic: '주요 인물',
+      question: 'Who is Serin to the warden?',
+      answer: '세린은 종루지기다.',
+      answeredAt: new Date(),
+    })
+    const { client } = recordQuestions(() => q('Who is Serin to the warden?'))
+    await expectAppError(
+      askNextQuestion(db, owner, session.id, fillRunCapAfterFirstCall(client)),
+      'CONFLICT',
+    )
   })
 })

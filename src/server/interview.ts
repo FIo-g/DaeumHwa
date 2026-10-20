@@ -431,9 +431,12 @@ async function unknownQuestionNames(
   return findUngroundedNames(question, groundingTexts(base, [...answers, ...coreTopics]))
 }
 
-/** A failed or limited AI call; a cancel (CANCELLED) is not one. */
+/** A failed, limited or concurrency-capped AI call; a cancel (CANCELLED) is not one. */
 function isSoftAiFailure(error: unknown): boolean {
-  return isAppError(error) && (error.code === 'AI_ERROR' || error.code === 'AI_LIMIT')
+  return (
+    isAppError(error) &&
+    (error.code === 'AI_ERROR' || error.code === 'AI_LIMIT' || error.code === 'CONFLICT')
+  )
 }
 
 /** The first `max` characters of a text, trimmed. */
