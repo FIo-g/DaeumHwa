@@ -43,6 +43,8 @@ export type InterviewQuestionInput = {
   recent: { topic: string; question: string; answer: string | null; skipped: boolean }[]
   /** A question the service found to repeat an earlier one; the new question must differ. */
   rejected: string | null
+  /** Names or quoted terms of the question being re-asked that the work never gave. Set only on that retry. */
+  unknownNames?: string[]
   /** Closed and untouched topics of the work, from planInterviewTopics. Absent when not planned. */
   plan?: InterviewPlan
 }
@@ -174,6 +176,10 @@ function turnAnswer(turn: { answer: string | null; skipped: boolean }, max: numb
   return oneLine(turn.answer, max)
 }
 
+/** Last line of a re-ask after the question used names the work never gave. Outside every tag, so the model follows it. */
+export const UNKNOWN_NAMES_RULE =
+  '<unknown_names>에 적힌 이름이나 표현은 작가가 준 시놉시스, 위키, 답에 없다. 질문에 쓰지 않는다. 있는 이름만 쓰거나 이름 없이 묻는다.'
+
 /**
  * Prompt with <work>, <wiki>, <story>, <covered>, <recent> and, after a repeat, <rejected>
  * sections. A <plan> block follows <covered> when the plan closes a topic, switches the question or
@@ -259,7 +265,16 @@ export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): strin
   ]
   if (input.rejected !== null)
     sections.push('<rejected>', oneLine(input.rejected, 200), '</rejected>')
+  const unknown = input.unknownNames ?? []
+  if (unknown.length > 0) {
+    sections.push(
+      '<unknown_names>',
+      unknown.map((name) => oneLine(name, 40)).join(', '),
+      '</unknown_names>',
+    )
+  }
   sections.push('', '위 내용을 보고 다음 질문을 하나 만드세요.')
+  if (unknown.length > 0) sections.push(UNKNOWN_NAMES_RULE)
   return sections.join('\n')
 }
 

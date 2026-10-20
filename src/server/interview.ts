@@ -19,7 +19,7 @@ import {
   type InterviewTurnRow,
   type ProposalRow,
 } from '@/db/types'
-import { AppError } from '@/lib/errors'
+import { AppError, isAppError } from '@/lib/errors'
 import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { extractionToProposals, type ExtractionContext } from '@/ai/extraction'
@@ -33,6 +33,7 @@ import {
 } from '@/ai/tasks/interview-question'
 import { ReaderSimSchema } from '@/ai/tasks/reader-sim'
 import { normalizeQuestion, planInterviewTopics, violatesPlan } from '@/lib/interview-plan'
+import { extractNameCandidates, findUngroundedNames, groundingTexts } from '@/lib/interview-names'
 import type { NewProposal } from '@/lib/proposal-payloads'
 import { isUndecidedOnlyAnswer } from '@/lib/undecided-answer'
 import { requireRowWork, requireWorkRole } from '@/server/access'
@@ -129,18 +130,24 @@ export async function askNextQuestion(
     client,
   )
   const earlier = await loadQuestionKeys(db, workId)
-  if (
+  const needsNewQuestion =
     earlier.has(normalizeQuestion(output.question)) ||
     (base.plan !== undefined && violatesPlan(output, base.plan, CORE_TOPICS))
-  ) {
+  const unknownNames = await unknownQuestionNames(db, workId, base, output.question)
+  if (needsNewQuestion || unknownNames.length > 0) {
     const repeated = output.question
-    ;({ output } = await runAiTask(
-      db,
-      meta,
-      interviewQuestionTask,
-      { ...base, rejected: repeated },
-      client,
-    ))
+    const retryInput: InterviewQuestionInput = {
+      ...base,
+      rejected: repeated,
+      ...(unknownNames.length > 0 ? { unknownNames } : {}),
+    }
+    try {
+      ;({ output } = await runAiTask(db, meta, interviewQuestionTask, retryInput, client))
+    } catch (error) {
+      // The name check is a soft guard: when only it asked for the retry and the retry failed,
+      // the first question stands. A repeat or a plan break, and every cancel, still fail.
+      if (needsNewQuestion || !isSoftAiFailure(error)) throw error
+    }
   }
 
   throwIfCancelled(signal)
@@ -399,6 +406,34 @@ async function loadQuestionKeys(db: Db, workId: string): Promise<Set<string>> {
     .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
     .where(eq(interviewSessions.workId, workId))
   return new Set(rows.map((row) => normalizeQuestion(row.question)))
+}
+
+/** Every answer the author gave in this work, full text, across all its interview sessions. */
+async function loadAnswerTexts(db: Db, workId: string): Promise<string[]> {
+  const rows = await db
+    .select({ answer: interviewTurns.answer })
+    .from(interviewTurns)
+    .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
+    .where(and(eq(interviewSessions.workId, workId), isNotNull(interviewTurns.answer)))
+  return rows.flatMap((row) => (row.answer === null ? [] : [row.answer]))
+}
+
+/** Names or quoted terms of the question that the work never gave. No query unless the question has a candidate. */
+async function unknownQuestionNames(
+  db: Db,
+  workId: string,
+  base: Omit<InterviewQuestionInput, 'rejected'>,
+  question: string,
+): Promise<string[]> {
+  if (extractNameCandidates(question).length === 0) return []
+  const answers = await loadAnswerTexts(db, workId)
+  const coreTopics = CORE_TOPICS.flatMap((topic) => [topic.name, ...topic.aliases])
+  return findUngroundedNames(question, groundingTexts(base, [...answers, ...coreTopics]))
+}
+
+/** A failed or limited AI call; a cancel (CANCELLED) is not one. */
+function isSoftAiFailure(error: unknown): boolean {
+  return isAppError(error) && (error.code === 'AI_ERROR' || error.code === 'AI_LIMIT')
 }
 
 /** The first `max` characters of a text, trimmed. */

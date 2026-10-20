@@ -86,6 +86,10 @@ const RULES: readonly Rule[] = [
     '위 내용을 보고 다음 질문을 하나 만드세요.',
     'Based on the information above, write one next question.',
   ],
+  [
+    '<unknown_names>에 적힌 이름이나 표현은 작가가 준 시놉시스, 위키, 답에 없다. 질문에 쓰지 않는다. 있는 이름만 쓰거나 이름 없이 묻는다.',
+    'The names or phrases in <unknown_names> do not appear in the synopsis, wiki or answers the author gave. Do not use them in the question. Use only names that exist, or ask without a name.',
+  ],
   ['(미정)', '(unspecified)'],
   ['(요약 없음)', '(no summary)'],
   ['(건너뜀)', '(skipped)'],
