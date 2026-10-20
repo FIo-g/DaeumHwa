@@ -23,6 +23,7 @@ import { AppError } from '@/lib/errors'
 import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { extractionToProposals, type ExtractionContext } from '@/ai/extraction'
+import { isStyleTopic, styleCardFromAnswer } from '@/ai/interview-style'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
 import { isSpeechStyleEnabled } from '@/ai/voice'
 import {
@@ -40,6 +41,7 @@ import { insertProposals } from '@/server/proposal-store'
 
 // F1 interview service. Questions and answers are stored as interview_sessions / interview_turns.
 // Answers go through the AI extraction task and become pending proposals (source 'interview').
+// A style-topic answer becomes one style_card proposal with no AI call, like an undecided-only answer.
 // Nothing here writes wiki tables; approval happens later through the proposal engine.
 
 const COVERED_LIMIT = 120
@@ -181,8 +183,25 @@ export async function answerTurn(
   await assertTurnOpen(db, turn)
 
   // An answer that only says the topic is undecided has nothing to extract: no AI call, no proposals.
+  // A style-topic answer becomes one style card proposal, built without an AI call.
+  const undecidedOnly = isUndecidedOnlyAnswer(answer)
+  const styleTurn = isStyleTopic(turn.topic)
   let items: NewProposal[] = []
-  if (!isUndecidedOnlyAnswer(answer)) {
+  if (!undecidedOnly && styleTurn) {
+    const card = styleCardFromAnswer(turn.topic, answer)
+    if (card) {
+      items = [
+        {
+          type: 'style_card',
+          payload: card,
+          source: 'interview',
+          sourceRef: turn.id,
+          chapterId: null,
+        },
+      ]
+    }
+  }
+  if (!undecidedOnly && !styleTurn) {
     const known = await loadKnownEntries(db, workId)
     // Pending facts come first (the loader orders them), so the prompt cap keeps them.
     const factTexts = (await loadKnownFactTexts(db, workId)).map((f) => ({
