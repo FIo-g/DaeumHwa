@@ -114,6 +114,11 @@ const RULES: readonly Rule[] = [
     /장면 (\d+)개, 장면마다 공백 포함 (\d+)자 안팎/g,
     '$1 scenes, about $2 characters per scene including spaces',
   ],
+  // Expansion length line (stage 1b, buildExpandPrompt). Before the generic rule below.
+  [
+    /공백 포함 약 (\d+)자 \(지금 (\d+)자\)/g,
+    'about $1 characters including spaces (now $2 characters)',
+  ],
   [/약 (\d+)자/g, 'about $1 characters'],
   // Section headers and fixed sentences.
   ['[인물 ', '[Character '],

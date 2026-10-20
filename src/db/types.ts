@@ -161,6 +161,7 @@ export const AI_TASKS = [
   'chapter-extract-relations',
   'draft-plan',
   'draft-scene',
+  'draft-expand',
 ] as const
 export type AiTaskName = (typeof AI_TASKS)[number]
 

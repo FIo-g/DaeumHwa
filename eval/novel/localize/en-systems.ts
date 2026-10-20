@@ -13,6 +13,7 @@ import { DIRECTION_ADVICE_SYSTEM } from './en/direction-advice'
 import { DRAFT_BEATS_SYSTEM } from './en/draft-beats'
 import { DRAFT_PLAN_SYSTEM } from './en/draft-plan'
 import { DRAFT_CHAPTER_SYSTEM } from './en/draft-chapter'
+import { DRAFT_EXPAND_SYSTEM } from './en/draft-expand'
 import { DRAFT_REPAIR_SYSTEM } from './en/draft-repair'
 import { buildEnInterviewExtractSystem } from './en/interview-extract'
 import { buildEnInterviewQuestionSystem } from './en/interview-question'
@@ -48,6 +49,7 @@ export const EN_SYSTEMS: Record<AiTaskName, string> = {
   'draft-plan': DRAFT_PLAN_SYSTEM,
   // Scene calls of the scenes draft mode share the English draft-chapter system, like draft-continue.
   'draft-scene': DRAFT_CHAPTER_SYSTEM,
+  'draft-expand': DRAFT_EXPAND_SYSTEM,
   'scene-rewrite': SCENE_REWRITE_SYSTEM,
   'chapter-extract-facts': CHAPTER_EXTRACT_FACTS_SYSTEM,
   'chapter-extract-threads': CHAPTER_EXTRACT_THREADS_SYSTEM,

@@ -161,6 +161,7 @@ export const PROSE_TASKS: readonly AiTaskName[] = [
   'draft-continue',
   'draft-scene',
   'scene-rewrite',
+  'draft-expand',
 ]
 /** Every other AI task: the object calls and the prose-editing helpers. */
 export const HELPER_TASKS: readonly AiTaskName[] = AI_TASKS.filter(

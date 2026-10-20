@@ -13,6 +13,7 @@ import { directionAdviceSample } from './samples/direction-advice'
 import { draftBeatsSample } from './samples/draft-beats'
 import { draftSample } from './samples/draft-chapter'
 import { draftContinueSample } from './samples/draft-continue'
+import { draftExpandSample } from './samples/draft-expand'
 import { draftPlanSample } from './samples/draft-plan'
 import { draftRepairSample } from './samples/draft-repair'
 import { interviewExtractSample } from './samples/interview-extract'
@@ -45,6 +46,8 @@ const PROMPTS: Record<AiTaskName, string> = {
   'draft-plan': draftPlanSample,
   // Scene calls are built on the draft prompt (stage 1, draft-scene); the sample is the draft prompt.
   'draft-scene': draftSample,
+  // Expansion calls (stage 1b) are built by buildExpandPrompt; the sample is that prompt.
+  'draft-expand': draftExpandSample,
   'scene-rewrite': sceneRewriteSample,
   'chapter-extract-facts': chapterExtractFactsSample,
   'chapter-extract-threads': chapterExtractThreadsSample,

@@ -165,7 +165,7 @@ function voicesSection(voices: DraftPromptInput['voices']): string[] {
   ]
 }
 
-function renderCard(card: DraftPromptInput['styleCards'][number]): string {
+export function renderCard(card: DraftPromptInput['styleCards'][number]): string {
   const scope = card.entryName ? `인물 ${card.entryName}` : '작품 전체'
   const lines = [`[${scope}] ${card.name}`, `- 말투: ${card.tone || '(없음)'}`]
   lines.push(`- 규칙: ${card.rules || '(없음)'}`)

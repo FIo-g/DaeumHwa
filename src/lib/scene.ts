@@ -103,6 +103,49 @@ export function sceneRangeAt(text: string, start: number, end: number): SceneRan
 }
 
 /**
+ * The spans of a chapter for the length expansion (stage 1b): the trimmed segments between its
+ * break lines, or, with no break line, its paragraphs cut into `max(1, fallbackCount)` runs of
+ * nearly equal paragraph counts (earlier runs one larger). Spans are in order and cover every
+ * paragraph exactly once. A run never comes out empty, so there are at most as many spans as
+ * paragraphs.
+ */
+export function sceneSpans(text: string, fallbackCount: number): SceneRange[] {
+  const segments = breakSegments(text)
+  if (segments !== null) return segments
+  const paragraphs = splitParagraphs(text)
+  if (paragraphs.length === 0) return []
+  const runs = Math.min(paragraphs.length, Math.max(1, Math.floor(fallbackCount)))
+  const base = Math.floor(paragraphs.length / runs)
+  const extra = paragraphs.length % runs
+  const spans: SceneRange[] = []
+  let index = 0
+  for (let run = 0; run < runs; run++) {
+    const size = base + (run < extra ? 1 : 0)
+    const first = paragraphs[index]
+    const last = paragraphs[index + size - 1]
+    spans.push({ start: first.start, end: last.end })
+    index += size
+  }
+  return spans
+}
+
+/**
+ * The text with each span replaced by its new text. Replacements are applied from the back, so
+ * their offsets stay valid; everything outside the given spans is kept as it was.
+ */
+export function spliceSpans(
+  text: string,
+  replacements: { span: SceneRange; text: string }[],
+): string {
+  let out = text
+  const ordered = [...replacements].sort((a, b) => b.span.start - a.span.start)
+  for (const { span, text: next } of ordered) {
+    out = out.slice(0, span.start) + next + out.slice(span.end)
+  }
+  return out
+}
+
+/**
  * The scene texts of a chapter: the trimmed segments between its break lines. A text with no break
  * line is one scene. Used for the per-scene lengths of the eval (stage 1).
  */
