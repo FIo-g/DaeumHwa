@@ -12,6 +12,82 @@ export const SCENE_WINDOW_LINES = 6
 /** A scene break line: `* * *`, `***`, `---`, `◇`, `◆` or `#` alone on its line. */
 const BREAK_LINE = /^\s*(\*\s*\*\s*\*|\*{3,}|-{3,}|◇+|◆+|#)\s*$/
 
+/** True when the line is a scene break line (one line, without its newline). */
+export function isBreakLine(line: string): boolean {
+  return BREAK_LINE.test(line)
+}
+
+/** A line so far that could still become a blank line or a break line. */
+const BREAK_PREFIX = /^[\s*\-◇◆#]*$/
+
+function isBlankOrBreak(line: string): boolean {
+  return line.trim() === '' || isBreakLine(line)
+}
+
+/**
+ * Filters the streamed text of one scene so that it neither starts nor ends with a break line or
+ * the blank lines around one. Code joins scenes with its own break line, so one the model wrote at
+ * the edge of a scene would double it. A break line in the middle of a scene is kept.
+ *
+ * `push` takes the next chunk and returns the text that is safe to send now. A trailing run of
+ * blank and break lines is held back until more text follows it, and `end` drops it. A start that
+ * could still turn into a break line (`*`, `**`) is held until the line is known.
+ */
+export function createSceneEdgeFilter(): { push(chunk: string): string; end(): string } {
+  let started = false
+  let held = ''
+  const push = (chunk: string): string => {
+    let text = held + chunk
+    held = ''
+    if (!started) {
+      text = dropLeadingBreakLines(text)
+      if (!text.includes('\n') && BREAK_PREFIX.test(text)) {
+        held = text
+        return ''
+      }
+      started = true
+      text = text.trimStart()
+    }
+    const keep = trailingBreakStart(text)
+    held = text.slice(keep)
+    return text.slice(0, keep)
+  }
+  return {
+    push,
+    // A closing newline completes the last line, so only blank and break lines stay unsent.
+    end() {
+      const rest = push('\n')
+      held = ''
+      return rest
+    },
+  }
+}
+
+/** The text without its leading complete lines that are blank or break lines. */
+function dropLeadingBreakLines(text: string): string {
+  let from = 0
+  for (;;) {
+    const newline = text.indexOf('\n', from)
+    if (newline === -1 || !isBlankOrBreak(text.slice(from, newline))) break
+    from = newline + 1
+  }
+  return text.slice(from)
+}
+
+/**
+ * Where the trailing run of blank lines, break lines and a line that may still become one begins:
+ * the newline that ends the last line of text. The text length when there is no such run.
+ */
+function trailingBreakStart(text: string): number {
+  const lines = text.split('\n')
+  let last = lines.length - 1
+  if (!BREAK_PREFIX.test(lines[last])) return text.length
+  last--
+  while (last >= 0 && isBlankOrBreak(lines[last])) last--
+  if (last < 0) return 0
+  return lines.slice(0, last + 1).join('\n').length
+}
+
 /**
  * The scene that contains [start, end), or null when the span is not inside one scene. The range
  * is trimmed: it starts and ends on text, never on a break line or a blank line around one.
@@ -48,7 +124,7 @@ function breakSegments(text: string): SceneRange[] | null {
   for (;;) {
     const newline = text.indexOf('\n', lineStart)
     const lineEnd = newline === -1 ? text.length : newline
-    if (BREAK_LINE.test(text.slice(lineStart, lineEnd))) {
+    if (isBreakLine(text.slice(lineStart, lineEnd))) {
       hasBreak = true
       pushTrimmed(text, segmentStart, lineStart, segments)
       segmentStart = lineEnd

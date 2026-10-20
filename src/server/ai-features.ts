@@ -65,6 +65,7 @@ import {
 } from '@/lib/draft-plan'
 import { AppError, isAppError } from '@/lib/errors'
 import { chapterLabel } from '@/lib/labels'
+import { createSceneEdgeFilter } from '@/lib/scene'
 import { type DraftFlag, findDraftFlags } from '@/lib/korean/style-copy'
 import { sentenceIn, splitSentences } from '@/lib/korean/sentences'
 import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
@@ -783,7 +784,8 @@ async function completeDraft(
  * Writes a plan card one scene per call (`scenes` mode). The first scene is the draft run; each later
  * scene is its own `draft-scene` run, streamed to `pipe` as it arrives. A later scene that fails or
  * has too little time left ends the draft: the text written so far is kept, with a SCENES_CUT
- * warning. Only a user abort rejects. Stored and streamed text are the same.
+ * warning. An empty first scene ends it too, with scenesWritten 0 and no text. Only a user abort
+ * rejects. Stored and streamed text are the same.
  */
 async function completeScenes(
   ctx: DraftContext,
@@ -804,6 +806,11 @@ async function completeScenes(
 
   let scenesWritten = 1
   let cut = false
+  // An empty first scene leaves no opening to build on, so no later scene is written.
+  if (written.text === '') {
+    cut = true
+    scenesWritten = 0
+  }
   for (let index = 1; index < card.scenes.length && !cut; index++) {
     const remaining = Math.min(
       DRAFT_TOTAL_BUDGET_MS - (Date.now() - ctx.startedAt),
@@ -864,9 +871,10 @@ async function completeScenes(
 }
 
 /**
- * Passes one scene's chunks on to `pipe` as they arrive and appends them to `written`. Leading
- * whitespace of the scene is dropped, and `joint` goes out with the first kept chunk, so a scene
- * that yields nothing adds nothing to the text.
+ * Passes one scene's chunks on to `pipe` as they arrive and appends them to `written`. Blank lines
+ * and break lines at the start and end of the scene are dropped, because code writes the break
+ * between scenes. `joint` goes out with the first kept text, so a scene that yields nothing adds
+ * nothing to the text.
  */
 async function streamScene(
   source: AsyncIterable<string>,
@@ -874,15 +882,17 @@ async function streamScene(
   written: { text: string },
   joint: string,
 ): Promise<void> {
+  const edges = createSceneEdgeFilter()
   let started = false
-  for await (const chunk of source) {
-    const piece = started ? chunk : chunk.trimStart()
-    if (piece === '') continue
+  const send = (piece: string): void => {
+    if (piece === '') return
     const out = (started ? '' : joint) + piece
     started = true
     written.text += out
     pipe.push(out)
   }
+  for await (const chunk of source) send(edges.push(chunk))
+  send(edges.end())
 }
 
 /**
