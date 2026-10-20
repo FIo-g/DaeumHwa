@@ -30,12 +30,52 @@ export const ENDING_DEVICE_LABELS: Record<EndingDevice, string> = {
   twist: '반전',
 }
 
-/** Gives every scene an equal share of the chapter target (spaces included). */
-export function withSceneTargets(plan: DraftPlan, targetChars: number): DraftPlanCard {
-  const perScene = draftLengthPlan(targetChars, plan.scenes.length).charsPerScene
+/** Longest text the card accepts (DraftPlanCardSchema), counted in UTF-16 units like zod does. */
+export const PLAN_TEXT_MAX = 400
+/** Longest list (names, threads) the card accepts (DraftPlanCardSchema). */
+export const PLAN_LIST_MAX = 12
+
+/** Trims, then cuts to `max` units without leaving half of a surrogate pair at the end. */
+function cutText(text: string, max: number = PLAN_TEXT_MAX): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= max) return trimmed
+  let cut = trimmed.slice(0, max)
+  const last = cut.charCodeAt(cut.length - 1)
+  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1)
+  return cut
+}
+
+/**
+ * Brings a model output within the limits the card accepts: texts are trimmed and cut to
+ * PLAN_TEXT_MAX, names and threads are cut to PLAN_LIST_MAX entries. Keeps the plan otherwise.
+ */
+export function clampPlan(plan: DraftPlan): DraftPlan {
   return {
-    ...plan,
-    scenes: plan.scenes.map((scene) => ({ ...scene, targetChars: perScene })),
+    scenes: plan.scenes.map((scene) => ({
+      summary: cutText(scene.summary),
+      goal: cutText(scene.goal),
+      decision: cutText(scene.decision),
+      stake: cutText(scene.stake),
+      trigger: cutText(scene.trigger),
+      role: scene.role,
+      place: cutText(scene.place),
+      characters: scene.characters.slice(0, PLAN_LIST_MAX).map((name) => cutText(name)),
+    })),
+    ending: { device: plan.ending.device, line: cutText(plan.ending.line) },
+    threads: plan.threads.slice(0, PLAN_LIST_MAX).map((title) => cutText(title)),
+  }
+}
+
+/**
+ * Gives every scene an equal share of the chapter target (spaces included). The plan is clamped
+ * first, so the card it returns always passes DraftPlanCardSchema.
+ */
+export function withSceneTargets(plan: DraftPlan, targetChars: number): DraftPlanCard {
+  const clamped = clampPlan(plan)
+  const perScene = draftLengthPlan(targetChars, clamped.scenes.length).charsPerScene
+  return {
+    ...clamped,
+    scenes: clamped.scenes.map((scene) => ({ ...scene, targetChars: perScene })),
   }
 }
 

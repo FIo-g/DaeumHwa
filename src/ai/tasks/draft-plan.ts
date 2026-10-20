@@ -5,8 +5,16 @@
 import { z } from 'zod'
 import { neutralizeDeep, neutralizeTags, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { buildDraftPrompt, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
-import { renderPlanInstructions, type DraftPlanCard } from '@/lib/draft-plan'
+import {
+  PLAN_LIST_MAX,
+  PLAN_TEXT_MAX,
+  renderPlanInstructions,
+  type DraftPlanCard,
+} from '@/lib/draft-plan'
 import type { AiTaskDef } from '@/ai/types'
+
+/** Most scenes a plan card can have: the schemas, the plan call and the revision clamp all use it. */
+export const PLAN_MAX_SCENES = 8
 
 export const SCENE_ROLES = ['opening', 'turn', 'rise', 'ending'] as const
 export type SceneRole = (typeof SCENE_ROLES)[number]
@@ -53,12 +61,12 @@ const DraftPlanEndingSchema = z.object({
 
 export const DraftPlanSchema: z.ZodType<DraftPlan> = z.object({
   // One to eight scenes: the call fails and is recorded as one when the model goes outside that.
-  scenes: z.array(DraftPlanSceneSchema).min(1).max(8),
+  scenes: z.array(DraftPlanSceneSchema).min(1).max(PLAN_MAX_SCENES),
   ending: DraftPlanEndingSchema,
   threads: z.array(z.string()),
 })
 
-const CardText = z.string().max(400)
+const CardText = z.string().max(PLAN_TEXT_MAX)
 
 /**
  * The card the author sends back (an approved or edited card). Client input goes into the prompt, so
@@ -76,14 +84,14 @@ export const DraftPlanCardSchema: z.ZodType<DraftPlanCard> = z.object({
         trigger: CardText,
         role: z.enum(SCENE_ROLES),
         place: CardText,
-        characters: z.array(CardText).max(12),
+        characters: z.array(CardText).max(PLAN_LIST_MAX),
         targetChars: z.number().int().min(0),
       }),
     )
     .min(1)
-    .max(8),
+    .max(PLAN_MAX_SCENES),
   ending: z.object({ device: z.enum(ENDING_DEVICES), line: CardText }),
-  threads: z.array(CardText).max(12),
+  threads: z.array(CardText).max(PLAN_LIST_MAX),
 })
 
 export type DraftPlanInput = DraftPromptInput & {

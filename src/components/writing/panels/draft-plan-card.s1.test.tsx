@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DraftPlanCard } from '@/lib/draft-plan'
+import { type DraftPlanCard, PLAN_TEXT_MAX } from '@/lib/draft-plan'
 import { DraftPlanCardView } from './draft-plan-card'
 
 function makeCard(): DraftPlanCard {
@@ -153,6 +153,15 @@ describe('DraftPlanCardView', () => {
     fireEvent.click(screen.getByRole('button', { name: '다시 계획' }))
 
     expect(onRevise).toHaveBeenCalledWith('윤서가 먼저')
+  })
+
+  it('caps the 일어나는 일 textarea at the card limit', () => {
+    renderView()
+    const summaries = screen.getAllByLabelText('일어나는 일')
+    for (const summary of summaries) {
+      expect(summary.getAttribute('maxlength')).toBe(String(PLAN_TEXT_MAX))
+    }
+    expect(PLAN_TEXT_MAX).toBe(400)
   })
 
   it('calls onWrite from 이 계획으로 쓰기', () => {

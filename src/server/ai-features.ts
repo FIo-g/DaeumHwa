@@ -38,7 +38,7 @@ import {
   splitReaderSimInput,
 } from '@/ai/tasks/reader-sim'
 import { styleSuggestTask } from '@/ai/tasks/style-suggest'
-import { draftPlanTask } from '@/ai/tasks/draft-plan'
+import { draftPlanTask, PLAN_MAX_SCENES } from '@/ai/tasks/draft-plan'
 import type { Db } from '@/db/client'
 import { aiRuns, chapters } from '@/db/schema'
 import {
@@ -470,7 +470,10 @@ export async function planDraft(
     draftPlanTask,
     {
       ...promptInput,
-      sceneCount: revision ? revision.card.scenes.length : draftLengthPlan(targetChars).sceneCount,
+      sceneCount: Math.min(
+        PLAN_MAX_SCENES,
+        revision ? revision.card.scenes.length : draftLengthPlan(targetChars).sceneCount,
+      ),
       advice: await latestAdviceText(db, actor, workId),
       revision,
     },

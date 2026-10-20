@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { DraftPlan } from '@/ai/tasks/draft-plan'
+import { DraftPlanCardSchema, type DraftPlan } from '@/ai/tasks/draft-plan'
 import {
+  clampPlan,
   type DraftPlanCard,
+  PLAN_LIST_MAX,
+  PLAN_TEXT_MAX,
   planWarnings,
   renderPlanInstructions,
   withSceneTargets,
@@ -45,7 +48,51 @@ const role = (r: DraftPlan['scenes'][number]['role']) => ({
   characters: [],
 })
 
+/** A model output that goes over every card cap: 401-character texts, 13 names and 13 threads. */
+function oversizedPlan(): DraftPlan {
+  const long = '가'.repeat(401)
+  return {
+    scenes: [
+      {
+        ...plan.scenes[0],
+        goal: long,
+        characters: Array.from({ length: 13 }, (_, i) => `인물${i}`),
+      },
+    ],
+    ending: { device: 'crisis', line: long },
+    threads: Array.from({ length: 13 }, (_, i) => `떡밥${i}`),
+  }
+}
+
+describe('clampPlan', () => {
+  it('cuts texts to the card limit, and names and threads to the list limit', () => {
+    const clamped = clampPlan(oversizedPlan())
+    expect(clamped.scenes[0].goal).toHaveLength(PLAN_TEXT_MAX)
+    expect(clamped.ending.line).toHaveLength(PLAN_TEXT_MAX)
+    expect(clamped.scenes[0].characters).toHaveLength(PLAN_LIST_MAX)
+    expect(clamped.threads).toHaveLength(PLAN_LIST_MAX)
+    expect(clamped.threads[0]).toBe('떡밥0')
+  })
+
+  it('trims text before it cuts it and never splits a surrogate pair', () => {
+    const clamped = clampPlan({
+      ...plan,
+      scenes: [{ ...plan.scenes[0], summary: `  ${'가'.repeat(399)}😀😀  ` }],
+    })
+    const summary = clamped.scenes[0].summary
+    expect(summary.length).toBeLessThanOrEqual(PLAN_TEXT_MAX)
+    expect(summary.endsWith('가')).toBe(true)
+  })
+})
+
 describe('withSceneTargets', () => {
+  it('returns a card that the card schema accepts, even for an oversized plan', () => {
+    const card = withSceneTargets(oversizedPlan(), 5000)
+    expect(DraftPlanCardSchema.safeParse(card).success).toBe(true)
+    expect(card.threads).toHaveLength(12)
+    expect(card.scenes[0].goal).toHaveLength(400)
+  })
+
   it('gives every scene an equal share of the target', () => {
     const four: DraftPlan = {
       ...plan,

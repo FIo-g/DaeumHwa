@@ -4,6 +4,7 @@ import type { Db } from '@/db/client'
 import { aiUsageEvents, chapters } from '@/db/schema'
 import { buildDraftPrompt } from '@/ai/tasks/draft-chapter'
 import { draftLengthPlan } from '@/lib/draft-length'
+import { DraftPlanCardSchema } from '@/ai/tasks/draft-plan'
 import { withSceneTargets } from '@/lib/draft-plan'
 import { FakeAiClient } from '@/test/fake-ai'
 import { fakeDraftPlan } from '@/test/ai-fakes/draft-plan'
@@ -169,6 +170,73 @@ describe('planDraft', () => {
 
     const prompt = spy.mock.calls[0][0].prompt
     expect(prompt.slice(prompt.indexOf('<wiki>'), prompt.indexOf('</wiki>'))).toContain('종루지기')
+  })
+
+  it('asks for at most eight scenes for a 15,000-character target', async () => {
+    const client = new FakeAiClient()
+    const spy = vi.spyOn(client, 'generateObject')
+
+    await planDraft(
+      db,
+      actor,
+      { workId, instructions: '', entryIds: [], targetChars: 15000 },
+      client,
+    )
+
+    const prompt = spy.mock.calls[0][0].prompt
+    expect(prompt).toContain('<scene_count>8</scene_count>')
+    expect(prompt).not.toContain('<scene_count>10</scene_count>')
+  })
+
+  it('asks for at most eight scenes when a revision card has more', async () => {
+    const client = new FakeAiClient()
+    const spy = vi.spyOn(client, 'generateObject')
+    const nine = withSceneTargets(
+      { ...fakeDraftPlan(), scenes: Array.from({ length: 9 }, () => fakeDraftPlan().scenes[1]) },
+      9000,
+    )
+
+    await planDraft(
+      db,
+      actor,
+      {
+        workId,
+        instructions: '',
+        entryIds: [],
+        targetChars: 9000,
+        revision: { card: nine, note: '짧게' },
+      },
+      client,
+    )
+
+    expect(spy.mock.calls[0][0].prompt).toContain('<scene_count>8</scene_count>')
+  })
+
+  it('returns a card the card schema accepts when the model goes over the card limits', async () => {
+    const long = '가'.repeat(401)
+    const plan = {
+      ...fakeDraftPlan(),
+      scenes: [
+        {
+          ...fakeDraftPlan().scenes[0],
+          characters: Array.from({ length: 13 }, (_, i) => `인물${i}`),
+        },
+      ],
+      ending: { device: 'crisis' as const, line: long },
+      threads: Array.from({ length: 13 }, (_, i) => `떡밥${i}`),
+    }
+    const client = new FakeAiClient({ overrides: { 'draft-plan': () => plan } })
+
+    const { card } = await planDraft(
+      db,
+      actor,
+      { workId, instructions: '', entryIds: [], targetChars: 5000 },
+      client,
+    )
+
+    expect(DraftPlanCardSchema.safeParse(card).success).toBe(true)
+    expect(card.threads).toHaveLength(12)
+    expect(card.ending.line).toHaveLength(400)
   })
 
   it('keeps the plan pack on the author line when there is one', async () => {

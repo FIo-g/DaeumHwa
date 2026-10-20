@@ -7,7 +7,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { draftLengthPlan } from '@/lib/draft-length'
-import { type DraftPlanCard, ENDING_DEVICE_LABELS, SCENE_ROLE_LABELS } from '@/lib/draft-plan'
+import {
+  type DraftPlanCard,
+  ENDING_DEVICE_LABELS,
+  PLAN_TEXT_MAX,
+  SCENE_ROLE_LABELS,
+} from '@/lib/draft-plan'
 
 export type PlanEditKind = 'removed' | 'moved' | 'textEdits'
 
@@ -130,6 +135,7 @@ export function DraftPlanCardView({
                 id={`plan-summary-${index}`}
                 value={scene.summary}
                 rows={2}
+                maxLength={PLAN_TEXT_MAX}
                 disabled={busy}
                 onFocus={() => {
                   focused.current = { index, before: scene.summary }
