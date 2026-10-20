@@ -93,7 +93,11 @@ function highIssue(input: unknown): ContinuityOutput {
 
 function localInner(): FakeAiClient {
   return new FakeAiClient({
-    overrides: { 'draft-chapter': () => LONG_KO, 'continuity-check': highIssue },
+    overrides: {
+      'draft-chapter': () => LONG_KO,
+      'draft-expand': NO_EXPANSION,
+      'continuity-check': highIssue,
+    },
   })
 }
 
@@ -144,6 +148,12 @@ async function runLocal(dir: string) {
   const ctx = await open(dir, { inner: localInner(), autoAuthor: true })
   ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
   return { ctx, state: await runUntilBlocked(ctx) }
+}
+
+// Expansion fails in these tests, as before the fake answered draft-expand: they plant text
+// that an accepted expansion would rewrite.
+const NO_EXPANSION = () => {
+  throw new Error('no expansion in this test')
 }
 
 describe('scene rewrite resume after a crash (local profile)', () => {
@@ -219,6 +229,7 @@ describe('scene rewrite resume after a crash (local profile)', () => {
     const inner = new FakeAiClient({
       overrides: {
         'draft-chapter': () => TWO_SCENE_KO,
+        'draft-expand': NO_EXPANSION,
         'continuity-check': twoIssues,
         'scene-rewrite': sceneRewriteAnswer,
       },

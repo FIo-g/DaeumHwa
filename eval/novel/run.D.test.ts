@@ -96,18 +96,30 @@ function highIssue(input: unknown): ContinuityOutput {
 async function runLocal(dir: string, modelId: 'qwen3.8-27b' | 'haiku-5.5') {
   makeRun(dir, 'ko', modelId, 2)
   const inner = new FakeAiClient({
-    overrides: { 'draft-chapter': () => LONG_KO, 'continuity-check': highIssue },
+    overrides: {
+      'draft-chapter': () => LONG_KO,
+      'draft-expand': NO_EXPANSION,
+      'continuity-check': highIssue,
+    },
   })
   const ctx = await open(dir, { inner, autoAuthor: true })
   ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
   return { ctx, state: await runUntilBlocked(ctx) }
 }
 
+// Expansion fails in these tests, as before the fake answered draft-expand: they plant text
+// that an accepted expansion would rewrite.
+const NO_EXPANSION = () => {
+  throw new Error('no expansion in this test')
+}
+
 describe('draft beats (local profile)', () => {
   it('makes the beat list first and keeps it next to the attempt', async () => {
     const dir = newDir()
     makeRun(dir)
-    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_KO } })
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => LONG_KO, 'draft-expand': NO_EXPANSION },
+    })
     const ctx = await open(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
     const state = await runUntilBlocked(ctx)
@@ -146,7 +158,11 @@ describe('scene rewrite (local profile)', () => {
     const dir = newDir()
     makeRun(dir, 'ko', 'qwen3.8-27b', 2)
     const inner = new FakeAiClient({
-      overrides: { 'draft-chapter': () => LONG_KO, 'continuity-check': highIssue },
+      overrides: {
+        'draft-chapter': () => LONG_KO,
+        'draft-expand': NO_EXPANSION,
+        'continuity-check': highIssue,
+      },
     })
     const first = await open(dir, { inner, autoAuthor: true })
     first.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))

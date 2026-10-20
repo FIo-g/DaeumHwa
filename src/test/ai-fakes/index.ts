@@ -7,7 +7,12 @@ import { fakeContinuity } from '@/test/ai-fakes/continuity-check'
 import { fakeAdvice } from '@/test/ai-fakes/direction-advice'
 import { fakeDraftBeats } from '@/test/ai-fakes/draft-beats'
 import { fakeDraftPlan } from '@/test/ai-fakes/draft-plan'
-import { fakeDraft, fakeDraftContinue, fakeDraftScene } from '@/test/ai-fakes/draft-chapter'
+import {
+  fakeDraft,
+  fakeDraftContinue,
+  fakeDraftExpand,
+  fakeDraftScene,
+} from '@/test/ai-fakes/draft-chapter'
 import { fakeDraftRepair } from '@/test/ai-fakes/draft-repair'
 import { fakeInterviewExtraction } from '@/test/ai-fakes/interview-extract'
 import { fakeInterviewQuestion } from '@/test/ai-fakes/interview-question'
@@ -44,4 +49,5 @@ export const FAKE_TEXT: Partial<Record<AiTaskName, (input: any) => string>> = {
   'draft-chapter': fakeDraft,
   'draft-continue': fakeDraftContinue,
   'draft-scene': fakeDraftScene,
+  'draft-expand': fakeDraftExpand,
 }

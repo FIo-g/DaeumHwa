@@ -64,6 +64,12 @@ function recordingClient(questions: string[], extracts: string[]): AiClient {
   }
 }
 
+// Expansion fails in these tests, as before the fake answered draft-expand: they plant text
+// that an accepted expansion would rewrite.
+const NO_EXPANSION = () => {
+  throw new Error('no expansion in this test')
+}
+
 describe('openRun speech flag (M5)', () => {
   it('sets AI_SPEECH_STYLE on for a speech run and restores the unset value', async () => {
     delete process.env.AI_SPEECH_STYLE
@@ -242,7 +248,9 @@ describe('--two-step on for a cloud profile (M5)', () => {
   it('makes the beat list before the prose', async () => {
     const dir = newDir()
     makeCloudRun(dir, { twoStep: true })
-    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_KO } })
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => LONG_KO, 'draft-expand': NO_EXPANSION },
+    })
     const ctx = await openRun(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
     try {
@@ -264,7 +272,11 @@ describe('--two-step on for a cloud profile (M5)', () => {
     const dir = newDir()
     makeCloudRun(dir, { twoStep: true, chapters: 2 })
     const inner = new FakeAiClient({
-      overrides: { 'draft-chapter': () => LONG_KO, 'continuity-check': highIssue },
+      overrides: {
+        'draft-chapter': () => LONG_KO,
+        'draft-expand': NO_EXPANSION,
+        'continuity-check': highIssue,
+      },
     })
     const ctx = await openRun(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
@@ -285,7 +297,9 @@ describe('--two-step on for a cloud profile (M5)', () => {
   it('leaves the foreign-script repair off', async () => {
     const dir = newDir()
     makeCloudRun(dir, { twoStep: true })
-    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_WITH_HAN } })
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => LONG_WITH_HAN, 'draft-expand': NO_EXPANSION },
+    })
     const ctx = await openRun(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
     let state
@@ -303,7 +317,11 @@ describe('--two-step on for a cloud profile (M5)', () => {
     const dir = newDir()
     makeCloudRun(dir)
     const inner = new FakeAiClient({
-      overrides: { 'draft-chapter': () => LONG_KO, 'continuity-check': highIssue },
+      overrides: {
+        'draft-chapter': () => LONG_KO,
+        'draft-expand': NO_EXPANSION,
+        'continuity-check': highIssue,
+      },
     })
     const ctx = await openRun(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))

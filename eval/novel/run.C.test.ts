@@ -118,11 +118,19 @@ async function savedBody(ctx: OpenRun, chapterId: string): Promise<string | unde
   return row?.body
 }
 
+// Expansion fails in these tests, as before the fake answered draft-expand: they plant text
+// that an accepted expansion would rewrite.
+const NO_EXPANSION = () => {
+  throw new Error('no expansion in this test')
+}
+
 describe('draft step: foreign-script repair (ko)', () => {
   it('repairs Han before review and saves the clean text', async () => {
     const dir = newDir()
     makeRun(dir)
-    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_KO } })
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => LONG_KO, 'draft-expand': NO_EXPANSION },
+    })
     const ctx = await open(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
     const state = await runUntilBlocked(ctx)
@@ -151,7 +159,7 @@ describe('draft step: foreign-script repair (ko)', () => {
     makeRun(dir)
     const inner = faultyClient(
       [{ task: 'draft-repair', error: () => new AppError('AI_ERROR', 'x') }],
-      { overrides: { 'draft-chapter': () => LONG_KO } },
+      { overrides: { 'draft-chapter': () => LONG_KO, 'draft-expand': NO_EXPANSION } },
     )
     const ctx = await open(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
@@ -176,6 +184,7 @@ describe('draft step: foreign-script repair (ko)', () => {
     const first = new FakeAiClient({
       overrides: {
         'draft-chapter': () => WITH_HAN,
+        'draft-expand': NO_EXPANSION,
         'draft-repair': (input) => {
           const { flags } = input as { flags: { kind: string }[] }
           if (flags.some((flag) => flag.kind === 'foreign-script')) {
@@ -194,7 +203,9 @@ describe('draft step: foreign-script repair (ko)', () => {
 
     // Resumed draft: a clean text, so no repair runs and nothing is left over.
     const ctx2 = await open(dir, {
-      inner: new FakeAiClient({ overrides: { 'draft-chapter': () => SHORT } }),
+      inner: new FakeAiClient({
+        overrides: { 'draft-chapter': () => SHORT, 'draft-expand': NO_EXPANSION },
+      }),
       autoAuthor: true,
     })
     ctx2.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
@@ -208,7 +219,9 @@ describe('draft step: foreign-script repair (cloud profile)', () => {
   it('is not run for a cloud profile', async () => {
     const dir = newDir()
     makeRun(dir, 'ko', 'haiku-5.5')
-    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_KO } })
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => LONG_KO, 'draft-expand': NO_EXPANSION },
+    })
     const ctx = await open(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('ko'))
     const state = await runUntilBlocked(ctx)
@@ -225,7 +238,9 @@ describe('draft step: foreign-script repair (en)', () => {
   it('is not run for an English run', async () => {
     const dir = newDir()
     makeRun(dir, 'en')
-    const inner = new FakeAiClient({ overrides: { 'draft-chapter': () => LONG_KO } })
+    const inner = new FakeAiClient({
+      overrides: { 'draft-chapter': () => LONG_KO, 'draft-expand': NO_EXPANSION },
+    })
     const ctx = await open(dir, { inner, autoAuthor: true })
     ctx.autoAuthor = (p) => fakeAnswer(p, loadBible('en'))
     const state = await runUntilBlocked(ctx)
