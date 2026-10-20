@@ -201,4 +201,89 @@ describe('usage events (stage 0)', () => {
     ).resolves.toBeUndefined()
     expect(await rowsOf(db, 'draft_edit_ratio')).toHaveLength(0)
   })
+
+  it('freezes the ratio once a later draft was appended to the chapter', async () => {
+    const first = await insertDraftRun(db, actor.userId, workId, AI_TEXT)
+    await recordDraftUse(db, actor, { workId, chapterId, runId: first, priorChars: 0 })
+    await updateDraftEditRatio(db, workId, chapterId, AI_TEXT)
+
+    const second = '그녀는 편지를 펼쳤다. 종이는 눅눅했다.'
+    const secondRun = await insertDraftRun(db, actor.userId, workId, second)
+    await recordDraftUse(db, actor, {
+      workId,
+      chapterId,
+      runId: secondRun,
+      priorChars: AI_TEXT.length,
+    })
+    await updateDraftEditRatio(db, workId, chapterId, `${AI_TEXT}\n\n${second}`)
+
+    const rows = await rowsOf(db, 'draft_edit_ratio')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].value).toBe(0)
+    expect(rows[0].extra).toEqual({ aiChars: AI_TEXT.length, bodyChars: AI_TEXT.length })
+  })
+
+  it('uses a new draft as the base again when the chapter was cleared and refilled', async () => {
+    const first = await insertDraftRun(db, actor.userId, workId, AI_TEXT)
+    await recordDraftUse(db, actor, { workId, chapterId, runId: first, priorChars: 0 })
+    await updateDraftEditRatio(db, workId, chapterId, AI_TEXT)
+
+    const second = '그녀는 편지를 펼쳤다. 종이는 눅눅했다.'
+    const secondRun = await insertDraftRun(db, actor.userId, workId, second)
+    await recordDraftUse(db, actor, { workId, chapterId, runId: secondRun, priorChars: 0 })
+    await updateDraftEditRatio(db, workId, chapterId, second)
+
+    const rows = await rowsOf(db, 'draft_edit_ratio')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].value).toBe(0)
+    expect(rows[0].extra).toEqual({ aiChars: second.length, bodyChars: second.length })
+  })
+
+  describe('when the diff is too expensive', () => {
+    // Seeded so the two texts are unrelated and the run is the same every time.
+    function randomKorean(seed: number, chars: number): string {
+      const syllables = '가나다라마바사아자차카타파하서윤은문을열었다안개들어왔종이눅했'
+      let state = seed
+      const next = () => {
+        state = (state * 1664525 + 1013904223) % 4294967296
+        return state / 4294967296
+      }
+      let text = ''
+      while (text.length < chars) {
+        const length = 2 + Math.floor(next() * 3)
+        for (let i = 0; i < length; i++) text += syllables[Math.floor(next() * syllables.length)]
+        text += ' '
+      }
+      return text.slice(0, chars)
+    }
+
+    it('returns quickly and writes no ratio row', async () => {
+      const aiText = randomKorean(1, 20_000)
+      const runId = await insertDraftRun(db, actor.userId, workId, aiText)
+      await recordDraftUse(db, actor, { workId, chapterId, runId, priorChars: 0 })
+
+      const start = performance.now()
+      await updateDraftEditRatio(db, workId, chapterId, randomKorean(2, 20_000))
+      expect(performance.now() - start).toBeLessThan(500)
+      expect(await rowsOf(db, 'draft_edit_ratio')).toHaveLength(0)
+    })
+
+    it('keeps the earlier ratio row unchanged', async () => {
+      const aiText = randomKorean(1, 20_000)
+      const runId = await insertDraftRun(db, actor.userId, workId, aiText)
+      await recordDraftUse(db, actor, { workId, chapterId, runId, priorChars: 0 })
+      await updateDraftEditRatio(db, workId, chapterId, aiText)
+      const [before] = await rowsOf(db, 'draft_edit_ratio')
+      expect(before.value).toBe(0)
+
+      const start = performance.now()
+      await updateDraftEditRatio(db, workId, chapterId, randomKorean(2, 20_000))
+      expect(performance.now() - start).toBeLessThan(500)
+
+      const rows = await rowsOf(db, 'draft_edit_ratio')
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ id: before.id, value: 0 })
+      expect(rows[0].extra).toEqual(before.extra)
+    })
+  })
 })

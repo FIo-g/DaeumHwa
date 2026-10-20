@@ -138,4 +138,54 @@ describe('draft usage events (stage 0)', () => {
     expect(rows[0].runId).toBe(run.runId)
     expect(rows[0].extra).toEqual({ mode: 0, priorChars: 0 })
   })
+
+  describe('edit ratio of a chapter created from a draft', () => {
+    async function insertDraftRun(text: string) {
+      const [run] = await db
+        .insert(aiRuns)
+        .values({
+          workId,
+          userId: actor.userId,
+          task: 'draft-chapter',
+          status: 'done',
+          output: { text },
+        })
+        .returning()
+      return run
+    }
+
+    async function ratioRows(chapterId: string) {
+      const rows = await db
+        .select()
+        .from(aiUsageEvents)
+        .where(eq(aiUsageEvents.kind, 'draft_edit_ratio'))
+      return rows.filter((row) => row.chapterId === chapterId)
+    }
+
+    it('writes a zero ratio row when the draft is accepted without edits', async () => {
+      const run = await insertDraftRun(DRAFT)
+      const chapter = await createChapterFromDraft(db, actor, { workId, runId: run.id })
+
+      const rows = await ratioRows(chapter.id)
+      expect(rows).toHaveLength(1)
+      expect(rows[0].value).toBe(0)
+      expect(rows[0].extra).toEqual({ aiChars: DRAFT.length, bodyChars: DRAFT.length })
+    })
+
+    it('writes the ratio of the body override when a server caller passes one', async () => {
+      const edited = '서윤은 편지를 활짝 펼쳤다. 종이는 눅눅했다.'
+      const run = await insertDraftRun(DRAFT)
+      const chapter = await createChapterFromDraft(db, actor, {
+        workId,
+        runId: run.id,
+        body: edited,
+      })
+
+      const rows = await ratioRows(chapter.id)
+      expect(rows).toHaveLength(1)
+      expect(rows[0].value).toBeGreaterThan(0)
+      expect(rows[0].value).toBeLessThan(1)
+      expect(rows[0].extra).toEqual({ aiChars: DRAFT.length, bodyChars: chapter.body.length })
+    })
+  })
 })

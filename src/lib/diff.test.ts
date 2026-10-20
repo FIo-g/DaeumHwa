@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { diffStats, diffTexts } from '@/lib/diff'
+import { describe, expect, it, vi } from 'vitest'
+import { diffStats, diffTexts, diffTextsBounded } from '@/lib/diff'
 
 describe('diffTexts', () => {
   it('reports one delete and one insert for a changed word', () => {
@@ -37,4 +37,31 @@ describe('diffStats', () => {
     ]
     expect(diffStats(parts)).toEqual({ inserted: 2, deleted: 2 })
   })
+})
+
+describe('diffTextsBounded', () => {
+  it.each(['words', 'chars', 'lines'] as const)(
+    'returns the same parts as diffTexts for a small edit in %s mode',
+    (mode) => {
+      const a = '첫 줄은 그대로\n서윤은 웃었다\n마지막 줄'
+      const b = '첫 줄은 그대로\n서윤은 울었다\n마지막 줄'
+      expect(diffTextsBounded(a, b, mode, { timeoutMs: 1000 })).toEqual(diffTexts(a, b, mode))
+    },
+  )
+
+  it.each(['words', 'chars', 'lines'] as const)(
+    'returns null in %s mode once the time budget is spent',
+    (mode) => {
+      let calls = 0
+      // The first reading starts the clock, every later one is far past the budget.
+      const now = vi.spyOn(Date, 'now').mockImplementation(() => calls++ * 10_000)
+      try {
+        expect(
+          diffTextsBounded('가 나 다\n라', '마 바 사\n아', mode, { timeoutMs: 100 }),
+        ).toBeNull()
+      } finally {
+        now.mockRestore()
+      }
+    },
+  )
 })

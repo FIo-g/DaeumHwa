@@ -6,7 +6,7 @@ import { createTestDb } from '@/test/db'
 import { createTestChapter, createTestUser, createTestWork } from '@/test/factories'
 import { createChapterFromDraft } from '@/server/ai-features'
 import { saveChapter } from '@/server/chapters'
-import { updateDraftEditRatio } from '@/server/usage-events'
+import { recordDraftUse, updateDraftEditRatio } from '@/server/usage-events'
 
 // Stage 0: a save never fails because usage counting fails.
 
@@ -73,6 +73,51 @@ describe('saveChapter usage counting (stage 0)', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].value).toBeGreaterThan(0)
     expect(rows[0].value).toBeLessThan(1)
+  })
+
+  it('keeps the ratio after a later draft is appended and saved', async () => {
+    const insertRun = async (text: string) => {
+      const [run] = await db
+        .insert(aiRuns)
+        .values({
+          workId,
+          userId: actor.userId,
+          task: 'draft-chapter',
+          status: 'done',
+          output: { text },
+        })
+        .returning()
+      return run
+    }
+    const run = await insertRun(AI_TEXT)
+    const created = await createChapterFromDraft(db, actor, { workId, runId: run.id })
+    const saved = await saveChapter(db, actor, {
+      chapterId: created.id,
+      body: EDITED,
+      expectedVersion: created.version,
+    })
+    const ratioRows = () =>
+      db.select().from(aiUsageEvents).where(eq(aiUsageEvents.kind, 'draft_edit_ratio'))
+    const [before] = await ratioRows()
+
+    const next = '그녀는 편지를 펼쳤다. 종이는 눅눅했다.'
+    const nextRun = await insertRun(next)
+    await recordDraftUse(db, actor, {
+      workId,
+      chapterId: created.id,
+      runId: nextRun.id,
+      priorChars: EDITED.length,
+    })
+    await saveChapter(db, actor, {
+      chapterId: created.id,
+      body: `${EDITED}\n\n${next}`,
+      expectedVersion: saved.version,
+    })
+
+    const rows = await ratioRows()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ id: before.id, value: before.value })
+    expect(rows[0].extra).toEqual(before.extra)
   })
 
   describe('with a draft_used event planted from another work', () => {

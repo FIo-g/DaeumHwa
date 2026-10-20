@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { Db } from '@/db/client'
 import { aiRuns, aiUsageEvents, chapters } from '@/db/schema'
 import type { Actor, UsageEventKind } from '@/db/types'
-import { diffStats, diffTexts } from '@/lib/diff'
+import { diffStats, diffTextsBounded } from '@/lib/diff'
 import { requireWorkRole } from '@/server/access'
 import { AppError } from '@/lib/errors'
 
@@ -12,6 +12,12 @@ import { AppError } from '@/lib/errors'
 
 /** Longer texts are skipped: the word diff on them costs more than a usage number is worth. */
 const MAX_RATIO_CHARS = 40_000
+
+/**
+ * Time budget of the word diff. The diff runs on the server's event loop after every save, so a
+ * body that has diverged far from the draft is skipped instead of blocking other requests.
+ */
+const RATIO_DIFF_BUDGET_MS = 100
 
 const ExtraSchema = z.record(z.string(), z.number())
 
@@ -81,7 +87,9 @@ export async function recordDraftUse(
 /**
  * Updates the edit ratio of a chapter that was created from a draft: the share of the AI text
  * the author changed, in code points over the AI text length. Runs after a save, so it is best
- * effort: callers catch its errors. Skips texts over the size limit.
+ * effort: callers catch its errors. Skips texts over the size limit and bodies whose diff
+ * exceeds its time budget (an existing row then keeps its value). The ratio freezes once a later
+ * draft was appended, because that AI text would count as the author's own changes.
  */
 export async function updateDraftEditRatio(
   db: Db,
@@ -104,6 +112,8 @@ export async function updateDraftEditRatio(
   // The latest draft_used of a new chapter (priorChars 0) is the draft the chapter came from.
   const event = used.find((row) => row.extra.priorChars === 0)
   if (!event || !event.runId) return
+  // `used` is newest first: a newer draft_used means more AI text came in after the base draft.
+  if (used.indexOf(event) > 0) return
 
   const [run] = await db.select().from(aiRuns).where(eq(aiRuns.id, event.runId)).limit(1)
   if (!run || run.workId !== workId) return
@@ -111,7 +121,9 @@ export async function updateDraftEditRatio(
   if (aiText === null) return
   if (aiText.length > MAX_RATIO_CHARS || body.length > MAX_RATIO_CHARS) return
 
-  const { inserted, deleted } = diffStats(diffTexts(aiText, body, 'words'))
+  const parts = diffTextsBounded(aiText, body, 'words', { timeoutMs: RATIO_DIFF_BUDGET_MS })
+  if (!parts) return
+  const { inserted, deleted } = diffStats(parts)
   const value = (inserted + deleted) / Math.max(1, aiText.length)
   const extra = { aiChars: aiText.length, bodyChars: body.length }
 

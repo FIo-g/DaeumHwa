@@ -72,7 +72,7 @@ import { isSpeechStyleEnabled, selectMainVoices } from '@/ai/voice'
 import { listStyleCards } from '@/server/styles'
 import { listThreads } from '@/server/threads'
 import { getWork } from '@/server/works'
-import { recordUsageEvent } from '@/server/usage-events'
+import { recordUsageEvent, updateDraftEditRatio } from '@/server/usage-events'
 
 // AI features on top of the wiki (spec F11, F12, F13). Each AI call is recorded in ai_runs.
 // Nothing here writes wiki tables: style cards go through proposals, drafts become chapters only
@@ -652,6 +652,8 @@ export async function createChapterFromDraft(
       value: text.length,
       extra: { mode: 0, priorChars: 0 },
     })
+    // The unedited chapter is the best case for the edit ratio, so it gets its row now.
+    await updateDraftEditRatio(db, input.workId, chapter.id, chapter.body)
   } catch (error) {
     console.warn('usage event draft_used failed', error)
   }
