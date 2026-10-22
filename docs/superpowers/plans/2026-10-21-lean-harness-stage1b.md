@@ -267,6 +267,16 @@ Worktree `../DaeumHwa-s1b` detached at the reviewed commit. Flags on every run: 
 - [ ] **Step 2–4:** run, implement, run as in Task 6. `pnpm vitest run src/server/ai-features src/ai/tasks/draft-expand src/app/api/works eval/novel/run.expand-fake.s1b.test.ts src/test/ai-fakes --maxWorkers=2`.
 - [ ] **Step 5: Commit:** `fix(draft): allow a third expansion round after a refused rewrite`.
 
+**Other targets (probe, 2026-10-22, `scratchpad/m0/targets.log`):**
+- Setup: the s1bq and s1bqr quick-draft prompts were resent with only `<target_length>` and `<scene_budget>` changed. The expansion then ran with the Task 6b rules.
+- First drafts grow with the target and stay at 60–85% of it:
+  - target 3,000: 2,511 and 2,131 (84%, 71%);
+  - target 8,000: 5,142 and 4,957 (64%, 62%).
+- Finals: 108% and 113% at 3,000; 107% and 111% at 8,000.
+  - At 8,000, five spans and the per-round cap of 4 were covered by round 2. One draft needed all three rounds.
+- No overshoot was seen at the smaller target, so no shrink path and no first-draft calibration are added.
+- Limit: expansion took 60–80 s at 8,000. With a first draft of 110–145 s, that fits the 290 s budget. Well above 10,000 characters, the last round can be cut by the budget.
+
 ## Measurement M1c (orchestrator)
 
 Worktree at the Task 6 commit, with stage 2 changes left out. Flags on both runs: `--deploy-settings --directives on`.
