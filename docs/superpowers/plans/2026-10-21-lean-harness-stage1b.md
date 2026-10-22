@@ -199,3 +199,48 @@ Worktree `../DaeumHwa-s1b` detached at the reviewed commit. Flags on every run: 
 - **Expansion:** quick runs against s0 and s0fix on T3, Q and must-fix.
 - **Plan card:** plan runs against quick runs, and the few-instruction run against s0few, under the stage 1 adoption rule.
 - **Writing it up:** the stage 1 results doc (sonnet, Korean) `docs/eval/harness/2026-10-21-stage1.md` covers M1 and M1b.
+
+## Task 6 (addendum after M1b): a second expansion round
+
+**Why (M1b, 2026-10-22, haiku cloud, first two finished runs):**
+- First drafts came out shorter than in M1: 3,256 (s1br, plan flow) and 2,881 (s1bq, quick) characters, 65% and 58% of 5,000.
+- Every expansion was accepted, but each delivered less than it was asked when the span was far under its share: 740→1,322 and 727→1,303 (72% and 71% of the 1,834 ask, about 1.8× growth), 1,004→1,689, 1,150→1,563 and 1,239→1,663 (85–92%), 1,271→1,876 (102%).
+- The drafts after expansion were 4,867 and 4,547, so both runs failed T3 again. Trimming and repair changed less than 60 characters.
+- A larger single ask does not fix it. Delivery falls with the growth asked (about 72% of a 2.5× ask, 85–102% of a ≤1.5× ask), so a ratio high enough for the shortest span overshoots spans near their share.
+- A second round asks only ≤1.5× growth. Applied to these two drafts, it would reach about 5,400 and 5,100 (estimate from the delivery rates above, checked by the probe in step 4).
+
+**Files:** `src/server/ai-features.ts`. Test: `src/server/ai-features.expand-round.s1b.test.ts`; update existing expansion tests only where they pin a single round.
+
+**Interfaces:**
+- `EXPAND_ROUNDS = 2`. `expandDraft` runs one round, then a second one on the spliced text when that text is still under `targetChars`.
+- A round starts only when the current text is under target, the author has not aborted, and at least `MIN_CONTINUATION_MS` is left.
+- Each round recomputes `sceneSpans(current, sceneCount)` and the shares, and picks, orders, asks and checks exactly as round 1 does (`EXPAND_SHORT_RATIO`, `EXPAND_ASK_RATIO`, `MAX_EXPAND_SPANS` per round, the same pool and per-span clock check). `<before>` and `<after>` come from the current text.
+- A round with at least one accepted rewrite stores its text with `replaceRunOutput` (with the warnings so far) and sends one replace record. The last record always equals the stored text.
+- Warnings from every round are kept. A round with no accepted rewrite stores nothing new and records its warnings the way a single round does today.
+- An abort during either round rejects as today. Text a finished round 1 already stored stays stored, as any completed write does.
+- Extract the round into a helper (for example `expandRound(ctx, text): Promise<{ text: string; accepted: number; warnings: DraftWarning[] }>`) so both rounds share one code path. The name and shape are the builder's call.
+
+- [ ] **Step 1: Write the failing tests** (`FakeAiClient`; the expansions are returned short on purpose):
+  - A 3-span first draft whose round-1 rewrites leave the total under target sends round-2 `draft-expand` calls only for the spans still under their share. Each round-2 `<scene>` is the round-1 rewrite, and the stored text is the round-2 splice.
+  - A draft whose round 1 reaches the target sends no round-2 call.
+  - With less than `MIN_CONTINUATION_MS` left after round 1 (fake clock), no round-2 call is made and the round-1 text is stored.
+  - An `acceptsReplace` client gets one replace record per round with an accepted rewrite, and `parseDraftStream` of the whole body equals the stored text.
+  - A round-1 `EXPAND_REJECTED` warning is still stored after round 2 succeeds.
+  - At most `2 × MAX_EXPAND_SPANS` expansion calls are made per draft.
+- [ ] **Step 2: Run** `pnpm vitest run src/server/ai-features.expand-round.s1b.test.ts --maxWorkers=2`. Expected: FAIL.
+- [ ] **Step 3: Implement** as in Interfaces.
+- [ ] **Step 4: Run** the new test plus `pnpm vitest run src/server/ai-features* src/ai/tasks/draft-expand* --maxWorkers=2`. Expected: PASS.
+  - Then the orchestrator runs the cloud probe (`scratchpad/m0/expand-probe2.ts`, extended to two rounds) on the five M1b first drafts.
+  - Expected: every final is between 100% and 130% of target, with no banned phrase added.
+- [ ] **Step 5: Commit:** `fix(draft): run a second expansion round when the draft is still short`.
+
+## Measurement M1c (orchestrator)
+
+Worktree at the Task 6 commit, with stage 2 changes left out. Flags on both runs: `--deploy-settings --directives on`.
+
+| date | runs |
+|---|---|
+| `2026-10-22-s1c` | haiku ko (plan flow) |
+| `2026-10-22-s1cq` | haiku ko `--quick` |
+
+**Decide:** M1c with M1b, on T3, Q, must-fix, cost and time after first character, against s0 and s0fix.
