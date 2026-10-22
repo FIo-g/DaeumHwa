@@ -45,7 +45,7 @@ export class FakeAiClient implements AiClient {
   streamText(args: StreamTextArgs) {
     const { name, input } = args.task
     this.record(args)
-    const text = this.streamedText(name, input)
+    const text = this.streamedText(name, input, args.prompt)
     const model = args.model ?? this.defaultModel
     const chunks = splitChunks(text, CHUNK_CHARS)
     const textStream = (async function* () {
@@ -72,15 +72,16 @@ export class FakeAiClient implements AiClient {
     throw new Error(`No fake output for task ${name}`)
   }
 
-  private streamedText(name: AiTaskName, input: unknown): string {
+  private streamedText(name: AiTaskName, input: unknown, prompt: string): string {
     const override = this.overrides[name]
     if (override) {
       const value = override(input)
       if (typeof value !== 'string') throw new Error(`Fake text for task ${name} must be a string`)
       return value
     }
+    // The prompt goes along too, for fakes that answer the text in it (draft-expand's span).
     const fake = FAKE_TEXT[name]
-    if (fake) return fake(input)
+    if (fake) return fake(input, prompt)
     throw new Error(`No fake output for task ${name}`)
   }
 }

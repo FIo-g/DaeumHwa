@@ -31,8 +31,11 @@ const SCENE_B = '민준은 편지를 읽었다. 종이가 젖어 있었다. '.re
 const SCENE_C = '도윤은 창을 닫았다. 밖에서 비가 내렸다. '.repeat(53).trim()
 const DRAFT = [SCENE_A, SCENE_B, SCENE_C].join(BREAK)
 
-/** A longer span whose sentences are all different, so it passes acceptExpansion. */
-function grown(label: string, count = 60): string {
+/**
+ * A longer span whose sentences are all different, so it passes acceptExpansion. 90 sentences put
+ * the spliced draft over 1.05 times the target, so no second expansion round runs.
+ */
+function grown(label: string, count = 90): string {
   return Array.from(
     { length: count },
     (_, i) => `${label}의 장면에서 ${i}번째 감각이 천천히 번졌다.`,

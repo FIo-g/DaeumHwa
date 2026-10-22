@@ -128,6 +128,12 @@ const EXPAND_CONCURRENCY = 2
 const EXPAND_SHORT_RATIO = 1
 /** A rewrite is asked for this many times its span's share: the middle of the 1.0x to 1.2x range. */
 const EXPAND_ASK_RATIO = 1.1
+/** Expansion rounds: round 2 fixes what round 1 left short, round 3 what a refused round 2 left. */
+const EXPAND_ROUNDS = 3
+/** Round 2 runs only while the draft is under this many times the target (a margin for trimming). */
+const EXPAND_AGAIN_RATIO = 1.05
+/** Round 2 asks a picked span for at least this many times its length. */
+const EXPAND_MIN_GROWTH_ASK = 1.2
 /** Characters of a refused rewrite kept in its EXPAND_REJECTED warning, after the failed check. */
 const REJECTED_PREVIEW_CHARS = 300
 /** Joins the scenes of a `scenes`-mode draft. The model is not asked to write it. */
@@ -887,14 +893,28 @@ type ExpandOutcome =
   | { status: 'rejected'; reason: unknown }
 
 /**
- * The expand path (default). The first text is split into scene spans (sceneSpans). Each span under
- * its share of the target is rewritten in place, asked for EXPAND_ASK_RATIO times the share,
- * EXPAND_CONCURRENCY at a time, with the end of the span before and the start of the span after as
- * context. A span is not started with less than MIN_CONTINUATION_MS of the budget left; it keeps
- * its text and records no warning. An
- * expansion that passes acceptExpansion is spliced in; any other span keeps its text and records a
- * warning whose detail starts with the failed check. The spliced text is stored in the first run
- * row. Only a user abort rejects, and then nothing is stored and no further span is started.
+ * One expansion round: the draft length below which it runs, the multiple of a span's share under
+ * which a span is picked, and the length asked for a picked span. `ask` gets the span's current
+ * length and share, the draft's current length and the number of picked spans.
+ */
+type ExpandPass = {
+  limit: number
+  pickRatio: number
+  ask: (span: { length: number; share: number }, total: number, picked: number) => number
+}
+
+/**
+ * The expand path (default), in up to EXPAND_ROUNDS rounds. Round 1 splits the first text into scene
+ * spans (sceneSpans). Each span under its share of the target is rewritten in place, asked for
+ * EXPAND_ASK_RATIO times the share. Rounds 2 and 3 share rules: each runs on the spliced text while
+ * it is under EXPAND_AGAIN_RATIO times the target, picks the spans under EXPAND_ASK_RATIO times their
+ * share, and asks each for the larger of EXPAND_MIN_GROWTH_ASK times its length and its part of the
+ * gap to the middle of the range. Each round rewrites up to MAX_EXPAND_SPANS spans, EXPAND_CONCURRENCY at a
+ * time, with the end of the span before and the start of the span after as context (expandRound).
+ * A round with an accepted rewrite stores its text and sends one replace record. Any other span keeps
+ * its text and records a warning whose detail starts with the failed check; warnings from every round
+ * are kept. A round is not started with less than MIN_CONTINUATION_MS of the budget left. Only a user
+ * abort rejects, and then nothing half-spliced is stored and no further span is started.
  */
 async function expandDraft(
   ctx: DraftContext,
@@ -902,6 +922,63 @@ async function expandDraft(
   pipe: TextPipe,
   firstText: string,
 ): Promise<string> {
+  const { db, promptInput } = ctx
+  const targetChars = promptInput.targetChars
+  const roundTwo: ExpandPass = {
+    limit: targetChars * EXPAND_AGAIN_RATIO,
+    pickRatio: EXPAND_ASK_RATIO,
+    ask: (span, total, picked) =>
+      Math.max(
+        Math.round(span.length * EXPAND_MIN_GROWTH_ASK),
+        Math.round(span.length + (targetChars * EXPAND_ASK_RATIO - total) / picked),
+      ),
+  }
+  const passes: ExpandPass[] = [
+    {
+      limit: targetChars,
+      pickRatio: EXPAND_SHORT_RATIO,
+      ask: (span) => Math.round(span.share * EXPAND_ASK_RATIO),
+    },
+    roundTwo,
+    // Round 3 uses the round-2 rules unchanged, on the text after round 2.
+    roundTwo,
+  ]
+
+  let text = firstText
+  const warnings: DraftWarning[] = []
+  for (const pass of passes.slice(0, EXPAND_ROUNDS)) {
+    const round = await expandRound(ctx, pipe, text, pass)
+    text = round.text
+    warnings.push(...round.warnings)
+    if (round.accepted > 0) {
+      // Stored text must be the text returned, so a failure here rejects instead of keeping one half.
+      try {
+        await replaceRunOutput(db, first.runId, warnings.length > 0 ? { text, warnings } : { text })
+      } catch (error) {
+        pipe.fail(error)
+        throw error
+      }
+      pipe.replace(text)
+    } else if (round.warnings.length > 0) {
+      await recordWarnings(db, first.runId, text, warnings)
+    }
+  }
+  pipe.end()
+  return text
+}
+
+/**
+ * One expansion round over `text`, as described in expandDraft. It returns the spliced text, the
+ * number of accepted rewrites and the warnings of this round, and stores nothing. A round that is
+ * skipped (the draft is at the pass limit, the author has aborted, or too little budget is left)
+ * returns the text unchanged and makes no call. Only a user abort rejects, after pipe.fail.
+ */
+async function expandRound(
+  ctx: DraftContext,
+  pipe: TextPipe,
+  text: string,
+  pass: ExpandPass,
+): Promise<{ text: string; accepted: number; warnings: DraftWarning[] }> {
   const { db, actor, workId, chapterId, promptInput, client, signal, card } = ctx
   const targetChars = promptInput.targetChars
   const remaining = Math.min(
@@ -909,20 +986,12 @@ async function expandDraft(
     STREAM_AI_TIMEOUT_MS,
   )
   // Skips are not failures: they make no call and record no warning.
-  if (
-    draftCharCount(firstText) >= targetChars ||
-    signal?.aborted ||
-    remaining < MIN_CONTINUATION_MS
-  ) {
-    pipe.end()
-    return firstText
+  if (draftCharCount(text) >= pass.limit || signal?.aborted || remaining < MIN_CONTINUATION_MS) {
+    return { text, accepted: 0, warnings: [] }
   }
 
-  const spans = sceneSpans(
-    firstText,
-    card?.scenes.length ?? draftLengthPlan(targetChars).sceneCount,
-  )
-  const spanText = (index: number): string => firstText.slice(spans[index].start, spans[index].end)
+  const spans = sceneSpans(text, card?.scenes.length ?? draftLengthPlan(targetChars).sceneCount)
+  const spanText = (index: number): string => text.slice(spans[index].start, spans[index].end)
   // A card whose scene count matches the spans gives each span its own scene target.
   const shareOf = (index: number): number =>
     Math.round(
@@ -930,15 +999,13 @@ async function expandDraft(
         ? card.scenes[index].targetChars
         : targetChars / spans.length,
     )
+  const total = draftCharCount(text)
   const picked = spans
     .map((_, index) => ({ index, text: spanText(index), share: shareOf(index) }))
-    .filter((item) => draftCharCount(item.text) < item.share * EXPAND_SHORT_RATIO)
+    .filter((item) => draftCharCount(item.text) < item.share * pass.pickRatio)
     .sort((a, b) => draftCharCount(a.text) / a.share - draftCharCount(b.text) / b.share)
     .slice(0, MAX_EXPAND_SPANS)
-  if (picked.length === 0) {
-    pipe.end()
-    return firstText
-  }
+  if (picked.length === 0) return { text, accepted: 0, warnings: [] }
 
   // Expansions are sub-runs of this draft, which already passed the run cap. They run in a small
   // pool, and the clock is read again before each span starts. `skipped` covers a span that never
@@ -956,7 +1023,7 @@ async function expandDraft(
       )
       // Time only runs out, so no later span can start either.
       if (left < MIN_CONTINUATION_MS) return
-      const { index, text, share } = picked[k]
+      const { index, text: scene, share } = picked[k]
       try {
         const before =
           index > 0
@@ -978,9 +1045,9 @@ async function expandDraft(
             system: DRAFT_EXPAND_SYSTEM,
             prompt: buildExpandPrompt({
               before,
-              scene: text,
+              scene,
               after,
-              targetChars: Math.round(share * EXPAND_ASK_RATIO),
+              targetChars: pass.ask({ length: draftCharCount(scene), share }, total, picked.length),
               styleCards: promptInput.styleCards,
               instructions: promptInput.instructions,
               requests: promptInput.requests,
@@ -1011,7 +1078,7 @@ async function expandDraft(
   const replacements: { span: SceneRange; text: string }[] = []
   const warnings: DraftWarning[] = []
   settled.forEach((outcome, k) => {
-    const { index, text } = picked[k]
+    const { index, text: scene } = picked[k]
     if (outcome.status === 'skipped') return
     if (outcome.status === 'rejected') {
       const error = outcome.reason
@@ -1022,7 +1089,7 @@ async function expandDraft(
           : String(error)
       warnings.push(continueFailedWarning('EXPAND_ERROR', detail))
     } else {
-      const rejection = expansionRejection(text, outcome.value)
+      const rejection = expansionRejection(scene, outcome.value)
       if (rejection === null) {
         replacements.push({ span: spans[index], text: outcome.value })
       } else {
@@ -1033,22 +1100,8 @@ async function expandDraft(
     }
   })
 
-  if (replacements.length === 0) {
-    if (warnings.length > 0) await recordWarnings(db, first.runId, firstText, warnings)
-    pipe.end()
-    return firstText
-  }
-  const text = spliceSpans(firstText, replacements)
-  // Stored text must be the text returned, so a failure here rejects instead of keeping one half.
-  try {
-    await replaceRunOutput(db, first.runId, warnings.length > 0 ? { text, warnings } : { text })
-  } catch (error) {
-    pipe.fail(error)
-    throw error
-  }
-  pipe.replace(text)
-  pipe.end()
-  return text
+  if (replacements.length === 0) return { text, accepted: 0, warnings }
+  return { text: spliceSpans(text, replacements), accepted: replacements.length, warnings }
 }
 
 /**

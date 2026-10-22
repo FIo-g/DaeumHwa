@@ -53,8 +53,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** A longer span whose sentences are all different, so it passes acceptExpansion. */
-function grown(label: string, count = 60): string {
+/**
+ * A longer span whose sentences are all different, so it passes acceptExpansion. 90 sentences (about
+ * 2,250 characters) make round 1 reach the target, so no second round runs in these tests.
+ */
+function grown(label: string, count = 90): string {
   return Array.from(
     { length: count },
     (_, i) => `${label}의 장면에서 ${i}번째 감각이 천천히 번졌다.`,

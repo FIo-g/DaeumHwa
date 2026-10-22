@@ -57,14 +57,24 @@ function draftAnswer(prompt: string): string {
   return prompt.includes('<draft_so_far>') ? CONTINUE_TEXT : DRAFT_TEXT
 }
 
-/** New sentences, all different, that an expansion adds after the scene it was given. */
-const EXPAND_ADDITION =
-  '서윤은 문고리를 잡은 손에 힘을 주었다. 낡은 경첩이 낮게 울었다. 복도 끝에서 희미한 불빛이 흔들렸다.'
+/** New sentences, all different, that an expansion can add after the scene it was given. */
+const EXPAND_ADDITIONS = [
+  '서윤은 문고리를 잡은 손에 힘을 주었다.',
+  '낡은 경첩이 낮게 울었다.',
+  '복도 끝에서 희미한 불빛이 흔들렸다.',
+  '서윤은 숨을 고르고 문틈을 들여다보았다.',
+  '바깥에서 발소리가 멀어지는 소리가 났다.',
+  '창문의 유리가 얇게 떨렸다.',
+]
 
-/** The scene text followed by a few new sentences, so it grows and passes acceptExpansion. */
+/**
+ * The scene text followed by up to three of EXPAND_ADDITIONS that the scene does not have yet, so it
+ * grows and passes acceptExpansion. A second round adds the next ones, and never repeats a sentence.
+ */
 function expandAnswer(prompt: string): string {
   const scene = section(prompt, 'scene').trim()
-  return `${scene} ${EXPAND_ADDITION}`
+  const added = EXPAND_ADDITIONS.filter((sentence) => !scene.includes(sentence)).slice(0, 3)
+  return [scene, ...added].join(' ')
 }
 
 /** Answers one request. Throws UnknownSystemError when the system prompt is not a known task. */

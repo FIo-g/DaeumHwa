@@ -7,7 +7,7 @@ import {
 import type { AiClient } from '@/ai/types'
 import type { Db } from '@/db/client'
 import type { Actor } from '@/db/types'
-import { isAppError } from '@/lib/errors'
+import { AppError, isAppError } from '@/lib/errors'
 import {
   overlongParagraphs,
   PARAGRAPH_MAX_SENTENCES,
@@ -16,11 +16,14 @@ import {
 } from '@/lib/korean/paragraphs'
 import { requireWorkRole } from '@/server/access'
 
-// Trims paragraphs with too many sentences (spec 6, 7). Only the offenders are sent to the model.
-// Never writes wiki tables and never saves the manuscript: the caller decides what to keep.
+// Trims paragraphs with too many sentences (spec 6, 7). Only the offenders are sent to the model,
+// in batches of TRIM_BATCH, one call after another. Never writes wiki tables and never saves the
+// manuscript: the caller decides what to keep.
 
 /** Each round sends the offenders still left; a third round is never started. */
 export const MAX_TRIM_ROUNDS = 2
+/** Most offenders in one paragraph-trim call. Larger calls return shifted or cut answers. */
+export const TRIM_BATCH = 12
 /** Characters of each neighbour paragraph sent as context. */
 const NEIGHBOUR_CHARS = 300
 
@@ -35,8 +38,10 @@ export type TrimResult = {
 
 /**
  * Rewrites the paragraphs of `input.text` that have more than `maxSentences` sentences. Editor
- * role. A failure in the first round is thrown; a failure in a later round keeps the fixes already
- * made. Returns the text unchanged, with no AI call, when no paragraph is overlong.
+ * role. Each round sends its offenders in batches of TRIM_BATCH, in text order. A batch that fails
+ * with an AppError is skipped and the other batches' fixes are kept. When every batch of the first
+ * round fails, the first error is thrown; a later round that fails keeps the fixes already made.
+ * A cancel always throws. Returns the text unchanged, with no AI call, when no paragraph is overlong.
  */
 export async function trimOverlongParagraphs(
   db: Db,
@@ -69,24 +74,36 @@ export async function trimOverlongParagraphs(
     })
 
     rounds += 1
-    let answer: ParagraphTrimOutput
-    try {
-      const run = await runAiTask(
-        db,
-        { userId: actor.userId, workId: input.workId, signal },
-        paragraphTrimTask,
-        { maxSentences: max, items },
-        client,
-      )
-      answer = run.output
-      runIds.push(run.runId)
-    } catch (error) {
-      // A cancel always reaches the caller; other later-round failures keep the fixes already made.
-      if (rounds === 1 || !isAppError(error) || error.code === 'CANCELLED') throw error
+    // Every batch answers against the text as it was at the start of the round, so the fixes are
+    // applied together at the end of the round.
+    const fixes: ParagraphTrimOutput['paragraphs'] = []
+    let answered = 0
+    let firstError: AppError | null = null
+    for (let start = 0; start < items.length; start += TRIM_BATCH) {
+      try {
+        const run = await runAiTask(
+          db,
+          { userId: actor.userId, workId: input.workId, signal },
+          paragraphTrimTask,
+          { maxSentences: max, items: items.slice(start, start + TRIM_BATCH) },
+          client,
+        )
+        runIds.push(run.runId)
+        answered += 1
+        fixes.push(...run.output.paragraphs)
+      } catch (error) {
+        // A cancel always reaches the caller; any other failure skips this batch only.
+        if (!isAppError(error) || error.code === 'CANCELLED') throw error
+        firstError ??= error
+      }
+    }
+    if (answered === 0) {
+      // Every batch failed: the first round is an error, a later round keeps the fixes made.
+      if (rounds === 1 && firstError) throw firstError
       break
     }
-    if (answer.paragraphs.length === 0) break
-    current = replaceParagraphs(current, answer.paragraphs)
+    if (fixes.length === 0) break
+    current = replaceParagraphs(current, fixes)
   }
 
   return {
