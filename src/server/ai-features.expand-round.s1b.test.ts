@@ -254,7 +254,10 @@ describe('draft expansion runs a second round (F5b)', () => {
     // Six scenes of about 240 characters, each under its 833 share, so round 1 picks the four
     // shortest (the first four) and rewrites each to 900 characters. The 900 is above the share and
     // under 1.1 times it (916), so round 2 picks it again. Round 2 takes the four lowest ratios:
-    // the two untouched scenes and two of the 900-character ones. It asks for 1,000 characters each.
+    // the two untouched scenes and two of the 900-character ones. The draft is 4,093 characters, so
+    // the gap to 5,500 is 1,407, shared by the four picked spans (351.75 each). Each untouched scene
+    // is asked for 591 characters (239 + 352) and each 900-character one for 1,252 (900 + 352). The
+    // fake's answers below are 1,000 characters, which does not change what is asked.
     const outputs = [
       ...Array.from({ length: 4 }, () => chars('가', 900)),
       ...Array.from({ length: 4 }, () => chars('나', 1000)),
@@ -270,5 +273,12 @@ describe('draft expansion runs a second round (F5b)', () => {
     const expandCalls = spy.mock.calls.filter((c) => c[0].task.name === 'draft-expand')
     // Four calls in round 1 and four in round 2: never more than four per round.
     expect(expandCalls).toHaveLength(8)
+    // The round-2 asks, as (asked, current) lengths: 591 for each untouched scene and 1,252 for each
+    // 900-character scene.
+    const round2Asks = expandCalls.slice(4).map((c) => {
+      const match = /<length>공백 포함 약 (\d+)자 \(지금 (\d+)자\)<\/length>/.exec(c[0].prompt)
+      return `${match?.[1]}/${match?.[2]}`
+    })
+    expect(round2Asks.sort()).toEqual(['1252/900', '1252/900', '591/239', '591/239'])
   })
 })

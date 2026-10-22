@@ -61,23 +61,43 @@ const EXPAND_PREDICATES = [
   '희미하게 떨리고 있었다.',
 ]
 
+/** Marks a demo rewrite. It goes in front of the first rewrite of a span only. */
+const EXPAND_MARK = '(데모 확장)'
+/** A demo rewrite is this many times as long as the text it starts from. */
+const EXPAND_GROWTH = 1.1
+
+/** The text of the <scene> block in an expansion prompt, or '' when the prompt has none. */
+function sceneOf(prompt: string): string {
+  return /<scene>\n([\s\S]*?)\n<\/scene>/.exec(prompt)?.[1] ?? ''
+}
+
 /**
- * Demo rewrite for 'draft-expand'. The task input holds only the instructions, so the rewrite does
- * not echo a span. It is the instructions, then distinct new sentences until it is 1.05 times as
- * long as the whole demo draft, which is at least as long as any span of it. Every new sentence
- * occurs once and is not in FILLER, so acceptExpansion passes for every span of a fake draft.
+ * Demo rewrite for 'draft-expand'. It starts from the span in the prompt, marked once, and adds
+ * distinct new sentences that the span does not already have until it is 1.1 times as long. So a
+ * second round, which gets the first round's text as its span, adds sentences again and is accepted.
+ * Without a prompt (a direct call) the span is not known: the rewrite starts from the instructions
+ * and grows to 1.1 times the whole demo draft, which is at least as long as any span of it.
+ * acceptExpansion passes in both cases, since every added sentence is new and is not in FILLER.
  */
-export function fakeDraftExpand(input: { instructions: string }): string {
-  const target = draftCharCount(fakeDraft(input)) * 1.05
+export function fakeDraftExpand(input: { instructions: string }, prompt = ''): string {
+  const scene = sceneOf(prompt)
   const parts = input.instructions
     .split(/[.!?\n]+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
-  let text = `(데모 확장) ${parts.join('. ')}${parts.length > 0 ? '.' : ''}`
+  const start =
+    scene === ''
+      ? `${EXPAND_MARK} ${parts.join('. ')}${parts.length > 0 ? '.' : ''}`
+      : scene.includes(EXPAND_MARK)
+        ? scene
+        : `${EXPAND_MARK} ${scene}`
+  const target = draftCharCount(scene === '' ? fakeDraft(input) : scene) * EXPAND_GROWTH
+  let text = start
   for (const subject of EXPAND_SUBJECTS) {
     for (const predicate of EXPAND_PREDICATES) {
       if (draftCharCount(text) >= target) return text
-      text = `${text} ${subject} ${predicate}`
+      const sentence = `${subject} ${predicate}`
+      if (!start.includes(sentence)) text = `${text} ${sentence}`
     }
   }
   return text

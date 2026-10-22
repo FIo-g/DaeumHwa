@@ -45,7 +45,7 @@ export const FAKE_OUTPUTS: Partial<Record<AiTaskName, (input: any) => unknown>> 
 
 /** Fixed streamed text per task, used by FakeAiClient. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const FAKE_TEXT: Partial<Record<AiTaskName, (input: any) => string>> = {
+export const FAKE_TEXT: Partial<Record<AiTaskName, (input: any, prompt: string) => string>> = {
   'draft-chapter': fakeDraft,
   'draft-continue': fakeDraftContinue,
   'draft-scene': fakeDraftScene,

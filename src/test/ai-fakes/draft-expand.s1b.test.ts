@@ -24,6 +24,20 @@ describe('fakeDraftExpand', () => {
     })
   }
 
+  it('grows a span that an earlier round already rewrote, so a second round is accepted too', () => {
+    // The service sends the span in the prompt. Round 2 sees round 1's text as its span.
+    const promptFor = (scene: string) => `<scene>\n${scene}\n</scene>`
+    for (const input of samples) {
+      const draft = fakeDraft(input)
+      for (const span of sceneSpans(draft, 3)) {
+        const original = draft.slice(span.start, span.end)
+        const round1 = fakeDraftExpand(input, promptFor(original))
+        const round2 = fakeDraftExpand(input, promptFor(round1))
+        expect(acceptExpansion(round1, round2)).toBe(true)
+      }
+    }
+  })
+
   it('starts with the demo marker and holds no scene break line', () => {
     const text = fakeDraftExpand({ instructions: '첫 장면. 둘째 장면.' })
     expect(text.startsWith('(데모 확장)')).toBe(true)
