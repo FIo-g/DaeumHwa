@@ -248,6 +248,25 @@ Worktree `../DaeumHwa-s1b` detached at the reviewed commit. Flags on every run: 
   - Expected: every final is between 105% and 130% of target, with no banned phrase added.
 - [ ] **Step 5: Commit:** `fix(draft): run a second expansion round when the draft is still short`.
 
+### Task 6b: a third round with the round-2 rules
+
+**Why (probe with the product rules, 2026-10-22, `scratchpad/m0/expand-rounds3.log`, eight saved first drafts, one try each):**
+- Six finals were 110–114% of target and one was 104%.
+- s1bq ended at 99%. In round 2 only two spans were under 1.1× share, and one of the two rewrites came back as `repeat`.
+- A rejection in the last round is the gap left. One more round with the same rules covers it and runs only when the draft is still under 1.05× target.
+
+**Interfaces:**
+- `EXPAND_ROUNDS = 3`. Round 3 uses the round-2 rules unchanged (trigger, pick, ask), on the text after round 2.
+- At most `3 × MAX_EXPAND_SPANS` expansion calls are made per draft.
+- Round 3 obeys the same budget, abort, replace-record and warning rules as rounds 1 and 2.
+
+- [ ] **Step 1: Write the failing tests** in `src/server/ai-features.expand-round.s1b.test.ts`:
+  - A round-2 rewrite refused as `repeat` leaves the draft under 1.05× target, so round 3 runs. Round 3 asks only spans under 1.1× share, and its `<scene>` comes from the text after round 2.
+  - A draft that reaches 1.05× target in round 2 makes no round-3 call.
+  - Replace the "at most `2 × MAX_EXPAND_SPANS`" assertion with `3 × MAX_EXPAND_SPANS`.
+- [ ] **Step 2–4:** run, implement, run as in Task 6. `pnpm vitest run src/server/ai-features src/ai/tasks/draft-expand src/app/api/works eval/novel/run.expand-fake.s1b.test.ts src/test/ai-fakes --maxWorkers=2`.
+- [ ] **Step 5: Commit:** `fix(draft): allow a third expansion round after a refused rewrite`.
+
 ## Measurement M1c (orchestrator)
 
 Worktree at the Task 6 commit, with stage 2 changes left out. Flags on both runs: `--deploy-settings --directives on`.
