@@ -142,6 +142,42 @@
 - [ ] **Step 4: Run** the new tests plus `pnpm vitest run src/ai src/server eval/novel --maxWorkers=2`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(draft): put author requests and core entries in a cached prefix`.
 
+### Task 4 review fixes (sonnet review, 2026-10-22)
+
+Fix these before the task 4 commit (one commit for task 4 and its fixes).
+
+1. **New chapter position.** `requestsForText` uses the chapter's position when `chapterId` is set. With `chapterId` null (a draft for a new chapter), it uses the position `buildDraftContext` gives that draft (latest position + 1), so the repair of a new-chapter draft keeps its chapter requests. The chapter lookup also filters on `chapters.workId = workId`.
+2. **Name matching.** `requestsForText` loads only entries with `archivedAt` null and `contextTier !== 'never'`. It finds names and aliases with the shared mention helper that `buildContextPack` uses (`src/lib/korean/mentions.ts`), not `text.includes`, so a name of one syllable inside another word (`비` in `준비`) does not match.
+3. **Repair paths.** `repairDraft` and `repairDraftForeignScript` in `src/server/ai-features.ts` load `requestsForText` for the run's chapter and text and pass `requests` to `draftRepairTask`, as `previewDraftRefinement` does.
+4. **System rule (builder's call; this changes the line in Global Constraints that keeps `DRAFT_SYSTEM` as it is).**
+   - Why: every writing system prompt ends with `TAG_DATA_RULE`, which tells the model not to follow instructions inside tags. `DRAFT_SYSTEM` names the tags it follows (`<instructions>`, `<wiki>`, `<target_length>` and others), but no system prompt names `<author_requests>`, so the requests could be read as data.
+   - Add one rule line before `${TAG_DATA_RULE}` in each system prompt:
+     - `DRAFT_SYSTEM`: `- <author_requests>는 작가가 계속 지켜 달라고 한 요청이다. 모든 장면에서 지키고, 이번 화 지시(<instructions>)와 부딪치면 지시를 따른다.`
+     - `DRAFT_EXPAND_SYSTEM`: `- <author_requests>가 있으면 늘려 쓰는 문장도 그 요청을 지킨다.`
+     - `DRAFT_REPAIR_SYSTEM`: `- <author_requests>가 있으면 고쳐 쓰는 문장도 그 요청을 지킨다.`
+     - `SCENE_REWRITE_SYSTEM`: `- <author_requests>가 있으면 다시 쓰는 장면도 그 요청을 지킨다.`
+   - English twins go in `eval/novel/localize/en/*`, with the en-systems snapshot updated:
+     - `- <author_requests> are requests the author asked to keep. Keep them in every scene; if one conflicts with this chapter's instructions (<instructions>), follow the instructions.`
+     - `- If <author_requests> is given, the sentences you add keep those requests too.`
+     - `- If <author_requests> is given, the sentences you rewrite keep those requests too.`
+     - `- If <author_requests> is given, the rewritten scene keeps those requests too.`
+5. **Injection.** `renderRequestsBlock` neutralizes `pattern` as it does `text`, so a pattern holding `</author_requests>` cannot close the block on paths that do not run `neutralizeDeep`. `EXPAND_NOTE_MARKERS` also treats an echoed `<author_requests>` or `</author_requests>` line as a note.
+6. **Tests.**
+   - `src/server/directives.requests-text.s2.test.ts` covers `requestsForText`:
+     - a name and an alias hit;
+     - no hit inside another word;
+     - an archived entry, a `never` entry and another work's entry give nothing;
+     - a chapter request matches by `chapterId`, and a null `chapterId` gives the new chapter position;
+     - work requests are always present.
+   - A service test checks that `previewDraftRefinement` (or `repairDraft`) and `rewriteFlaggedScenes` send the requests block.
+   - The "request added after the draft started" test asserts that no recorded call has `<author_requests>` in its prefix or prompt, and that the expand calls exist.
+   - Wiring tests:
+     - the continuation call and the scenes-mode calls (scene 0 and later) send `promptPrefix`;
+     - an always-tier entry lands in `<core_wiki>`;
+     - a fact revealed in a later chapter is hidden;
+     - an always-tier character's request is sent although the character is not mentioned.
+   - The system rule lines are asserted.
+
 ## Task 5: Code checks for checkable requests
 
 **Files:**
