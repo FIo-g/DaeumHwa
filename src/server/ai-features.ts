@@ -126,8 +126,8 @@ const EXPAND_CONCURRENCY = 2
 const EXPAND_SHORT_RATIO = 1
 /** A rewrite is asked for this many times its span's share: the middle of the 1.0x to 1.2x range. */
 const EXPAND_ASK_RATIO = 1.1
-/** Expansion rounds: round 2 fixes what round 1 left short. */
-const EXPAND_ROUNDS = 2
+/** Expansion rounds: round 2 fixes what round 1 left short, round 3 what a refused round 2 left. */
+const EXPAND_ROUNDS = 3
 /** Round 2 runs only while the draft is under this many times the target (a margin for trimming). */
 const EXPAND_AGAIN_RATIO = 1.05
 /** Round 2 asks a picked span for at least this many times its length. */
@@ -892,10 +892,10 @@ type ExpandPass = {
 /**
  * The expand path (default), in up to EXPAND_ROUNDS rounds. Round 1 splits the first text into scene
  * spans (sceneSpans). Each span under its share of the target is rewritten in place, asked for
- * EXPAND_ASK_RATIO times the share. Round 2 runs on the spliced text while it is under
- * EXPAND_AGAIN_RATIO times the target: it picks the spans under EXPAND_ASK_RATIO times their share
- * and asks each for the larger of EXPAND_MIN_GROWTH_ASK times its length and its part of the gap to
- * the middle of the range. Each round rewrites up to MAX_EXPAND_SPANS spans, EXPAND_CONCURRENCY at a
+ * EXPAND_ASK_RATIO times the share. Rounds 2 and 3 share rules: each runs on the spliced text while
+ * it is under EXPAND_AGAIN_RATIO times the target, picks the spans under EXPAND_ASK_RATIO times their
+ * share, and asks each for the larger of EXPAND_MIN_GROWTH_ASK times its length and its part of the
+ * gap to the middle of the range. Each round rewrites up to MAX_EXPAND_SPANS spans, EXPAND_CONCURRENCY at a
  * time, with the end of the span before and the start of the span after as context (expandRound).
  * A round with an accepted rewrite stores its text and sends one replace record. Any other span keeps
  * its text and records a warning whose detail starts with the failed check; warnings from every round
@@ -910,21 +910,24 @@ async function expandDraft(
 ): Promise<string> {
   const { db, promptInput } = ctx
   const targetChars = promptInput.targetChars
+  const roundTwo: ExpandPass = {
+    limit: targetChars * EXPAND_AGAIN_RATIO,
+    pickRatio: EXPAND_ASK_RATIO,
+    ask: (span, total, picked) =>
+      Math.max(
+        Math.round(span.length * EXPAND_MIN_GROWTH_ASK),
+        Math.round(span.length + (targetChars * EXPAND_ASK_RATIO - total) / picked),
+      ),
+  }
   const passes: ExpandPass[] = [
     {
       limit: targetChars,
       pickRatio: EXPAND_SHORT_RATIO,
       ask: (span) => Math.round(span.share * EXPAND_ASK_RATIO),
     },
-    {
-      limit: targetChars * EXPAND_AGAIN_RATIO,
-      pickRatio: EXPAND_ASK_RATIO,
-      ask: (span, total, picked) =>
-        Math.max(
-          Math.round(span.length * EXPAND_MIN_GROWTH_ASK),
-          Math.round(span.length + (targetChars * EXPAND_ASK_RATIO - total) / picked),
-        ),
-    },
+    roundTwo,
+    // Round 3 uses the round-2 rules unchanged, on the text after round 2.
+    roundTwo,
   ]
 
   let text = firstText

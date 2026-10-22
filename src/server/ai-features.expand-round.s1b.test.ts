@@ -155,7 +155,7 @@ describe('draft expansion runs a second round (F5b)', () => {
     const client = new FakeAiClient({
       overrides: {
         'draft-chapter': () => DRAFT,
-        'draft-expand': inOrder([...round1, ...round1]),
+        'draft-expand': inOrder([...round1, ...round1, ...round1]),
       },
     })
     const spy = vi.spyOn(client, 'streamText')
@@ -168,7 +168,8 @@ describe('draft expansion runs a second round (F5b)', () => {
     await readAll(textStream)
     await done
 
-    expect(spy.mock.calls.filter((c) => c[0].task.name === 'draft-expand')).toHaveLength(6)
+    // Round 2 and round 3 both run, since the text stays under 1.05 times target after round 1.
+    expect(spy.mock.calls.filter((c) => c[0].task.name === 'draft-expand')).toHaveLength(9)
   })
 
   it('makes no round-2 call with less than 30 seconds of the budget left after round 1', async () => {
@@ -280,5 +281,110 @@ describe('draft expansion runs a second round (F5b)', () => {
       return `${match?.[1]}/${match?.[2]}`
     })
     expect(round2Asks.sort()).toEqual(['1252/900', '1252/900', '591/239', '591/239'])
+  })
+
+  it('runs round 3 on the round-2 text when a round-2 rewrite is refused as repeat', async () => {
+    // Round 1 gives three spans of 1,200 characters: a 3,606 draft, under 1.05 times target.
+    // Round 2 accepts span 0 (2,000) and span 2 (1,500), and refuses span 1 as a repeat, so span 1
+    // keeps 1,200. The draft is then 4,706, still under 5,250, so round 3 runs.
+    const REPEATED = '서윤은 문을 열었다. '.repeat(120).trim()
+    const client = new FakeAiClient({
+      overrides: {
+        'draft-chapter': () => DRAFT,
+        'draft-expand': inOrder([
+          chars('가', 1200),
+          chars('나', 1200),
+          chars('다', 1200),
+          chars('라', 2000),
+          REPEATED,
+          chars('마', 1500),
+          chars('바', 1600),
+          chars('사', 1900),
+        ]),
+      },
+    })
+    const spy = vi.spyOn(client, 'streamText')
+    const { runId, textStream, done } = await startDraft(db, actor, draftInput(), client)
+    await readAll(textStream)
+    const text = await done
+
+    const expandPrompts = spy.mock.calls
+      .filter((c) => c[0].task.name === 'draft-expand')
+      .map((c) => c[0].prompt)
+    expect(expandPrompts).toHaveLength(8)
+    // Round 3 picks only the spans under 1.1 times their share (1,833): span 1 and span 2, not span 0.
+    // Its <scene> is the text after round 2, and the asks follow the round-2 rules.
+    // Span 1: the gap is 5,500 - 4,706 = 794, shared by two spans, so 1,200 + 397 = 1,597.
+    // Span 2: 1,500 + 397 = 1,897.
+    expect(expandPrompts[6]).toContain(`<scene>\n${chars('나', 1200)}\n</scene>`)
+    expect(expandPrompts[6]).toContain('<length>공백 포함 약 1597자 (지금 1200자)')
+    expect(expandPrompts[7]).toContain(`<scene>\n${chars('마', 1500)}\n</scene>`)
+    expect(expandPrompts[7]).toContain('<length>공백 포함 약 1897자 (지금 1500자)')
+    expect(expandPrompts.slice(6).some((p) => p.includes(`<scene>\n${chars('라', 2000)}`))).toBe(
+      false,
+    )
+
+    expect(text).toBe([chars('라', 2000), chars('바', 1600), chars('사', 1900)].join(BREAK))
+    // The refused round-2 span is kept as a warning, and the stored text is the final text.
+    const row = await outputOf(runId)
+    const output = row.output as { text: string; warnings: unknown[] }
+    expect(output.text).toBe(text)
+    expect(output.warnings).toEqual([
+      {
+        kind: 'continue-failed',
+        reason: 'EXPAND_REJECTED',
+        detail: expect.stringMatching(/^repeat: /),
+        message: '이어쓰기 실패',
+      },
+    ])
+  })
+
+  it('makes no round-3 call when round 2 reaches 1.05 times target', async () => {
+    const client = new FakeAiClient({
+      overrides: {
+        'draft-chapter': () => DRAFT,
+        'draft-expand': inOrder([
+          chars('가', 1200),
+          chars('나', 1200),
+          chars('다', 1200),
+          chars('라', 1800),
+          chars('마', 1800),
+          chars('바', 1800),
+        ]),
+      },
+    })
+    const spy = vi.spyOn(client, 'streamText')
+    const { textStream, done } = await startDraft(db, actor, draftInput(), client)
+    await readAll(textStream)
+    await done
+
+    // Round 2 ends at 5,406, above 1.05 times target (5,250), so round 3 is skipped.
+    expect(spy.mock.calls.filter((c) => c[0].task.name === 'draft-expand')).toHaveLength(6)
+  })
+
+  it('makes at most three rounds of four expansion calls per draft', async () => {
+    // Round 1 rewrites the four shortest of six 240-character scenes to 900. Round 2 picks the two
+    // untouched scenes and two of the 900s, and ends at 4,335 characters, under 5,250. Round 3 then
+    // picks the four spans under 1.1 times their share (916): the two 900s and the two round-2
+    // scenes of 300. That is 12 calls: three rounds of MAX_EXPAND_SPANS (4).
+    const client = new FakeAiClient({
+      overrides: {
+        'draft-chapter': () => SIX_SCENES,
+        'draft-expand': inOrder([
+          ...Array.from({ length: 4 }, () => chars('가', 900)),
+          chars('나', 300),
+          chars('나', 300),
+          chars('다', 960),
+          chars('다', 960),
+          ...Array.from({ length: 4 }, () => chars('라', 1000)),
+        ]),
+      },
+    })
+    const spy = vi.spyOn(client, 'streamText')
+    const { textStream, done } = await startDraft(db, actor, draftInput(), client)
+    await readAll(textStream)
+    await done
+
+    expect(spy.mock.calls.filter((c) => c[0].task.name === 'draft-expand')).toHaveLength(12)
   })
 })
