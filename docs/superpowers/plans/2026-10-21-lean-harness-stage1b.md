@@ -277,6 +277,39 @@ Worktree `../DaeumHwa-s1b` detached at the reviewed commit. Flags on every run: 
 - No overshoot was seen at the smaller target, so no shrink path and no first-draft calibration are added.
 - Limit: expansion took 60–80 s at 8,000. With a first draft of 110–145 s, that fits the 290 s budget. Well above 10,000 characters, the last round can be cut by the budget.
 
+## Task 7 (addendum after M1c): paragraph trim checks its answers
+
+**Why (M1c review of s1c, then every saved `paragraph-trim` call of the 2026-10-20 to 10-22 Haiku Korean runs):**
+- In s1c, 6 of the 9 must-fix places came from the trim step. Call 032 sent 35 overlong paragraphs and got answers shifted by one index: answer 0 was a rewrite of target 1. `replaceParagraphs` put them in place, which duplicated three passages, dropped others (the 종루 paragraph and the word 입춘) and moved a line of dialogue after a door closed.
+- Across 591 trim answers, 36 (6%) rewrote a neighbour instead of their own target.
+  - All 36 came from calls of 21 or more targets (s0 21, s1r 25, s1bq 27, s1br 29, s1 31, s1cfew 32, s1c 35). Calls of 12 or fewer had none.
+  - Three calls of 30 to 34 targets (s1b twice, s1bqr, s1cfew) returned nothing: the answer was cut at the 8,000-token limit.
+- Expansion raises the load. A rewritten span has 40–60% of its paragraphs over three sentences, against 10–20% in first drafts, so M1c drafts reached trim with 32–36 offenders, where s0/s0fix had 20–21.
+  - A "three sentences per paragraph" rule in the expand prompt cut that by only about 10% and shortened the expansions by 4% (probe `scratchpad/m0/expand-para.log`). It is not added.
+- Character-bigram overlap (Dice, whitespace removed) between an answer and its own target separates the two cases. 485 of 591 answers are at 0.9 or more, while shifted answers are at 0.05–0.18 against their target and about 1.0 against the neighbour.
+
+**Files:** `src/ai/tasks/paragraph-trim.ts`, `src/server/draft-paragraphs.ts`. Tests: `src/ai/tasks/paragraph-trim.overlap.s1b.test.ts`, `src/server/draft-paragraphs.batch.s1b.test.ts`.
+
+**Interfaces:**
+- `trimOverlap(a: string, b: string): number` in paragraph-trim.ts is the Dice coefficient of the character bigrams of `a` and `b` with all whitespace removed, counted with multiplicity. Two texts without bigrams give 0.
+- `TRIM_MIN_OVERLAP = 0.6`. `postProcess` drops an answer when `trimOverlap(answer, ownTarget) < TRIM_MIN_OVERLAP`, or when its overlap with the item's `before` or `after` text is higher than with its own target. The dropped paragraph keeps its text; this is the same as an answer that fails `isValidTrim` today.
+- `TRIM_BATCH = 12`. Each round of `trimOverlongParagraphs` sends its offenders in batches of at most `TRIM_BATCH`, in text order, one call after another. Each batch is its own `paragraph-trim` run, and `runIds` lists them all. `MAX_TRIM_ROUNDS` stays 2.
+- Within a round, a batch that fails with a non-cancel `AppError` is skipped and the other batches' fixes are kept. If every batch of round 1 fails, the first error is thrown (today's contract for a failed first round). A cancel always throws. Later rounds keep the fixes made so far, as today.
+
+- [ ] **Step 1: Write the failing tests:**
+  - `trimOverlap` gives 1 for a text and the same text re-split into two paragraphs, and less than 0.3 for two different 4-sentence paragraphs.
+  - Shifted answers are dropped. For three items whose answers are shifted by one (answer for index 0 is target 1 re-split), `postProcess` keeps none of them.
+  - A correct answer that only adds a paragraph break is kept.
+  - An answer equal to its `after` neighbour re-split is dropped even when its length passes.
+  - 30 offenders go out as three calls of 12, 12 and 6 (`FakeAiClient` records three `paragraph-trim` prompts with 12, 12 and 6 `<paragraph` items, in text order), and `runIds` has three entries.
+  - When the second batch of round 1 fails with `AI_ERROR`, the fixes of batches 1 and 3 are in the returned text. When all batches of round 1 fail, `trimOverlongParagraphs` rejects with the first error.
+- [ ] **Step 2: Run** `pnpm vitest run src/ai/tasks/paragraph-trim src/server/draft-paragraphs --maxWorkers=2`. Expected: FAIL.
+- [ ] **Step 3: Implement** as in Interfaces. Update the comments in both files to describe the batches and the overlap check.
+- [ ] **Step 4: Run** the new tests plus `pnpm vitest run src/ai/tasks/paragraph-trim src/server/draft-paragraphs src/server/draft-refine src/server/ai-features eval/novel --maxWorkers=2`. Expected: PASS.
+  - Then the orchestrator replays the trim step with cloud Haiku on the saved `01.attempt-1.draft.raw.txt` of s1c, s1cq, s1cfew and s1br.
+  - Expected: no accepted answer is under 0.6 overlap or closer to a neighbour; no call returns empty; no passage appears twice that appeared once in the raw draft.
+- [ ] **Step 5: Commit:** `fix(draft): send paragraph trims in small batches and keep only answers that match their paragraph`.
+
 ## Measurement M1c (orchestrator)
 
 Worktree at the Task 6 commit, with stage 2 changes left out. Flags on both runs: `--deploy-settings --directives on`.
