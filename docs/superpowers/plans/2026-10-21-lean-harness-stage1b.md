@@ -207,22 +207,36 @@ Worktree `../DaeumHwa-s1b` detached at the reviewed commit. Flags on every run: 
 - Every expansion was accepted, but each delivered less than it was asked when the span was far under its share: 740→1,322 and 727→1,303 (72% and 71% of the 1,834 ask, about 1.8× growth), 1,004→1,689, 1,150→1,563 and 1,239→1,663 (85–92%), 1,271→1,876 (102%).
 - The drafts after expansion were 4,867 and 4,547, so both runs failed T3 again. Trimming and repair changed less than 60 characters.
 - A larger single ask does not fix it. Delivery falls with the growth asked (about 72% of a 2.5× ask, 85–102% of a ≤1.5× ask), so a ratio high enough for the shortest span overshoots spans near their share.
-- A second round asks only ≤1.5× growth. Applied to these two drafts, it would reach about 5,400 and 5,100 (estimate from the delivery rates above, checked by the probe in step 4).
+- Replaying the saved product prompts three times each gave the same lengths (740→1,188–1,381), so this is not noise. The earlier probes behind Task 5 left the style cards out (`styleCards: []`), and without cards the model writes longer. Their 96–111% finals were too optimistic.
+- Probe with the cards (`scratchpad/m0/expand-probe-rounds.ts`, six saved first drafts: s1br, s1bq, s1, s1r, s0fix, s1few, twice each):
+  - Round 1 as today ended at 81–105%.
+  - Five drafts ended round 1 at 100–101%, where trimming can still push them under 5,000.
+  - With the round-2 rules below, all 12 finals were 100–117% of target. No banned phrase was added, and each round-2 call took 8–14 s.
+  - In one trial round 1 lost two of three spans (`note`, `short`) at 81%. Round 2 still reached 102%.
 
 **Files:** `src/server/ai-features.ts`. Test: `src/server/ai-features.expand-round.s1b.test.ts`; update existing expansion tests only where they pin a single round.
 
 **Interfaces:**
-- `EXPAND_ROUNDS = 2`. `expandDraft` runs one round, then a second one on the spliced text when that text is still under `targetChars`.
-- A round starts only when the current text is under target, the author has not aborted, and at least `MIN_CONTINUATION_MS` is left.
-- Each round recomputes `sceneSpans(current, sceneCount)` and the shares, and picks, orders, asks and checks exactly as round 1 does (`EXPAND_SHORT_RATIO`, `EXPAND_ASK_RATIO`, `MAX_EXPAND_SPANS` per round, the same pool and per-span clock check). `<before>` and `<after>` come from the current text.
+- `EXPAND_ROUNDS = 2`. `expandDraft` runs round 1 exactly as today.
+- Round 2 runs on the spliced text when it is under `targetChars * EXPAND_AGAIN_RATIO`, with `EXPAND_AGAIN_RATIO = 1.05`. The 5% is a margin for trimming and repair, which cut up to 60 characters in M1b.
+- Like round 1, round 2 needs the author not to have aborted and at least `MIN_CONTINUATION_MS` left.
+- Round 2 recomputes `sceneSpans(current, sceneCount)` and the shares. `<before>` and `<after>` come from the current text. The pool, the per-span clock check, `MAX_EXPAND_SPANS`, the order (shortest relative to share first) and `expansionRejection` are the same as in round 1.
+- Round 2 picks spans under `share * EXPAND_ASK_RATIO`.
+- Round 2 asks each picked span for `max(round(len * EXPAND_MIN_GROWTH_ASK), round(len + (targetChars * EXPAND_ASK_RATIO - total) / picked.length))`:
+  - `EXPAND_MIN_GROWTH_ASK = 1.2`;
+  - `len` is the span's current length and `total` is the current draft length;
+  - the second term spreads the gap to the middle of the range over the picked spans;
+  - the 1.2 floor keeps every ask clear of `MIN_GROWTH` (1.05).
 - A round with at least one accepted rewrite stores its text with `replaceRunOutput` (with the warnings so far) and sends one replace record. The last record always equals the stored text.
 - Warnings from every round are kept. A round with no accepted rewrite stores nothing new and records its warnings the way a single round does today.
 - An abort during either round rejects as today. Text a finished round 1 already stored stays stored, as any completed write does.
 - Extract the round into a helper (for example `expandRound(ctx, text): Promise<{ text: string; accepted: number; warnings: DraftWarning[] }>`) so both rounds share one code path. The name and shape are the builder's call.
 
 - [ ] **Step 1: Write the failing tests** (`FakeAiClient`; the expansions are returned short on purpose):
-  - A 3-span first draft whose round-1 rewrites leave the total under target sends round-2 `draft-expand` calls only for the spans still under their share. Each round-2 `<scene>` is the round-1 rewrite, and the stored text is the round-2 splice.
-  - A draft whose round 1 reaches the target sends no round-2 call.
+  - A 3-span first draft whose round-1 rewrites leave the total under 1.05× target sends round-2 `draft-expand` calls only for the spans under 1.1× their share.
+    - Each round-2 `<scene>` is the current text of its span, and each `<length>` asks the larger of 1.2× the span and the span plus its part of the gap to 1.1× target.
+    - The stored text is the round-2 splice.
+  - A draft whose round 1 reaches 1.05× target sends no round-2 call. A draft at exactly target after round 1 still gets round 2.
   - With less than `MIN_CONTINUATION_MS` left after round 1 (fake clock), no round-2 call is made and the round-1 text is stored.
   - An `acceptsReplace` client gets one replace record per round with an accepted rewrite, and `parseDraftStream` of the whole body equals the stored text.
   - A round-1 `EXPAND_REJECTED` warning is still stored after round 2 succeeds.
@@ -231,7 +245,7 @@ Worktree `../DaeumHwa-s1b` detached at the reviewed commit. Flags on every run: 
 - [ ] **Step 3: Implement** as in Interfaces.
 - [ ] **Step 4: Run** the new test plus `pnpm vitest run src/server/ai-features* src/ai/tasks/draft-expand* --maxWorkers=2`. Expected: PASS.
   - Then the orchestrator runs the cloud probe (`scratchpad/m0/expand-probe2.ts`, extended to two rounds) on the five M1b first drafts.
-  - Expected: every final is between 100% and 130% of target, with no banned phrase added.
+  - Expected: every final is between 105% and 130% of target, with no banned phrase added.
 - [ ] **Step 5: Commit:** `fix(draft): run a second expansion round when the draft is still short`.
 
 ## Measurement M1c (orchestrator)
@@ -242,5 +256,8 @@ Worktree at the Task 6 commit, with stage 2 changes left out. Flags on both runs
 |---|---|
 | `2026-10-22-s1c` | haiku ko (plan flow) |
 | `2026-10-22-s1cq` | haiku ko `--quick` |
+| `2026-10-22-s1cfew` | haiku ko `--few-instructions` (replaces M1b's s1bfew, which was not run) |
 
-**Decide:** M1c with M1b, on T3, Q, must-fix, cost and time after first character, against s0 and s0fix.
+**Decide:**
+- **Expansion:** M1c with the finished M1b runs, on T3, Q, must-fix, cost and time after first character, against s0 and s0fix.
+- **Plan card:** plan against quick runs, and s1cfew against s0few and s1few.
