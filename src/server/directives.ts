@@ -1,6 +1,6 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { authorDirectives, wikiEntries } from '@/db/schema'
+import { authorDirectives, chapters, wikiEntries } from '@/db/schema'
 import type {
   Actor,
   AuthorDirectiveRow,
@@ -10,9 +10,11 @@ import type {
   DirectiveStatus,
   SpeechLevel,
 } from '@/db/types'
+import { findMentions } from '@/lib/korean/mentions'
 import { type DirectiveForPrompt, banPatternFor } from '@/lib/directives'
 import { AppError } from '@/lib/errors'
 import { requireRowWork, requireWorkRole } from '@/server/access'
+import { getLatestPosition } from '@/server/chapters'
 import { type ChangeOpts, logChange, preview } from '@/server/facts'
 import { recordUsageEvent } from '@/server/usage-events'
 
@@ -340,4 +342,47 @@ export async function activeDirectivesFor(
     })
   }
   return out
+}
+
+/**
+ * The requests for a text of one chapter (or of no chapter): work-wide, chapter ones for its
+ * position, and character ones for the entries whose name or alias occurs in `text`. A null
+ * `chapterId` is a draft for a new chapter, which gets the position after the latest one (as
+ * buildDraftContext does). Entries are matched with the same mention rule as the context pack,
+ * and archived or `never` entries are left out. For the services that rewrite a text without a
+ * context pack. No actor: callers have already checked the work.
+ */
+export async function requestsForText(
+  db: Db,
+  workId: string,
+  o: { chapterId: string | null; text: string },
+): Promise<DirectiveForPrompt[]> {
+  let position: number
+  if (o.chapterId) {
+    const [chapter] = await db
+      .select({ position: chapters.position })
+      .from(chapters)
+      .where(and(eq(chapters.id, o.chapterId), eq(chapters.workId, workId)))
+      .limit(1)
+    // Position 0 matches no chapter request: chapter positions start at 1.
+    position = chapter?.position ?? 0
+  } else {
+    position = (await getLatestPosition(db, workId)) + 1
+  }
+
+  const entries = await db
+    .select({ id: wikiEntries.id, name: wikiEntries.name, aliases: wikiEntries.aliases })
+    .from(wikiEntries)
+    .where(
+      and(
+        eq(wikiEntries.workId, workId),
+        isNull(wikiEntries.archivedAt),
+        ne(wikiEntries.contextTier, 'never'),
+      ),
+    )
+  const entryIds = findMentions(
+    o.text,
+    entries.map((entry) => ({ id: entry.id, names: [entry.name, ...entry.aliases] })),
+  ).map((mention) => mention.entryId)
+  return activeDirectivesFor(db, workId, { position, entryIds })
 }

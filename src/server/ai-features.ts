@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import { getAiClient } from '@/ai'
-import { buildContextPack, renderContextPack } from '@/ai/context'
+import { buildContextPack, renderContextPack, renderCoreEntries } from '@/ai/context'
 import { READER_PERSONAS, type Persona } from '@/ai/personas'
 import {
   isLocalProvider,
@@ -17,6 +17,7 @@ import type { AiClient } from '@/ai/types'
 import { draftModeFromEnv, type DraftMode } from '@/ai/draft-mode'
 import {
   buildContinuationPrompt,
+  buildDraftPrefix,
   buildDraftPrompt,
   buildScenePrompt,
   CONTINUE_EFFORT,
@@ -84,6 +85,7 @@ import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
 import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
 import { assertEntryInWork, listFacts } from '@/server/facts'
+import { activeDirectivesFor, requestsForText } from '@/server/directives'
 import { insertProposals } from '@/server/proposal-store'
 import {
   createChapter,
@@ -441,10 +443,18 @@ export async function buildDraftContext(
     input.seedPackFromPrevious && instructions === ''
       ? [previousSummary, previousTail].filter((part) => part !== null).join('\n')
       : instructions
+  // Context tiers (stage 2): unrevealed facts are left out, and always-tier entries go to the core.
   const pack = await buildContextPack(db, workId, {
     text: input.packText ?? seeded,
     position,
     extraEntryIds: input.entryIds,
+    hideUnrevealed: true,
+    splitCore: true,
+  })
+  // The requests that apply to this chapter: the selected, mentioned and core characters count.
+  const requests = await activeDirectivesFor(db, workId, {
+    position,
+    entryIds: [...input.entryIds, ...pack.entries.map((e) => e.id), ...pack.core.map((e) => e.id)],
   })
   const promptInput: DraftPromptInput = {
     instructions,
@@ -455,6 +465,8 @@ export async function buildDraftContext(
     previousTail,
     chapterLabel: promptLabel,
     voices: voices?.map((v) => ({ name: v.name, speech: v.speech })),
+    requests,
+    coreText: renderCoreEntries(pack),
   }
   return { promptInput, chapterId, position, targetChars }
 }
@@ -648,6 +660,7 @@ export async function startDraft(
       effort: DRAFT_EFFORT,
       maxTokens: DRAFT_MAX_TOKENS,
       system: DRAFT_SYSTEM,
+      promptPrefix: buildDraftPrefix(finalInput),
       prompt: scenesCard
         ? buildScenePrompt(finalInput, scenesCard, 0, '')
         : buildDraftPrompt(finalInput),
@@ -818,6 +831,7 @@ async function continueDraft(
         effort: CONTINUE_EFFORT,
         maxTokens: CONTINUE_MAX_TOKENS,
         system: DRAFT_SYSTEM,
+        promptPrefix: buildDraftPrefix(promptInput),
         prompt: buildContinuationPrompt(promptInput, firstText),
       },
       client,
@@ -969,6 +983,7 @@ async function expandDraft(
               targetChars: Math.round(share * EXPAND_ASK_RATIO),
               styleCards: promptInput.styleCards,
               instructions: promptInput.instructions,
+              requests: promptInput.requests,
             }),
           },
           client,
@@ -1088,6 +1103,7 @@ async function completeScenes(
           effort: DRAFT_EFFORT,
           maxTokens: DRAFT_MAX_TOKENS,
           system: DRAFT_SYSTEM,
+          promptPrefix: buildDraftPrefix(promptInput),
           prompt: buildScenePrompt(promptInput, card, index, written.text),
         },
         client,
@@ -1296,11 +1312,12 @@ export async function repairDraft(
     return { runId, text, ...repair }
   }
 
+  const requests = await requestsForText(db, workId, { chapterId: run.chapterId, text })
   const { output: edits } = await runAiTask(
     db,
     { userId: actor.userId, workId, chapterId: run.chapterId, signal },
     draftRepairTask,
-    { text, flags },
+    { text, flags, requests },
     client,
   )
   throwIfCancelled(signal)
@@ -1370,11 +1387,12 @@ export async function repairDraftForeignScript(
       })
     }
     const batch = flags.slice(0, MAX_REPAIR_SENTENCES)
+    const requests = await requestsForText(db, workId, { chapterId: run.chapterId, text })
     const { output: edits } = await runAiTask(
       db,
       { userId: actor.userId, workId, chapterId: run.chapterId, signal },
       draftRepairTask,
-      { text, flags: batch },
+      { text, flags: batch, requests },
       client,
     )
     throwIfCancelled(signal)

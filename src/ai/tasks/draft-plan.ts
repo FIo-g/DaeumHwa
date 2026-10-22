@@ -4,7 +4,7 @@
 
 import { z } from 'zod'
 import { neutralizeDeep, neutralizeTags, TAG_DATA_RULE } from '@/ai/prompt-utils'
-import { buildDraftPrompt, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
+import { buildDraftPrefix, buildDraftPrompt, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
 import {
   PLAN_LIST_MAX,
   PLAN_TEXT_MAX,
@@ -128,6 +128,7 @@ export const draftPlanTask: AiTaskDef<DraftPlanInput, DraftPlan> = {
   effort: 'low',
   maxTokens: 4000,
   system: DRAFT_PLAN_SYSTEM,
+  buildPromptPrefix: buildDraftPrefix,
   buildPrompt: (input) =>
     [
       buildDraftPrompt({ ...input, beats: null }, { omitTargetLength: true }),

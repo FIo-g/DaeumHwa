@@ -100,7 +100,10 @@ describe('draftBeatsTask', () => {
   })
 
   it('builds the prompt with instructions, wiki and previous tail but no length lines', () => {
-    const prompt = draftBeatsTask.buildPrompt(sample)
+    const prompt = [
+      ...(draftBeatsTask.buildPromptPrefix?.(sample) ?? []),
+      draftBeatsTask.buildPrompt(sample),
+    ].join('\n\n')
     expect(prompt).toContain('<instructions>')
     expect(prompt).toContain('서윤이 탑에 올라간다.')
     expect(prompt).toContain('- 서윤 (인물)')

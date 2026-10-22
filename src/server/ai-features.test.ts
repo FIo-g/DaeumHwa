@@ -26,6 +26,11 @@ import {
 import { createStyleCard } from '@/server/styles'
 import * as run from '@/ai/run'
 
+/** The text the model reads for one streamed call: the cached prefix blocks, then the prompt. */
+function modelText(call: { prompt: string; promptPrefix?: string[] }): string {
+  return [...(call.promptPrefix ?? []), call.prompt].join('\n\n')
+}
+
 const CHAPTER_BODY = '서윤은 문을 열었다. "여기가 어디야?" 그녀가 물었다. 아무도 대답하지 않았다.'
 
 async function setup() {
@@ -253,7 +258,7 @@ describe('draft', () => {
     )
     await done
 
-    const prompt = spy.mock.calls[0][0].prompt
+    const prompt = modelText(spy.mock.calls[0][0])
     expect(prompt).toContain('작품 문체')
     expect(prompt).toContain('서윤 말투')
     expect(prompt).not.toContain('철수 말투')
@@ -281,7 +286,7 @@ describe('draft', () => {
     )
     await done
 
-    const prompt = spy.mock.calls[0][0].prompt
+    const prompt = modelText(spy.mock.calls[0][0])
     expect(prompt).toContain('<chapter>2화</chapter>')
     expect(prompt).not.toContain('2화 2화')
   })
@@ -729,7 +734,7 @@ describe('draft voices (speech feature)', () => {
       client,
     )
     await done
-    return spy.mock.calls[0][0].prompt
+    return modelText(spy.mock.calls[0][0])
   }
 
   afterEach(() => {

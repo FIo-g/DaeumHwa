@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { aiRuns, aiUsageEvents } from '@/db/schema'
-import { buildDraftPrompt } from '@/ai/tasks/draft-chapter'
+import { buildDraftPrefix, buildDraftPrompt } from '@/ai/tasks/draft-chapter'
 import { renderPlanInstructions, withSceneTargets } from '@/lib/draft-plan'
 import { FakeAiClient } from '@/test/fake-ai'
 import { fakeDraftPlan } from '@/test/ai-fakes/draft-plan'
@@ -261,7 +261,8 @@ describe('startDraft from an approved plan card', () => {
   })
 
   it('keeps the draft prompt byte-identical without a plan', async () => {
-    const prompt = buildDraftPrompt({
+    // Stage 2 layout: the style cards and the previous text are the cached prefix, the rest is the prompt.
+    const input = {
       instructions: '서윤이 편지를 찾는다.',
       targetChars: 5000,
       styleCards: [],
@@ -269,8 +270,20 @@ describe('startDraft from an approved plan card', () => {
       previousSummary: null,
       previousTail: null,
       chapterLabel: '1화 (새 회차)',
-    })
-    expect(prompt).toBe(
+    }
+    expect(buildDraftPrefix(input)).toEqual([
+      ['<style_cards>', '(없음)', '</style_cards>'].join('\n'),
+      [
+        '<previous_summary>',
+        '(없음)',
+        '</previous_summary>',
+        '',
+        '<previous_tail>',
+        '(없음)',
+        '</previous_tail>',
+      ].join('\n'),
+    ])
+    expect(buildDraftPrompt(input)).toBe(
       [
         '<chapter>1화 (새 회차)</chapter>',
         '<target_length>공백 포함 5000자 이상, 6000자 이하</target_length>',
@@ -279,21 +292,9 @@ describe('startDraft from an approved plan card', () => {
         '서윤이 편지를 찾는다.',
         '</instructions>',
         '',
-        '<style_cards>',
-        '(없음)',
-        '</style_cards>',
-        '',
         '<wiki>',
         '(없음)',
         '</wiki>',
-        '',
-        '<previous_summary>',
-        '(없음)',
-        '</previous_summary>',
-        '',
-        '<previous_tail>',
-        '(없음)',
-        '</previous_tail>',
       ].join('\n'),
     )
   })

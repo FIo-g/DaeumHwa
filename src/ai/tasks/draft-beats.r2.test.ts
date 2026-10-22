@@ -25,9 +25,7 @@ const BEATS_LINE = '장면 1\n장소: 탑'
 describe('P1 draftBeatsTask scene count', () => {
   it('ends the beat prompt with the planned scene count', () => {
     expect(
-      draftBeatsTask
-        .buildPrompt(sample)
-        .endsWith('</previous_tail>\n\n<scene_count>4</scene_count>'),
+      draftBeatsTask.buildPrompt(sample).endsWith('</wiki>\n\n<scene_count>4</scene_count>'),
     ).toBe(true)
   })
 

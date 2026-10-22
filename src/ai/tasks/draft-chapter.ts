@@ -5,6 +5,7 @@ import { neutralizeDeep, neutralizeTags, TAG_DATA_RULE } from '@/ai/prompt-utils
 import { continuationPlan, draftCharCount, draftLengthPlan } from '@/lib/draft-length'
 import { renderVoiceLines, type VoiceLine } from '@/ai/voice'
 import type { DraftPlanCard } from '@/lib/draft-plan'
+import { type DirectiveForPrompt, renderRequestsBlock } from '@/lib/directives'
 
 export const DRAFT_SYSTEM = `당신은 웹소설 작가의 초안 작성을 돕는 보조 작가다. 작가의 지시와 설정 위키, 문체 카드를 따라 회차 초안을 쓴다.
 규칙:
@@ -19,6 +20,7 @@ export const DRAFT_SYSTEM = `당신은 웹소설 작가의 초안 작성을 돕�
 - 이 작품에서 처음 나오는 인물과 고유 용어(직책, 지명, 물건, 규칙의 이름)는 나오는 장면 안에서 한 번, 행동이나 대사로 누구인지 무엇인지 알 수 있게 드러낸다. 작가의 지시와 위키에 있는 내용만 쓰고 설명문으로 늘어놓지 않는다. <previous_summary>, <previous_tail>, <draft_so_far>에 이미 나온 것은 다시 소개하지 않는다.
 - <target_length>의 최소 분량 이상 쓰고 최대 분량은 넘기지 않는다. 분량이 모자라면 사건을 늘리지 말고 장면 묘사와 대사를 더 쓴다. <scene_budget>이 있으면 장면마다 그 분량을 채운다.
 - <draft_so_far>가 있으면 그 글 바로 뒤에서 이어 쓴다. 앞부분을 다시 쓰거나 요약하지 않고 이어 쓸 부분만 출력한다. <continue_length>의 분량을 지킨다.
+- <author_requests>는 작가가 계속 지켜 달라고 한 요청이다. 모든 장면에서 지키고, 이번 화 지시(<instructions>)와 부딪치면 지시를 따른다.
 ${TAG_DATA_RULE}
 - 제목이나 설명 없이 본문만 출력한다.`
 
@@ -50,6 +52,10 @@ export type DraftPromptInput = {
   beatSceneCount?: number
   /** Scene count of an approved plan card. Used in `<scene_budget>` when there are no beats. */
   sceneCount?: number
+  /** Active author requests for this chapter. Undefined or empty adds no <author_requests> block. */
+  requests?: DirectiveForPrompt[]
+  /** Core (always-tier) wiki entries, already rendered as text. Empty adds no <core_wiki> block. */
+  coreText?: string
 }
 
 /**
@@ -59,13 +65,44 @@ export type DraftPromptInput = {
 export const BEATS_RULE =
   '위 장면 목록의 장소, 인물, 물건의 위치, 사건 순서를 그대로 지키고 목록에 없는 장소 이동은 쓰지 않는다.'
 
+/**
+ * The cached prefix of every writing prompt, as two blocks sent ahead of `buildDraftPrompt`:
+ * A is the author requests, the voices, the style cards and the core entries (parts that are empty
+ * are left out); B is the previous summary and tail. The model reads A, then B, then the rest.
+ */
+export function buildDraftPrefix(raw: DraftPromptInput): string[] {
+  const input = neutralizeDeep(raw)
+  const cards =
+    input.styleCards.length > 0 ? input.styleCards.map(renderCard).join('\n\n') : '(없음)'
+  const blockA = [
+    renderRequestsBlock(input.requests ?? []),
+    voicesBlock(input.voices),
+    ['<style_cards>', cards, '</style_cards>'].join('\n'),
+    input.coreText ? `<core_wiki>\n${input.coreText}\n</core_wiki>` : '',
+  ]
+    .filter((part) => part !== '')
+    .join('\n\n')
+  const blockB = [
+    '<previous_summary>',
+    input.previousSummary ?? '(없음)',
+    '</previous_summary>',
+    '',
+    '<previous_tail>',
+    input.previousTail ?? '(없음)',
+    '</previous_tail>',
+  ].join('\n')
+  return [blockA, blockB]
+}
+
+/**
+ * The per-call rest of the draft prompt: the chapter, the length lines, the instructions, the wiki
+ * and the beats. The cached prefix comes from `buildDraftPrefix`.
+ */
 export function buildDraftPrompt(
   raw: DraftPromptInput,
   options?: { omitTargetLength?: boolean },
 ): string {
   const input = neutralizeDeep(raw)
-  const cards =
-    input.styleCards.length > 0 ? input.styleCards.map(renderCard).join('\n\n') : '(없음)'
   const length = draftLengthPlan(
     input.targetChars,
     input.beats ? input.beatSceneCount : input.sceneCount,
@@ -84,22 +121,9 @@ export function buildDraftPrompt(
     input.instructions,
     '</instructions>',
     '',
-    ...voicesSection(input.voices),
-    '<style_cards>',
-    cards,
-    '</style_cards>',
-    '',
     '<wiki>',
     input.packText,
     '</wiki>',
-    '',
-    '<previous_summary>',
-    input.previousSummary ?? '(없음)',
-    '</previous_summary>',
-    '',
-    '<previous_tail>',
-    input.previousTail ?? '(없음)',
-    '</previous_tail>',
     ...beatsSection(input.beats),
   ].join('\n')
 }
@@ -153,16 +177,15 @@ export function buildContinuationPrompt(raw: DraftPromptInput, draftSoFar: strin
   ].join('\n')
 }
 
-/** The <voices> block, with its trailing blank line; empty when voices are not given. */
-function voicesSection(voices: DraftPromptInput['voices']): string[] {
-  if (voices === undefined) return []
+/** The <voices> block; empty when voices are not given (the speech feature is off). */
+function voicesBlock(voices: DraftPromptInput['voices']): string {
+  if (voices === undefined) return ''
   return [
     '<voices>',
     '인물별 말투. 대사는 이 말투를 따르고 바꾸지 않는다.',
     renderVoiceLines(voices),
     '</voices>',
-    '',
-  ]
+  ].join('\n')
 }
 
 export function renderCard(card: DraftPromptInput['styleCards'][number]): string {

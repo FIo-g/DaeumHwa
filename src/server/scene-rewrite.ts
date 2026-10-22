@@ -11,6 +11,7 @@ import { issues } from '@/db/schema'
 import type { Actor, ChapterRow, IssueRow } from '@/db/types'
 import { type SceneRange, sceneRangeAt } from '@/lib/scene'
 import { requireRowWork, requireWorkRole } from '@/server/access'
+import { requestsForText } from '@/server/directives'
 import { getChapter, saveChapter } from '@/server/chapters'
 
 /** Scenes rewritten per call, in story order. The rest are skipped as over-limit. */
@@ -95,11 +96,12 @@ export async function rewriteFlaggedScenes(
     }
     const sceneText = body.slice(group.start, group.end)
     const findings = group.issues.map(toFinding)
+    const requests = await requestsForText(db, workId, { chapterId: chapter.id, text: sceneText })
     const { output, runId } = await runAiTask(
       db,
       { userId: actor.userId, workId, chapterId: chapter.id, signal },
       sceneRewriteTask,
-      { sceneText, findings, beats: input.beats ?? null },
+      { sceneText, findings, beats: input.beats ?? null, requests },
       client,
     )
     const quotes = findings.map((finding) => finding.quote)

@@ -8,5 +8,6 @@ Rules:
 - Do not add new events.
 - Keep the length close to the original scene.
 - Keep paragraphs short. Use at most 3 sentences per paragraph.
+- If <author_requests> is given, the rewritten scene keeps those requests too.
 ${EN_TAG_DATA_RULE}
 - Write in the same language as the manuscript. Put the whole scene in text only, and do not add explanations.`

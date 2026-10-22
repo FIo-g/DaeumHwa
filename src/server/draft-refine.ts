@@ -12,6 +12,7 @@ import { draftCharCount } from '@/lib/draft-length'
 import type { AppliedRefinement, DraftRefinePreview, RefineRepairState } from '@/lib/draft-refine'
 import { findDraftFlags } from '@/lib/korean/style-copy'
 import { requireWorkRole } from '@/server/access'
+import { requestsForText } from '@/server/directives'
 import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
 import { listStyleCards } from '@/server/styles'
@@ -74,6 +75,10 @@ export async function previewDraftRefinement(
     if (remaining < MIN_REPAIR_MS) {
       repairState = 'skipped'
     } else {
+      const requests = await requestsForText(db, workId, {
+        chapterId: run.chapterId,
+        text: trimmed.text,
+      })
       try {
         const { output: edits } = await runAiTask(
           db,
@@ -85,7 +90,7 @@ export async function previewDraftRefinement(
             timeoutMs: Math.min(draftRepairTask.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS, remaining),
           },
           draftRepairTask,
-          { text: trimmed.text, flags },
+          { text: trimmed.text, flags, requests },
           client,
         )
         throwIfCancelled(signal)

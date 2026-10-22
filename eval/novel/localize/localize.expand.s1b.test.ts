@@ -25,6 +25,9 @@ describe('draft-expand English localization (stage 1b)', () => {
       '- Output only the expanded scene text, with no commentary or questions.',
     )
     expect(lines[lines.length - 2]).toBe(EN_TAG_DATA_RULE)
-    expect(lines[lines.length - 3]).toContain('<instructions>')
+    expect(lines[lines.length - 3]).toBe(
+      '- If <author_requests> is given, the sentences you add keep those requests too.',
+    )
+    expect(lines[lines.length - 4]).toContain('<instructions>')
   })
 })

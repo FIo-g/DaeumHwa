@@ -2,6 +2,7 @@ import { BEATS_RULE } from '@/ai/tasks/draft-chapter'
 import { BEATS_STATE_RULE } from '@/ai/tasks/draft-beats'
 import { PLAN_INTRO_RULE } from '@/lib/draft-plan'
 import { SCENE_PLAN_RULE } from '@/ai/tasks/continuity-check'
+import { REQUESTS_HEADER } from '@/lib/directives'
 
 // Turns the Korean scaffolding that product prompt builders emit (labels, empty markers, persona
 // text, chapter numbers) into English. Content from the work itself is never matched by these rules,
@@ -12,6 +13,18 @@ type Rule = readonly [pattern: string | RegExp, replacement: string]
 // Ordered: every rule runs in sequence, so longer and more specific fragments come first. A bare
 // label rule can also rewrite Hangul inside leaked Korean text, so the Hangul count is a lower bound.
 const RULES: readonly Rule[] = [
+  // Author requests (stage 2, the <author_requests> block). The header sentence comes first. The
+  // scope and kind markers are whole-line pieces, so they come before the label rules further down.
+  [
+    REQUESTS_HEADER,
+    "These are requests the author asked to keep. If one conflicts with this chapter's instructions, follow the instructions; otherwise keep them in every scene.",
+  ],
+  ['[작품 전체]', '[Whole work]'],
+  [/\[(\d+)화만\]/g, '[Chapter $1 only]'],
+  ['(말투: 반말)', '(speech: casual)'],
+  ['(말투: 존댓말)', '(speech: polite)'],
+  ['(쓰지 않을 말: ', '(do not write: '],
+  [/\(분량: 공백 포함 (\d+)자\)/g, '(length: $1 characters with spaces)'],
   // Scene plan rule (brief P3, continuity check). The whole sentence comes first: it names places,
   // people and objects, which the bare label rules below would rewrite word by word.
   [

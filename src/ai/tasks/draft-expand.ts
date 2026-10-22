@@ -6,6 +6,7 @@
 
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import { renderCard, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
+import { type DirectiveForPrompt, withRequestsBlock } from '@/lib/directives'
 import { splitSentences } from '@/lib/korean/sentences'
 import { COMMENTARY_MARKERS, draftCharCount, QUOTED } from '@/lib/draft-length'
 import { isBreakLine } from '@/lib/scene'
@@ -18,6 +19,7 @@ export const DRAFT_EXPAND_SYSTEM = `너는 웹소설 장면을 늘려 다시 쓰
 - 문체와 시점, 문단 길이는 <scene>을 따른다. 장면 구분선은 쓰지 않는다.
 - <style_cards>가 있으면 그 말투와 규칙을 지킨다.
 - <instructions>는 작가가 이 회차 전체에 준 지시다. 금지 표현, 말투, 회차 끝 방식 같은 규칙을 지킨다. <instructions>에 있어도 <scene>에 없는 사건은 더하지 않는다.
+- <author_requests>가 있으면 늘려 쓰는 문장도 그 요청을 지킨다.
 ${TAG_DATA_RULE}
 - 해설이나 질문 없이 늘린 장면 본문만 출력한다.`
 
@@ -40,6 +42,8 @@ export type DraftExpandInput = {
   styleCards: DraftPromptInput['styleCards']
   /** The author's instructions for the whole chapter (bans, voice, how the chapter ends). */
   instructions: string
+  /** Active author requests of the draft; they lead the prompt when given. */
+  requests?: DirectiveForPrompt[]
 }
 
 /**
@@ -51,7 +55,7 @@ export function buildExpandPrompt(raw: DraftExpandInput): string {
   const input = neutralizeDeep(raw)
   const cards =
     input.styleCards.length > 0 ? input.styleCards.map(renderCard).join('\n\n') : '(없음)'
-  return [
+  const prompt = [
     `<style_cards>\n${cards}\n</style_cards>`,
     `<instructions>\n${orNone(input.instructions)}\n</instructions>`,
     `<before>\n${orNone(input.before)}\n</before>`,
@@ -59,6 +63,7 @@ export function buildExpandPrompt(raw: DraftExpandInput): string {
     `<after>\n${orNone(input.after)}\n</after>`,
     `<length>공백 포함 약 ${input.targetChars}자 (지금 ${draftCharCount(input.scene)}자)</length>`,
   ].join('\n\n')
+  return withRequestsBlock(input.requests ?? [], prompt)
 }
 
 function orNone(text: string): string {
@@ -92,7 +97,7 @@ const ANNOUNCING_LINE =
  */
 const EXPAND_NOTE_MARKERS = [
   // The input tags echoed back.
-  /<\/?(?:scene|before|after|length|style_cards|instructions)>/,
+  /<\/?(?:scene|before|after|length|style_cards|instructions|author_requests)>/,
   // A bare length note.
   /^\s*\(?\s*(?:공백\s*포함\s*)?약?\s*[\d,]+\s*자\s*\)?\s*$/m,
   // The English forms, for the eval runs.

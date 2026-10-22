@@ -5,7 +5,7 @@
 
 import { z } from 'zod'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
-import { buildDraftPrompt, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
+import { buildDraftPrefix, buildDraftPrompt, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
 import { draftLengthPlan } from '@/lib/draft-length'
 import type { AiTaskDef } from '@/ai/types'
 
@@ -128,6 +128,7 @@ export const draftBeatsTask: AiTaskDef<DraftPromptInput, DraftBeats> = {
   effort: 'medium',
   maxTokens: 4000,
   system: DRAFT_BEATS_SYSTEM,
+  buildPromptPrefix: buildDraftPrefix,
   // Same sections as the prose prompt (one source, no drift), without the length lines and beats.
   // The planned scene count goes last, from draftLengthPlan: the same source as the prose <scene_budget>.
   buildPrompt: (input) =>

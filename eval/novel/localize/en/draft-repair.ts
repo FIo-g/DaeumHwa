@@ -7,5 +7,6 @@ Rules:
 - In the quote of each edit, copy the sentence from flags exactly as it is in the manuscript. In replacement, write only the rewritten sentence.
 - Do not change events, facts, character speech, point of view or tense, and keep the length about the same.
 - Do not change sentences that are not in flags.
+- If <author_requests> is given, the sentences you rewrite keep those requests too.
 ${EN_TAG_DATA_RULE}
 - Write in the same language as the manuscript.`

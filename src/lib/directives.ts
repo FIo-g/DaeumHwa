@@ -70,7 +70,8 @@ export function matchBan(text: string, pattern: string): number[] {
   return hits
 }
 
-const RENDER_HEADER =
+/** The sentence under <author_requests>. Exported so the English eval can translate it. */
+export const REQUESTS_HEADER =
   '작가가 계속 지켜 달라고 한 요청이다. 이번 화 지시와 부딪치면 지시를 따르고, 그 밖에는 모든 장면에서 지킨다.'
 
 function scopeLabel(d: DirectiveForPrompt): string {
@@ -82,7 +83,7 @@ function scopeLabel(d: DirectiveForPrompt): string {
 function kindSuffixes(d: DirectiveForPrompt): string {
   let out = ''
   if (d.speechLevel) out += ` (말투: ${d.speechLevel === 'banmal' ? '반말' : '존댓말'})`
-  if (d.kind === 'ban' && d.pattern) out += ` (쓰지 않을 말: ${d.pattern})`
+  if (d.kind === 'ban' && d.pattern) out += ` (쓰지 않을 말: ${neutralizeTags(d.pattern)})`
   if (d.kind === 'length' && d.targetChars) out += ` (분량: 공백 포함 ${d.targetChars}자)`
   return out
 }
@@ -96,5 +97,11 @@ export function renderRequestsBlock(directives: DirectiveForPrompt[]): string {
   const lines = directives.map(
     (d) => `- ${scopeLabel(d)} ${neutralizeTags(d.text)}${kindSuffixes(d)}`,
   )
-  return ['<author_requests>', RENDER_HEADER, ...lines, '</author_requests>'].join('\n')
+  return ['<author_requests>', REQUESTS_HEADER, ...lines, '</author_requests>'].join('\n')
+}
+
+/** `prompt` with the `<author_requests>` block in front, after a blank line; `prompt` alone when there are no requests. */
+export function withRequestsBlock(directives: DirectiveForPrompt[], prompt: string): string {
+  const block = renderRequestsBlock(directives)
+  return block ? `${block}\n\n${prompt}` : prompt
 }

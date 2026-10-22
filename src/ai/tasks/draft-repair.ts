@@ -5,13 +5,19 @@
 import { z } from 'zod'
 import { type ForeignSpan, foreignScriptSpans } from '@/ai/guards'
 import { neutralizeTags, TAG_DATA_RULE } from '@/ai/prompt-utils'
+import { type DirectiveForPrompt, withRequestsBlock } from '@/lib/directives'
 import type { AiTaskDef } from '@/ai/types'
 import { DRAFT_ERROR_MARK } from '@/lib/draft-stream'
 import { locateQuote } from '@/lib/korean/sentences'
 import type { DraftFlag } from '@/lib/korean/style-copy'
 
 export type DraftEdit = { quote: string; replacement: string }
-export type DraftRepairInput = { text: string; flags: DraftFlag[] }
+export type DraftRepairInput = {
+  text: string
+  flags: DraftFlag[]
+  /** Active author requests; they lead the prompt when given. */
+  requests?: DirectiveForPrompt[]
+}
 export type DraftRepairOutput = { edits: DraftEdit[] }
 
 export const DraftRepairSchema: z.ZodType<DraftRepairOutput> = z.object({
@@ -23,6 +29,7 @@ export const DRAFT_REPAIR_SYSTEM = `당신은 웹소설 퇴고를 돕는 보조 
 - flags의 각 줄은 [종류] 뒤에 원고 문장을 그대로 옮긴 것이다. sample-copy는 문체 카드 견본과 거의 같은 문장이므로, 사건과 뜻은 두고 표현과 이미지를 새로 쓴다. repeated-word는 같은 말이 너무 많이 나오는 문장이므로, 그 말을 다른 표현이나 대명사로 바꾸거나 줄인다.
 - edits의 quote에는 flags의 문장을 원고 그대로 옮기고, replacement에는 다시 쓴 문장만 쓴다.
 - 사건, 사실, 인물 말투, 시점, 시제는 바꾸지 않고 길이는 비슷하게 유지한다.
+- <author_requests>가 있으면 고쳐 쓰는 문장도 그 요청을 지킨다.
 - flags에 없는 문장은 고치지 않는다.
 ${TAG_DATA_RULE}
 - 원고와 같은 언어로 쓴다.`
@@ -63,13 +70,14 @@ export const draftRepairTask: AiTaskDef<DraftRepairInput, DraftRepairOutput> = {
   // The product default (120 s) is too short for a repair on a slow model.
   timeoutMs: 180_000,
   system: DRAFT_REPAIR_SYSTEM,
-  buildPrompt: ({ text, flags }) => {
+  buildPrompt: ({ text, flags, requests }) => {
     const prompt = `<manuscript>\n${neutralizeTags(text)}\n</manuscript>\n\n<flags>\n${flags
       .map((flag, i) => `${i + 1}. [${flag.kind}] ${neutralizeTags(flag.quote)}`)
       .join('\n')}\n</flags>`
-    return flags.some((flag) => flag.kind === 'foreign-script')
+    const withRules = flags.some((flag) => flag.kind === 'foreign-script')
       ? `${FOREIGN_SCRIPT_RULE}\n\n${prompt}`
       : prompt
+    return withRequestsBlock(requests ?? [], withRules)
   },
   schema: DraftRepairSchema,
   postProcess(output, input) {

@@ -4,6 +4,7 @@
 
 import { z } from 'zod'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
+import { type DirectiveForPrompt, withRequestsBlock } from '@/lib/directives'
 import type { AiTaskDef } from '@/ai/types'
 import { locateAllQuotes } from '@/lib/korean/sentences'
 
@@ -17,6 +18,8 @@ export type SceneRewriteInput = {
   sceneText: string
   findings: SceneFinding[]
   beats: string | null
+  /** Active author requests; they lead the prompt when given. */
+  requests?: DirectiveForPrompt[]
 }
 export type SceneRewriteOutput = { text: string }
 
@@ -31,6 +34,7 @@ export const SCENE_REWRITE_SYSTEM = `당신은 웹소설 연속성 퇴고를 돕
 - 사건 순서, 대화, 인물 말투, 문단 나눔은 장면 안에서도 그대로 둔다.
 - 새 사건을 더하지 않는다.
 - 길이는 원래 장면과 비슷하게 유지한다.
+- <author_requests>가 있으면 다시 쓰는 장면도 그 요청을 지킨다.
 - 문단은 짧게 쓴다. 한 문단은 3문장 이하로 쓴다.
 ${TAG_DATA_RULE}
 - 원고와 같은 언어로 쓴다. 장면 전체를 text에만 쓰고, 설명을 덧붙이지 않는다.`
@@ -52,7 +56,7 @@ export const sceneRewriteTask: AiTaskDef<SceneRewriteInput, SceneRewriteOutput> 
       '</findings>',
     ]
     if (input.beats) lines.push('', '<beats>', input.beats, '</beats>')
-    return lines.join('\n')
+    return withRequestsBlock(input.requests ?? [], lines.join('\n'))
   },
   schema: SceneRewriteSchema,
 }

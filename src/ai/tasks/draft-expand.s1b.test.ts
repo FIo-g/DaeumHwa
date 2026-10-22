@@ -96,6 +96,7 @@ describe('DRAFT_EXPAND_SYSTEM and constants', () => {
       '- 문체와 시점, 문단 길이는 <scene>을 따른다. 장면 구분선은 쓰지 않는다.',
       '- <style_cards>가 있으면 그 말투와 규칙을 지킨다.',
       '- <instructions>는 작가가 이 회차 전체에 준 지시다. 금지 표현, 말투, 회차 끝 방식 같은 규칙을 지킨다. <instructions>에 있어도 <scene>에 없는 사건은 더하지 않는다.',
+      '- <author_requests>가 있으면 늘려 쓰는 문장도 그 요청을 지킨다.',
       TAG_DATA_RULE,
       '- 해설이나 질문 없이 늘린 장면 본문만 출력한다.',
     ])
