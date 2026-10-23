@@ -56,6 +56,12 @@ export type ContextPack = {
   /** Always-tier entries kept out of the budget (only with `splitCore`); see `renderCoreEntries`. */
   core: PackEntry[]
   entries: PackEntry[]
+  /**
+   * Every entry chosen before the budget trimmed the pack (mentioned, always-tier and extra ids),
+   * including the ones the trim cut. Set by buildContextPack; not rendered. Callers use it to pick
+   * the author requests. Packs built by hand leave it out.
+   */
+  chosenEntryIds?: string[]
   threads: PackThread[]
   relations: { sourceName: string; targetName: string; kind: string; description: string }[]
   previousSummaries: { position: number; title: string; summary: string }[]
@@ -336,7 +342,8 @@ export async function buildContextPack(
     namingRules: rules,
   }
 
-  const measure = () => renderPack(assemble(position, selection, entryRows.length, core)).length
+  const measure = () =>
+    renderPack(assemble(position, selection, entryRows.length, core, chosenIds)).length
   if (input.keepNamed) {
     trimKeepingNamed(selection, budget, measure)
   } else {
@@ -358,7 +365,7 @@ export async function buildContextPack(
     }
   }
 
-  const pack = assemble(position, selection, entryRows.length, core)
+  const pack = assemble(position, selection, entryRows.length, core, chosenIds)
   pack.stats.approxChars = renderPack(pack).length
   return pack
 }
@@ -512,6 +519,7 @@ function assemble(
   selection: Selection,
   totalEntries: number,
   core: PackEntry[],
+  chosenEntryIds: string[],
 ): ContextPack {
   let factCount = factCountOf(core)
   const entries: PackEntry[] = selection.entries.map((entry, index) => {
@@ -527,6 +535,7 @@ function assemble(
     position,
     core,
     entries,
+    chosenEntryIds: [...chosenEntryIds],
     threads: threadList,
     relations: selection.relations.map((r) => ({
       sourceName: r.sourceName,

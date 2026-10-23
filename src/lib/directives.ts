@@ -100,6 +100,18 @@ export function renderRequestsBlock(directives: DirectiveForPrompt[]): string {
   return ['<author_requests>', REQUESTS_HEADER, ...lines, '</author_requests>'].join('\n')
 }
 
+/**
+ * The chapter target a length request sets: the newest chapter-scope length request with a target,
+ * else the newest work-scope one. `requests` is in creation order, so the last match is the newest.
+ * Null when no such request applies.
+ */
+export function lengthRequestTarget(requests: DirectiveForPrompt[]): number | null {
+  const lengths = requests.filter((d) => d.kind === 'length' && d.targetChars !== null)
+  const chapter = lengths.filter((d) => d.scope === 'chapter').pop()
+  const work = lengths.filter((d) => d.scope === 'work').pop()
+  return (chapter ?? work)?.targetChars ?? null
+}
+
 /** `prompt` with the `<author_requests>` block in front, after a blank line; `prompt` alone when there are no requests. */
 export function withRequestsBlock(directives: DirectiveForPrompt[], prompt: string): string {
   const block = renderRequestsBlock(directives)

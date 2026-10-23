@@ -1,6 +1,7 @@
 import type { Db } from '@/db/client'
 import { type Actor, resolveWorkSettings } from '@/db/types'
 import type { WritingData } from '@/components/writing/types'
+import { lengthRequestTarget } from '@/lib/directives'
 import { AppError } from '@/lib/errors'
 import { getChapter, listChapters } from '@/server/chapters'
 import { listComments } from '@/server/comments'
@@ -8,6 +9,7 @@ import { listIssues } from '@/server/issues'
 import { listNamingRules } from '@/server/naming'
 import { countPendingProposals } from '@/server/proposal-store'
 import { listThreads } from '@/server/threads'
+import { activeDirectivesFor } from '@/server/directives'
 import { listEntries } from '@/server/wiki'
 import { getWork } from '@/server/works'
 
@@ -36,6 +38,12 @@ export async function loadWritingData(
       countPendingProposals(db, workId),
     ])
 
+  // The target box starts at the chapter's length request, when one applies (stage 2).
+  const requests = await activeDirectivesFor(db, workId, {
+    position: chapter.position,
+    entryIds: [],
+  })
+
   // An archived chapter is not in the list, but the screen still has to show it.
   const chapterOptions = chapters.map((c) => ({ id: c.id, position: c.position, title: c.title }))
   if (chapter.archivedAt) {
@@ -47,7 +55,7 @@ export async function loadWritingData(
     workId,
     workTitle: work.title,
     role: work.role,
-    targetChars: resolveWorkSettings(work.settings).targetChars,
+    targetChars: lengthRequestTarget(requests) ?? resolveWorkSettings(work.settings).targetChars,
     chapter,
     chapters: chapterOptions,
     entries: entries.map((e) => ({

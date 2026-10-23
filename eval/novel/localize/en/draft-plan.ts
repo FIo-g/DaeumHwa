@@ -14,5 +14,6 @@ Rules:
 - Do not invent important settings (new powers, new relations, deaths) that the wiki does not have.
 - With <revision>, change only the "current plan" as the author's note says. Keep every scene the note does not touch.
 - Write names of people and places exactly as they appear in the wiki.
+- <author_requests> are requests the author asked to keep. Scene summaries and the ending (ending.line) must not break them.
 ${EN_TAG_DATA_RULE}
 - Write all output in English.`

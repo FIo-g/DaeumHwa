@@ -86,7 +86,7 @@ import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
 import { assertEntryInWork, listFacts } from '@/server/facts'
 import { checkDraftDirectives, type DirectiveFinding } from '@/lib/directive-check'
-import type { DirectiveForPrompt } from '@/lib/directives'
+import { type DirectiveForPrompt, lengthRequestTarget } from '@/lib/directives'
 import { activeDirectivesFor, requestsForText } from '@/server/directives'
 import { insertProposals } from '@/server/proposal-store'
 import {
@@ -395,7 +395,6 @@ export async function buildDraftContext(
 }> {
   const { workId, instructions } = input
   const work = await getWork(db, actor, workId)
-  const targetChars = input.targetChars ?? resolveWorkSettings(work.settings).targetChars
   const all = await listChapters(db, actor, workId)
 
   let position: number
@@ -421,17 +420,20 @@ export async function buildDraftContext(
 
   const selected = new Set(input.entryIds)
   // Speech feature (off by default): characters with a speech style go to <voices>, and their
-  // style cards are kept even when the author did not select them.
+  // style cards are kept even when the author did not select them. A `never` character is left
+  // out unless the author selected it, as it is left out of the pack.
   const speech = isSpeechStyleEnabled()
   const voices = speech
     ? selectMainVoices(
-        (await listEntries(db, actor, workId, { kinds: ['character'] })).map((e) => ({
-          entryId: e.id,
-          name: e.name,
-          speech: e.fields.speech ?? '',
-          selected: selected.has(e.id),
-          createdAt: e.createdAt,
-        })),
+        (await listEntries(db, actor, workId, { kinds: ['character'] }))
+          .filter((e) => e.contextTier !== 'never' || selected.has(e.id))
+          .map((e) => ({
+            entryId: e.id,
+            name: e.name,
+            speech: e.fields.speech ?? '',
+            selected: selected.has(e.id),
+            createdAt: e.createdAt,
+          })),
       )
     : undefined
   const voiceIds = new Set((voices ?? []).map((v) => v.entryId))
@@ -459,11 +461,23 @@ export async function buildDraftContext(
     hideUnrevealed: true,
     splitCore: true,
   })
-  // The requests that apply to this chapter: the selected, mentioned and core characters count.
-  const requests = await activeDirectivesFor(db, workId, {
+  // The requests that apply to this chapter: the selected, mentioned and always-tier characters
+  // count, even when the budget cut their cards out of the pack.
+  const active = await activeDirectivesFor(db, workId, {
     position,
-    entryIds: [...input.entryIds, ...pack.entries.map((e) => e.id), ...pack.core.map((e) => e.id)],
+    entryIds: [
+      ...input.entryIds,
+      ...(pack.chosenEntryIds ?? [...pack.core, ...pack.entries].map((e) => e.id)),
+    ],
   })
+  // A length request sets the chapter target (stage 2). An explicit target that differs from it is
+  // the author's choice for this chapter, so the length requests then leave the prompt and the check.
+  const lengthTarget = lengthRequestTarget(active)
+  const targetChars =
+    input.targetChars ?? lengthTarget ?? resolveWorkSettings(work.settings).targetChars
+  const overridden =
+    lengthTarget !== null && input.targetChars !== undefined && input.targetChars !== lengthTarget
+  const requests = overridden ? active.filter((d) => d.kind !== 'length') : active
   const promptInput: DraftPromptInput = {
     instructions,
     targetChars,
