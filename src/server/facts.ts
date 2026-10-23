@@ -229,6 +229,8 @@ export type SupersedeInput = {
   evidence?: string
   sourceChapterId?: string | null
   sourceType?: FactSourceType
+  /** Omitted: the old fact's reveal chapter carries over. Null clears the lock. */
+  revealAtPosition?: number | null
 }
 
 async function loadFact(db: Db, factId: string): Promise<FactRow> {
@@ -434,6 +436,10 @@ export async function supersedeFact(
         evidence: (input.evidence ?? '').trim(),
         validFromPosition: input.fromPosition,
         validToPosition: null,
+        revealAtPosition:
+          input.revealAtPosition !== undefined
+            ? (requireReveal(input.revealAtPosition) ?? null)
+            : old.revealAtPosition,
         createdByType: o.proposerType ?? 'author',
       })
       .returning()

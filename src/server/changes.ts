@@ -150,6 +150,7 @@ const WIKI_ENTRY_KEYS = [
   'body',
   'fields',
   'customFields',
+  'contextTier',
   'archivedAt',
 ] as const
 const FACT_KEYS = [
@@ -162,6 +163,7 @@ const FACT_KEYS = [
   'evidence',
   'validFromPosition',
   'validToPosition',
+  'revealAtPosition',
   'supersededByFactId',
   'archivedAt',
 ] as const

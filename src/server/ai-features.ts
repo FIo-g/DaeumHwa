@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import { getAiClient } from '@/ai'
-import { buildContextPack, renderContextPack, renderCoreEntries } from '@/ai/context'
+import { buildContextPack, isUnrevealed, renderContextPack, renderCoreEntries } from '@/ai/context'
 import { READER_PERSONAS, type Persona } from '@/ai/personas'
 import {
   isLocalProvider,
@@ -243,6 +243,8 @@ export async function runDirectionAdvice(
   const factsByEntry = new Map<string, string[]>()
   for (const fact of allFacts) {
     if (!fact.entryId) continue
+    // The advice is for the next chapter; a fact still locked there must not reach the plan.
+    if (isUnrevealed(fact, latestPosition + 1)) continue
     const list = factsByEntry.get(fact.entryId) ?? []
     if (list.length < 5) list.push(fact.content)
     factsByEntry.set(fact.entryId, list)

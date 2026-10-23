@@ -617,7 +617,7 @@ function isFactValidAt(
 }
 
 /** A fact with a reveal chapter is unknown to the author's reader until that chapter (spoiler lock). */
-function isUnrevealed(fact: { revealAtPosition: number | null }, position: number): boolean {
+export function isUnrevealed(fact: { revealAtPosition: number | null }, position: number): boolean {
   return fact.revealAtPosition !== null && fact.revealAtPosition > position
 }
 

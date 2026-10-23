@@ -67,6 +67,7 @@ const SupersedeFactSchema = z.object({
   sourceType: z.enum(FACT_SOURCE_TYPES).optional(),
   evidence: z.string().max(2000).optional(),
   sourceChapterId: z.uuid().nullable().optional(),
+  revealAtPosition: z.number().int().min(1).nullable().optional(),
 })
 const FactIdSchema = z.object({ factId: z.uuid() })
 
