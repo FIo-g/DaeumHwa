@@ -192,6 +192,116 @@ describe('DirectiveList', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled())
   })
 
+  it('sends the chosen character when the scope is 인물', async () => {
+    const user = userEvent.setup()
+    create.mockReturnValue(Promise.resolve({ ok: true, data: {} }) as never)
+    render(
+      <DirectiveList
+        workId="w1"
+        directives={[]}
+        characters={characters}
+        styleCards={styleCards}
+        canEdit
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('예: 세린은 누구에게나 반말을 한다.'), {
+      target: { value: '서윤은 존댓말을 쓴다.' },
+    })
+    await user.click(screen.getByRole('combobox', { name: '범위' }))
+    await user.click(await screen.findByRole('option', { name: '인물' }))
+    await user.click(screen.getByRole('combobox', { name: '인물' }))
+    await user.click(await screen.findByRole('option', { name: '서윤' }))
+    fireEvent.click(screen.getByRole('button', { name: '요청 추가' }))
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'character',
+        entryId: 'e1',
+        chapterPosition: null,
+      }),
+    )
+  })
+
+  it('sends the chapter number when the scope is 한 회차만', async () => {
+    const user = userEvent.setup()
+    create.mockReturnValue(Promise.resolve({ ok: true, data: {} }) as never)
+    render(
+      <DirectiveList
+        workId="w1"
+        directives={[]}
+        characters={characters}
+        styleCards={styleCards}
+        canEdit
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('예: 세린은 누구에게나 반말을 한다.'), {
+      target: { value: '이번 회차는 짧게 끊는다.' },
+    })
+    await user.click(screen.getByRole('combobox', { name: '범위' }))
+    await user.click(await screen.findByRole('option', { name: '한 회차만' }))
+    fireEvent.change(screen.getByLabelText('회차'), { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('button', { name: '요청 추가' }))
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'chapter',
+        chapterPosition: 7,
+        entryId: null,
+      }),
+    )
+  })
+
+  it('sends the chosen speech level when the kind is 말투', async () => {
+    const user = userEvent.setup()
+    create.mockReturnValue(Promise.resolve({ ok: true, data: {} }) as never)
+    render(
+      <DirectiveList
+        workId="w1"
+        directives={[]}
+        characters={characters}
+        styleCards={styleCards}
+        canEdit
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('예: 세린은 누구에게나 반말을 한다.'), {
+      target: { value: '세린은 존댓말을 쓴다.' },
+    })
+    await user.click(screen.getByRole('combobox', { name: '종류' }))
+    await user.click(await screen.findByRole('option', { name: '말투' }))
+    await user.click(screen.getByRole('combobox', { name: '말투' }))
+    await user.click(await screen.findByRole('option', { name: '존댓말' }))
+    fireEvent.click(screen.getByRole('button', { name: '요청 추가' }))
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'speech', speechLevel: 'jondaet', targetChars: null }),
+    )
+  })
+
+  it('sends the target character count when the kind is 분량', async () => {
+    const user = userEvent.setup()
+    create.mockReturnValue(Promise.resolve({ ok: true, data: {} }) as never)
+    render(
+      <DirectiveList
+        workId="w1"
+        directives={[]}
+        characters={characters}
+        styleCards={styleCards}
+        canEdit
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('예: 세린은 누구에게나 반말을 한다.'), {
+      target: { value: '한 회차는 3000자 안팎으로 쓴다.' },
+    })
+    await user.click(screen.getByRole('combobox', { name: '종류' }))
+    await user.click(await screen.findByRole('option', { name: '분량' }))
+    fireEvent.change(screen.getByLabelText('공백 포함 글자 수'), { target: { value: '3000' } })
+    fireEvent.click(screen.getByRole('button', { name: '요청 추가' }))
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'length', targetChars: 3000, speechLevel: null }),
+    )
+  })
+
   it('prefills the ban pattern from the text and sends the edited pattern', async () => {
     const user = userEvent.setup()
     create.mockReturnValue(Promise.resolve({ ok: true, data: {} }) as never)
