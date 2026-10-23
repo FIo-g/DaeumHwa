@@ -559,7 +559,11 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
               workId={data.workId}
               runId={runId}
               onPreviewChange={setRefineOpen}
-              onApplied={(text) => setDraft(text)}
+              onApplied={(text) => {
+                setDraft(text)
+                // The findings describe the old draft; they are not recomputed for the refined one.
+                setFindings(null)
+              }}
             />
           )}
         </div>

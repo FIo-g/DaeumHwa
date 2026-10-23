@@ -23,6 +23,7 @@ const QUOTE_RE = /'([^']+)'|"([^"]+)"|‘([^’]+)’|“([^”]+)”|「([^」]
 /**
  * Default ban pattern for a request text: the first quoted span, or else the whole text.
  * A dictionary form loses its 다 (`고개를 끄덕이다` → `고개를 끄덕`), so its inflections match too.
+ * A one-syllable verb keeps its stem (`고개를 젓다` → `고개를 젓`), so the object alone never bans.
  */
 export function banPatternFor(text: string): string {
   const trimmed = text.trim()
@@ -31,7 +32,10 @@ export function banPatternFor(text: string): string {
     ? (quoted[1] ?? quoted[2] ?? quoted[3] ?? quoted[4] ?? quoted[5]).trim()
     : trimmed
   if (pattern.endsWith('다') && pattern.replace(/\s/g, '').length >= 4) {
-    pattern = pattern.slice(0, -2)
+    // Keep the verb's one syllable: 젓다 → 젓, 감다 → 감. Two characters go only when the last
+    // word keeps one before them: 끄덕이다 → 끄덕.
+    const lastWord = pattern.split(/\s+/).pop() ?? ''
+    pattern = pattern.slice(0, lastWord.length >= 3 ? -2 : -1)
   }
   return pattern.trim()
 }
