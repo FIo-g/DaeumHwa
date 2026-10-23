@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { HelperThink, ModelId } from './models'
 import type { InterviewTurnStat } from './metrics-interview'
 import type { DraftPlanCard } from '@/lib/draft-plan'
+import type { PlantedLedger } from './directives'
 
 // Run config and resumable progress for one novel eval run. Both files live in the run directory.
 
@@ -27,6 +28,8 @@ export type RunConfig = {
   twoStep?: boolean
   /** Chapter 1's instructions get the planted author directives, and their kept/broken counts are measured (`--directives on`). Absent means off. */
   directives?: boolean
+  /** Ledger mode (`--directives ledger`): the probes are planted as author requests, not in chapter 1's instructions. Absent means the instructions carry them. */
+  directivesMode?: 'ledger'
   /** Chapter instructions are only the first sentence and the draft review gets no mustInclude list (`--few-instructions`). Absent means off. */
   fewInstructions?: boolean
   /** No plan card: the draft is written at once, as before stage 1 (`--quick`). Absent means off. */
@@ -71,6 +74,8 @@ export type RunData = {
    * (few-instruction runs). Optional so state files from before stage 1 load.
    */
   plans?: Record<number, { runId: string; card: DraftPlanCard; notes: string[] }>
+  /** The author requests planted in ledger mode, with the scope each got. Absent on other runs. */
+  planted?: PlantedLedger
 }
 
 export type RunState = {

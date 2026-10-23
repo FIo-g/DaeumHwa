@@ -87,6 +87,7 @@ const runs = Array.isArray(args.runs)
 const ALLOWED_RUN_FLAGS = [
   '--deploy-settings',
   '--directives on',
+  '--directives ledger',
   '--draft-mode scenes',
   '--few-instructions',
   '--length-mode continue',

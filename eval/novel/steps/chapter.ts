@@ -18,6 +18,7 @@ import { repairableForeignSpans } from '@/ai/tasks/draft-repair'
 import { DraftBeatsSchema, renderBeatLocations } from '@/ai/tasks/draft-beats'
 import { MODEL_PROFILES, twoStepEnabled } from '../models'
 import { chapterInstructions } from '../instructions'
+import { plantLedger } from '../directives'
 import { trimOverlongParagraphs } from '@/server/draft-paragraphs'
 import { listEntries } from '@/server/wiki'
 import {
@@ -464,6 +465,12 @@ export const draft: StepFn = async (ctx, key, state) => {
   const spec = chapterSpec(ctx, n)
   const instructions = chapterInstructions(ctx.bible, n, ctx.config)
   const workId = requireWorkId(state)
+
+  // Ledger mode plants the probes before chapter 1's first plan or draft call. Planting is idempotent.
+  if (n === 1 && ctx.config.directivesMode === 'ledger' && !state.data.planted) {
+    state.data.planted = await plantLedger(ctx, workId)
+    persist(ctx, state)
+  }
 
   // The chapter was saved before its mark was: adopt it, never draft it again.
   const existing = await chapterAt(ctx, workId, n)

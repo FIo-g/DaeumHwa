@@ -16,6 +16,8 @@ export type HarnessInput = {
   plans?: Record<number, { notes: string[] }>
   price?: ModelPrice
   settings: 'deploy' | 'eval'
+  /** Ledger mode: the planted probe texts' characters, counted on chapter 1 (0 or absent otherwise). */
+  ledgerChars?: number
 }
 
 const CountSchema = z.number().int().nonnegative()
@@ -48,6 +50,9 @@ export const HarnessSummarySchema = z.object({
       instructionChars: CountSchema,
       // Stage 1b: expansion calls of the chapter's draft (their time is already in writeMs). Saved runs from before stage 1b read as 0.
       expandCalls: CountSchema.default(0),
+      // Stage 2: cached input tokens over all input tokens of the chapter's calls; ledger characters (chapter 1). Older runs read as 0.
+      cacheReadShare: z.number().min(0).max(1).default(0),
+      ledgerChars: CountSchema.default(0),
     }),
   ),
   interview: z.object({
@@ -58,7 +63,13 @@ export const HarnessSummarySchema = z.object({
     usd: UsdSchema,
     totalMs: MsSchema,
   }),
-  total: z.object({ calls: CountSchema, usd: UsdSchema, totalMs: MsSchema }),
+  total: z.object({
+    calls: CountSchema,
+    usd: UsdSchema,
+    totalMs: MsSchema,
+    cacheReadShare: z.number().min(0).max(1).default(0),
+    ledgerChars: CountSchema.default(0),
+  }),
 })
 export type HarnessSummary = z.infer<typeof HarnessSummarySchema>
 export type ChapterHarness = HarnessSummary['chapters'][number]
@@ -115,6 +126,7 @@ function tally(calls: CallRecord[], price: ModelPrice | undefined) {
     cacheRecorded,
     usd,
     totalMs,
+    cacheReadShare: inputTokens > 0 ? cacheReadTokens / inputTokens : 0,
   }
 }
 
@@ -186,6 +198,8 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
       regenerations: Math.max(0, (o.drafts[n]?.length ?? 0) - 1),
       instructionChars: Array.from(o.instructions(n)).length,
       expandCalls: drafting.filter((call) => call.task === EXPAND_TASK).length,
+      cacheReadShare: all.cacheReadShare,
+      ledgerChars: n === 1 ? (o.ledgerChars ?? 0) : 0,
     })
   }
 
@@ -206,6 +220,12 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
       usd: interview.usd,
       totalMs: interview.totalMs,
     },
-    total: { calls: total.calls, usd: total.usd, totalMs: total.totalMs },
+    total: {
+      calls: total.calls,
+      usd: total.usd,
+      totalMs: total.totalMs,
+      cacheReadShare: total.cacheReadShare,
+      ledgerChars: o.ledgerChars ?? 0,
+    },
   }
 }

@@ -25,6 +25,7 @@ Work from `root`. Every repo-relative path below (`eval/...`, `docs/...`) is rel
    - **속도** (Korean, a table with one row per run): model, lang, generation tok/s (median over all tasks), prompt tok/s (local runs only; "-" for cloud), draft first-token time (median of the `draft-chapter` tasks, from `byTask`), and median time per chapter (median of the `perChapterMs` values). Take these from each run's `run-summary.json` `speed` block (`dir` in `runs`, or the run directory named in the review document). If a run has no `speed` block, write "no data". Add a note under the table: local speeds come from Ollama's internal timings, cloud speeds from wall-clock time including network and thinking, so they are not directly comparable.
    - **비용·시간·고칠 곳·요청 준수** (Korean, one row per run and chapter): model, lang, chapter `n`, and these columns, each from the run's `run-summary.json` or its review document:
      - 한 화 비용 (달러): `harness.chapters[].usd`, four decimals (for example 0.0273). Write `—` when `usd` is null. When `harness.chapters[].cacheRecorded` is `false`, append ` (캐시 미기록)` to the same cell (for example `0.0273 (캐시 미기록)`).
+     - 캐시 읽기 비율: `harness.chapters[].cacheReadShare` (cached input tokens over all input tokens of the chapter), written as a percentage with no decimals (for example `42%`). Older runs have no value and read as `0%`.
      - 본문 첫 글자 (초): `harness.chapters[].firstCharMs` divided by 1000.
      - 쓰기 시간 (초): `harness.chapters[].writeMs` divided by 1000.
      - 저장 뒤 시간 (초): `harness.chapters[].afterSaveMs` divided by 1000.
@@ -34,6 +35,7 @@ Work from `root`. Every repo-relative path below (`eval/...`, `docs/...`) is rel
      - 고칠 곳 (1,000자당): the chapter's `mustFix` from the review's 'Verdict data' block, divided by `chars` (the chapter's character count with spaces) times 1000.
      - 요청 준수: `directives.chapters[]` kept divided by (kept + broken), written as a fraction, for the chapters that have it.
        Write `—` in a cell when its block is absent (older runs). Do not compute a value the file does not hold.
+   - **Ledger runs** (`-ledger`, `--directives ledger`): their planted requests are not in the instructions. In the intervention comparison, count `harness.chapters[0].ledgerChars` (the planted probe characters) together with `instructionChars`, and say in the note that this is how the figures were combined. Compare the cache read share of ledger and non-ledger runs only as a note, since the prompt layouts differ.
    - **Korean versus English diagnosis**: the difference between each model's ko and en runs, and the likely causes, with evidence from the reviews. State which causes are only guesses.
    - **Improvement candidates**: ordered by expected effect, highest first. Cover prompts, splitting the work into smaller steps, self-review, code-side validation, and settings. For each, say the expected effect and the evidence.
    - **Paused or blocked runs**: each with its `RESUME.md` path and its status.

@@ -158,6 +158,7 @@ export type InitOptions = {
   speech?: string
   twoStep?: string
   directives?: boolean
+  directivesMode?: 'ledger'
   fewInstructions?: boolean
   quick?: boolean
   draftMode?: string
@@ -196,9 +197,11 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (refusal) throw new Error(refusal)
   }
   const twoStepSuffix = twoStep ? '-twostep' : ''
-  const directives = o.directives === true
+  // Ledger mode is a directives run too: the ledger flag alone turns the measurement on.
+  const ledger = o.directivesMode === 'ledger'
+  const directives = o.directives === true || ledger
   const fewInstructions = o.fewInstructions === true
-  const directivesSuffix = directives ? '-directives' : ''
+  const directivesSuffix = ledger ? '-ledger' : directives ? '-directives' : ''
   const fewSuffix = fewInstructions ? '-few' : ''
   const quick = o.quick === true
   const quickSuffix = quick ? '-quick' : ''
@@ -235,7 +238,11 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (twoStep && existing.twoStep !== true) {
       throw new Error(`run exists with another two-step setting: ${dir}`)
     }
-    if (o.directives !== undefined && directives !== (existing.directives ?? false)) {
+    if (
+      o.directives !== undefined &&
+      (directives !== (existing.directives ?? false) ||
+        ledger !== (existing.directivesMode === 'ledger'))
+    ) {
       throw new Error(`run exists with another directives: ${dir}`)
     }
     if (
@@ -267,6 +274,7 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       speech: speech || undefined,
       twoStep: twoStep || undefined,
       directives: directives || undefined,
+      directivesMode: ledger ? 'ledger' : undefined,
       fewInstructions: fewInstructions || undefined,
       quick: quick || undefined,
       draftMode: draftMode === 'scenes' ? 'scenes' : undefined,
@@ -354,14 +362,19 @@ export function draftModeFlag(flags: Flags): string | undefined {
 }
 
 /**
- * The --directives value, or undefined when the flag is absent. Only `on` is accepted; a bare flag
- * is refused, so a directive run is never created silently without its setting.
+ * The --directives value, or undefined when the flag is absent. `on` and `ledger` are accepted; a
+ * bare flag is refused, so a directive run is never created silently without its setting.
  */
 export function directivesFlag(flags: Flags): boolean | undefined {
   const value = flags.directives
   if (value === undefined) return undefined
-  if (value === 'on') return true
+  if (value === 'on' || value === 'ledger') return true
   throw new Error(`unknown directives value: ${String(value)}`)
+}
+
+/** The ledger mode of --directives: `ledger` when given, else undefined (the instruction mode). */
+export function directivesModeFlag(flags: Flags): 'ledger' | undefined {
+  return flags.directives === 'ledger' ? 'ledger' : undefined
 }
 
 /**
@@ -846,6 +859,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         speech: speechFlag(flags),
         twoStep: twoStepFlag(flags),
         directives: directivesFlag(flags),
+        directivesMode: directivesModeFlag(flags),
         fewInstructions: fewInstructionsFlag(flags),
         quick: quickFlag(flags),
         draftMode: draftModeFlag(flags),

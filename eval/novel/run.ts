@@ -105,6 +105,7 @@ export type RunCreateOptions = {
   speech?: boolean
   twoStep?: boolean
   directives?: boolean
+  directivesMode?: 'ledger'
   fewInstructions?: boolean
   quick?: boolean
   draftMode?: 'single' | 'scenes'
@@ -131,6 +132,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     ...(o.speech ? { speech: true } : {}),
     ...(o.twoStep ? { twoStep: true } : {}),
     ...(o.directives ? { directives: true } : {}),
+    ...(o.directivesMode === 'ledger' ? { directivesMode: 'ledger' as const } : {}),
     ...(o.fewInstructions ? { fewInstructions: true } : {}),
     ...(o.quick ? { quick: true } : {}),
     ...(o.draftMode === 'scenes' ? { draftMode: 'scenes' as const } : {}),

@@ -12,7 +12,12 @@ import { listEntries } from '@/server/wiki'
 import { packCoverage } from '../../coverage'
 import { chapterInstructions } from '../instructions'
 import { loadRunBible } from '../bible'
-import { directiveCounts, directiveResults, type DirectiveResults } from '../directives'
+import {
+  directiveCounts,
+  directiveResults,
+  type DirectiveResults,
+  ledgerCharsOf,
+} from '../directives'
 import type { CallRecord, CallSpeed, FailureKind } from '../eval-client'
 import { harnessSummary, type HarnessInput, HarnessSummarySchema } from '../harness-summary'
 import { interviewMetrics } from '../metrics-interview'
@@ -1071,6 +1076,13 @@ export const finish: StepFn = async (ctx, _key, state) => {
 
   const calls = readCallRecords(ctx.dir)
   const inputs = readSummaryInputs(ctx.dir)
+  // Ledger mode: the planted rows go to directives.json, and their characters count in the harness block.
+  if (state.data.planted) {
+    if (inputs.directives) inputs.directives.planted = state.data.planted
+    if (inputs.harness) {
+      inputs.harness.ledgerChars = ledgerCharsOf(state.data.planted, ctx.config.lang)
+    }
+  }
   writeDirectivesFile(ctx.dir, inputs)
   writeRunFile(
     ctx.dir,
