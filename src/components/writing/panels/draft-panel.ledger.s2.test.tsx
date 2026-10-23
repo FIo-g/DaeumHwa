@@ -137,7 +137,14 @@ describe('DraftPanel request ledger (stage 2)', () => {
   it('shows how many requests apply and links to the requests tab', async () => {
     renderPanel()
 
-    expect(await screen.findByText('적용 중인 요청 2개')).toBeInTheDocument()
+    const count = await screen.findByText('적용 중인 요청 2개')
+    expect(count).toBeInTheDocument()
+    // The count sits above the instruction box, not below the keep-instruction checkbox.
+    const box = document.getElementById('draft-instructions')
+    expect(box).not.toBeNull()
+    expect(
+      count.compareDocumentPosition(box as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     expect(screen.getByRole('link', { name: '보기' })).toHaveAttribute(
       'href',
       '/works/work-1/wiki?tab=requests',

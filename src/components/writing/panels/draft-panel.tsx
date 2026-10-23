@@ -401,6 +401,14 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     <section aria-label="AI 초안" className="grid gap-4">
       <div className="grid gap-2">
         <Label htmlFor="draft-instructions">무슨 일이 일어나야 하나요?</Label>
+        {activeRequests !== null && activeRequests > 0 && (
+          <p className="text-sm text-muted-foreground">
+            <span>{`적용 중인 요청 ${activeRequests}개`}</span>{' '}
+            <Link className="underline" href={`/works/${data.workId}/wiki?tab=requests`}>
+              보기
+            </Link>
+          </p>
+        )}
         <Textarea
           id="draft-instructions"
           value={instructions}
@@ -419,14 +427,6 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           />
           <Label htmlFor="draft-keep-instruction">이 지시를 앞으로도 지키기</Label>
         </div>
-        {activeRequests !== null && activeRequests > 0 && (
-          <p className="text-sm text-muted-foreground">
-            <span>{`적용 중인 요청 ${activeRequests}개`}</span>{' '}
-            <Link className="underline" href={`/works/${data.workId}/wiki?tab=requests`}>
-              보기
-            </Link>
-          </p>
-        )}
       </div>
 
       <div className="grid gap-2">

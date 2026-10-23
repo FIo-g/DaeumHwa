@@ -7,6 +7,8 @@ import { neutralizeDeep, neutralizeTags, TAG_DATA_RULE } from '@/ai/prompt-utils
 import { buildDraftPrefix, buildDraftPrompt, type DraftPromptInput } from '@/ai/tasks/draft-chapter'
 import {
   PLAN_LIST_MAX,
+  PLAN_REQUEST_MAX,
+  PLAN_REQUEST_TEXT_MAX,
   PLAN_TEXT_MAX,
   renderPlanInstructions,
   type DraftPlanCard,
@@ -48,9 +50,8 @@ export type DraftPlan = {
   requests?: string[]
 }
 
-/** Most suggested requests a plan carries, and the longest one (DraftPlanSchema and the card). */
-export const PLAN_REQUEST_MAX = 3
-export const PLAN_REQUEST_TEXT_MAX = 120
+// Re-exported so callers keep importing the request limits from the task module.
+export { PLAN_REQUEST_MAX, PLAN_REQUEST_TEXT_MAX }
 
 const DraftPlanSceneSchema = z.object({
   summary: z.string(),

@@ -1,13 +1,7 @@
 // Pure helpers for the chapter plan card (stage 1 of the lean harness): per-scene targets, the
 // warnings the card view shows, and the instruction text the draft receives from an approved card.
 
-import {
-  type DraftPlan,
-  type EndingDevice,
-  PLAN_REQUEST_MAX,
-  PLAN_REQUEST_TEXT_MAX,
-  type SceneRole,
-} from '@/ai/tasks/draft-plan'
+import type { DraftPlan, EndingDevice, SceneRole } from '@/ai/tasks/draft-plan'
 import { draftLengthPlan } from '@/lib/draft-length'
 
 // Omit before the intersection: a plain DraftPlan & { scenes } would intersect the two scene arrays
@@ -40,6 +34,9 @@ export const ENDING_DEVICE_LABELS: Record<EndingDevice, string> = {
 export const PLAN_TEXT_MAX = 400
 /** Longest list (names, threads) the card accepts (DraftPlanCardSchema). */
 export const PLAN_LIST_MAX = 12
+/** Most suggested requests a plan carries, and the longest one (DraftPlanSchema and the card). */
+export const PLAN_REQUEST_MAX = 3
+export const PLAN_REQUEST_TEXT_MAX = 120
 
 /** Trims, then cuts to `max` units without leaving half of a surrogate pair at the end. */
 function cutText(text: string, max: number = PLAN_TEXT_MAX): string {
