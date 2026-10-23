@@ -282,6 +282,52 @@ Fix these before the task 4 commit (one commit for task 4 and its fixes).
 
 - [ ] Review the stage 2 range along: ledger rules (only author actions write rows, change_log, archive, permissions), request selection per chapter and character, ban and speech check false positives on real chapters in `eval/results` (read-only), prompt layout and localization, the prefix on every client and in eval records and replays, and spoiler-lock reach. Each finding goes to an opus skeptic; confirmed ones are fixed with the task procedure, then Gate S2 again.
 
+### Stage review fixes (opus review, 2026-10-24)
+
+Gate S2 passed at 0877c07 (465 files, 4,150 tests, build). The review confirmed 19 of 28 findings. Each fix is test first; new tests go in new `*.s2.test.ts(x)` files. The fixes run in five groups, one after another.
+
+**Group A: ledger service and screens**
+- A1 (task 6): `앞으로도 지키기` cannot create two rows on a double click. Guard each item while its create is pending. The revise note is kept only after the target check passes: `onRevise(note, keep)`, and `plan()` creates the `revision` row after `checkedTarget()`.
+- A2 (tasks 1, 2): the history diff labels the ledger columns. Use `scope 범위`, `text 요청`, `pattern 찾을 말`, `speechLevel 말투`, `targetChars 분량`, `chapterPosition 회차`, `source 출처`, `contextTier AI 문맥` and `revealAtPosition 공개 회차`.
+  - Enum values show the ledger screen's Korean labels. Move those maps to `src/lib/labels.ts`.
+  - `createdBy` is skipped.
+- A3 (task 1): action limits no longer give the generic error.
+  - `text` takes up to 5,000 characters at zod, so the service reports `요청은 300자까지 적을 수 있습니다.`.
+  - `pattern` takes up to 300 at zod. The service refuses over 100 with `찾을 말은 100자까지 적을 수 있습니다.`.
+- A4 (task 1): `끄기`/`켜기` changes only the status, with its change_log, and does not re-validate the row.
+
+**Group B: request selection and length**
+- B1 (task 4): requests follow every character chosen for the chapter before the budget trims cards. `ContextPack.chosenEntryIds` is set and is not rendered.
+- B2 (task 6): add one line to `DRAFT_PLAN_SYSTEM`, before the tag-data rule: `- <author_requests>는 작가가 계속 지켜 달라고 한 요청이다. 장면 요약과 회차 끝(ending.line)도 그 요청을 어기지 않게 쓴다.`
+  - English twin: `- <author_requests> are requests the author asked to keep. Scene summaries and the ending (ending.line) must not break them.`
+  - This is the second exception to "keeps their text" in Global Constraints.
+- B3 (tasks 4, 5), my call: a length request sets the chapter target.
+  - `lengthRequestTarget(requests)` takes the newest chapter-scope `length` request with `targetChars`, else the newest work-scope one.
+  - With no explicit target from the caller, `buildDraftContext` uses it before the work setting. The draft panel's target box also starts at it (`writing-data.ts`).
+  - An explicit target that differs is the author's choice for this chapter. The `length` requests are then left out of that call's prefix and out of the check.
+  - Result: `<target_length>`, the scene budget, expansion and the check use one number.
+- B4 (task 4): with speech on, a `never`-tier character is not in the voices or its style card, unless the author selected it.
+
+**Group C: request checks**
+- C1 (task 5): speech attribution. Find names with `findMentions` in the narration only, with the quoted text blanked.
+  - Count the paragraph only when this character is named there with a subject particle (은/는/이/가/께서), and no other character is named there.
+- C2 (task 5): `speechLevelOf` fixes:
+  - 네/예/아뇨/아니요 are jondaet.
+  - A trailing comma vocative of up to two words is dropped.
+  - 니다/니까 are polite only after 습 or a ㅂ final.
+  - A last sentence that is one word with no predicate ending falls back to the previous sentence, or null.
+  - Banmal needs an ending from a whitelist: 다, 어, 아, 야, 지, 해, 라, 자, 냐, 니, 군, 걸, 게, 래, 네.
+- C3 (task 1): `banPatternFor` strips two characters only when the last word keeps one before them. Examples: 끄덕이다 → 끄덕, 젓다 → 젓.
+- C4 (task 5): after `다듬기` replaces the draft, the panel drops the old findings.
+
+**Group D: spoiler lock**
+- D1 (task 2): `supersedeFact` carries the old reveal chapter unless the input sets one (action schema too).
+- D2 (task 2): undo restores `contextTier` and `revealAtPosition` (`WIKI_ENTRY_KEYS`, `FACT_KEYS`).
+- D3 (task 2): direction advice leaves out facts not yet revealed in the next chapter (`isUnrevealed`, exported from `src/ai/context.ts`).
+
+**Group E: gateway probe**
+- E1 (task 3): the cache-key probe sends the product's OpenCode headers (session header included).
+
 ## Measurement M2 (orchestrator)
 
 Worktree `../DaeumHwa-s2` detached at the reviewed commit, set up as in M0. `D` is the default model picked in M0, `O` the other one.
