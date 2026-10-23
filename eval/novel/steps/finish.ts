@@ -927,6 +927,7 @@ const HarnessFlagsSchema = z.object({
   deploySettings: z.boolean().optional(),
   fewInstructions: z.boolean().optional(),
   directives: z.boolean().optional(),
+  directivesMode: z.literal('ledger').optional(),
 })
 
 /** Writes directives.json when the run has directive results (`--directives on`). */
@@ -1005,6 +1006,9 @@ export function buildRunSummary(
       ...inputs.harness,
       drafts: state.data.drafts,
       plans: state.data.plans,
+      // Ledger mode: the planted probe texts count as chapter 1 instruction text. Derived here, so
+      // resummarize rebuilds the same number from the state.
+      ledgerChars: state.data.planted ? ledgerCharsOf(state.data.planted, lang) : 0,
     })
   }
 
@@ -1076,13 +1080,8 @@ export const finish: StepFn = async (ctx, _key, state) => {
 
   const calls = readCallRecords(ctx.dir)
   const inputs = readSummaryInputs(ctx.dir)
-  // Ledger mode: the planted rows go to directives.json, and their characters count in the harness block.
-  if (state.data.planted) {
-    if (inputs.directives) inputs.directives.planted = state.data.planted
-    if (inputs.harness) {
-      inputs.harness.ledgerChars = ledgerCharsOf(state.data.planted, ctx.config.lang)
-    }
-  }
+  // Ledger mode: the planted rows go to directives.json (the harness block reads them from the state).
+  if (state.data.planted && inputs.directives) inputs.directives.planted = state.data.planted
   writeDirectivesFile(ctx.dir, inputs)
   writeRunFile(
     ctx.dir,
