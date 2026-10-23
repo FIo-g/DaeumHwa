@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { PageHeader } from '@/components/app/page-header'
 import { ChapterSummaries } from '@/components/wiki/chapter-summaries'
+import { DirectiveList } from '@/components/wiki/directive-list'
 import { EntryList, type EntryListItem } from '@/components/wiki/entry-list'
 import { NamingRules } from '@/components/wiki/naming-rules'
 import { StyleCards } from '@/components/wiki/style-cards'
@@ -8,6 +9,7 @@ import { WikiTabs } from '@/components/wiki/wiki-tabs'
 import { ENTRY_KINDS, type EntryKind } from '@/db/types'
 import { hasRole } from '@/server/access'
 import { listChapters } from '@/server/chapters'
+import { listDirectives } from '@/server/directives'
 import { listFacts } from '@/server/facts'
 import { listNamingRules } from '@/server/naming'
 import { guardPage, pageContext } from '@/server/page-helpers'
@@ -18,7 +20,7 @@ import { listEntries } from '@/server/wiki'
 // Style card suggestions run AI tasks from this page.
 export const maxDuration = 300
 
-const TABS = ['characters', 'world', 'naming', 'summaries', 'styles'] as const
+const TABS = ['characters', 'world', 'naming', 'summaries', 'styles', 'requests'] as const
 const WORLD_KINDS: EntryKind[] = ENTRY_KINDS.filter((k) => k !== 'character')
 
 export default async function WikiPage({
@@ -79,6 +81,25 @@ export default async function WikiPage({
   } else if (tab === 'summaries') {
     const chapters = await guardPage(() => listChapters(db, actor, workId))
     content = <ChapterSummaries chapters={chapters} canEdit={canEdit} />
+  } else if (tab === 'requests') {
+    const [directives, characters, cards] = await Promise.all([
+      guardPage(() => listDirectives(db, actor, workId)),
+      guardPage(() => listEntries(db, actor, workId, { kinds: ['character'] })),
+      guardPage(() => listStyleCards(db, actor, workId)),
+    ])
+    content = (
+      <DirectiveList
+        workId={workId}
+        directives={directives}
+        characters={characters.map((c) => ({
+          id: c.id,
+          name: c.name,
+          speech: c.fields.speech?.trim() || null,
+        }))}
+        styleCards={cards.map((card) => ({ name: card.name, rules: card.rules }))}
+        canEdit={canEdit}
+      />
+    )
   } else {
     const [cards, characters] = await Promise.all([
       guardPage(() => listStyleCards(db, actor, workId)),

@@ -29,6 +29,7 @@ export type EditableFact = {
   status: FactStatus
   sourceChapterId: string | null
   evidence: string
+  revealAtPosition?: number | null
 }
 
 type FactFormDialogProps = {
@@ -92,11 +93,13 @@ function FactFormFields({
   const [status, setStatus] = useState<FactStatus>(fact?.status ?? 'confirmed')
   const [chapterId, setChapterId] = useState<string | null>(fact?.sourceChapterId ?? null)
   const [evidence, setEvidence] = useState(fact?.evidence ?? '')
+  const [reveal, setReveal] = useState(fact?.revealAtPosition ? String(fact.revealAtPosition) : '')
   const [pending, setPending] = useState(false)
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setPending(true)
+    const revealAtPosition = reveal.trim() === '' ? null : Number(reveal)
     const saved =
       mode === 'create'
         ? await runAction(
@@ -108,6 +111,7 @@ function FactFormFields({
               sourceType: chapterId ? 'chapter' : 'author',
               sourceChapterId: chapterId,
               evidence,
+              revealAtPosition,
             }),
             { success: '사실을 추가했습니다.' },
           )
@@ -119,6 +123,7 @@ function FactFormFields({
                 status,
                 sourceChapterId: chapterId,
                 evidence,
+                revealAtPosition,
               }),
               { success: '사실을 고쳤습니다.' },
             )
@@ -154,6 +159,18 @@ function FactFormFields({
         <div role="group" aria-labelledby="fact-source-label">
           <ChapterPicker chapters={chapters} value={chapterId} onChange={setChapterId} allowNone />
         </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="fact-reveal">공개 회차</Label>
+        <Input
+          id="fact-reveal"
+          type="number"
+          min={1}
+          step={1}
+          value={reveal}
+          onChange={(e) => setReveal(e.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">이 회차 전에는 AI 초안에 넣지 않습니다.</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fact-evidence">근거 문장</Label>

@@ -141,6 +141,7 @@ describe('FactList', () => {
       sourceType: 'author',
       sourceChapterId: null,
       evidence: '',
+      revealAtPosition: null,
     })
   })
 })

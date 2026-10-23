@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
 
 export type WikiTab =
-  'characters' | 'world' | 'threads' | 'graph' | 'naming' | 'summaries' | 'styles'
+  'characters' | 'world' | 'threads' | 'graph' | 'naming' | 'summaries' | 'styles' | 'requests'
 
 const TABS: { key: WikiTab; label: string; path: (workId: string) => string }[] = [
   { key: 'characters', label: '인물', path: (w) => `/works/${w}/wiki?tab=characters` },
@@ -12,6 +12,7 @@ const TABS: { key: WikiTab; label: string; path: (workId: string) => string }[] 
   { key: 'naming', label: '표기 통일', path: (w) => `/works/${w}/wiki?tab=naming` },
   { key: 'summaries', label: '회차 요약', path: (w) => `/works/${w}/wiki?tab=summaries` },
   { key: 'styles', label: '문체 카드', path: (w) => `/works/${w}/wiki?tab=styles` },
+  { key: 'requests', label: '요청', path: (w) => `/works/${w}/wiki?tab=requests` },
 ]
 
 /** Tab bar of the settings board. Tabs are links so each state has its own URL. */
