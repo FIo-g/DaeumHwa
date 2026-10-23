@@ -39,8 +39,8 @@ describe('speechLevelOf', () => {
 describe('checkDraftDirectives', () => {
   it('skips a paragraph with two quoted lines or with two character names', () => {
     const text = [
-      '민준이 말했다. "알겠어요." "그만해."',
-      '민준과 서윤이 같이 말했다. "알겠어요."',
+      '민준이 말했다. "그만해." "알겠어요."',
+      '민준과 서윤이 같이 말했다. "그만해."',
       '민준이 말했다. "그만해."',
     ].join('\n')
     const findings = checkDraftDirectives(
