@@ -3,10 +3,13 @@
 import { z } from 'zod'
 import { DraftPlanCardSchema } from '@/ai/tasks/draft-plan'
 import type { ChapterRow } from '@/db/types'
+import type { DirectiveFinding } from '@/lib/directive-check'
+import type { DirectiveForPrompt } from '@/lib/directives'
 import { requireRowWork } from '@/server/access'
 import { revalidateWork, withAction } from '@/server/action-helpers'
 import {
   createChapterFromDraft,
+  draftDirectiveFindings,
   planDraft,
   type RepairDraftResult,
   repairDraft,
@@ -91,6 +94,24 @@ export async function repairDraftAction(input: unknown): Promise<ActionResult<Re
     const result = await repairDraft(db, actor, data)
     revalidateWork(data.workId)
     return result
+  })
+}
+
+const DraftFindingsSchema = z.object({
+  workId: z.uuid(),
+  runId: z.uuid(),
+})
+
+/** The request findings of a finished draft run, for the draft panel. */
+export async function draftFindingsAction(input: unknown): Promise<
+  ActionResult<{
+    findings: DirectiveFinding[]
+    directives: DirectiveForPrompt[]
+  }>
+> {
+  return withAction(async (db, actor) => {
+    const data = DraftFindingsSchema.parse(input)
+    return draftDirectiveFindings(db, actor, data.workId, data.runId)
   })
 }
 

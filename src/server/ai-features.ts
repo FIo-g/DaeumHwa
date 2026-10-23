@@ -85,6 +85,8 @@ import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
 import { requireWorkRole } from '@/server/access'
 import { getEntryAppearances } from '@/server/appearances'
 import { assertEntryInWork, listFacts } from '@/server/facts'
+import { checkDraftDirectives, type DirectiveFinding } from '@/lib/directive-check'
+import type { DirectiveForPrompt } from '@/lib/directives'
 import { activeDirectivesFor, requestsForText } from '@/server/directives'
 import { insertProposals } from '@/server/proposal-store'
 import {
@@ -722,16 +724,24 @@ export async function startDraft(
     : completeDraft(ctx, first, pipe)
   // The plan joins the run output once the text is final, so the stored text is still the one streamed.
   // The text is already stored and streamed here, so a lost plan annotation must not fail the draft.
-  const done = card
-    ? drafted.then(async (text) => {
-        try {
-          await keepPlanInRun(db, first.runId, card, input.planRunId)
-        } catch (error) {
-          console.warn('plan merge into the draft run failed', error)
-        }
-        return text
-      })
-    : drafted
+  // The request check runs on the final text, after the plan merge. Its failures are never thrown.
+  const done = drafted.then(async (text) => {
+    if (card) {
+      try {
+        await keepPlanInRun(db, first.runId, card, input.planRunId)
+      } catch (error) {
+        console.warn('plan merge into the draft run failed', error)
+      }
+    }
+    await keepDirectiveFindings(db, actor, {
+      runId: first.runId,
+      workId,
+      chapterId,
+      text,
+      requests: finalInput.requests ?? [],
+    })
+    return text
+  })
   // Callers that only read the text stream must not see an unhandled rejection.
   done.catch(() => {})
   return {
@@ -1237,6 +1247,79 @@ async function keepPlanInRun(
     .limit(1)
   const output = row?.output && typeof row.output === 'object' ? row.output : {}
   await replaceRunOutput(db, runId, { ...output, plan: card, planRunId: planRunId ?? null })
+}
+
+/**
+ * Keeps the request findings of a finished draft in its run row, with the requests they were checked
+ * against, and counts one directive_violation event. Only a draft with findings is changed. Best
+ * effort: never throws, and the stored text is never touched by a failure here.
+ */
+async function keepDirectiveFindings(
+  db: Db,
+  actor: Actor,
+  o: {
+    runId: string
+    workId: string
+    chapterId: string | null
+    text: string
+    requests: DirectiveForPrompt[]
+  },
+): Promise<void> {
+  try {
+    if (o.requests.length === 0) return
+    const characters = await listEntries(db, actor, o.workId, { kinds: ['character'] })
+    const names = Object.fromEntries(characters.map((e) => [e.id, [e.name, ...e.aliases]]))
+    const findings = checkDraftDirectives(o.text, o.requests, names)
+    if (findings.length === 0) return
+
+    const [row] = await db
+      .select({ output: aiRuns.output })
+      .from(aiRuns)
+      .where(eq(aiRuns.id, o.runId))
+      .limit(1)
+    const output = row?.output && typeof row.output === 'object' ? row.output : {}
+    await replaceRunOutput(db, o.runId, {
+      ...output,
+      directiveFindings: findings,
+      directives: o.requests,
+    })
+
+    const extra = { ban: 0, speech: 0, length: 0 }
+    for (const f of findings) extra[f.kind] += f.count
+    await recordUsageEvent(db, actor, {
+      workId: o.workId,
+      chapterId: o.chapterId,
+      runId: o.runId,
+      kind: 'directive_violation',
+      value: extra.ban + extra.speech + extra.length,
+      extra,
+    })
+  } catch (error) {
+    console.warn('directive check failed', error)
+  }
+}
+
+/**
+ * The request findings of a finished draft run, with the requests they name, for the draft panel.
+ * Empty lists when the run has none. Editor role.
+ */
+export async function draftDirectiveFindings(
+  db: Db,
+  actor: Actor,
+  workId: string,
+  runId: string,
+): Promise<{ findings: DirectiveFinding[]; directives: DirectiveForPrompt[] }> {
+  await requireWorkRole(db, workId, actor.userId, 'editor')
+  const [row] = await db
+    .select({ output: aiRuns.output })
+    .from(aiRuns)
+    .where(and(eq(aiRuns.id, runId), eq(aiRuns.workId, workId)))
+    .limit(1)
+  const output = (row?.output && typeof row.output === 'object' ? row.output : {}) as {
+    directiveFindings?: DirectiveFinding[]
+    directives?: DirectiveForPrompt[]
+  }
+  return { findings: output.directiveFindings ?? [], directives: output.directives ?? [] }
 }
 
 /** Keeps the first text in the first run row with the warnings. Best effort: never throws. */

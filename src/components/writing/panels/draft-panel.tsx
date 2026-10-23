@@ -11,10 +11,13 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { runAction } from '@/lib/client/run-action'
 import { useAiRun } from '@/lib/client/use-ai-run'
+import type { DirectiveFinding } from '@/lib/directive-check'
+import type { DirectiveForPrompt } from '@/lib/directives'
 import { countTextEdits, type DraftPlanCard, type PlanEdits, planWarnings } from '@/lib/draft-plan'
 import { parseDraftStream } from '@/lib/draft-stream'
 import {
   createChapterFromDraftAction,
+  draftFindingsAction,
   planDraftAction,
   recordDraftUseAction,
 } from '@/server/actions/ai-features'
@@ -36,8 +39,44 @@ const NO_EDITS: PlanEdits = { revisions: 0, removed: 0, moved: 0, textEdits: 0 }
 // Shown while the stream is quiet for this long after the first text: the scenes are being expanded.
 const FILLING_NOTE_MS = 3000
 const FILLING_NOTE = '분량을 채우는 중'
+const FINDINGS_TITLE = '요청과 다른 곳'
 const USAGE_NOTICE =
   '초안 품질을 높이려고 초안을 쓴 횟수와 고친 글자 비율 같은 숫자만 셉니다. 원고 내용은 모으지 않습니다.'
+
+/** One line per finding of a draft: which request it breaks, and where. */
+function findingLine(finding: DirectiveFinding, directive: DirectiveForPrompt | undefined): string {
+  if (finding.kind === 'ban') return `'${directive?.pattern ?? ''}' ${finding.count}곳`
+  if (finding.kind === 'speech') {
+    return `${directive?.entryName ?? '인물'}의 말투가 요청과 다른 대사 ${finding.count}곳`
+  }
+  return `분량이 요청한 ${directive?.targetChars ?? 0}자와 다릅니다`
+}
+
+/** The findings of a draft under it. Renders nothing without findings. */
+export function DirectiveFindingsView({
+  findings,
+  directives,
+}: {
+  findings: DirectiveFinding[]
+  directives: DirectiveForPrompt[]
+}) {
+  if (findings.length === 0) return null
+  return (
+    <div className="grid gap-1 rounded-lg border p-3 text-sm">
+      <p className="font-medium">{FINDINGS_TITLE}</p>
+      <ul className="grid gap-1 text-muted-foreground">
+        {findings.map((finding) => (
+          <li key={finding.directiveId + finding.kind}>
+            {findingLine(
+              finding,
+              directives.find((d) => d.id === finding.directiveId),
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 /**
  * AI draft (F13). Streams a chapter from the author's instructions, the story cards and the
@@ -70,6 +109,11 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   // True while the open stream has been quiet for FILLING_NOTE_MS after its first text.
   const [filling, setFilling] = useState(false)
   const [creating, setCreating] = useState(false)
+  // The request findings of the shown draft, from the server after the stream ends.
+  const [findings, setFindings] = useState<{
+    findings: DirectiveFinding[]
+    directives: DirectiveForPrompt[]
+  } | null>(null)
   // True while a 다듬기 preview is open; its buttons hold the append and new-chapter actions.
   const [refineOpen, setRefineOpen] = useState(false)
   const streaming = ai.running
@@ -110,7 +154,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         setDraft(null)
         return false
       }
-      setRunId(response.headers.get('X-Run-Id'))
+      const streamRunId = response.headers.get('X-Run-Id')
+      setRunId(streamRunId)
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let raw = ''
@@ -142,6 +187,15 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       if (parsed.error !== null) {
         toast.error(parsed.error)
         return false
+      }
+      // The check is best effort: a failed read only leaves the findings out.
+      if (streamRunId) {
+        try {
+          const found = await draftFindingsAction({ workId: data.workId, runId: streamRunId })
+          if (found.ok) setFindings(found.data)
+        } catch {
+          // Leaves the findings out; the completed draft is not affected.
+        }
       }
       return true
     } catch {
@@ -232,6 +286,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     setStopped(false)
     setAppended(false)
     setRefineOpen(false)
+    setFindings(null)
     // Resolves null when the author cancels, false when the stream failed (a toast says why), and
     // true only when the whole draft arrived. Anything but true keeps the partial text as stopped.
     const completed = await ai.run((signal) =>
@@ -384,6 +439,9 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
             AI 초안은 작가가 고치고 저장해야 원고가 됩니다.
           </p>
           {stopped && <p className="text-sm text-muted-foreground">중간에 멈춘 초안입니다.</p>}
+          {findings && (
+            <DirectiveFindingsView findings={findings.findings} directives={findings.directives} />
+          )}
           {finished && (
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={appendToChapter} disabled={appended || refineOpen}>
