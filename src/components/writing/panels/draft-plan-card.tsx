@@ -3,9 +3,11 @@
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { runAction } from '@/lib/client/run-action'
 import { draftLengthPlan } from '@/lib/draft-length'
 import {
   type DraftPlanCard,
@@ -13,6 +15,7 @@ import {
   PLAN_TEXT_MAX,
   SCENE_ROLE_LABELS,
 } from '@/lib/draft-plan'
+import { createDirectiveAction } from '@/server/actions/wiki'
 
 export type PlanEditKind = 'removed' | 'moved'
 
@@ -21,6 +24,8 @@ type DraftPlanCardViewProps = {
   warnings: string[]
   /** True while a plan or a draft is running: every control is held. */
   busy: boolean
+  /** The work the kept requests belong to. */
+  workId: string
   /** The chapter target now in the input, or null when it is not a valid target. Sets the scene lengths. */
   targetChars?: number | null
   /** Called with the changed card. `edit` is set for a removal or a move; text changes are counted by the panel. */
@@ -28,6 +33,8 @@ type DraftPlanCardViewProps = {
   /** Called with the author's one-line note; the panel asks the server for a new card. */
   onRevise(note: string): void
   onWrite(): void
+  /** Called after a request from this card is kept in the ledger, so the panel can recount. */
+  onKept?(): void
 }
 
 const REVISION_PLACEHOLDER = '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 윤서가 먼저 말을 걸게)'
@@ -40,12 +47,18 @@ export function DraftPlanCardView({
   card,
   warnings,
   busy,
+  workId,
   targetChars = null,
   onChange,
   onRevise,
   onWrite,
+  onKept,
 }: DraftPlanCardViewProps) {
   const [note, setNote] = useState('')
+  // Whether the one-line note also becomes a lasting request when the author revises the plan.
+  const [keepNote, setKeepNote] = useState(false)
+  // Indexes of the suggested requests the author has already kept.
+  const [kept, setKept] = useState<number[]>([])
   const lastIndex = card.scenes.length - 1
   // Where keyboard focus goes after a move or a removal: the scene moved, or the row that took its place.
   const listRef = useRef<HTMLOListElement>(null)
@@ -95,6 +108,25 @@ export function DraftPlanCardView({
     ;[scenes[index], scenes[to]] = [scenes[to], scenes[index]]
     pendingFocus.current = { index: to, label: to > index ? '아래로' : '위로' }
     setScenes(scenes, 'moved')
+  }
+
+  /** Keeps one request in the ledger. A failure shows its toast; the plan is never held up by it. */
+  async function keepRequest(text: string, source: 'suggested' | 'revision', index?: number) {
+    const row = await runAction(
+      createDirectiveAction({ workId, scope: 'work', kind: 'content', text, source }),
+    )
+    if (!row) return
+    if (index !== undefined) setKept((prev) => [...prev, index])
+    onKept?.()
+  }
+
+  function revise() {
+    const text = note.trim()
+    if (keepNote) {
+      void keepRequest(text, 'revision')
+      setKeepNote(false)
+    }
+    onRevise(text)
   }
 
   return (
@@ -177,6 +209,31 @@ export function DraftPlanCardView({
         <p className="text-sm">{`움직일 떡밥: ${card.threads.join(', ')}`}</p>
       )}
 
+      {(card.requests ?? []).length > 0 && (
+        <div className="grid gap-2">
+          <p className="text-sm font-medium">계속 지킬 요청으로 보이는 것</p>
+          <ul className="grid gap-2">
+            {(card.requests ?? []).map((request, index) => (
+              <li key={index} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 flex-1">{request}</span>
+                {kept.includes(index) ? (
+                  <span className="shrink-0 text-xs text-muted-foreground">장부에 넣었습니다</span>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void keepRequest(request, 'suggested', index)}
+                  >
+                    앞으로도 지키기
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <Input
           aria-label="계획 고치는 말"
@@ -187,13 +244,18 @@ export function DraftPlanCardView({
           disabled={busy}
           onChange={(event) => setNote(event.target.value)}
         />
-        <Button
-          variant="outline"
-          disabled={busy || note.trim() === ''}
-          onClick={() => onRevise(note.trim())}
-        >
+        <Button variant="outline" disabled={busy || note.trim() === ''} onClick={revise}>
           다시 계획
         </Button>
+      </div>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="plan-keep-note"
+          checked={keepNote}
+          disabled={busy}
+          onCheckedChange={(checked) => setKeepNote(checked)}
+        />
+        <Label htmlFor="plan-keep-note">앞으로도 이렇게</Label>
       </div>
 
       <div>

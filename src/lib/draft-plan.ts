@@ -1,7 +1,13 @@
 // Pure helpers for the chapter plan card (stage 1 of the lean harness): per-scene targets, the
 // warnings the card view shows, and the instruction text the draft receives from an approved card.
 
-import type { DraftPlan, EndingDevice, SceneRole } from '@/ai/tasks/draft-plan'
+import {
+  type DraftPlan,
+  type EndingDevice,
+  PLAN_REQUEST_MAX,
+  PLAN_REQUEST_TEXT_MAX,
+  type SceneRole,
+} from '@/ai/tasks/draft-plan'
 import { draftLengthPlan } from '@/lib/draft-length'
 
 // Omit before the intersection: a plain DraftPlan & { scenes } would intersect the two scene arrays
@@ -63,6 +69,9 @@ export function clampPlan(plan: DraftPlan): DraftPlan {
     })),
     ending: { device: plan.ending.device, line: cutText(plan.ending.line) },
     threads: plan.threads.slice(0, PLAN_LIST_MAX).map((title) => cutText(title)),
+    requests: (plan.requests ?? [])
+      .slice(0, PLAN_REQUEST_MAX)
+      .map((request) => cutText(request, PLAN_REQUEST_TEXT_MAX)),
   }
 }
 
@@ -97,6 +106,9 @@ export function normalizeCard(card: DraftPlanCard, targetChars: number): DraftPl
     })),
     ending: { device: card.ending.device, line: card.ending.line.trim() },
     threads: card.threads.map((title) => title.trim()).filter((title) => title !== ''),
+    requests: (card.requests ?? [])
+      .map((request) => request.trim())
+      .filter((request) => request !== ''),
   }
   return withSceneTargets(plan, targetChars)
 }

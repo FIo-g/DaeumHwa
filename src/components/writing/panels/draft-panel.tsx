@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,7 @@ import {
   planDraftAction,
   recordDraftUseAction,
 } from '@/server/actions/ai-features'
+import { createDirectiveAction, listDirectivesAction } from '@/server/actions/wiki'
 import type { WorkspaceApi, WritingData } from '../types'
 import { DraftPlanCardView, type PlanEditKind } from './draft-plan-card'
 import { DraftRefine } from './draft-refine'
@@ -78,6 +80,16 @@ export function DirectiveFindingsView({
   )
 }
 
+/** Active requests of the work, or null when the read fails. */
+async function countActiveRequests(workId: string): Promise<number | null> {
+  try {
+    const result = await listDirectivesAction({ workId })
+    return result.ok ? result.data.filter((row) => row.status === 'active').length : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * AI draft (F13). Streams a chapter from the author's instructions, the story cards and the
  * previous chapter. The result is never written into the manuscript by itself: the author either
@@ -98,6 +110,10 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   // The scene summaries the server sent with the current card: a summary that differs is a text edit.
   const [baseSummaries, setBaseSummaries] = useState<string[]>([])
   const [planning, setPlanning] = useState(false)
+  // The instruction box: when checked, the next plan or quick draft also keeps the instruction as a request.
+  const [keepInstruction, setKeepInstruction] = useState(false)
+  // How many requests apply to the work now; null until the first count arrives.
+  const [activeRequests, setActiveRequests] = useState<number | null>(null)
   const ai = useAiRun()
   const [draft, setDraft] = useState<string | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
@@ -117,6 +133,44 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   // True while a 다듬기 preview is open; its buttons hold the append and new-chapter actions.
   const [refineOpen, setRefineOpen] = useState(false)
   const streaming = ai.running
+
+  // Recounts the active requests; a failed read leaves the count line as it was.
+  function refreshRequests() {
+    void countActiveRequests(data.workId).then((count) => {
+      if (count !== null) setActiveRequests(count)
+    })
+  }
+
+  useEffect(() => {
+    let live = true
+    void countActiveRequests(data.workId).then((count) => {
+      if (live && count !== null) setActiveRequests(count)
+    })
+    return () => {
+      live = false
+    }
+  }, [data.workId])
+
+  /**
+   * Keeps the instruction as a request when its box is checked, then unchecks the box. It runs
+   * beside the plan or the draft and never holds them up: a failure only shows its toast.
+   */
+  function keepInstructionRequest(text: string) {
+    if (!keepInstruction || text === '') return
+    void (async () => {
+      await runAction(
+        createDirectiveAction({
+          workId: data.workId,
+          scope: 'work',
+          kind: 'content',
+          text,
+          source: 'instruction',
+        }),
+      )
+      setKeepInstruction(false)
+      void refreshRequests()
+    })()
+  }
 
   function toggleCharacter(id: string, checked: boolean) {
     setEntryIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
@@ -221,6 +275,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     const target = checkedTarget()
     if (target === null) return
     const revising = card !== null && note !== undefined
+    if (!revising) keepInstructionRequest(instructions.trim())
     setPlanning(true)
     const result = await runAction(
       planDraftAction({
@@ -268,6 +323,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     }
     const target = checkedTarget()
     if (target === null) return
+    if (!withPlan) keepInstructionRequest(trimmed)
     const planBody =
       withPlan && card && planRunId
         ? {
@@ -354,6 +410,23 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           maxLength={5000}
           disabled={streaming}
         />
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="draft-keep-instruction"
+            checked={keepInstruction}
+            disabled={streaming}
+            onCheckedChange={(checked) => setKeepInstruction(checked)}
+          />
+          <Label htmlFor="draft-keep-instruction">이 지시를 앞으로도 지키기</Label>
+        </div>
+        {activeRequests !== null && activeRequests > 0 && (
+          <p className="text-sm text-muted-foreground">
+            <span>{`적용 중인 요청 ${activeRequests}개`}</span>{' '}
+            <Link className="underline" href={`/works/${data.workId}/wiki?tab=requests`}>
+              보기
+            </Link>
+          </p>
+        )}
       </div>
 
       <div className="grid gap-2">
@@ -397,9 +470,11 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           warnings={planWarnings(card)}
           busy={planning || streaming}
           targetChars={cardTarget}
+          workId={data.workId}
           onChange={editPlan}
           onRevise={(note) => void plan(note)}
           onWrite={() => void write(true)}
+          onKept={() => void refreshRequests()}
         />
       )}
 

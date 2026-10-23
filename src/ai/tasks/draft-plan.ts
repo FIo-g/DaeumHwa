@@ -41,7 +41,16 @@ export type DraftPlan = {
   ending: { device: EndingDevice; line: string }
   /** Titles of wiki threads this chapter moves. Only titles that exist in the wiki. */
   threads: string[]
+  /**
+   * Requests the author should keep beyond this chapter, suggested for the author to keep as ledger
+   * rows. Absent in plans stored before stage 2.
+   */
+  requests?: string[]
 }
+
+/** Most suggested requests a plan carries, and the longest one (DraftPlanSchema and the card). */
+export const PLAN_REQUEST_MAX = 3
+export const PLAN_REQUEST_TEXT_MAX = 120
 
 const DraftPlanSceneSchema = z.object({
   summary: z.string(),
@@ -64,6 +73,7 @@ export const DraftPlanSchema: z.ZodType<DraftPlan> = z.object({
   scenes: z.array(DraftPlanSceneSchema).min(1).max(PLAN_MAX_SCENES),
   ending: DraftPlanEndingSchema,
   threads: z.array(z.string()),
+  requests: z.array(z.string().max(PLAN_REQUEST_TEXT_MAX)).max(PLAN_REQUEST_MAX).default([]),
 })
 
 const CardText = z.string().max(PLAN_TEXT_MAX)
@@ -92,6 +102,7 @@ export const DraftPlanCardSchema: z.ZodType<DraftPlanCard> = z.object({
     .max(PLAN_MAX_SCENES),
   ending: z.object({ device: z.enum(ENDING_DEVICES), line: CardText }),
   threads: z.array(CardText).max(PLAN_LIST_MAX),
+  requests: z.array(z.string().max(PLAN_REQUEST_TEXT_MAX)).max(PLAN_REQUEST_MAX).default([]),
 })
 
 export type DraftPlanInput = DraftPromptInput & {
@@ -112,6 +123,7 @@ export const DRAFT_PLAN_SYSTEM = `당신은 웹소설 한 회차의 계획을 �
 - role은 opening, turn, rise, ending 중 하나다. 첫 장면은 opening, 마지막 장면은 ending으로 쓴다. 같은 role을 두 장면 연속으로 쓰지 않는다.
 - ending.device는 question, crisis, twist 중 하나다. ending.line은 마지막 장면이 어떻게 끝나는지 한 문장으로, 요약이나 교훈이 아니라 장면 안의 한 순간으로 쓴다.
 - threads에는 이 회차가 움직이는 <wiki> 떡밥의 제목만 쓴다. 위키에 있는 제목만 쓴다.
+- requests: 작가 지시나 메모 가운데 이번 화를 넘어 계속 지켜야 할 요청만 한 문장씩 적는다(최대 3개). <author_requests>에 이미 있는 것, 이번 화의 사건, "더 재미있게" 같은 막연한 말은 넣지 않는다. 없으면 []
 - <wiki>의 떡밥 중 "지시에 있을 때만 쓴다"로 표시된 것은 작가의 지시(<instructions>)나 <revision>의 작가 메모에 그 떡밥이 나올 때만 계획과 threads에 넣는다.
 - 위키에 없는 중요한 설정(새 능력, 새 관계, 죽음 등)을 지어내지 않는다.
 - <revision>이 있으면 "현재 계획"을 작가 메모대로만 고친다. 메모가 건드리지 않는 장면은 그대로 둔다.

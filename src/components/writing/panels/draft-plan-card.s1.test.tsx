@@ -54,7 +54,7 @@ function renderView(card: DraftPlanCard = makeCard()) {
     onRevise: vi.fn(),
     onWrite: vi.fn(),
   }
-  render(<DraftPlanCardView card={card} warnings={[]} busy={false} {...handlers} />)
+  render(<DraftPlanCardView card={card} warnings={[]} busy={false} workId="work-1" {...handlers} />)
   return handlers
 }
 
@@ -120,6 +120,7 @@ describe('DraftPlanCardView', () => {
           card={card}
           warnings={[]}
           busy={false}
+          workId="work-1"
           onChange={(next, edit) => {
             onChange(next, edit)
             setCard(next)
@@ -190,6 +191,7 @@ function Harness({
       card={card}
       warnings={[]}
       busy={false}
+      workId="work-1"
       targetChars={targetChars}
       onChange={(next, edit) => {
         onChange(next, edit)
@@ -239,6 +241,7 @@ describe('DraftPlanCardView focus and lengths', () => {
         card={{ ...card, scenes: card.scenes.map((scene) => ({ ...scene, targetChars: 1667 })) }}
         warnings={[]}
         busy={false}
+        workId="work-1"
         targetChars={5000}
         onChange={onChange}
         onRevise={vi.fn()}
