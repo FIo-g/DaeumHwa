@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { OPENCODE_BASE_URL, OPENCODE_OPENAI_BASE_URL } from '@/ai/opencode'
+import { OPENCODE_BASE_URL, OPENCODE_OPENAI_BASE_URL, opencodeHeaders } from '@/ai/opencode'
 import type { AiClient, AiUsage } from '@/ai/types'
 import { MODEL_PROFILES, createModelClient } from './novel/models'
 
@@ -58,8 +58,9 @@ export async function probeCache(
 }
 
 /**
- * One small Responses request that carries `prompt_cache_key`. The key counts as accepted unless
- * the gateway answers with a 4xx whose body names the field. A network error is thrown.
+ * One small Responses request that carries `prompt_cache_key`, sent with the same OpenCode headers
+ * (session id included) as the product client. The key counts as accepted unless the gateway
+ * answers with a 4xx whose body names the field. A network error is thrown.
  */
 export async function probeCacheKey(
   fetchImpl: typeof fetch,
@@ -78,7 +79,7 @@ export async function probeCacheKey(
     headers: {
       'content-type': 'application/json',
       Authorization: `Bearer ${o.apiKey}`,
-      'User-Agent': USER_AGENT,
+      ...opencodeHeaders(),
     },
     body: JSON.stringify(body),
   })

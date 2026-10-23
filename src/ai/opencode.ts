@@ -14,6 +14,11 @@ const USER_AGENT = 'daeumhwa/0.1'
 const SESSION_ID = `daeumhwa-${randomUUID()}`
 const SHARED_HEADERS = { 'x-opencode-session': SESSION_ID, 'User-Agent': USER_AGENT }
 
+/** Headers every OpenCode request carries. Copied so callers cannot change the shared object. */
+export function opencodeHeaders(): Record<string, string> {
+  return { ...SHARED_HEADERS }
+}
+
 /** OpenCode Go models served through the OpenAI Responses format. */
 const RESPONSES_MODELS = new Set([
   'muse-spark-1.3-contributor',
