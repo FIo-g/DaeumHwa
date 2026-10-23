@@ -22,6 +22,7 @@ import { recordUsageEvent } from '@/server/usage-events'
 // in the plan run's output until the author adds them. Rows are archived, never deleted.
 
 const MAX_TEXT_CHARS = 300
+const MAX_PATTERN_CHARS = 100
 const MIN_TARGET_CHARS = 500
 const MAX_TARGET_CHARS = 20_000
 
@@ -95,6 +96,9 @@ async function checkDirective(db: Db, input: DirectiveInput): Promise<Checked> {
     // An explicit empty pattern is an error; only a missing one takes the default from the text.
     pattern = input.pattern == null ? banPatternFor(text) : input.pattern.trim()
     if (!pattern) throw new AppError('VALIDATION', '쓰지 않을 말을 적어 주세요.')
+    if (pattern.length > MAX_PATTERN_CHARS) {
+      throw new AppError('VALIDATION', '찾을 말은 100자까지 적을 수 있습니다.')
+    }
   }
 
   let targetChars: number | null = null
@@ -218,19 +222,33 @@ export async function updateDirective(
       : scope !== 'character'
         ? null
         : current.speechLevel
-  const checked = await checkDirective(db, {
-    workId,
-    scope,
-    kind: patch.kind ?? current.kind,
-    text: patch.text ?? current.text,
-    entryId: patch.entryId !== undefined ? patch.entryId : current.entryId,
-    chapterPosition:
-      patch.chapterPosition !== undefined ? patch.chapterPosition : current.chapterPosition,
-    pattern: patch.pattern !== undefined ? patch.pattern : current.pattern,
-    speechLevel,
-    targetChars: patch.targetChars !== undefined ? patch.targetChars : current.targetChars,
-    source: current.source,
-  })
+  // A switch on or off keeps the stored columns as they are: the row was checked when it was
+  // saved, and a card changed since then (say, from a character to another kind) must not block it.
+  const editsFields = (Object.keys(patch) as (keyof DirectivePatch)[]).some(
+    (key) => key !== 'status' && patch[key] !== undefined,
+  )
+  const checked: Checked = editsFields
+    ? await checkDirective(db, {
+        workId,
+        scope,
+        kind: patch.kind ?? current.kind,
+        text: patch.text ?? current.text,
+        entryId: patch.entryId !== undefined ? patch.entryId : current.entryId,
+        chapterPosition:
+          patch.chapterPosition !== undefined ? patch.chapterPosition : current.chapterPosition,
+        pattern: patch.pattern !== undefined ? patch.pattern : current.pattern,
+        speechLevel,
+        targetChars: patch.targetChars !== undefined ? patch.targetChars : current.targetChars,
+        source: current.source,
+      })
+    : {
+        text: current.text,
+        entryId: current.entryId,
+        chapterPosition: current.chapterPosition,
+        pattern: current.pattern,
+        speechLevel: current.speechLevel,
+        targetChars: current.targetChars,
+      }
   const status = patch.status ?? current.status
 
   return db.transaction(async (tx) => {

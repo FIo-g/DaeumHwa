@@ -89,8 +89,7 @@ describe('DraftPlanCardView requests (stage 2)', () => {
     })
   })
 
-  it('keeps the note as a request with source revision when the box is checked', async () => {
-    vi.mocked(createDirectiveAction).mockResolvedValue({ ok: true, data: {} } as never)
+  it('passes the note with its keep flag when the box is checked, and keeps nothing itself', async () => {
     const { onRevise } = renderView()
 
     fireEvent.click(screen.getByRole('checkbox', { name: '앞으로도 이렇게' }))
@@ -99,14 +98,9 @@ describe('DraftPlanCardView requests (stage 2)', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '다시 계획' }))
 
-    await waitFor(() => expect(onRevise).toHaveBeenCalledWith('2장면에서 윤서가 먼저 말을 걸게'))
-    expect(createDirectiveAction).toHaveBeenCalledWith({
-      workId: 'work-1',
-      scope: 'work',
-      kind: 'content',
-      text: '2장면에서 윤서가 먼저 말을 걸게',
-      source: 'revision',
-    })
+    expect(onRevise).toHaveBeenCalledWith('2장면에서 윤서가 먼저 말을 걸게', true)
+    // The panel keeps the note once the target check passes (stage 2 review, A1).
+    expect(createDirectiveAction).not.toHaveBeenCalled()
   })
 
   it('does not keep the note when the box is not checked', () => {
@@ -115,22 +109,19 @@ describe('DraftPlanCardView requests (stage 2)', () => {
     fireEvent.change(screen.getByLabelText('계획 고치는 말'), { target: { value: '고쳐 주세요' } })
     fireEvent.click(screen.getByRole('button', { name: '다시 계획' }))
 
-    expect(onRevise).toHaveBeenCalledWith('고쳐 주세요')
+    expect(onRevise).toHaveBeenCalledWith('고쳐 주세요', false)
     expect(createDirectiveAction).not.toHaveBeenCalled()
   })
 
-  it('still revises the plan when keeping the note fails', async () => {
-    vi.mocked(createDirectiveAction).mockResolvedValue({
-      ok: false,
-      error: { code: 'FORBIDDEN', message: '권한이 없습니다.' },
-    } as never)
+  it('still revises the plan when the box is checked, since the panel does the keeping', async () => {
     const { onRevise } = renderView()
 
     fireEvent.click(screen.getByRole('checkbox', { name: '앞으로도 이렇게' }))
     fireEvent.change(screen.getByLabelText('계획 고치는 말'), { target: { value: '고쳐 주세요' } })
     fireEvent.click(screen.getByRole('button', { name: '다시 계획' }))
 
-    await waitFor(() => expect(onRevise).toHaveBeenCalledWith('고쳐 주세요'))
-    expect(toast.error).toHaveBeenCalledWith('권한이 없습니다.')
+    await waitFor(() => expect(onRevise).toHaveBeenCalledWith('고쳐 주세요', true))
+    expect(createDirectiveAction).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })

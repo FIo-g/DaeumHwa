@@ -172,6 +172,22 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     })()
   }
 
+  /** Keeps a plan revision note as a request. Like the instruction, it never holds the plan up. */
+  function keepRevisionRequest(text: string) {
+    void (async () => {
+      await runAction(
+        createDirectiveAction({
+          workId: data.workId,
+          scope: 'work',
+          kind: 'content',
+          text,
+          source: 'revision',
+        }),
+      )
+      void refreshRequests()
+    })()
+  }
+
   function toggleCharacter(id: string, checked: boolean) {
     setEntryIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
   }
@@ -270,12 +286,16 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     return target
   }
 
-  /** Asks the server for a chapter plan card. A note revises the current card instead. */
-  async function plan(note?: string) {
+  /**
+   * Asks the server for a chapter plan card. A note revises the current card instead; `keep` also
+   * makes the note a lasting request, but only once the target check has passed.
+   */
+  async function plan(note?: string, keep = false) {
     const target = checkedTarget()
     if (target === null) return
     const revising = card !== null && note !== undefined
     if (!revising) keepInstructionRequest(instructions.trim())
+    if (revising && keep && note) keepRevisionRequest(note)
     setPlanning(true)
     const result = await runAction(
       planDraftAction({
@@ -472,7 +492,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           targetChars={cardTarget}
           workId={data.workId}
           onChange={editPlan}
-          onRevise={(note) => void plan(note)}
+          onRevise={(note, keep) => void plan(note, keep)}
           onWrite={() => void write(true)}
           onKept={() => void refreshRequests()}
         />

@@ -21,6 +21,7 @@ import { runAction } from '@/lib/client/run-action'
 import { CHARACTER_FIELD_LABELS, ENTRY_KIND_LABEL, PLACE_FIELD_LABELS } from '@/lib/labels'
 import { createEntryAction, updateEntryAction } from '@/server/actions/wiki'
 import { SelectField } from './select-field'
+import { CONTEXT_TIER_LABEL } from '@/lib/labels'
 
 /** The editable parts of a wiki card, as the detail page passes them in. */
 export type EditableEntry = {
@@ -47,11 +48,9 @@ type EntryFormDialogProps = {
   triggerSize?: 'default' | 'sm'
 }
 
-const CONTEXT_TIER_OPTIONS: { value: ContextTier; label: string }[] = [
-  { value: 'always', label: '항상 넣기' },
-  { value: 'mention', label: '이름이 나오면 넣기' },
-  { value: 'never', label: '넣지 않기' },
-]
+const CONTEXT_TIER_OPTIONS: { value: ContextTier; label: string }[] = (
+  ['always', 'mention', 'never'] as const
+).map((value) => ({ value, label: CONTEXT_TIER_LABEL[value] }))
 
 const FIELD_LABELS: Partial<Record<EntryKind, Record<string, string>>> = {
   character: CHARACTER_FIELD_LABELS,

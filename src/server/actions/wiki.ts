@@ -96,10 +96,11 @@ const CardIdSchema = z.object({ cardId: z.uuid() })
 const DirectiveFields = z.object({
   scope: z.enum(DIRECTIVE_SCOPES),
   kind: z.enum(DIRECTIVE_KINDS),
-  text: z.string().max(300),
+  // The service gives the Korean limit messages (300 for text, 100 for pattern); zod only bounds the input.
+  text: z.string().max(5000),
   entryId: z.uuid().nullable().optional(),
   chapterPosition: z.number().int().nullable().optional(),
-  pattern: z.string().max(100).nullable().optional(),
+  pattern: z.string().max(300).nullable().optional(),
   speechLevel: z.enum(SPEECH_LEVELS).nullable().optional(),
   targetChars: z.number().int().nullable().optional(),
 })

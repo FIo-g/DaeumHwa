@@ -157,7 +157,7 @@ describe('DraftPlanCardView', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: '다시 계획' }))
 
-    expect(onRevise).toHaveBeenCalledWith('윤서가 먼저')
+    expect(onRevise).toHaveBeenCalledWith('윤서가 먼저', false)
   })
 
   it('caps the 일어나는 일 textarea at the card limit', () => {

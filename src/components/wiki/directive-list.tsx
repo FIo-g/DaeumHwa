@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { DirectiveKind, DirectiveScope, DirectiveStatus, SpeechLevel } from '@/db/types'
 import { banPatternFor } from '@/lib/directives'
+import { DIRECTIVE_KIND_LABEL, DIRECTIVE_SCOPE_LABEL } from '@/lib/labels'
 import { runAction } from '@/lib/client/run-action'
 import {
   archiveDirectiveAction,
@@ -45,20 +46,6 @@ type DirectiveListProps = {
   characters: CharacterItem[]
   styleCards: StyleCardSummary[]
   canEdit: boolean
-}
-
-const SCOPE_LABEL: Record<DirectiveScope, string> = {
-  work: '작품 전체',
-  character: '인물',
-  chapter: '한 회차만',
-}
-
-const KIND_LABEL: Record<DirectiveKind, string> = {
-  style: '문체',
-  speech: '말투',
-  ban: '쓰지 않을 말',
-  length: '분량',
-  content: '내용',
 }
 
 const SCOPE_OPTIONS: { value: DirectiveScope; label: string }[] = [
@@ -165,7 +152,7 @@ export function DirectiveList({
 function scopeText(directive: DirectiveItem): string {
   if (directive.scope === 'character') return `인물 ${directive.entryName ?? '-'}`
   if (directive.scope === 'chapter') return `${directive.chapterPosition ?? '-'}화만`
-  return SCOPE_LABEL.work
+  return DIRECTIVE_SCOPE_LABEL.work
 }
 
 function DirectiveRow({ directive, canEdit }: { directive: DirectiveItem; canEdit: boolean }) {
@@ -186,7 +173,7 @@ function DirectiveRow({ directive, canEdit }: { directive: DirectiveItem; canEdi
     <li className="flex flex-col gap-2 p-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{scopeText(directive)}</Badge>
-        <Badge variant="outline">{KIND_LABEL[directive.kind]}</Badge>
+        <Badge variant="outline">{DIRECTIVE_KIND_LABEL[directive.kind]}</Badge>
       </div>
       <p className="whitespace-pre-line text-sm">{directive.text}</p>
       {canEdit && (

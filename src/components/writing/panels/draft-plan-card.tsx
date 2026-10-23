@@ -30,8 +30,11 @@ type DraftPlanCardViewProps = {
   targetChars?: number | null
   /** Called with the changed card. `edit` is set for a removal or a move; text changes are counted by the panel. */
   onChange(card: DraftPlanCard, edit?: PlanEditKind): void
-  /** Called with the author's one-line note; the panel asks the server for a new card. */
-  onRevise(note: string): void
+  /**
+   * Called with the author's one-line note and whether it also becomes a lasting request. The
+   * panel keeps it only after the target check passes, and asks the server for a new card.
+   */
+  onRevise(note: string, keep: boolean): void
   onWrite(): void
   /** Called after a request from this card is kept in the ledger, so the panel can recount. */
   onKept?(): void
@@ -59,6 +62,9 @@ export function DraftPlanCardView({
   const [keepNote, setKeepNote] = useState(false)
   // Indexes of the suggested requests the author has already kept.
   const [kept, setKept] = useState<number[]>([])
+  // Indexes whose create is pending. The ref stops a second click before the state re-renders.
+  const keepingRef = useRef(new Set<number>())
+  const [keeping, setKeeping] = useState<number[]>([])
   const lastIndex = card.scenes.length - 1
   // Where keyboard focus goes after a move or a removal: the scene moved, or the row that took its place.
   const listRef = useRef<HTMLOListElement>(null)
@@ -110,23 +116,23 @@ export function DraftPlanCardView({
     setScenes(scenes, 'moved')
   }
 
-  /** Keeps one request in the ledger. A failure shows its toast; the plan is never held up by it. */
-  async function keepRequest(text: string, source: 'suggested' | 'revision', index?: number) {
+  /** Keeps one suggested request in the ledger. A failure shows its toast; the plan is never held up by it. */
+  async function keepSuggestion(text: string, index: number) {
+    if (keepingRef.current.has(index) || kept.includes(index)) return
+    keepingRef.current.add(index)
+    setKeeping([...keepingRef.current])
     const row = await runAction(
-      createDirectiveAction({ workId, scope: 'work', kind: 'content', text, source }),
+      createDirectiveAction({ workId, scope: 'work', kind: 'content', text, source: 'suggested' }),
     )
+    keepingRef.current.delete(index)
+    setKeeping([...keepingRef.current])
     if (!row) return
-    if (index !== undefined) setKept((prev) => [...prev, index])
+    setKept((prev) => [...prev, index])
     onKept?.()
   }
 
   function revise() {
-    const text = note.trim()
-    if (keepNote) {
-      void keepRequest(text, 'revision')
-      setKeepNote(false)
-    }
-    onRevise(text)
+    onRevise(note.trim(), keepNote)
   }
 
   return (
@@ -222,8 +228,8 @@ export function DraftPlanCardView({
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={busy}
-                    onClick={() => void keepRequest(request, 'suggested', index)}
+                    disabled={busy || keeping.includes(index)}
+                    onClick={() => void keepSuggestion(request, index)}
                   >
                     앞으로도 지키기
                   </Button>
