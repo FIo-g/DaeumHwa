@@ -43,8 +43,20 @@ function endingLevel(part: string): SpeechLevel | null {
 }
 
 /**
+ * A tail that is unambiguously polite: 요, 죠, 십시오, or 니다/니까 after a ㅂ final or 습.
+ * Only such a tail can override the head of a comma clause.
+ */
+function isPoliteTail(part: string): boolean {
+  if (JONDAET_ENDING_RE.test(part)) return true
+  const formal = FORMAL_NIDA_RE.exec(part)
+  return formal !== null && hasBieupFinal(formal[1])
+}
+
+/**
  * The speech level of one sentence. A trailing comma vocative of up to two words (", 아가씨") is
- * dropped, unless the vocative itself reads as a predicate ending.
+ * dropped: the head decides, so a kin vocative ending in 니 or 지 (", 어머니") does not override a
+ * polite head. The tail decides only when it is unambiguously polite, and is read only when the
+ * head is not recognized.
  */
 function sentenceLevel(sentence: string): SpeechLevel | null {
   const comma = sentence.lastIndexOf(',')
@@ -52,10 +64,11 @@ function sentenceLevel(sentence: string): SpeechLevel | null {
     const head = sentence.slice(0, comma).trim()
     const tail = sentence.slice(comma + 1).trim()
     if (head !== '' && tail !== '' && tail.split(/\s+/).length <= 2) {
-      const tailLevel = endingLevel(tail)
-      if (tailLevel !== null) return tailLevel
+      if (isPoliteTail(tail)) return 'jondaet'
       const headLevel = endingLevel(head)
       if (headLevel !== null) return headLevel
+      const tailLevel = endingLevel(tail)
+      if (tailLevel !== null) return tailLevel
     }
   }
   return endingLevel(sentence)
