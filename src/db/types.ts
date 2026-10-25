@@ -181,6 +181,8 @@ export const USAGE_EVENT_KINDS = [
   'plan_edited',
   'directive_added',
   'directive_violation',
+  'directive_inferred',
+  'directive_inferred_added',
   'check_flagged',
   'scene_fix_applied',
   'scene_fix_discarded',

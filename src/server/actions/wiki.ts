@@ -21,6 +21,7 @@ import {
   listDirectives,
   updateDirective,
 } from '@/server/directives'
+import { decideInferred } from '@/server/directive-infer'
 import { archiveFact, createFact, supersedeFact, updateFact } from '@/server/facts'
 import { archiveNamingRule, createNamingRule, updateNamingRule } from '@/server/naming'
 import { archiveStyleCard, createStyleCard, updateStyleCard } from '@/server/styles'
@@ -295,5 +296,21 @@ export async function archiveDirectiveAction(
     const row = await archiveDirective(db, actor, directiveId)
     revalidateWork(row.workId)
     return row
+  })
+}
+
+const DecideInferredSchema = z.object({
+  workId: z.uuid(),
+  runId: z.uuid(),
+  index: z.number().int().min(0),
+  decision: z.enum(['add', 'ignore']),
+})
+
+export async function decideInferredAction(input: unknown) {
+  return withAction(async (db, actor) => {
+    const data = DecideInferredSchema.parse(input)
+    const result = await decideInferred(db, actor, data)
+    revalidateWork(data.workId)
+    return result
   })
 }
