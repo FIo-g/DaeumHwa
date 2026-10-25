@@ -9,6 +9,7 @@ import { MODEL_PROFILES, createModelClient } from './novel/models'
 // endpoints answer. Sends a few small calls and a few GET requests; writes one report file.
 //
 //   node --env-file=.env.local --import tsx eval/probe-gateway.ts --model <haiku-5.5|luna-6>
+//   [--cache-key] [--ttl 1h --gap <seconds>]
 //
 // Batch probes are GET requests only. Nothing is submitted for batch processing.
 
@@ -89,6 +90,68 @@ export async function probeCacheKey(
 }
 
 /**
+ * Sends the cached request, waits `gapSeconds`, and sends it again. Reports the first
+ * call's cache writes and the second call's cache reads for the chosen path (Anthropic
+ * `ttl`, Responses `retention`). `accepted` is false when a 4xx names the field.
+ */
+export async function probeTtl(o: {
+  ttl: string
+  gapSeconds: number
+  send: () => Promise<{ usage: AiUsage }>
+  sleep?: (ms: number) => Promise<void>
+}): Promise<TtlProbeResult> {
+  let firstWrite = 0
+  try {
+    const first = await o.send()
+    firstWrite = first.usage.cacheWriteTokens ?? 0
+  } catch (error) {
+    if (!isTtlRejection(error)) throw error
+    return { ttl: o.ttl, gapSeconds: o.gapSeconds, firstWrite: 0, secondRead: 0, accepted: false }
+  }
+  await (o.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms))))(
+    o.gapSeconds * 1000,
+  )
+  try {
+    const second = await o.send()
+    return {
+      ttl: o.ttl,
+      gapSeconds: o.gapSeconds,
+      firstWrite,
+      secondRead: second.usage.cacheReadTokens ?? 0,
+      accepted: true,
+    }
+  } catch (error) {
+    if (!isTtlRejection(error)) throw error
+    return {
+      ttl: o.ttl,
+      gapSeconds: o.gapSeconds,
+      firstWrite,
+      secondRead: 0,
+      accepted: false,
+    }
+  }
+}
+
+export type TtlProbeResult = {
+  ttl: string
+  gapSeconds: number
+  firstWrite: number
+  secondRead: number
+  accepted: boolean
+}
+
+/** A 4xx whose body or message names the lifetime field means the gateway rejects it. */
+const TTL_FIELD = /ttl|prompt_cache_retention/i
+
+function isTtlRejection(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  if (!TTL_FIELD.test(message)) return false
+  const status = (error as { status?: unknown }).status
+  if (status === undefined) return true
+  return typeof status === 'number' && status >= 400 && status < 500
+}
+
+/**
  * One GET per URL with the auth headers the OpenCode client sends. Records the status and the
  * start of the body. A network error is recorded with a null status.
  */
@@ -158,16 +221,51 @@ async function main(): Promise<void> {
       })
     : undefined
 
+  // Only with --ttl --gap: send the cached request, wait, and send it again.
+  const ttlFlag = argValue('--ttl')
+  const gapFlag = argValue('--gap')
+  if ((ttlFlag === undefined) !== (gapFlag === undefined)) {
+    throw new Error('--ttl and --gap must be given together')
+  }
+  const gapSeconds = gapFlag !== undefined ? Number(gapFlag) : undefined
+  if (gapSeconds !== undefined && !Number.isFinite(gapSeconds)) {
+    throw new Error('--gap must be a number')
+  }
+  const ttlProbe =
+    ttlFlag !== undefined && gapSeconds !== undefined
+      ? await probeTtl({
+          ttl: ttlFlag,
+          gapSeconds,
+          send: async () => {
+            const stream = client.streamText({
+              task: { name: 'draft-chapter', input: { probe: 'ttl' } },
+              system,
+              prompt: PROBE_PROMPT,
+              effort: 'low',
+              maxTokens: 200,
+              model: profile.model,
+            })
+            for await (const chunk of stream.textStream) void chunk
+            const done = await stream.final
+            return { usage: done.usage }
+          },
+        })
+      : undefined
+
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   mkdirSync(RESULTS_DIR, { recursive: true })
   const outFile = path.join(RESULTS_DIR, `probe-gateway-${modelId}-${stamp}.json`)
   writeFileSync(
     outFile,
-    `${JSON.stringify({ model: profile.model, createdAt: stamp, cache, batch, ...(cacheKey ? { cacheKey } : {}) }, null, 2)}\n`,
+    `${JSON.stringify({ model: profile.model, createdAt: stamp, cache, batch, ...(cacheKey ? { cacheKey } : {}), ...(ttlProbe ? { ttlProbe } : {}) }, null, 2)}\n`,
   )
   console.log(`cache hit ${cache.cacheHit} · batch ${batch.map((b) => b.status).join(', ')}`)
   if (cacheKey)
     console.log(`cache key accepted ${cacheKey.cacheKeyAccepted} (HTTP ${cacheKey.status})`)
+  if (ttlProbe)
+    console.log(
+      `ttl ${ttlProbe.ttl} gap ${ttlProbe.gapSeconds}s write ${ttlProbe.firstWrite} read ${ttlProbe.secondRead} accepted ${ttlProbe.accepted}`,
+    )
   console.log(`saved: ${outFile}`)
 }
 

@@ -328,8 +328,17 @@ function requestOptions(args: { signal?: AbortSignal; timeoutMs?: number }) {
   }
 }
 
+/**
+ * `AI_CACHE_TTL` set to `1h` keeps cached prompt blocks for an hour instead of the
+ * default five minutes. Anything else (including unset) keeps today's object.
+ */
+export function anthropicCacheControl(): { type: 'ephemeral'; ttl?: '1h' } {
+  if (process.env.AI_CACHE_TTL?.trim() === '1h') return { type: 'ephemeral', ttl: '1h' }
+  return { type: 'ephemeral' }
+}
+
 export function systemBlocks(text: string) {
-  return [{ type: 'text' as const, text, cache_control: { type: 'ephemeral' as const } }]
+  return [{ type: 'text' as const, text, cache_control: anthropicCacheControl() }]
 }
 
 /**
@@ -346,7 +355,7 @@ export function userContent(
     ...args.promptPrefix.map((block) => ({
       type: 'text' as const,
       text: block,
-      cache_control: { type: 'ephemeral' as const },
+      cache_control: anthropicCacheControl(),
     })),
     { type: 'text' as const, text },
   ]

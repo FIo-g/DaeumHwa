@@ -210,6 +210,7 @@ export class ResponsesAiClient implements AiClient {
     }
     if (mode.reasoning) body.reasoning = { effort: reasoningEffortFor(args.effort) }
     if (args.cacheKey && isPromptCacheKeyEnabled()) body.prompt_cache_key = args.cacheKey
+    if (isCacheRetentionEnabled()) body.prompt_cache_retention = '24h'
     return body
   }
 
@@ -322,6 +323,14 @@ export class ResponsesAiClient implements AiClient {
  */
 export function isPromptCacheKeyEnabled(): boolean {
   return /^(1|true|on)$/i.test(process.env.AI_PROMPT_CACHE_KEY?.trim() ?? '')
+}
+
+/**
+ * `AI_CACHE_RETENTION` set to `24h` sends `prompt_cache_retention: '24h'` so cached
+ * input stays available for a day. Anything else (including unset) sends nothing.
+ */
+export function isCacheRetentionEnabled(): boolean {
+  return process.env.AI_CACHE_RETENTION?.trim() === '24h'
 }
 
 /** Maps OpenCode Go effort levels to the Responses reasoning effort. xhigh and max become high. */
