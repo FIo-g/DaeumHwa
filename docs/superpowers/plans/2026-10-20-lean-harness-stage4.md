@@ -161,6 +161,31 @@
 - [ ] **Step 4: Run** the new tests plus `pnpm vitest run eval --maxWorkers=2`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(eval): learn requests from simulated author edits and add an example bank`.
 
+## Task 7: Drop a trailing plan label (F9 from M3)
+
+M3 run `2026-10-25-s3sp2` ended its chapter with a literal line `회차 끝` after the last dialogue. The draft copied the plan card's ending label (the plan rule says `"회차 끝"에 적힌 장면으로 끝낸다`). It was in the first stream and survived every stage; eval `metaHits` missed it. About 1 in 30 M2/M3 drafts.
+
+**Files:**
+- Modify: `src/lib/draft-plan.ts` (`stripEndingLabel`), `src/server/ai-features.ts` (`completeDraft`), `eval/novel/metrics.ts` (`META_PATTERNS`)
+- Test: `src/lib/draft-plan.label.s4.test.ts`, `src/server/ai-features.label.s4.test.ts`, `eval/novel/metrics.label.s4.test.ts`
+
+**Interfaces:**
+- `stripEndingLabel(text: string): string` drops the last non-empty line, and the blank lines before it, when that line, with surrounding spaces, brackets `[]()`, dashes `-–—` and `*` removed, equals `회차 끝`, or `Ending` or `End of chapter` (case-insensitive). Any other text is returned unchanged. It removes only one line and never touches a line that has other words.
+- `completeDraft`: after the length step (both `expand` and `continue` modes), when `stripEndingLabel(text) !== text` and the client accepts a replace record (the same condition the expand path uses), store the stripped text with `replaceRunOutput` and send `pipe.replace`. When the client does not accept a replace record, leave the text as it is. A stored text must always equal the text the client ends with.
+- `META_PATTERNS` gains `/^\s*[\[(\-–—*]*\s*회차 끝\s*[\])\-–—*]*\s*$/m` and `/^\s*[\[(\-–—*]*\s*(Ending|End of chapter)\s*[\])\-–—*]*\s*$/im`.
+
+- [ ] **Step 1: Write the failing tests:**
+  - `stripEndingLabel`:
+    - On `"…지금 누가 종 건드렸어?"\n\n회차 끝`, it gives the text without the label.
+    - `— 회차 끝 —` and `[Ending]` are stripped.
+    - `회차 끝이 밋밋했다.` and a text with no label are unchanged.
+  - The service, with `FakeAiClient`: a draft whose stream ends with `\n\n회차 끝` is stored without it, and a replace record is sent.
+  - The metric: `metaHits` lists the label line.
+- [ ] **Step 2: Run** `pnpm vitest run src/lib/draft-plan.label.s4.test.ts src/server/ai-features.label.s4.test.ts eval/novel/metrics.label.s4.test.ts --maxWorkers=2`. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** the same command plus `pnpm vitest run src/lib src/server/ai-features eval/novel --maxWorkers=2`. Expected: PASS.
+- [ ] **Step 5: Commit** `fix(draft): drop a trailing plan label`.
+
 ## Gate S4 (sonnet)
 
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm vitest run --maxWorkers=2`, `pnpm build`. Only stale pinned tests are fixed here; defects go back to the owning task.
