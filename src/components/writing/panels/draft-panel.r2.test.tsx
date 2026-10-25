@@ -116,6 +116,17 @@ function refineResponse(preview: DraftRefinePreview = PREVIEW): Response {
   })
 }
 
+// The draft panel starts the stage 3 check once a draft finishes; an empty result keeps the
+// panel on the refine flow these tests cover.
+function checkResponse(): Response {
+  return new Response(
+    JSON.stringify({ ok: true, data: { findings: [], fix: null, notice: null } }),
+    {
+      headers: { 'content-type': 'application/json' },
+    },
+  )
+}
+
 function renderPanel() {
   const api = makeApi()
   render(<DraftPanel data={makeData()} api={api} />)
@@ -156,6 +167,7 @@ describe('DraftPanel 다듬기', () => {
   it('disables the append and new-chapter buttons while a preview is open', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(draftResponse(fullStream('원래 초안입니다.')))
+      .mockResolvedValueOnce(checkResponse())
       .mockResolvedValueOnce(refineResponse())
     renderPanel()
     startDraft()
@@ -184,6 +196,7 @@ describe('DraftPanel 다듬기', () => {
     })
     vi.mocked(fetch)
       .mockResolvedValueOnce(draftResponse(fullStream('원래 초안입니다.')))
+      .mockResolvedValueOnce(checkResponse())
       .mockResolvedValueOnce(refineResponse())
     const { api } = renderPanel()
     startDraft()
@@ -211,6 +224,7 @@ describe('DraftPanel 다듬기', () => {
   it('a new draft clears an open preview and re-enables the buttons', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(draftResponse(fullStream('원래 초안입니다.')))
+      .mockResolvedValueOnce(checkResponse())
       .mockResolvedValueOnce(refineResponse())
       .mockResolvedValueOnce(draftResponse(fullStream('두 번째 초안입니다.')))
     renderPanel()

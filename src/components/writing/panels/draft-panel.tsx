@@ -25,6 +25,7 @@ import {
 import { createDirectiveAction, listDirectivesAction } from '@/server/actions/wiki'
 import type { WorkspaceApi, WritingData } from '../types'
 import { DraftPlanCardView, type PlanEditKind } from './draft-plan-card'
+import { DraftCheck } from './draft-check'
 import { DraftRefine } from './draft-refine'
 import { EDITOR_ONLY_NOTE, canEditChapter } from './shared'
 
@@ -136,6 +137,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   } | null>(null)
   // True while a 다듬기 preview is open; its buttons hold the append and new-chapter actions.
   const [refineOpen, setRefineOpen] = useState(false)
+  // True while a 점검 fix preview is open; it holds the append, new-chapter and 다듬기 actions.
+  const [checkOpen, setCheckOpen] = useState(false)
   const streaming = ai.running
 
   // Recounts the active requests; a failed read leaves the count line as it was.
@@ -379,6 +382,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     setStopped(false)
     setAppended(false)
     setRefineOpen(false)
+    setCheckOpen(false)
     setFindings(null)
     // Resolves null when the author cancels, false when the stream failed (a toast says why), and
     // true only when the whole draft arrived. Anything but true keeps the partial text as stopped.
@@ -559,14 +563,18 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           )}
           {finished && (
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={appendToChapter} disabled={appended || refineOpen}>
+              <Button
+                variant="outline"
+                onClick={appendToChapter}
+                disabled={appended || refineOpen || checkOpen}
+              >
                 {appended ? '원고 끝에 붙였습니다' : '현재 원고 끝에 붙이기'}
               </Button>
               {complete && runId && (
                 <Button
                   variant="outline"
                   onClick={() => void createChapter()}
-                  disabled={creating || refineOpen}
+                  disabled={creating || refineOpen || checkOpen}
                 >
                   새 회차로 만들기
                 </Button>
@@ -574,11 +582,25 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
             </div>
           )}
           {finished && complete && runId && !appended && (
+            <DraftCheck
+              key={`check-${runId}`}
+              workId={data.workId}
+              runId={runId}
+              onPreviewChange={setCheckOpen}
+              onApplied={(text) => {
+                setDraft(text)
+                // The findings describe the old draft; they are not recomputed for the fixed one.
+                setFindings(null)
+              }}
+            />
+          )}
+          {finished && complete && runId && !appended && (
             <DraftRefine
-              key={runId}
+              key={`refine-${runId}`}
               workId={data.workId}
               runId={runId}
               onPreviewChange={setRefineOpen}
+              disabled={checkOpen}
               onApplied={(text) => {
                 setDraft(text)
                 // The findings describe the old draft; they are not recomputed for the refined one.

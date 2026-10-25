@@ -16,13 +16,21 @@ type DraftRefineProps = {
   onApplied(text: string): void
   /** Reports whether a preview is open, so the panel can hold its other buttons. */
   onPreviewChange(open: boolean): void
+  /** Holds the 다듬기 button while another preview is open. */
+  disabled?: boolean
 }
 
 /**
  * "다듬기" for a finished draft (P6). The server runs the paragraph trim and the sentence repair
  * and returns a preview. Nothing changes until the author presses "적용".
  */
-export function DraftRefine({ workId, runId, onApplied, onPreviewChange }: DraftRefineProps) {
+export function DraftRefine({
+  workId,
+  runId,
+  onApplied,
+  onPreviewChange,
+  disabled,
+}: DraftRefineProps) {
   const [preview, setPreview] = useState<DraftRefinePreview | null>(null)
   const [nothing, setNothing] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
@@ -128,7 +136,7 @@ export function DraftRefine({ workId, runId, onApplied, onPreviewChange }: Draft
   return (
     <div className="grid gap-2">
       <div>
-        <Button size="sm" variant="outline" onClick={() => void refine()}>
+        <Button size="sm" variant="outline" onClick={() => void refine()} disabled={disabled}>
           다듬기
         </Button>
       </div>

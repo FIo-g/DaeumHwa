@@ -104,6 +104,17 @@ function refineResponse(preview: DraftRefinePreview = PREVIEW): Response {
   })
 }
 
+// The draft panel starts the stage 3 check once a draft finishes; an empty result keeps the
+// panel on the refine flow this test covers.
+function checkResponse(): Response {
+  return new Response(
+    JSON.stringify({ ok: true, data: { findings: [], fix: null, notice: null } }),
+    {
+      headers: { 'content-type': 'application/json' },
+    },
+  )
+}
+
 function startDraft(instructions = '주인공이 성문을 연다.') {
   fireEvent.change(screen.getByLabelText('무슨 일이 일어나야 하나요?'), {
     target: { value: instructions },
@@ -149,6 +160,7 @@ describe('DraftPanel findings after 다듬기', () => {
     })
     vi.mocked(fetch)
       .mockResolvedValueOnce(draftResponse(fullStream('입꼬리가 올라갔다. 입꼬리를 내렸다.')))
+      .mockResolvedValueOnce(checkResponse())
       .mockResolvedValueOnce(refineResponse())
     render(<DraftPanel data={makeData()} api={makeApi()} />)
 
