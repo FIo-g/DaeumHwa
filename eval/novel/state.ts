@@ -78,6 +78,8 @@ export type RunData = {
   plans?: Record<number, { runId: string; card: DraftPlanCard; notes: string[] }>
   /** The author requests planted in ledger mode, with the scope each got. Absent on other runs. */
   planted?: PlantedLedger
+  /** Applied voice-fix lines per chapter, set when the draft step applies its fix. */
+  voiceApplied?: Record<number, number>
 }
 
 export type RunState = {

@@ -191,4 +191,40 @@ describe('checkAndFixDraft voice-fix (stage 3 task 8)', () => {
 
     expect(client.recorded.length).toBe(calls)
   })
+
+  it('applies plain-speech rewrites of 한세린 lines (F6)', async () => {
+    const db = await createTestDb()
+    const owner = await createTestUser(db, { email: 'hanserin@example.com' })
+    const work = await createTestWork(db, owner.id, { title: '잿빛 도시' })
+    const actor = { userId: owner.id }
+    await createTestEntry(db, work.id, {
+      name: '한세린',
+      fields: { speech: '반말을 쓰며 짧고 직설적이다.' },
+    })
+    const plain = [
+      S1,
+      '한세린이 말했다. "누구예요."\n한세린이 다시 물었다. "뜯어도 돼요?" 마음이 흔들렸다.',
+      S3,
+    ].join('\n\n***\n\n')
+    const starter = new FakeAiClient({ overrides: { 'draft-chapter': () => plain } })
+    const run = await startDraft(
+      db,
+      actor,
+      { workId: work.id, instructions: '한세린이 묻는다.', targetChars: 10, entryIds: [] },
+      starter,
+    )
+    await run.done
+    const client = baseClient([
+      { id: 1, speaker: '한세린', text: '"누구야."' },
+      { id: 2, speaker: '한세린', text: '"뜯어도 돼?"' },
+    ])
+
+    const result = await checkAndFixDraft(db, actor, { workId: work.id, runId: run.runId }, client)
+
+    expect(result.fix?.voiceLines).toBe(2)
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, run.runId))
+    const sceneFix = (row.output as { sceneFix: { text: string } }).sceneFix
+    expect(sceneFix.text).toContain('"누구야."')
+    expect(sceneFix.text).toContain('"뜯어도 돼?"')
+  })
 })

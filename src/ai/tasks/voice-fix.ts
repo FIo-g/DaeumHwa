@@ -64,13 +64,27 @@ export const voiceFixTask: AiTaskDef<VoiceFixInput, VoiceFixOutput> = {
 
 /**
  * A rewritten line is usable when it ends in the speaker's level, keeps at least half of the
- * line's words (bigram Dice ≥ 0.5), keeps the opening and closing quote marks, has no newline
- * and runs 50–200% of the original length.
+ * line's words (bigram Dice ≥ 0.5, or on a line of at most 8 characters the same opening quote
+ * and first syllable), keeps the opening and closing quote marks, has no newline and runs
+ * 50–200% of the original length. For `banmal`, dropping a recognized polite ending counts as
+ * the speaker's level: a fix `speechLevelOf` does not recognize is accepted when the original
+ * reads as `jondaet`, since plain endings are open-ended. For `jondaet`, the fix must read as
+ * `jondaet`.
  */
 export function acceptVoiceLine(original: string, fixed: string, level: SpeechLevel): boolean {
   if (original.length === 0 || fixed.length === 0) return false
-  if (speechLevelOf(fixed) !== level) return false
-  if (bigramDice(original, fixed) < 0.5) return false
+  const fixedLevel = speechLevelOf(fixed)
+  if (level === 'banmal') {
+    if (
+      fixedLevel !== 'banmal' &&
+      !(fixedLevel === null && speechLevelOf(original) === 'jondaet')
+    ) {
+      return false
+    }
+  } else if (fixedLevel !== level) {
+    return false
+  }
+  if (!similarEnough(original, fixed)) return false
   if (fixed[0] !== original[0]) return false
   if (fixed[fixed.length - 1] !== original[original.length - 1]) return false
   if (fixed.includes('\n')) return false
@@ -80,4 +94,17 @@ export function acceptVoiceLine(original: string, fixed: string, level: SpeechLe
   const ratio = after / before
   if (ratio < 0.5 || ratio > 2) return false
   return true
+}
+
+/**
+ * The word-keeping check: bigram Dice ≥ 0.5, or on an original of at most 8 characters
+ * (quote marks included) the same first two characters (the opening quote and the first
+ * syllable), since changing only the ending moves most bigrams of a short line.
+ */
+function similarEnough(original: string, fixed: string): boolean {
+  if (bigramDice(original, fixed) >= 0.5) return true
+  if (Array.from(original).length > 8) return false
+  const before = Array.from(original)
+  const after = Array.from(fixed)
+  return before.length >= 2 && after.length >= 2 && before[0] === after[0] && before[1] === after[1]
 }

@@ -316,6 +316,9 @@ async function checkFixStage(
         runId,
         token: result.fix.token,
       })
+      const n = chapterOf(key)
+      state.data.voiceApplied = { ...state.data.voiceApplied, [n]: result.fix.voiceLines }
+      persist(ctx, state)
       return applied.text
     } catch (error) {
       ctx.client.takeLastFailure()

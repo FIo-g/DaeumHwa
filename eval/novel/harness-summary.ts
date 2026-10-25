@@ -18,6 +18,8 @@ export type HarnessInput = {
   settings: 'deploy' | 'eval'
   /** Ledger mode: the planted probe texts' characters, counted on chapter 1 (0 or absent otherwise). */
   ledgerChars?: number
+  /** Applied voice-fix lines per chapter, from the run state. Absent on old runs. */
+  voiceApplied?: Record<number, number>
 }
 
 const CountSchema = z.number().int().nonnegative()
@@ -59,6 +61,7 @@ export const HarnessSummarySchema = z.object({
       checkFlagged: CountSchema.default(0),
       sceneFixes: CountSchema.default(0),
       voiceFixes: CountSchema.default(0),
+      voiceProposed: CountSchema.default(0),
       checkMs: MsSchema.default(0),
     }),
   ),
@@ -165,7 +168,7 @@ function flaggedScenesOf(output: unknown): number {
   return Array.isArray(scenes) ? scenes.length : 0
 }
 
-/** Accepted lines of a voice-fix call output. Unknown shapes count as none. */
+/** Proposed lines of a voice-fix call output. Unknown shapes count as none. */
 function voiceLinesOf(output: unknown): number {
   if (typeof output !== 'object' || output === null) return 0
   const lines = (output as { lines?: unknown }).lines
@@ -232,7 +235,8 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
         .filter((call) => call.task === CHECK_TASK)
         .reduce((sum, call) => sum + flaggedScenesOf(call.output), 0),
       sceneFixes: writes.filter((call) => call.task === SCENE_FIX_TASK).length,
-      voiceFixes: writes
+      voiceFixes: o.voiceApplied?.[n] ?? 0,
+      voiceProposed: writes
         .filter((call) => call.task === VOICE_FIX_TASK)
         .reduce((sum, call) => sum + voiceLinesOf(call.output), 0),
       checkMs: writes

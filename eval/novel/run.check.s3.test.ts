@@ -7,7 +7,7 @@ import { initRun, sceneFixFlag } from './cli'
 import { loadBible } from './bible'
 import { fakeAnswer } from './fake-author'
 import { createRun, openRun, runUntilBlocked, type RunCreateOptions } from './run'
-import { loadConfig } from './state'
+import { loadConfig, loadState } from './state'
 import { readCallRecords } from './steps/util'
 
 // Check-and-fix in the draft step (stage 3, task 6): right after the draft is stored and before
@@ -171,5 +171,44 @@ describe('draft step check-and-fix (stage 3)', () => {
     expect(chapter).toContain(ORIG_MARK)
     expect(chapter).not.toContain(FIX_MARK)
     expect(existsSync(join(dir, 'chapters', '01.md'))).toBe(true)
+  }, 120_000)
+
+  it('records voiceApplied {1: 1} when the voice fix applies one line (F7)', async () => {
+    const dir = newDir()
+    makeRun(dir)
+    const voiceDraft = [
+      S1,
+      S2,
+      `${sceneText('민준', '열쇠', 78)}\n\n"누구예요." 그녀가 말했다.`,
+    ].join('\n\n***\n\n')
+    const inner = new FakeAiClient({
+      overrides: {
+        'interview-extract': () => ({
+          summary: null,
+          entries: [
+            {
+              name: '한세린',
+              kind: 'character',
+              aliases: [],
+              summary: '한세린은 짧고 직설적이다.',
+              fields: [{ key: 'speech', value: '반말을 쓰며 짧고 직설적이다.' }],
+            },
+          ],
+          facts: [],
+          threads: [],
+          relations: [],
+        }),
+        'draft-chapter': () => voiceDraft,
+        'draft-check': () => ({ scenes: [] }),
+        'voice-fix': () => ({ lines: [{ id: 1, speaker: '한세린', text: '"누구야."' }] }),
+        'scene-fix': (input: unknown) => ({ text: (input as { scene: string }).scene }),
+      },
+    })
+    await runChapter(dir, inner)
+
+    expect(inner.recorded.filter((call) => call.name === 'voice-fix')).toHaveLength(1)
+    expect(loadState(dir).data.voiceApplied).toEqual({ 1: 1 })
+    const chapter = readFileSync(join(dir, 'chapters', '01.md'), 'utf8')
+    expect(chapter).toContain('"누구야."')
   }, 120_000)
 })
