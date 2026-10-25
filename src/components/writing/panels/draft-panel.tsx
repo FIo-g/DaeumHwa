@@ -91,6 +91,29 @@ async function countActiveRequests(workId: string): Promise<number | null> {
   }
 }
 
+/** Inferred proposals of one chapter, or null when the read fails. */
+async function countInferredProposals(workId: string, chapterId: string): Promise<number | null> {
+  try {
+    const response = await fetch(`/api/works/${workId}/directives/infer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chapterId }),
+    })
+    if (!response.ok) return null
+    // Draft streams carry X-Run-Id; the infer route does not. A mocked draft response in older
+    // tests must not be consumed as JSON here, or the draft reader breaks.
+    if (response.headers.get('X-Run-Id')) return null
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean
+      data?: { proposals?: unknown[] }
+    } | null
+    if (!payload || payload.ok !== true || !Array.isArray(payload.data?.proposals)) return null
+    return payload.data?.proposals.length ?? null
+  } catch {
+    return null
+  }
+}
+
 /**
  * AI draft (F13). Streams a chapter from the author's instructions, the story cards and the
  * previous chapter. The result is never written into the manuscript by itself: the author either
@@ -119,6 +142,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   const [keepInstruction, setKeepInstruction] = useState(false)
   // How many requests apply to the work now; null until the first count arrives.
   const [activeRequests, setActiveRequests] = useState<number | null>(null)
+  // How many inferred proposals the current chapter has; null until the first count arrives.
+  const [inferredCount, setInferredCount] = useState<number | null>(null)
   const ai = useAiRun()
   const [draft, setDraft] = useState<string | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
@@ -157,6 +182,17 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       live = false
     }
   }, [data.workId])
+
+  useEffect(() => {
+    if (data.chapter.status !== 'done') return
+    let live = true
+    void countInferredProposals(data.workId, data.chapter.id).then((count) => {
+      if (live && count !== null) setInferredCount(count)
+    })
+    return () => {
+      live = false
+    }
+  }, [data.workId, data.chapter.id, data.chapter.status])
 
   // A new chapter starts its own revision chain. The chapter id is stored with the render, so a
   // chapter change clears the notes without an effect.
@@ -445,6 +481,14 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         {activeRequests !== null && activeRequests > 0 && (
           <p className="text-sm text-muted-foreground">
             <span>{`적용 중인 요청 ${activeRequests}개`}</span>{' '}
+            <Link className="underline" href={`/works/${data.workId}/wiki?tab=requests`}>
+              보기
+            </Link>
+          </p>
+        )}
+        {inferredCount !== null && inferredCount > 0 && (
+          <p className="text-sm text-muted-foreground">
+            <span>{`새 요청 제안 ${inferredCount}개`}</span>{' '}
             <Link className="underline" href={`/works/${data.workId}/wiki?tab=requests`}>
               보기
             </Link>

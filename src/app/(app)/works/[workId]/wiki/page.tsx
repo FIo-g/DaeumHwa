@@ -9,6 +9,7 @@ import { WikiTabs } from '@/components/wiki/wiki-tabs'
 import { ENTRY_KINDS, type EntryKind } from '@/db/types'
 import { hasRole } from '@/server/access'
 import { listChapters } from '@/server/chapters'
+import { listInferredProposals } from '@/server/directive-infer'
 import { listDirectives } from '@/server/directives'
 import { listFacts } from '@/server/facts'
 import { listNamingRules } from '@/server/naming'
@@ -82,10 +83,11 @@ export default async function WikiPage({
     const chapters = await guardPage(() => listChapters(db, actor, workId))
     content = <ChapterSummaries chapters={chapters} canEdit={canEdit} />
   } else if (tab === 'requests') {
-    const [directives, characters, cards] = await Promise.all([
+    const [directives, characters, cards, inferred] = await Promise.all([
       guardPage(() => listDirectives(db, actor, workId)),
       guardPage(() => listEntries(db, actor, workId, { kinds: ['character'] })),
       guardPage(() => listStyleCards(db, actor, workId)),
+      guardPage(() => listInferredProposals(db, actor, workId)),
     ])
     content = (
       <DirectiveList
@@ -98,6 +100,7 @@ export default async function WikiPage({
         }))}
         styleCards={cards.map((card) => ({ name: card.name, rules: card.rules }))}
         canEdit={canEdit}
+        inferred={inferred}
       />
     )
   } else {

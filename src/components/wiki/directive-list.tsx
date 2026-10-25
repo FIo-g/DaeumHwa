@@ -12,12 +12,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { DirectiveKind, DirectiveScope, DirectiveStatus, SpeechLevel } from '@/db/types'
+import type { InferredProposal } from '@/server/directive-infer'
 import { banPatternFor } from '@/lib/directives'
 import { DIRECTIVE_KIND_LABEL, DIRECTIVE_SCOPE_LABEL } from '@/lib/labels'
 import { runAction } from '@/lib/client/run-action'
 import {
   archiveDirectiveAction,
   createDirectiveAction,
+  decideInferredAction,
   updateDirectiveAction,
 } from '@/server/actions/wiki'
 import { SelectField } from './select-field'
@@ -46,6 +48,7 @@ type DirectiveListProps = {
   characters: CharacterItem[]
   styleCards: StyleCardSummary[]
   canEdit: boolean
+  inferred?: InferredProposal[]
 }
 
 const SCOPE_OPTIONS: { value: DirectiveScope; label: string }[] = [
@@ -79,13 +82,70 @@ export function DirectiveList({
   characters,
   styleCards,
   canEdit,
+  inferred = [],
 }: DirectiveListProps) {
-  const active = directives.filter((d) => d.status === 'active')
-  const off = directives.filter((d) => d.status === 'off')
+  const [directiveState, setDirectiveState] = useState(directives)
+  const [inferredState, setInferredState] = useState(inferred)
+  const active = directiveState.filter((d) => d.status === 'active')
+  const off = directiveState.filter((d) => d.status === 'off')
   const speaking = characters.filter((c) => c.speech)
+
+  async function handleDecide(proposal: InferredProposal, decision: 'add' | 'ignore') {
+    const saved = await runAction(
+      decideInferredAction({
+        workId,
+        runId: proposal.runId,
+        index: proposal.index,
+        decision,
+      }),
+    )
+    if (!saved) return
+    setInferredState((prev) =>
+      prev.filter((p) => !(p.runId === proposal.runId && p.index === proposal.index)),
+    )
+    if (decision === 'add') {
+      const scope: DirectiveScope = proposal.entryId ? 'character' : 'work'
+      setDirectiveState((prev) => [
+        ...prev,
+        {
+          id: `inferred-${proposal.runId}-${proposal.index}`,
+          scope,
+          kind: proposal.kind,
+          text: proposal.text,
+          status: 'active',
+          entryId: proposal.entryId,
+          entryName: proposal.entryName,
+          chapterPosition: null,
+          pattern: proposal.pattern,
+          speechLevel: null,
+          targetChars: null,
+        } as DirectiveItem,
+      ])
+    }
+  }
 
   return (
     <div className="flex flex-col gap-8">
+      {inferredState.length > 0 && (
+        <section aria-labelledby="directives-inferred-heading" className="flex flex-col gap-3">
+          <h2 id="directives-inferred-heading" className="text-base font-semibold">
+            수정에서 찾은 요청
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            작가님이 고친 곳을 보고 찾은 것입니다. 추가해야 적용됩니다.
+          </p>
+          <ul className="flex flex-col divide-y rounded-lg border">
+            {inferredState.map((proposal) => (
+              <InferredRow
+                key={`${proposal.runId}-${proposal.index}`}
+                proposal={proposal}
+                canEdit={canEdit}
+                onDecide={(decision) => void handleDecide(proposal, decision)}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
       <section aria-labelledby="directives-active-heading" className="flex flex-col gap-3">
         <h2 id="directives-active-heading" className="text-base font-semibold">
           적용 중인 요청
@@ -153,6 +213,64 @@ function scopeText(directive: DirectiveItem): string {
   if (directive.scope === 'character') return `인물 ${directive.entryName ?? '-'}`
   if (directive.scope === 'chapter') return `${directive.chapterPosition ?? '-'}화만`
   return DIRECTIVE_SCOPE_LABEL.work
+}
+
+function inferredScopeText(proposal: InferredProposal): string {
+  if (proposal.entryId || proposal.entryName) return `인물 ${proposal.entryName ?? '-'}`
+  return DIRECTIVE_SCOPE_LABEL.work
+}
+
+function InferredRow({
+  proposal,
+  canEdit,
+  onDecide,
+}: {
+  proposal: InferredProposal
+  canEdit: boolean
+  onDecide: (decision: 'add' | 'ignore') => void
+}) {
+  const [pending, setPending] = useState(false)
+
+  async function decide(decision: 'add' | 'ignore') {
+    setPending(true)
+    try {
+      onDecide(decision)
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <li className="flex flex-col gap-2 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary">{inferredScopeText(proposal)}</Badge>
+        <Badge variant="outline">{DIRECTIVE_KIND_LABEL[proposal.kind]}</Badge>
+      </div>
+      <p className="whitespace-pre-line text-sm">{proposal.text}</p>
+      {canEdit && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() => void decide('add')}
+          >
+            추가
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() => void decide('ignore')}
+          >
+            무시
+          </Button>
+        </div>
+      )}
+    </li>
+  )
 }
 
 function DirectiveRow({ directive, canEdit }: { directive: DirectiveItem; canEdit: boolean }) {
