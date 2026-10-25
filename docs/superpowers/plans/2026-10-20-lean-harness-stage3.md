@@ -95,7 +95,7 @@ These come from `docs/eval/harness/2026-10-21-stage1.md` and `docs/eval/harness/
 
 **Interfaces:**
 - Produces: `type DraftCheckInput = { numbered: string; sceneCount: number; plan: string | null; instructions: string | null; requests: DirectiveForPrompt[]; hiddenFacts: string[] }` and `DraftCheckSchema` = `{ scenes: { scene: number (int 1..sceneCount checked in postProcess), reasons: { code: 'missing-event' | 'skipped-moment' | 'unmotivated-feeling' | 'repeated-beat' | 'flat-ending' | 'request' | 'leak'; note: string (max 80) }[] (max 3) }[] }`; `postProcess` drops scenes out of range and empty reason lists, and keeps at most 4 scenes.
-- Produces: `draftCheckTask: AiTaskDef<DraftCheckInput, DraftCheckOutput>` — effort `'low'`, maxTokens `2000`, system `DRAFT_CHECK_SYSTEM`.
+- Produces: `draftCheckTask: AiTaskDef<DraftCheckInput, DraftCheckOutput>` — effort `'low'`, maxTokens `3000` (raised from 2000 after the M3 effort replay), system `DRAFT_CHECK_SYSTEM`.
 - Produces: `numberScenes(text: string, spans: SceneRange[]): string` — each span prefixed with a line `[장면 N]`, spans joined by a blank line, break lines dropped.
 - Prompt (`buildPrompt`): `<draft>` (the numbered text, neutralized), then `<instructions>` (the author's instruction text and plan revision notes, neutralized, from task 7's `output.instructions` and `output.planNotes`) when there are any, then `<plan>` (stage 1 `renderPlanInstructions('', card)`) when there is a plan, then `renderRequestsBlock` of the `style` and `content` requests only when there are any, then `<hidden_facts>` (one `- ` line each) only when there are any.
 - `DRAFT_CHECK_SYSTEM` (Korean; English twin in `localize/en/draft-check.ts`) says, in this order:

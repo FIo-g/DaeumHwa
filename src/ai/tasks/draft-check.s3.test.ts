@@ -139,7 +139,7 @@ describe('draftCheckTask definition', () => {
   it('runs cheap', () => {
     expect(draftCheckTask.name).toBe('draft-check')
     expect(draftCheckTask.effort).toBe('low')
-    expect(draftCheckTask.maxTokens).toBe(2000)
+    expect(draftCheckTask.maxTokens).toBe(3000)
   })
 
   it('accepts a valid check and rejects a note over 80 characters', () => {

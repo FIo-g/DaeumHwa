@@ -88,7 +88,7 @@ function nonBlank(text: string | null): string | null {
 export const draftCheckTask: AiTaskDef<DraftCheckInput, DraftCheckOutput> = {
   name: 'draft-check',
   effort: 'low',
-  maxTokens: 2000,
+  maxTokens: 3000,
   system: DRAFT_CHECK_SYSTEM,
   buildPrompt: (raw) => {
     const input = neutralizeDeep(raw)
