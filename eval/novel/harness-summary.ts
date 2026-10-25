@@ -58,6 +58,7 @@ export const HarnessSummarySchema = z.object({
       // Stage 3: picked scenes, applied fixes and the check time of the chapter. Older runs read as 0.
       checkFlagged: CountSchema.default(0),
       sceneFixes: CountSchema.default(0),
+      voiceFixes: CountSchema.default(0),
       checkMs: MsSchema.default(0),
     }),
   ),
@@ -152,15 +153,23 @@ const PLAN_TASK: string = 'draft-plan'
 /** The stage 1b expansion call of a short draft's scenes; counted in writeMs like the draft's calls. */
 const EXPAND_TASK: string = 'draft-expand'
 
-/** The stage 3 check call and the one-scene fix call; both belong to the draft step. */
+/** The stage 3 check call, the one-scene fix call and the voice-fix call; all belong to the draft step. */
 const CHECK_TASK: string = 'draft-check'
 const SCENE_FIX_TASK: string = 'scene-fix'
+const VOICE_FIX_TASK: string = 'voice-fix'
 
 /** Scenes the check named, from a draft-check call output. Unknown shapes count as none. */
 function flaggedScenesOf(output: unknown): number {
   if (typeof output !== 'object' || output === null) return 0
   const scenes = (output as { scenes?: unknown }).scenes
   return Array.isArray(scenes) ? scenes.length : 0
+}
+
+/** Accepted lines of a voice-fix call output. Unknown shapes count as none. */
+function voiceLinesOf(output: unknown): number {
+  if (typeof output !== 'object' || output === null) return 0
+  const lines = (output as { lines?: unknown }).lines
+  return Array.isArray(lines) ? lines.length : 0
 }
 
 /**
@@ -223,8 +232,16 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
         .filter((call) => call.task === CHECK_TASK)
         .reduce((sum, call) => sum + flaggedScenesOf(call.output), 0),
       sceneFixes: writes.filter((call) => call.task === SCENE_FIX_TASK).length,
+      voiceFixes: writes
+        .filter((call) => call.task === VOICE_FIX_TASK)
+        .reduce((sum, call) => sum + voiceLinesOf(call.output), 0),
       checkMs: writes
-        .filter((call) => call.task === CHECK_TASK || call.task === SCENE_FIX_TASK)
+        .filter(
+          (call) =>
+            call.task === CHECK_TASK ||
+            call.task === SCENE_FIX_TASK ||
+            call.task === VOICE_FIX_TASK,
+        )
         .reduce((sum, call) => sum + call.durationMs, 0),
     })
   }

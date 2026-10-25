@@ -16,7 +16,7 @@ export type DirectiveFinding = {
 }
 
 const PATH_LIMIT = 5
-const QUOTED_LINE_RE = /"[^"\n]+"|“[^”\n]+”|「[^」\n]+」|『[^』\n]+』/g
+export const QUOTED_LINE_RE = /"[^"\n]+"|“[^”\n]+”|「[^」\n]+」|『[^』\n]+』/g
 const QUOTE_MARKS_RE = /["“”「」『』]/g
 const HANGUL_SYLLABLE_RE = /[가-힣]$/
 const SUBJECT_PARTICLE_RE = /^(은|는|이|가|께서)/

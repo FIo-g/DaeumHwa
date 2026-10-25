@@ -184,6 +184,9 @@ const RULES: readonly Rule[] = [
     '인물별 말투. 대사는 이 말투를 따르고 바꾸지 않는다.',
     'Speech style per character. Dialogue follows it and never changes it.',
   ],
+  // Voice-fix lines (stage 3, task 8): the level label after the speaker name.
+  [': 반말 (', ': casual ('],
+  [': 존댓말 (', ': polite ('],
   // Core interview topic names (INTERVIEW_TOPICS). After the section headers that contain them
   // (such as "열린 떡밥: "), and before the labels they contain (인물, 규칙, 장소).
   ['주요 인물', 'main characters'],

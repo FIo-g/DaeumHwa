@@ -17,6 +17,7 @@ import { DRAFT_CHAPTER_SYSTEM } from './en/draft-chapter'
 import { DRAFT_EXPAND_SYSTEM } from './en/draft-expand'
 import { DRAFT_REPAIR_SYSTEM } from './en/draft-repair'
 import { SCENE_FIX_SYSTEM } from './en/scene-fix'
+import { VOICE_FIX_SYSTEM } from './en/voice-fix'
 import { buildEnInterviewExtractSystem } from './en/interview-extract'
 import { buildEnInterviewQuestionSystem } from './en/interview-question'
 import { PARAGRAPH_TRIM_SYSTEM } from './en/paragraph-trim'
@@ -50,6 +51,7 @@ export const EN_SYSTEMS: Record<AiTaskName, string> = {
   'draft-beats': DRAFT_BEATS_SYSTEM,
   'draft-check': DRAFT_CHECK_SYSTEM,
   'scene-fix': SCENE_FIX_SYSTEM,
+  'voice-fix': VOICE_FIX_SYSTEM,
   'draft-plan': DRAFT_PLAN_SYSTEM,
   // Scene calls of the scenes draft mode share the English draft-chapter system, like draft-continue.
   'draft-scene': DRAFT_CHAPTER_SYSTEM,

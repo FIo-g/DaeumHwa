@@ -164,6 +164,9 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
           </ul>
         </div>
       )}
+      {(fix.voiceLines ?? 0) > 0 && (
+        <p className="text-sm text-muted-foreground">{`말투를 고친 대사 ${fix.voiceLines}줄`}</p>
+      )}
       <p className="text-sm font-medium">고친 장면 미리 보기</p>
       <p className="text-xs text-muted-foreground">
         초록은 새 글, 빨강 취소선은 지워지는 글입니다.

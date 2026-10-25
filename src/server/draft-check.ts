@@ -3,10 +3,12 @@ import { and, eq, sql } from 'drizzle-orm'
 import { runAiTask, throwIfCancelled } from '@/ai/run'
 import { draftCheckTask, numberScenes } from '@/ai/tasks/draft-check'
 import { acceptSceneFix, sceneFixTask } from '@/ai/tasks/scene-fix'
+import { acceptVoiceLine, voiceFixTask } from '@/ai/tasks/voice-fix'
+import { selectMainVoices } from '@/ai/voice'
 import type { AiClient } from '@/ai/types'
 import type { Db } from '@/db/client'
 import { aiRuns, chapters } from '@/db/schema'
-import type { Actor } from '@/db/types'
+import type { Actor, SpeechLevel } from '@/db/types'
 import { resolveWorkSettings } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { type DiffPart, diffTexts } from '@/lib/diff'
@@ -19,8 +21,10 @@ import {
 } from '@/lib/draft-check'
 import { draftLengthPlan } from '@/lib/draft-length'
 import { renderPlanInstructions, type DraftPlanCard } from '@/lib/draft-plan'
+import { textLang } from '@/lib/korean/cliches'
 import { splitParagraphs } from '@/lib/korean/paragraphs'
 import { sceneSpans, spliceSpans, type SceneRange } from '@/lib/scene'
+import { markLines, quotedLines, voiceLevelOf } from '@/lib/voice-level'
 import { requireWorkRole } from '@/server/access'
 import { getLatestPosition } from '@/server/chapters'
 import { requestsForText } from '@/server/directives'
@@ -48,6 +52,7 @@ export type DraftCheckResult = {
     scenes: { scene: number; reasons: SceneReason[] }[]
     parts: DiffPart[]
     token: string
+    voiceLines: number
   } | null
   notice: string | null
 }
@@ -58,6 +63,7 @@ type StoredFix = {
   text: string
   scenes: { scene: number; reasons: SceneReason[] }[]
   token: string
+  voiceLines?: number
 }
 
 /**
@@ -83,18 +89,31 @@ export async function checkAndFixDraft(
   const card = readPlanCard(output.plan)
   const work = await getWork(db, actor, workId)
   const targetChars = resolveWorkSettings(work.settings).targetChars
-  const spans = sceneSpans(stored, card?.scenes.length ?? draftLengthPlan(targetChars).sceneCount)
 
   const requests = await requestsForText(db, workId, { chapterId: run.chapterId, text: stored })
   const characters = await listEntries(db, actor, workId, { kinds: ['character'] })
   const names = Object.fromEntries(characters.map((e) => [e.id, [e.name, ...e.aliases]]))
-  const codeFindings = codeSceneFindings(stored, { spans, requests, names, card })
+
+  const { text: working, voiceLines } = await fixVoiceLines(
+    db,
+    actor,
+    workId,
+    run.chapterId,
+    characters,
+    stored,
+    client,
+    signal,
+    now,
+    startedAt,
+  )
+  const spans = sceneSpans(working, card?.scenes.length ?? draftLengthPlan(targetChars).sceneCount)
+  const codeFindings = codeSceneFindings(working, { spans, requests, names, card })
 
   const instructions = readInstructions(output)
   const position = await draftPosition(db, workId, run.chapterId)
   const hiddenFacts = await hiddenFactContents(db, actor, workId, position)
   const plan = card ? renderPlanInstructions('', card) : null
-  const numbered = numberScenes(stored, spans)
+  const numbered = numberScenes(working, spans)
 
   let aiFindings: SceneFinding[] = []
   let notice: string | null = null
@@ -158,7 +177,7 @@ export async function checkAndFixDraft(
     if (remaining < MIN_FIX_MS) break
     const span = spans[scene - 1]
     if (!span) continue
-    const sceneText = stored.slice(span.start, span.end)
+    const sceneText = working.slice(span.start, span.end)
     const reasons = findings
       .filter((finding) => finding.scene === scene)
       .map((finding) => ({ label: REASON_LABELS[finding.reason], note: finding.note }))
@@ -176,8 +195,8 @@ export async function checkAndFixDraft(
         sceneFixTask,
         {
           scene: sceneText,
-          before: beforeText(stored, spans, scene),
-          after: afterText(stored, spans, scene),
+          before: beforeText(working, spans, scene),
+          after: afterText(working, spans, scene),
           reasons,
           planScene: card?.scenes[scene - 1]?.summary ?? null,
           requests,
@@ -200,11 +219,17 @@ export async function checkAndFixDraft(
 
   throwIfCancelled(signal)
 
-  if (fixed.length > 0) {
-    const fixedText = spliceSpans(stored, fixed)
+  if (fixed.length > 0 || voiceLines > 0) {
+    const fixedText = spliceSpans(working, fixed)
     const token = randomUUID()
     const check: StoredCheck = { base: stored, findings, notice }
-    const sceneFix: StoredFix = { base: stored, text: fixedText, scenes: fixedScenes, token }
+    const sceneFix: StoredFix = {
+      base: stored,
+      text: fixedText,
+      scenes: fixedScenes,
+      token,
+      voiceLines,
+    }
     const written = await updateWhileDraftIs(
       db,
       runId,
@@ -216,7 +241,7 @@ export async function checkAndFixDraft(
     }
     return {
       findings,
-      fix: { scenes: fixedScenes, parts: diffTexts(stored, fixedText, 'words'), token },
+      fix: { scenes: fixedScenes, parts: diffTexts(stored, fixedText, 'words'), token, voiceLines },
       notice,
     }
   }
@@ -364,8 +389,96 @@ function readStoredResult(
   }
   return {
     findings: check.findings,
-    fix: { scenes: fix.scenes, parts: diffTexts(stored, fix.text, 'words'), token: fix.token },
+    fix: {
+      scenes: fix.scenes,
+      parts: diffTexts(stored, fix.text, 'words'),
+      token: fix.token,
+      voiceLines: fix.voiceLines ?? 0,
+    },
     notice: check.notice,
+  }
+}
+
+/**
+ * One voice-fix call before the code checks (stage 3, task 8). Korean drafts only. The voices
+ * are the character entries whose `fields.speech` gives a level, without `never`-tier entries,
+ * ordered as `selectMainVoices` orders them and capped at 6. Accepted lines are spliced back to
+ * front into the working text. A failed call is skipped silently.
+ */
+async function fixVoiceLines(
+  db: Db,
+  actor: Actor,
+  workId: string,
+  chapterId: string | null,
+  characters: {
+    id: string
+    name: string
+    fields: Record<string, string>
+    contextTier: string
+    createdAt: Date
+  }[],
+  stored: string,
+  client: AiClient | undefined,
+  signal: AbortSignal | undefined,
+  now: () => number,
+  startedAt: number,
+): Promise<{ text: string; voiceLines: number }> {
+  if (textLang(stored) !== 'ko') return { text: stored, voiceLines: 0 }
+  const sources = characters
+    .filter((entry) => entry.contextTier !== 'never')
+    .map((entry) => ({
+      entryId: entry.id,
+      name: entry.name,
+      speech: entry.fields.speech ?? '',
+      selected: false,
+      createdAt: entry.createdAt,
+    }))
+  const picked = selectMainVoices(sources, 6)
+  const voices = picked.flatMap((line) => {
+    const raw = sources.find((source) => source.entryId === line.entryId)?.speech ?? line.speech
+    const level = voiceLevelOf(raw)
+    return level === null ? [] : [{ name: line.name, level, speech: line.speech }]
+  })
+  if (voices.length === 0) return { text: stored, voiceLines: 0 }
+  const lines = quotedLines(stored)
+  const mismatch = lines.some(
+    (line) => line.level !== null && voices.some((voice) => voice.level !== line.level),
+  )
+  if (!mismatch) return { text: stored, voiceLines: 0 }
+  try {
+    const remaining = CHECK_BUDGET_MS - (now() - startedAt)
+    const { output: fixed } = await runAiTask(
+      db,
+      {
+        userId: actor.userId,
+        workId,
+        chapterId,
+        signal,
+        timeoutMs: Math.max(remaining, 1),
+      },
+      voiceFixTask,
+      { marked: markLines(stored, lines), voices },
+      client,
+    )
+    throwIfCancelled(signal)
+    const byId = new Map(lines.map((line) => [line.id, line]))
+    const seen = new Set<number>()
+    const replacements: { span: { start: number; end: number }; text: string }[] = []
+    for (const item of fixed.lines) {
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      const original = byId.get(item.id)
+      if (!original) continue
+      const voice = voices.find((candidate) => candidate.name === item.speaker)
+      if (!voice) continue
+      if (!acceptVoiceLine(original.quote, item.text, voice.level as SpeechLevel)) continue
+      replacements.push({ span: { start: original.start, end: original.end }, text: item.text })
+    }
+    if (replacements.length === 0) return { text: stored, voiceLines: 0 }
+    return { text: spliceSpans(stored, replacements), voiceLines: replacements.length }
+  } catch (error) {
+    if (isCancel(error)) throw error
+    return { text: stored, voiceLines: 0 }
   }
 }
 

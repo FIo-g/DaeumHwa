@@ -48,6 +48,7 @@ const FIX_RESULT: DraftCheckResult = {
       { type: 'equal', value: '열었다.' },
     ],
     token: 'token-1',
+    voiceLines: 0,
   },
   notice: null,
 }

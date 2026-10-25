@@ -164,6 +164,7 @@ export const AI_TASKS = [
   'draft-expand',
   'draft-check',
   'scene-fix',
+  'voice-fix',
 ] as const
 export type AiTaskName = (typeof AI_TASKS)[number]
 

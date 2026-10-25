@@ -25,6 +25,7 @@ import { readerSimSample } from './samples/reader-sim'
 import { sceneFixSample } from './samples/scene-fix'
 import { sceneRewriteSample } from './samples/scene-rewrite'
 import { styleSuggestSample } from './samples/style-suggest'
+import { voiceFixSample } from './samples/voice-fix'
 import { countHangul, findHangul, translateScaffold } from './scaffold'
 
 // English-content sample inputs for every task (one module per task in ./samples). Together they
@@ -47,6 +48,7 @@ const PROMPTS: Record<AiTaskName, string> = {
   'draft-beats': draftBeatsSample,
   'draft-check': draftCheckSample,
   'scene-fix': sceneFixSample,
+  'voice-fix': voiceFixSample,
   'draft-plan': draftPlanSample,
   // Scene calls are built on the draft prompt (stage 1, draft-scene); the sample is the draft prompt.
   'draft-scene': draftSample,
