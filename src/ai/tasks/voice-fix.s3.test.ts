@@ -35,10 +35,10 @@ describe('voiceFixTask.buildPrompt', () => {
 })
 
 describe('voiceFixTask definition', () => {
-  it('runs cheap with 3000 max tokens', () => {
+  it('runs cheap with 6000 max tokens', () => {
     expect(voiceFixTask.name).toBe('voice-fix')
     expect(voiceFixTask.effort).toBe('low')
-    expect(voiceFixTask.maxTokens).toBe(3000)
+    expect(voiceFixTask.maxTokens).toBe(6000)
   })
 
   it('accepts lines and rejects more than 40', () => {

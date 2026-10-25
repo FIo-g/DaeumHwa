@@ -270,7 +270,7 @@ These come from `docs/eval/harness/2026-10-21-stage1.md` and `docs/eval/harness/
 - **`voiceFixTask`**:
   - Input: `{ marked: string; voices: { name: string; level: SpeechLevel; speech: string }[] }`.
   - Schema: `{ lines: { id: int; speaker: string; text: string }[] }`, at most 40 lines.
-  - Effort `'low'`, maxTokens `3000`, system `VOICE_FIX_SYSTEM`.
+  - Effort `'low'`, maxTokens `6000` (raised from 3000 after M3: a 50-line draft hit the cap), system `VOICE_FIX_SYSTEM`.
 - **The prompt** is `<voices>`, then `<draft>`.
   - Each `<voices>` line is `- {name}: {반말|존댓말} ({speech})`.
   - `<draft>` holds the marked text, neutralized.

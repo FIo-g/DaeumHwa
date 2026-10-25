@@ -47,7 +47,7 @@ function levelLabel(level: SpeechLevel): string {
 export const voiceFixTask: AiTaskDef<VoiceFixInput, VoiceFixOutput> = {
   name: 'voice-fix',
   effort: 'low',
-  maxTokens: 3000,
+  maxTokens: 6000,
   system: VOICE_FIX_SYSTEM,
   buildPrompt: (raw) => {
     const input = neutralizeDeep(raw)
