@@ -55,7 +55,7 @@ describe('openRun speech flag', () => {
     const systems: string[] = []
     const ctx = await openRun(dir, { inner: recordingClient(systems), autoAuthor: true })
     try {
-      expect(process.env.AI_SPEECH_STYLE).toBe('')
+      expect(process.env.AI_SPEECH_STYLE).toBe('off')
       await runUntilBlocked(ctx)
     } finally {
       await ctx.close()
@@ -79,7 +79,7 @@ describe('openRun speech flag', () => {
       commit: 'test',
     })
     const ctx = await openRun(dir, { inner: new FakeAiClient() })
-    expect(process.env.AI_SPEECH_STYLE).toBe('')
+    expect(process.env.AI_SPEECH_STYLE).toBe('off')
     await ctx.close()
     expect('AI_SPEECH_STYLE' in process.env).toBe(false)
   })

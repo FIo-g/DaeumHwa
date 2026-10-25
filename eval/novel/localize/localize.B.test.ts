@@ -73,8 +73,8 @@ describe('speech feature: English systems', () => {
 })
 
 describe('speech feature: EN_SYSTEMS assembler (test 27)', () => {
-  it('carries no speech rule when the flag is unset', () => {
-    vi.stubEnv('AI_SPEECH_STYLE', '')
+  it('carries no speech rule when the flag is off', () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'off')
     expect(EN_SYSTEMS['interview-question']).toBe(INTERVIEW_QUESTION_SYSTEM)
     expect(EN_SYSTEMS['interview-extract']).toBe(INTERVIEW_EXTRACT_SYSTEM)
     expect(EN_SYSTEMS['interview-question']).not.toContain('no speech style')

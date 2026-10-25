@@ -17,11 +17,11 @@ import {
 
 // Golden prompts with the speech feature off (spec 8, track B). The snapshots were written from the
 // cloud-w3 code before any speech edit and must never be regenerated: every later change has to keep
-// them byte-identical while AI_SPEECH_STYLE is unset.
+// them byte-identical while AI_SPEECH_STYLE is off (the product default is on since stage 3).
 
 beforeEach(() => {
   vi.unstubAllEnvs()
-  delete process.env.AI_SPEECH_STYLE
+  vi.stubEnv('AI_SPEECH_STYLE', 'off')
 })
 
 const questionInput: InterviewQuestionInput = {

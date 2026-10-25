@@ -82,12 +82,13 @@ describe('isSpeechStyleEnabled', () => {
     vi.unstubAllEnvs()
   })
 
-  it('is on only for 1, true or on (trimmed, case-insensitive)', () => {
-    expect(isSpeechStyleEnabled({})).toBe(false)
+  it('is on unless off, 0 or false (trimmed, case-insensitive)', () => {
+    expect(isSpeechStyleEnabled({})).toBe(true)
+    expect(isSpeechStyleEnabled({ AI_SPEECH_STYLE: '' })).toBe(true)
     expect(isSpeechStyleEnabled({ AI_SPEECH_STYLE: 'off' })).toBe(false)
-    expect(isSpeechStyleEnabled({ AI_SPEECH_STYLE: '' })).toBe(false)
+    expect(isSpeechStyleEnabled({ AI_SPEECH_STYLE: ' FALSE ' })).toBe(false)
+    expect(isSpeechStyleEnabled({ AI_SPEECH_STYLE: '0' })).toBe(false)
     expect(isSpeechStyleEnabled({ AI_SPEECH_STYLE: 'on' })).toBe(true)
-    expect(isSpeechStyleEnabled({ AI_SPEECH_STYLE: ' TRUE ' })).toBe(true)
     expect(isSpeechStyleEnabled({ AI_SPEECH_STYLE: '1' })).toBe(true)
   })
 

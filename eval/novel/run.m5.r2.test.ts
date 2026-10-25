@@ -99,7 +99,7 @@ describe('openRun speech flag (M5)', () => {
     makeRun(dir)
     const ctx = await openRun(dir, { inner: new FakeAiClient() })
     try {
-      expect(process.env.AI_SPEECH_STYLE).toBe('')
+      expect(process.env.AI_SPEECH_STYLE).toBe('off')
     } finally {
       await ctx.close()
     }

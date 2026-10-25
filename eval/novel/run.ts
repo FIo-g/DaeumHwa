@@ -188,7 +188,7 @@ export async function openRun(
   // comparable with the 2026-10-18 baseline even when .env.local turns the product flag on. close()
   // puts the previous value back.
   const previousSpeechStyle = process.env.AI_SPEECH_STYLE
-  process.env.AI_SPEECH_STYLE = config.speech === true ? 'on' : ''
+  process.env.AI_SPEECH_STYLE = config.speech === true ? 'on' : 'off'
   // The draft's short-length path follows the run's config, not the shell: absent means expand. close()
   // puts the previous value back.
   const previousLengthMode = process.env.AI_DRAFT_LENGTH_MODE

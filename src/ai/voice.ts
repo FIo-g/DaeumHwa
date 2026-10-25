@@ -1,5 +1,5 @@
-// Character speech style (spec 8, track B). Off by default: the feature runs only when the
-// AI_SPEECH_STYLE env flag is on. Pure helpers, no DB.
+// Character speech style (spec 8, track B). On by default: an unset or empty
+// AI_SPEECH_STYLE env flag means on; off, 0 or false turn it off. Pure helpers, no DB.
 
 export const SPEECH_STYLE_ENV = 'AI_SPEECH_STYLE'
 /** Most characters the draft prompt carries in its <voices> block. */
@@ -11,7 +11,8 @@ export function isSpeechStyleEnabled(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   const value = env[SPEECH_STYLE_ENV]?.trim().toLowerCase()
-  return value === '1' || value === 'true' || value === 'on'
+  if (value === undefined || value === '') return true
+  return value !== 'off' && value !== '0' && value !== 'false'
 }
 
 export type VoiceSource = {
