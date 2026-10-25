@@ -11,6 +11,7 @@ import { chapterExtractThreadsSample } from './samples/chapter-extract-threads'
 import { continuityCheckSample } from './samples/continuity-check'
 import { directionAdviceSample } from './samples/direction-advice'
 import { draftBeatsSample } from './samples/draft-beats'
+import { draftCheckSample } from './samples/draft-check'
 import { draftSample } from './samples/draft-chapter'
 import { draftContinueSample } from './samples/draft-continue'
 import { draftExpandSample } from './samples/draft-expand'
@@ -43,6 +44,9 @@ const PROMPTS: Record<AiTaskName, string> = {
   'paragraph-trim': paragraphTrimSample,
   'draft-repair': draftRepairSample,
   'draft-beats': draftBeatsSample,
+  'draft-check': draftCheckSample,
+  // Placeholder until task 3 wires the scene-fix sample.
+  'scene-fix': 'Mina closed the gate quietly.',
   'draft-plan': draftPlanSample,
   // Scene calls are built on the draft prompt (stage 1, draft-scene); the sample is the draft prompt.
   'draft-scene': draftSample,

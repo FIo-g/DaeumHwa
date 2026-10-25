@@ -11,6 +11,7 @@ import { CHAPTER_EXTRACT_RELATIONS_SYSTEM } from './en/chapter-extract-relations
 import { CONTINUITY_SYSTEM } from './en/continuity-check'
 import { DIRECTION_ADVICE_SYSTEM } from './en/direction-advice'
 import { DRAFT_BEATS_SYSTEM } from './en/draft-beats'
+import { DRAFT_CHECK_SYSTEM } from './en/draft-check'
 import { DRAFT_PLAN_SYSTEM } from './en/draft-plan'
 import { DRAFT_CHAPTER_SYSTEM } from './en/draft-chapter'
 import { DRAFT_EXPAND_SYSTEM } from './en/draft-expand'
@@ -46,6 +47,10 @@ export const EN_SYSTEMS: Record<AiTaskName, string> = {
   'paragraph-trim': PARAGRAPH_TRIM_SYSTEM,
   'draft-repair': DRAFT_REPAIR_SYSTEM,
   'draft-beats': DRAFT_BEATS_SYSTEM,
+  'draft-check': DRAFT_CHECK_SYSTEM,
+  // Placeholder English system for scene-fix: task 3 replaces it with the scene-fix twin.
+  'scene-fix':
+    'You are an assistant writer who rewrites one flagged scene. (Placeholder; task 3 fills the rules.)',
   'draft-plan': DRAFT_PLAN_SYSTEM,
   // Scene calls of the scenes draft mode share the English draft-chapter system, like draft-continue.
   'draft-scene': DRAFT_CHAPTER_SYSTEM,
