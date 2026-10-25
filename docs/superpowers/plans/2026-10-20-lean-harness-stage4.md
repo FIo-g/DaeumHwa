@@ -1,6 +1,6 @@
 # Lean Serial Harness, Stage 4 (requests learned from edits, chosen examples, cache lifetime) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Execution is a dynamic workflow: haiku implements each task (TDD), sonnet reviews it, opus reviews the stage, then the orchestrator measures.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Execution (since stage 3, 2026-10-25): OpenCode (Muse Spark) implements each task (TDD) in its own worktree and another OpenCode session reviews it, driven by a scheduler that retests after every rebase before the fast-forward; opus reviews the stage, then the orchestrator measures.
 
 **Goal:** The ledger also fills itself from what the author changes in AI drafts (proposals only, never applied without the author), the draft gets the two or three author example passages closest to this chapter instead of all of them, and the cache lifetime can be raised where the gateway allows it.
 
@@ -11,6 +11,8 @@
 **Spec:** `docs/superpowers/specs/2026-10-20-lean-serial-harness-design.md` sections 6.3 (third way in), 6.4 (example selection), 6.6 (cache, batch), 7 (CIPHER, "Catch Me If You Can? Not Yet") and the stage 4 row of section 9. Earlier plans: stages 0–3 in `docs/superpowers/plans/2026-10-20-lean-harness-stage{0,1,2,3}.md`.
 
 **Branch:** `feat/lean-harness`, after stage 3's gate, review fixes and M3 decision.
+
+**Stage 3 note (2026-10-25):** the scene and voice fixes write the accepted text back into the draft run's `output.text`, so task 2's "AI text" already holds every fix the author applied; only the author's own changes become hunks.
 
 **Not in this stage:** the batch API. The M0 gateway probe (2026-10-20) got 404 from both `…/anthropic/v1/messages/batches` and `…/openai/v1/batches`, so the gateway does not offer it (design 6.6: "게이트웨이가 지원할 때만 한다").
 
