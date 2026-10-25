@@ -2,6 +2,18 @@
 
 Updated 2026-10-25 KST. Read this first when continuing. The prompt to start an agent with is `PROMPT.md` in this folder.
 
+## Update (2026-10-25, later): M2 is finished
+
+- Items 1–3 of "To do" are done.
+  - Claude planned the remaining steps. OpenCode ran them (`opencode-go/muse-spark-1.3-contributor` through a headless `opencode serve --port 4097`).
+  - The results doc is `docs/eval/harness/2026-10-24-stage2-ledger.md` (4c9720b). It holds every number.
+- Decisions:
+  - The ledger is adopted.
+  - Speech (`AI_SPEECH_STYLE`) and the cache key stay off by default. No code change.
+- Item 4: the docs are copied. `../DaeumHwa-s2` is removed once nothing runs in it.
+- Next is item 5 (stage 3), and only when the user asks. `PROMPT.md` below describes the pre-finish state and is kept for the record.
+- The tables and to-do list below describe the state before the finish.
+
 ## Background
 
 - Design: `docs/superpowers/specs/2026-10-20-lean-serial-harness-design.md`. The user approved it and asked for every stage to be implemented end to end ("승인할테니까 구현까지 다 해줘").
