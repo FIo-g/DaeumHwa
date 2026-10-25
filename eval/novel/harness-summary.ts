@@ -53,6 +53,8 @@ export const HarnessSummarySchema = z.object({
       // Stage 2: cached input tokens over all input tokens of the chapter's calls; ledger characters (chapter 1). Older runs read as 0.
       cacheReadShare: z.number().min(0).max(1).default(0),
       ledgerChars: CountSchema.default(0),
+      // Stage 3: stalled cloud calls of the chapter. Older runs read as 0.
+      stalls: CountSchema.default(0),
     }),
   ),
   interview: z.object({
@@ -69,6 +71,7 @@ export const HarnessSummarySchema = z.object({
     totalMs: MsSchema,
     cacheReadShare: z.number().min(0).max(1).default(0),
     ledgerChars: CountSchema.default(0),
+    stalls: CountSchema.default(0),
   }),
 })
 export type HarnessSummary = z.infer<typeof HarnessSummarySchema>
@@ -200,6 +203,7 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
       expandCalls: drafting.filter((call) => call.task === EXPAND_TASK).length,
       cacheReadShare: all.cacheReadShare,
       ledgerChars: n === 1 ? (o.ledgerChars ?? 0) : 0,
+      stalls: mine.filter((call) => call.stalled === true).length,
     })
   }
 
@@ -226,6 +230,7 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
       totalMs: total.totalMs,
       cacheReadShare: total.cacheReadShare,
       ledgerChars: o.ledgerChars ?? 0,
+      stalls: records.filter((call) => call.stalled === true).length,
     },
   }
 }

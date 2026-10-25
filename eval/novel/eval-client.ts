@@ -92,7 +92,14 @@ export type CallRecord = {
   ollama?: CallOllama
   /** Present on a call that was the retry of a failed call and ran with a changed budget. `maxTokens` is the widened cap or null, `think` is the lowered think or null; `maxTokens` and `thinkRequested` of the record hold what was really sent. */
   retryBudget?: RetryBudget
+  /** True on a cloud call the stall guard cut. Absent otherwise and on records written before stage 3. */
+  stalled?: boolean
 }
+
+/** Grace after the product timeout before a cloud call is cut as stalled. */
+export const STALL_GRACE_MS = 60_000
+/** Message of the model error thrown after two stalls. */
+export const STALLED_MESSAGE = 'AI 호출이 멈춰 두 번 끊었습니다.'
 
 export interface EvalClientOptions {
   inner: AiClient
@@ -495,6 +502,52 @@ export class EvalClient implements AiClient {
       throw error
     }
     try {
+      if (this.profile.provider === 'ollama') {
+        const call = this.prepare(
+          args.task.name,
+          'object',
+          args.system,
+          args.prompt,
+          args.maxTokens,
+          args.effort,
+          args.promptPrefix,
+        )
+        const queueMs = local ? call.startedMs - requestedMs : 0
+        if (call.promptKey) this.sentPrompts.add(call.promptKey)
+        // A synchronous throw from a non-async inner client becomes a rejection, so it is recorded too.
+        const pending = (() => {
+          try {
+            return this.innerFor(call).generateObject<T>({
+              ...args,
+              system: call.system,
+              prompt: call.prompt,
+              promptPrefix: call.promptPrefix,
+              effort: call.effort,
+              maxTokens: call.maxTokens,
+              model: this.profile.model,
+            })
+          } catch (error) {
+            return Promise.reject(error)
+          }
+        })()
+        const result = await pending.catch((error: unknown): never => {
+          this.settle(call, { ok: false, error }, null, queueMs)
+          throw error
+        })
+        this.settle(call, { ok: true, output: result.object, usage: result.usage }, null, queueMs)
+        return result
+      }
+      return await this.generateObjectCloud<T>(args)
+    } finally {
+      release()
+    }
+  }
+
+  /** Cloud object call with the stall guard: cut at productTimeoutMs + grace, retry once. */
+  private async generateObjectCloud<T>(
+    args: GenerateObjectArgs<T>,
+  ): Promise<{ object: T; usage: AiUsage; model: string }> {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
       const call = this.prepare(
         args.task.name,
         'object',
@@ -504,12 +557,18 @@ export class EvalClient implements AiClient {
         args.effort,
         args.promptPrefix,
       )
-      const queueMs = local ? call.startedMs - requestedMs : 0
       if (call.promptKey) this.sentPrompts.add(call.promptKey)
-      // A synchronous throw from a non-async inner client becomes a rejection, so it is recorded too.
-      const pending = (() => {
+      const stallTimeoutMs = call.productTimeoutMs + STALL_GRACE_MS
+      const stallController = new AbortController()
+      const combined = args.signal
+        ? AbortSignal.any([args.signal, stallController.signal])
+        : stallController.signal
+      const innerPromise: Promise<
+        | { timeout: false; ok: true; result: { object: T; usage: AiUsage; model: string } }
+        | { timeout: false; ok: false; error: unknown }
+      > = (async () => {
         try {
-          return this.innerFor(call).generateObject<T>({
+          const result = await this.innerFor(call).generateObject<T>({
             ...args,
             system: call.system,
             prompt: call.prompt,
@@ -517,26 +576,146 @@ export class EvalClient implements AiClient {
             effort: call.effort,
             maxTokens: call.maxTokens,
             model: this.profile.model,
+            signal: combined,
           })
+          return { timeout: false as const, ok: true as const, result }
         } catch (error) {
-          return Promise.reject(error)
+          return { timeout: false as const, ok: false as const, error }
         }
       })()
-      const result = await pending.catch((error: unknown): never => {
-        this.settle(call, { ok: false, error }, null, queueMs)
-        throw error
+      let timedOut = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<{ timeout: true }>((resolve) => {
+        timer = setTimeout(() => {
+          timedOut = true
+          try {
+            stallController.abort()
+          } catch {
+            // Aborting never fails the call; the stall below does.
+          }
+          resolve({ timeout: true })
+        }, stallTimeoutMs)
       })
-      this.settle(call, { ok: true, output: result.object, usage: result.usage }, null, queueMs)
-      return result
-    } finally {
-      release()
+      const raced = await Promise.race([innerPromise, timeoutPromise])
+      if (timer !== undefined) clearTimeout(timer)
+      // Late inner settlement after a cut must not surface as unhandled.
+      innerPromise.catch(() => {})
+      const callerAborted = args.signal?.aborted === true
+      if (raced.timeout) {
+        const stallError = stallController.signal.reason ?? new Error('aborted')
+        if (attempt === 1) {
+          this.settle(call, { ok: false, error: stallError }, null, 0, {
+            stalled: true,
+            trackFailure: false,
+          })
+          continue
+        }
+        const doubleStall = new AppError('AI_ERROR', STALLED_MESSAGE)
+        this.settle(call, { ok: false, error: doubleStall }, null, 0, { stalled: true })
+        throw doubleStall
+      }
+      if (raced.ok) {
+        this.settle(
+          call,
+          { ok: true, output: raced.result.object, usage: raced.result.usage },
+          null,
+          0,
+        )
+        return raced.result
+      }
+      const stalledByAbort = !callerAborted && (timedOut || stallController.signal.aborted === true)
+      if (stalledByAbort) {
+        if (attempt === 1) {
+          this.settle(call, { ok: false, error: raced.error }, null, 0, {
+            stalled: true,
+            trackFailure: false,
+          })
+          continue
+        }
+        const doubleStall = new AppError('AI_ERROR', STALLED_MESSAGE)
+        this.settle(call, { ok: false, error: doubleStall }, null, 0, { stalled: true })
+        throw doubleStall
+      }
+      this.settle(call, { ok: false, error: raced.error }, null, 0)
+      throw raced.error
     }
+    throw new Error('unreachable')
   }
 
   streamText(args: StreamTextArgs) {
-    // Streams are not locked. The eval `draft` step awaits each stream's `done` before any other
-    // AI call starts (eval/novel/steps/chapter.ts), so no helper call overlaps a stream.
-    const call = this.prepare(
+    if (this.profile.provider === 'ollama') {
+      // Streams are not locked. The eval `draft` step awaits each stream's `done` before any other
+      // AI call starts (eval/novel/steps/chapter.ts), so no helper call overlaps a stream.
+      const call = this.prepare(
+        args.task.name,
+        'stream',
+        args.system,
+        args.prompt,
+        args.maxTokens,
+        args.effort,
+        args.promptPrefix,
+      )
+      let inner: ReturnType<AiClient['streamText']>
+      if (call.promptKey) this.sentPrompts.add(call.promptKey)
+      try {
+        inner = this.innerFor(call).streamText({
+          ...args,
+          system: call.system,
+          prompt: call.prompt,
+          promptPrefix: call.promptPrefix,
+          effort: call.effort,
+          maxTokens: call.maxTokens,
+          model: this.profile.model,
+        })
+      } catch (error) {
+        this.settle(call, { ok: false, error })
+        throw error
+      }
+      let firstTokenMs: number | null = null
+      const now = this.now
+      const startedMs = call.startedMs
+      const relay = new ChunkRelay()
+      // Reads the inner stream from the start, whether or not the caller reads it, so the first token
+      // is timed. Each chunk goes to the caller's iterable once.
+      const pump = (async () => {
+        try {
+          for await (const piece of inner.textStream) {
+            if (firstTokenMs === null && piece.length > 0) firstTokenMs = now() - startedMs
+            relay.push(piece)
+          }
+          relay.end()
+        } catch (error) {
+          relay.fail(error)
+        }
+      })()
+      // Settles after the pump has read the whole stream, so the first-token time is final.
+      const final = inner.final.then(
+        async (result) => {
+          await pump
+          this.settle(
+            call,
+            { ok: true, output: { text: result.text }, usage: result.usage },
+            firstTokenMs,
+          )
+          return result
+        },
+        async (error: unknown) => {
+          await pump
+          this.settle(call, { ok: false, error }, firstTokenMs)
+          throw error
+        },
+      )
+      return { textStream: relay.iterate(), final }
+    }
+    return this.streamTextCloud(args)
+  }
+
+  /** Cloud stream with the stall guard: cut at productTimeoutMs + grace, retry once. */
+  private streamTextCloud(args: StreamTextArgs): {
+    textStream: AsyncIterable<string>
+    final: Promise<{ text: string; usage: AiUsage; model: string }>
+  } {
+    const firstCall = this.prepare(
       args.task.name,
       'stream',
       args.system,
@@ -545,57 +724,201 @@ export class EvalClient implements AiClient {
       args.effort,
       args.promptPrefix,
     )
-    let inner: ReturnType<AiClient['streamText']>
-    if (call.promptKey) this.sentPrompts.add(call.promptKey)
+    if (firstCall.promptKey) this.sentPrompts.add(firstCall.promptKey)
+    const firstController = new AbortController()
+    const firstCombined = args.signal
+      ? AbortSignal.any([args.signal, firstController.signal])
+      : firstController.signal
+    let firstInner: ReturnType<AiClient['streamText']>
     try {
-      inner = this.innerFor(call).streamText({
+      firstInner = this.innerFor(firstCall).streamText({
         ...args,
-        system: call.system,
-        prompt: call.prompt,
-        promptPrefix: call.promptPrefix,
-        effort: call.effort,
-        maxTokens: call.maxTokens,
+        system: firstCall.system,
+        prompt: firstCall.prompt,
+        promptPrefix: firstCall.promptPrefix,
+        effort: firstCall.effort,
+        maxTokens: firstCall.maxTokens,
         model: this.profile.model,
+        signal: firstCombined,
       })
     } catch (error) {
-      this.settle(call, { ok: false, error })
+      this.settle(firstCall, { ok: false, error })
       throw error
     }
-    let firstTokenMs: number | null = null
-    const now = this.now
-    const startedMs = call.startedMs
     const relay = new ChunkRelay()
-    // Reads the inner stream from the start, whether or not the caller reads it, so the first token
-    // is timed. Each chunk goes to the caller's iterable once.
-    const pump = (async () => {
+    const final = this.runStreamCloud(args, firstCall, firstInner, firstController, relay)
+    return { textStream: relay.iterate(), final }
+  }
+
+  private async runStreamCloud(
+    args: StreamTextArgs,
+    firstCall: Prepared,
+    firstInner: ReturnType<AiClient['streamText']>,
+    firstController: AbortController,
+    relay: ChunkRelay,
+  ): Promise<{ text: string; usage: AiUsage; model: string }> {
+    const now = this.now
+    const pumpInto = async (
+      inner: ReturnType<AiClient['streamText']>,
+      call: Prepared,
+      isAbandoned: () => boolean,
+    ): Promise<{ firstTokenMs: number | null; done: boolean }> => {
+      let firstTokenMs: number | null = null
       try {
         for await (const piece of inner.textStream) {
-          if (firstTokenMs === null && piece.length > 0) firstTokenMs = now() - startedMs
+          if (isAbandoned()) return { firstTokenMs, done: false }
+          if (firstTokenMs === null && piece.length > 0) firstTokenMs = now() - call.startedMs
           relay.push(piece)
         }
-        relay.end()
-      } catch (error) {
-        relay.fail(error)
+        return { firstTokenMs, done: true }
+      } catch {
+        return { firstTokenMs, done: false }
       }
-    })()
-    // Settles after the pump has read the whole stream, so the first-token time is final.
-    const final = inner.final.then(
-      async (result) => {
-        await pump
+    }
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const call =
+        attempt === 1
+          ? firstCall
+          : this.prepare(
+              args.task.name,
+              'stream',
+              args.system,
+              args.prompt,
+              args.maxTokens,
+              args.effort,
+              args.promptPrefix,
+            )
+      if (attempt > 1 && call.promptKey) this.sentPrompts.add(call.promptKey)
+      const controller = attempt === 1 ? firstController : new AbortController()
+      const combined =
+        attempt === 1
+          ? args.signal
+            ? AbortSignal.any([args.signal, controller.signal])
+            : controller.signal
+          : (() => {
+              const c = controller
+              return args.signal ? AbortSignal.any([args.signal, c.signal]) : c.signal
+            })()
+      let inner: ReturnType<AiClient['streamText']>
+      if (attempt === 1) {
+        inner = firstInner
+      } else {
+        try {
+          inner = this.innerFor(call).streamText({
+            ...args,
+            system: call.system,
+            prompt: call.prompt,
+            promptPrefix: call.promptPrefix,
+            effort: call.effort,
+            maxTokens: call.maxTokens,
+            model: this.profile.model,
+            signal: combined,
+          })
+        } catch (error) {
+          this.settle(call, { ok: false, error })
+          relay.fail(error)
+          throw error
+        }
+      }
+      // Rebuild the combined signal for attempt 1 when the controller above was reused: it is
+      // already the signal inner was created with, so no change is needed here.
+      void combined
+      const stallTimeoutMs = call.productTimeoutMs + STALL_GRACE_MS
+      let abandoned = false
+      const isAbandoned = () => abandoned
+      const pump = pumpInto(inner, call, isAbandoned)
+      let timedOut = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<{ timeout: true }>((resolve) => {
+        timer = setTimeout(() => {
+          timedOut = true
+          abandoned = true
+          try {
+            controller.abort()
+          } catch {
+            // Aborting never fails the call; the stall below does.
+          }
+          resolve({ timeout: true })
+        }, stallTimeoutMs)
+      })
+      const innerPromise = inner.final.then(
+        (
+          result,
+        ): {
+          timeout: false
+          ok: true
+          result: { text: string; usage: AiUsage; model: string }
+        } => ({
+          timeout: false,
+          ok: true,
+          result,
+        }),
+        (error): { timeout: false; ok: false; error: unknown } => ({
+          timeout: false,
+          ok: false,
+          error,
+        }),
+      )
+      // Late inner settlement after a cut must not surface as unhandled.
+      innerPromise.catch(() => {})
+      const raced = await Promise.race([innerPromise, timeoutPromise])
+      const callerAborted = args.signal?.aborted === true
+      if (raced.timeout) {
+        if (timer !== undefined) clearTimeout(timer)
+        const pumpResult = await pump
+        const stallError = controller.signal.reason ?? new Error('aborted')
+        if (attempt === 1) {
+          this.settle(call, { ok: false, error: stallError }, pumpResult.firstTokenMs, 0, {
+            stalled: true,
+            trackFailure: false,
+          })
+          continue
+        }
+        const doubleStall = new AppError('AI_ERROR', STALLED_MESSAGE)
+        this.settle(call, { ok: false, error: doubleStall }, pumpResult.firstTokenMs, 0, {
+          stalled: true,
+        })
+        relay.fail(doubleStall)
+        throw doubleStall
+      }
+      if (timer !== undefined) clearTimeout(timer)
+      if (raced.ok) {
+        const pumpResult = await pump
+        const firstTokenMs = pumpResult.firstTokenMs !== null ? pumpResult.firstTokenMs : null
         this.settle(
           call,
-          { ok: true, output: { text: result.text }, usage: result.usage },
+          { ok: true, output: { text: raced.result.text }, usage: raced.result.usage },
           firstTokenMs,
         )
-        return result
-      },
-      async (error: unknown) => {
-        await pump
-        this.settle(call, { ok: false, error }, firstTokenMs)
-        throw error
-      },
-    )
-    return { textStream: relay.iterate(), final }
+        relay.end()
+        return raced.result
+      }
+      const stalledByAbort = !callerAborted && (timedOut || controller.signal.aborted === true)
+      if (stalledByAbort) {
+        const pumpResult = await pump
+        if (attempt === 1) {
+          this.settle(call, { ok: false, error: raced.error }, pumpResult.firstTokenMs, 0, {
+            stalled: true,
+            trackFailure: false,
+          })
+          abandoned = true
+          continue
+        }
+        const doubleStall = new AppError('AI_ERROR', STALLED_MESSAGE)
+        this.settle(call, { ok: false, error: doubleStall }, pumpResult.firstTokenMs, 0, {
+          stalled: true,
+        })
+        relay.fail(doubleStall)
+        throw doubleStall
+      }
+      await pump
+      // Normal failure: the pump already holds the stream error, so fail the outer relay with it.
+      // pumpInto swallows the stream error, so fail here with the final error.
+      this.settle(call, { ok: false, error: raced.error }, null, 0)
+      relay.fail(raced.error)
+      throw raced.error
+    }
+    throw new Error('unreachable')
   }
 
   /** The client a call runs on: the retry client when its think is lowered, else the main one. */
@@ -725,6 +1048,7 @@ export class EvalClient implements AiClient {
     outcome: Outcome,
     firstTokenMs: number | null = null,
     queueMs = 0,
+    o: { stalled?: boolean; trackFailure?: boolean } = {},
   ): void {
     const durationMs = this.now() - call.startedMs
     const usage = outcome.ok ? outcome.usage : billedUsageOf(outcome.error)
@@ -790,9 +1114,12 @@ export class EvalClient implements AiClient {
       ...(detail ? { ollama: detail } : {}),
       ...(call.power ? { power: call.power } : {}),
       ...(call.retry ? { retryBudget: call.retry } : {}),
+      ...(o.stalled ? { stalled: true as const } : {}),
     }
     this.records.push(record)
+    const trackFailure = o.trackFailure ?? true
     if (
+      trackFailure &&
       error &&
       (!this.pendingFailure || SEVERITY[error.kind] > SEVERITY[this.pendingFailure.kind])
     ) {
