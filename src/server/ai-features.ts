@@ -49,7 +49,7 @@ import {
   unwrapExpansion,
 } from '@/ai/tasks/draft-expand'
 import type { Db } from '@/db/client'
-import { aiRuns, chapters } from '@/db/schema'
+import { aiRuns, chapters, chapterVersions } from '@/db/schema'
 import {
   type Actor,
   type ChapterRow,
@@ -87,6 +87,12 @@ import { getEntryAppearances } from '@/server/appearances'
 import { assertEntryInWork, listFacts } from '@/server/facts'
 import { checkDraftDirectives, type DirectiveFinding } from '@/lib/directive-check'
 import { type DirectiveForPrompt, lengthRequestTarget } from '@/lib/directives'
+import {
+  EXAMPLE_BUDGET,
+  examplePassages,
+  isExampleSelectionEnabled,
+  selectExamples,
+} from '@/lib/examples'
 import { activeDirectivesFor, requestsForText } from '@/server/directives'
 import { insertProposals } from '@/server/proposal-store'
 import {
@@ -388,6 +394,8 @@ export async function buildDraftContext(
     entryIds: string[]
     packText?: string
     seedPackFromPrevious?: boolean
+    /** Approved plan card of this draft, for the example-selection cue. */
+    plan?: DraftPlanCard | null
   },
 ): Promise<{
   promptInput: DraftPromptInput
@@ -480,10 +488,50 @@ export async function buildDraftContext(
   const overridden =
     lengthTarget !== null && input.targetChars !== undefined && input.targetChars !== lengthTarget
   const requests = overridden ? active.filter((d) => d.kind !== 'length') : active
+  // Example selection (stage 4): with the switch on and a store over the budget, each card goes
+  // without its examples and the closest passages go to block B as <voice_examples>. Otherwise
+  // everything is as in stage 3.
+  const exampleTotal = styleCards.reduce((sum, card) => sum + card.examples.length, 0)
+  let voiceExamples: string[] | undefined
+  let cardExamples = styleCards
+  if (isExampleSelectionEnabled() && exampleTotal > EXAMPLE_BUDGET) {
+    const characters = await listEntries(db, actor, workId, { kinds: ['character'] })
+    const wanted = new Set([
+      ...input.entryIds,
+      ...(pack.chosenEntryIds ?? [...pack.core, ...pack.entries].map((e) => e.id)),
+    ])
+    const names = characters
+      .filter((entry) => wanted.has(entry.id))
+      .flatMap((entry) => [entry.name, ...entry.aliases])
+      .filter((name) => name.trim() !== '')
+    const plan = input.plan ?? null
+    const cue = plan
+      ? [instructions, ...plan.scenes.flatMap((scene) => [scene.trigger, scene.summary])]
+          .filter((part) => part.trim() !== '')
+          .join('\n')
+      : instructions
+    const earlier = all.filter((c) => c.position < position).slice(-5)
+    const authorBodies: string[] = []
+    for (const item of earlier) {
+      const [v1] = await db
+        .select({ source: chapterVersions.source })
+        .from(chapterVersions)
+        .where(and(eq(chapterVersions.chapterId, item.id), eq(chapterVersions.version, 1)))
+        .limit(1)
+      if (v1 && v1.source === 'ai_draft') continue
+      authorBodies.push((await getChapter(db, actor, item.id)).body)
+    }
+    const passages = examplePassages(
+      styleCards.map((card) => card.examples),
+      authorBodies,
+    )
+    voiceExamples = selectExamples(passages, { names, cue }).map((passage) => passage.text)
+    cardExamples = styleCards.map((card) => ({ ...card, examples: '' }))
+  }
   const promptInput: DraftPromptInput = {
     instructions,
     targetChars,
-    styleCards,
+    styleCards: cardExamples,
     packText: renderContextPack(pack, { markPlannedThreads: true }),
     previousSummary,
     previousTail,
@@ -491,6 +539,7 @@ export async function buildDraftContext(
     voices: voices?.map((v) => ({ name: v.name, speech: v.speech })),
     requests,
     coreText: renderCoreEntries(pack),
+    voiceExamples,
   }
   return { promptInput, chapterId, position, targetChars }
 }
@@ -641,6 +690,7 @@ export async function startDraft(
     // summaries, ending, threads) as well as the author line. Only names are matched, so the
     // per-scene targets of the client card do not matter here.
     packText: input.plan ? renderPlanInstructions(instructions, input.plan) : undefined,
+    plan: input.plan ?? null,
   })
   const { chapterId, targetChars } = context
   // The plan is the instruction: its scenes, threads and the author line become <instructions>.

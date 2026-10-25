@@ -46,6 +46,8 @@ export type DraftPromptInput = {
   chapterLabel: string
   /** Speech of each main character. Undefined (the speech feature is off) means no <voices> block. */
   voices?: Pick<VoiceLine, 'name' | 'speech'>[]
+  /** Chosen example passages (stage 4). Empty or undefined adds no <voice_examples> block. */
+  voiceExamples?: string[]
   /** Scene beat list from draft-beats, already rendered as text. Empty or null adds no section. */
   beats?: string | null
   /** Scene count of `beats`. With a non-empty `beats` it replaces the plan's scene count in `<scene_budget>`; ignored without beats. */
@@ -66,14 +68,35 @@ export const BEATS_RULE =
   '위 장면 목록의 장소, 인물, 물건의 위치, 사건 순서를 그대로 지키고 목록에 없는 장소 이동은 쓰지 않는다.'
 
 /**
+ * Header of the <voice_examples> block (stage 4). Shared with the English scaffold.
+ */
+export const VOICE_EXAMPLES_HEADER =
+  '작가 예문. 문체와 말투만 참고하고 문장을 그대로 옮기지 않는다.'
+
+/**
+ * The <voice_examples> block: the chosen passages joined by a blank line and ---.
+ * Empty when no passages are given.
+ */
+export function voiceExamplesBlock(passages: string[]): string {
+  return [
+    '<voice_examples>',
+    VOICE_EXAMPLES_HEADER,
+    passages.join('\n\n---\n\n'),
+    '</voice_examples>',
+  ].join('\n')
+}
+
+/**
  * The cached prefix of every writing prompt, as two blocks sent ahead of `buildDraftPrompt`:
  * A is the author requests, the voices, the style cards and the core entries (parts that are empty
- * are left out); B is the previous summary and tail. The model reads A, then B, then the rest.
+ * are left out); B is the voice examples and the previous summary and tail. The model reads A, then B, then the rest.
  */
 export function buildDraftPrefix(raw: DraftPromptInput): string[] {
   const input = neutralizeDeep(raw)
   const cards =
-    input.styleCards.length > 0 ? input.styleCards.map(renderCard).join('\n\n') : '(없음)'
+    input.styleCards.length > 0
+      ? input.styleCards.map((card) => renderCard(card)).join('\n\n')
+      : '(없음)'
   const blockA = [
     renderRequestsBlock(input.requests ?? []),
     voicesBlock(input.voices),
@@ -82,7 +105,7 @@ export function buildDraftPrefix(raw: DraftPromptInput): string[] {
   ]
     .filter((part) => part !== '')
     .join('\n\n')
-  const blockB = [
+  const previousBlock = [
     '<previous_summary>',
     input.previousSummary ?? '(없음)',
     '</previous_summary>',
@@ -91,6 +114,11 @@ export function buildDraftPrefix(raw: DraftPromptInput): string[] {
     input.previousTail ?? '(없음)',
     '</previous_tail>',
   ].join('\n')
+  const voice =
+    input.voiceExamples && input.voiceExamples.length > 0
+      ? voiceExamplesBlock(input.voiceExamples)
+      : ''
+  const blockB = voice === '' ? previousBlock : [voice, previousBlock].join('\n\n')
   return [blockA, blockB]
 }
 
@@ -188,10 +216,14 @@ function voicesBlock(voices: DraftPromptInput['voices']): string {
   ].join('\n')
 }
 
-export function renderCard(card: DraftPromptInput['styleCards'][number]): string {
+export function renderCard(
+  card: DraftPromptInput['styleCards'][number],
+  examplesOverride?: unknown,
+): string {
   const scope = card.entryName ? `인물 ${card.entryName}` : '작품 전체'
   const lines = [`[${scope}] ${card.name}`, `- 말투: ${card.tone || '(없음)'}`]
   lines.push(`- 규칙: ${card.rules || '(없음)'}`)
-  if (card.examples) lines.push(`- 예시:\n${card.examples}`)
+  const examples = typeof examplesOverride === 'string' ? examplesOverride : card.examples
+  if (examples) lines.push(`- 예시:\n${examples}`)
   return lines.join('\n')
 }

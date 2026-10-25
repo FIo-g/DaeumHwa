@@ -113,6 +113,11 @@ const RULES: readonly Rule[] = [
   ['일어나는 일: ', 'What happens: '],
   ['감정의 계기: ', 'Emotional trigger: '],
   ['움직일 떡밥: ', 'Threads to move: '],
+  // Voice examples (stage 4, task 4): the header of the <voice_examples> block.
+  [
+    '작가 예문. 문체와 말투만 참고하고 문장을 그대로 옮기지 않는다.',
+    "The author's example passages. Use them only for style and voice; do not copy their sentences.",
+  ],
   // Scene call (scenes mode, buildScenePrompt). The whole line comes first: it carries the counts.
   [
     /장면 (\d+)만 쓰고 멈춘다\. 이 장면은 공백 포함 약 ([\d,]+)자\. 지금까지 ([\d,]+)자를 썼고 회차 목표까지 ([\d,]+)자 남았다\./g,
