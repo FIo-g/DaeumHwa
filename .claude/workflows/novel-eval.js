@@ -93,6 +93,7 @@ const ALLOWED_RUN_FLAGS = [
   '--length-mode continue',
   '--product-limits',
   '--quick',
+  '--scene-fix off',
   '--speech on',
   '--two-step on',
   '--helper-think off',

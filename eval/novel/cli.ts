@@ -163,6 +163,7 @@ export type InitOptions = {
   quick?: boolean
   draftMode?: string
   lengthMode?: 'continue'
+  sceneFix?: boolean
 }
 
 /**
@@ -209,11 +210,13 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
   const scenesSuffix = draftMode === 'scenes' ? '-scenes' : ''
   const continueLength = o.lengthMode === 'continue'
   const lengthSuffix = continueLength ? '-cont' : ''
+  const sceneFix = o.sceneFix !== false
+  const nofixSuffix = sceneFix ? '' : '-nofix'
   const dir = path.resolve(
     o.dir ??
       path.join(
         RESULTS_DIR,
-        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${quickSuffix}${scenesSuffix}${lengthSuffix}${deploySuffix}`,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${quickSuffix}${scenesSuffix}${lengthSuffix}${nofixSuffix}${deploySuffix}`,
       ),
   )
 
@@ -260,6 +263,9 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (o.lengthMode !== undefined && continueLength !== (existing.lengthMode === 'continue')) {
       throw new Error(`run exists with another length mode: ${dir}`)
     }
+    if (o.sceneFix !== undefined && sceneFix !== (existing.sceneFix ?? true)) {
+      throw new Error(`run exists with another sceneFix: ${dir}`)
+    }
   } else {
     createRun(dir, {
       modelId: model,
@@ -279,6 +285,7 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       quick: quick || undefined,
       draftMode: draftMode === 'scenes' ? 'scenes' : undefined,
       lengthMode: continueLength ? 'continue' : undefined,
+      sceneFix: sceneFix ? undefined : false,
     })
   }
   return { dir, status: loadState(dir).status }
@@ -351,6 +358,18 @@ export function lengthModeFlag(flags: Flags): 'continue' | undefined {
   if (value === undefined) return undefined
   if (value === 'continue') return 'continue'
   throw new Error(`unknown length mode: ${String(value)}`)
+}
+
+/**
+ * The --scene-fix value, or undefined when the flag is absent. `off` turns the draft check off
+ * (the default run checks); `on` or a bare flag keeps it on. Anything else is an error.
+ */
+export function sceneFixFlag(flags: Flags): boolean | undefined {
+  const value = flags['scene-fix']
+  if (value === undefined) return undefined
+  if (value === 'off') return false
+  if (value === true || value === 'on') return true
+  throw new Error(`unknown scene-fix value: ${String(value)}`)
 }
 
 /** The --draft-mode value, or undefined when the flag is absent. Checked by initRun. */
@@ -864,6 +883,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         quick: quickFlag(flags),
         draftMode: draftModeFlag(flags),
         lengthMode: lengthModeFlag(flags),
+        sceneFix: sceneFixFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {

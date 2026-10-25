@@ -31,6 +31,7 @@ import { getChapter, listChapters, saveChapter, setChapterStatus } from '@/serve
 import { listIssues, resolveIssue } from '@/server/issues'
 import { rewriteFlaggedScenes } from '@/server/scene-rewrite'
 import { listProposals } from '@/server/proposals'
+import { applySceneFix, checkAndFixDraft } from '@/server/draft-check'
 import { classifyError, type FailureKind } from '../eval-client'
 import { bibleExempt, chapterMetrics, planTargetsOf } from '../metrics'
 import type { Answer, Pending } from '../author-io'
@@ -285,6 +286,51 @@ export async function repairBestEffort(
     state.failed.push({ step: label, message })
     persist(ctx, state)
     return fallback
+  }
+}
+
+/**
+ * Stage 3: checks the stored draft and applies the fix (the product's one-click default), right
+ * after the draft (and continuation) is stored and before trim and repair. The author sees the
+ * final text in draft_review. A failed check call keeps the code findings with a notice; the
+ * failed call stays in the call records and the draft goes on unchanged.
+ */
+async function checkFixStage(
+  ctx: RunContext,
+  state: RunState,
+  key: string,
+  workId: string,
+  runId: string,
+  text: string,
+): Promise<string> {
+  if (ctx.config.sceneFix === false) return text
+  try {
+    const result = await checkAndFixDraft(ctx.db, ctx.actor, { workId, runId }, ctx.client)
+    // The service swallows AI failures into a notice; the failed call stays in the call records.
+    // Drain the recorded failure so a later call never reads it as its own.
+    ctx.client.takeLastFailure()
+    if (!result.fix) return text
+    try {
+      const applied = await applySceneFix(ctx.db, ctx.actor, {
+        workId,
+        runId,
+        token: result.fix.token,
+      })
+      return applied.text
+    } catch (error) {
+      ctx.client.takeLastFailure()
+      const message = error instanceof Error ? error.message : String(error)
+      state.failed.push({ step: `${key}:scene-fix`, message })
+      persist(ctx, state)
+      return text
+    }
+  } catch (error) {
+    const failure = ctx.client.takeLastFailure()
+    if (failure && failure.kind !== 'model') throw new ExternalFailureError(failure)
+    const message = failure?.message ?? (error instanceof Error ? error.message : String(error))
+    state.failed.push({ step: `${key}:check`, message })
+    persist(ctx, state)
+    return text
   }
 }
 
@@ -571,13 +617,22 @@ export const draft: StepFn = async (ctx, key, state) => {
       if (plan && ctx.config.draftMode === 'scenes') {
         await recordScenesCut(ctx, generated.runId, n, attemptNo, plan.card.scenes.length)
       }
+      // Stage 3: the check runs on the stored draft, before trim and repair.
+      const checkedText = await checkFixStage(
+        ctx,
+        state,
+        key,
+        workId,
+        generated.runId,
+        generated.text,
+      )
       // E1 then E2, each stage on the text the previous one returned (spec 7).
       const trimmedText = await trimStage(
         ctx,
         state,
         key,
         workId,
-        generated.text,
+        checkedText,
         attemptNo,
         generated.runId,
       )

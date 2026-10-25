@@ -110,6 +110,8 @@ export type RunCreateOptions = {
   quick?: boolean
   draftMode?: 'single' | 'scenes'
   lengthMode?: 'continue'
+  /** Check-and-fix off for the draft step. Absent means on. */
+  sceneFix?: boolean
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
@@ -137,6 +139,7 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     ...(o.quick ? { quick: true } : {}),
     ...(o.draftMode === 'scenes' ? { draftMode: 'scenes' as const } : {}),
     ...(o.lengthMode === 'continue' ? { lengthMode: 'continue' as const } : {}),
+    ...(o.sceneFix === false ? { sceneFix: false as const } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))

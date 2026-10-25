@@ -38,6 +38,8 @@ export type RunConfig = {
   draftMode?: 'single' | 'scenes'
   /** A short draft is filled by the append continuation instead of scene expansion (`--length-mode continue`). Absent means expand. */
   lengthMode?: 'continue'
+  /** Check-and-fix off for the draft step (`--scene-fix off`). Absent means on. */
+  sceneFix?: boolean
 }
 
 export type RunStatus =
