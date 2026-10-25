@@ -187,6 +187,25 @@ const RULES: readonly Rule[] = [
   // Voice-fix lines (stage 3, task 8): the level label after the speaker name.
   [': 반말 (', ': casual ('],
   [': 존댓말 (', ': polite ('],
+  // Scene-fix problems (stage 3, tasks 3-4) and draft-plan revision (task 7). Longer and more
+  // specific first, before the generic labels below (e.g. 사건 -> event) that they contain.
+  ['- 중요한 순간을 설명으로 넘김: ', '- tells a key moment in summary: '],
+  ['- 장면 분량이 계획과 다름: ', '- scene length off the plan: '],
+  ['- 계기 없는 감정 변화: ', '- feeling changes with no cause: '],
+  ['- 공개 전 비밀이 드러남: ', '- reveals a hidden fact early: '],
+  ['- 지시한 사건이 빠짐: ', '- missing event: '],
+  ['- 회차 끝이 밋밋함: ', '- flat chapter ending: '],
+  ['- 같은 흐름 반복: ', '- repeats the same beat: '],
+  ['- 상투 표현 반복: ', '- repeated cliché: '],
+  ['- 같은 표현 반복: ', '- repeated phrase: '],
+  ['- 요약으로 끝남: ', '- ends in a summary: '],
+  ['- 요청과 다름: ', '- breaks a request: '],
+  [/(\d+)\/(\d+)자/g, '$1/$2 characters'],
+  [/^(- [^\n]*?) 말투$/gm, '$1 speech'],
+  [
+    '앞서 고쳐 달라고 한 것 (이번에도 지킨다):',
+    'Previously requested changes (keep them this time too):',
+  ],
   // Core interview topic names (INTERVIEW_TOPICS). After the section headers that contain them
   // (such as "열린 떡밥: "), and before the labels they contain (인물, 규칙, 장소).
   ['주요 인물', 'main characters'],

@@ -471,6 +471,7 @@ async function fixVoiceLines(
       if (!original) continue
       const voice = voices.find((candidate) => candidate.name === item.speaker)
       if (!voice) continue
+      if (original.level !== null && original.level === voice.level) continue
       if (!acceptVoiceLine(original.quote, item.text, voice.level as SpeechLevel)) continue
       replacements.push({ span: { start: original.start, end: original.end }, text: item.text })
     }

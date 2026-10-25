@@ -540,7 +540,11 @@ export async function planDraft(
       ),
       advice: await latestAdviceText(db, actor, workId),
       revision: revision
-        ? { card: revision.card, note: revision.note, earlierNotes: revision.earlierNotes ?? [] }
+        ? {
+            card: revision.card,
+            note: revision.note,
+            earlierNotes: normalizePlanNotes(revision.earlierNotes),
+          }
         : null,
     },
     client,

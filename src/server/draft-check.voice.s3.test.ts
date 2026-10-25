@@ -81,6 +81,28 @@ describe('checkAndFixDraft voice-fix (stage 3 task 8)', () => {
     expect(sceneFix.text).toContain(S3)
   })
 
+  it('leaves a line already in the speaker level unchanged', async () => {
+    const custom = [
+      S1,
+      '세린이 말했다. "빨래 가져왔어요."\n세린이 말했다. "빨리 왔어." 마음이 흔들렸다.',
+      S3,
+    ].join('\n\n***\n\n')
+    const runId = await draftOf(s, custom)
+    const client = baseClient([
+      { id: 1, speaker: '세린', text: '"빨래 가져왔어."' },
+      { id: 2, speaker: '세린', text: '"빨리 왔지."' },
+    ])
+
+    const result = await checkAndFixDraft(s.db, s.actor, { workId: s.workId, runId }, client)
+
+    expect(result.fix?.voiceLines).toBe(1)
+    const [row] = await s.db.select().from(aiRuns).where(eq(aiRuns.id, runId))
+    const sceneFix = (row.output as { sceneFix: { text: string } }).sceneFix
+    expect(sceneFix.text).toContain('"빨래 가져왔어."')
+    expect(sceneFix.text).toContain('"빨리 왔어."')
+    expect(sceneFix.text).not.toContain('"빨리 왔지."')
+  })
+
   it('rejects a rewrite still in 해요체', async () => {
     const runId = await draftOf(s, THREE)
     const client = baseClient([{ id: 1, speaker: '세린', text: '"빨래 가져왔어요."' }])

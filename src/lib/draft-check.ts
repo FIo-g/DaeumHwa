@@ -217,7 +217,8 @@ function chapterTokens(text: string): Token[] {
 
 /**
  * A 3-gram seen 3 or more times in the chapter: one hit per scene holding its second or later
- * occurrence. Dialogue counts, since it is part of the token stream.
+ * occurrence, at most 3 per scene. The most repeated grams win; ties break by first occurrence.
+ * Dialogue counts, since it is part of the token stream.
  */
 function repeatHits(text: string, spans: SceneRange[]): [number, string][] {
   const tokens = chapterTokens(text)
@@ -226,15 +227,28 @@ function repeatHits(text: string, spans: SceneRange[]): [number, string][] {
     const gram = `${tokens[i].text} ${tokens[i + 1].text} ${tokens[i + 2].text}`
     positions.set(gram, [...(positions.get(gram) ?? []), tokens[i].offset])
   }
-  const hits = new Map<string, number>()
+  const byScene = new Map<number, { gram: string; count: number; first: number }[]>()
+  const seen = new Set<string>()
   for (const [gram, offsets] of positions) {
     if (offsets.length < 3) continue
     for (const offset of offsets.slice(1)) {
-      const key = `${sceneOf(spans, offset)}|${gram}`
-      if (!hits.has(key)) hits.set(key, sceneOf(spans, offset))
+      const scene = sceneOf(spans, offset)
+      const key = `${scene}|${gram}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const list = byScene.get(scene) ?? []
+      list.push({ gram, count: offsets.length, first: offsets[0] })
+      byScene.set(scene, list)
     }
   }
-  return [...hits.entries()].map(([key, scene]) => [scene, key.split('|')[1]] as [number, string])
+  const out: [number, string][] = []
+  for (const [scene, grams] of byScene) {
+    grams
+      .sort((a, b) => b.count - a.count || a.first - b.first)
+      .slice(0, 3)
+      .forEach(({ gram }) => out.push([scene, gram]))
+  }
+  return out
 }
 
 /** A finding in the last scene when the last paragraph summarizes instead of ending the story. */

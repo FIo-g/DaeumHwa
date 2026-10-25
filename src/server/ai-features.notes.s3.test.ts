@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import { createTestDb } from '@/test/db'
 import { createTestUser, createTestWork } from '@/test/factories'
+import type { DraftPlanCard } from '@/lib/draft-plan'
 import { planDraft, startDraft } from '@/server/ai-features'
 
 async function readAll(stream: AsyncIterable<string>): Promise<string> {
@@ -96,6 +97,49 @@ describe('plan revision notes in the draft run (stage 3 task 7)', () => {
     expect(output['instructions']).toBe('열쇠를 목에 건다')
     expect(output['planNotes']).toEqual(notes)
     expect(output['plan']).toEqual(planned.card)
+  })
+
+  it('caps earlier notes to the last 5 in the plan prompt', async () => {
+    const client = new FakeAiClient()
+    const card = {
+      scenes: [
+        {
+          summary: 'stands at the gate.',
+          goal: 'go inside',
+          decision: '',
+          stake: '',
+          trigger: '',
+          role: 'opening',
+          place: 'gate',
+          characters: [],
+          targetChars: 1250,
+        },
+      ],
+      ending: { device: 'crisis', line: 'door opens.' },
+      threads: [],
+    } as unknown as DraftPlanCard
+    await planDraft(
+      db,
+      actor,
+      {
+        workId,
+        instructions: 'open the door',
+        entryIds: [],
+        targetChars: 5000,
+        revision: {
+          card,
+          note: 'current note',
+          earlierNotes: ['note1', 'note2', 'note3', 'note4', 'note5', 'note6', 'note7'],
+        },
+      },
+      client,
+    )
+    const prompt = client.recorded[0]?.prompt ?? ''
+    for (const kept of ['note3', 'note4', 'note5', 'note6', 'note7']) {
+      expect(prompt).toContain(kept)
+    }
+    expect(prompt).not.toContain('note1')
+    expect(prompt).not.toContain('note2')
   })
 
   it('a quick-path run keeps instructions and an empty planNotes', async () => {

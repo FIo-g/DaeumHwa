@@ -100,6 +100,8 @@ export type CallRecord = {
 export const STALL_GRACE_MS = 60_000
 /** Message of the model error thrown after two stalls. */
 export const STALLED_MESSAGE = 'AI 호출이 멈춰 두 번 끊었습니다.'
+/** Message of the model error thrown when a stream stalls after sending text. */
+export const STALLED_PARTIAL_MESSAGE = 'AI 호출이 글을 보내다 멈춰 끊었습니다.'
 
 export interface EvalClientOptions {
   inner: AiClient
@@ -758,6 +760,7 @@ export class EvalClient implements AiClient {
     relay: ChunkRelay,
   ): Promise<{ text: string; usage: AiUsage; model: string }> {
     const now = this.now
+    let chunkSent = false
     const pumpInto = async (
       inner: ReturnType<AiClient['streamText']>,
       call: Prepared,
@@ -769,6 +772,7 @@ export class EvalClient implements AiClient {
           if (isAbandoned()) return { firstTokenMs, done: false }
           if (firstTokenMs === null && piece.length > 0) firstTokenMs = now() - call.startedMs
           relay.push(piece)
+          chunkSent = true
         }
         return { firstTokenMs, done: true }
       } catch {
@@ -868,6 +872,14 @@ export class EvalClient implements AiClient {
         const pumpResult = await pump
         const stallError = controller.signal.reason ?? new Error('aborted')
         if (attempt === 1) {
+          if (chunkSent) {
+            const partial = new AppError('AI_ERROR', STALLED_PARTIAL_MESSAGE)
+            this.settle(call, { ok: false, error: partial }, pumpResult.firstTokenMs, 0, {
+              stalled: true,
+            })
+            relay.fail(partial)
+            throw partial
+          }
           this.settle(call, { ok: false, error: stallError }, pumpResult.firstTokenMs, 0, {
             stalled: true,
             trackFailure: false,
@@ -897,6 +909,14 @@ export class EvalClient implements AiClient {
       if (stalledByAbort) {
         const pumpResult = await pump
         if (attempt === 1) {
+          if (chunkSent) {
+            const partial = new AppError('AI_ERROR', STALLED_PARTIAL_MESSAGE)
+            this.settle(call, { ok: false, error: partial }, pumpResult.firstTokenMs, 0, {
+              stalled: true,
+            })
+            relay.fail(partial)
+            throw partial
+          }
           this.settle(call, { ok: false, error: raced.error }, pumpResult.firstTokenMs, 0, {
             stalled: true,
             trackFailure: false,

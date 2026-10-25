@@ -2,9 +2,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiClient, GenerateObjectArgs } from '@/ai/types'
+import type { AiClient, GenerateObjectArgs, StreamTextArgs } from '@/ai/types'
 import { MODEL_PROFILES } from './models'
-import { EvalClient } from './eval-client'
+import { EvalClient, STALLED_PARTIAL_MESSAGE } from './eval-client'
 import { harnessSummary } from './harness-summary'
 import { proofreadTask } from '@/ai/tasks/proofread'
 import type { CallRecord } from './eval-client'
@@ -140,6 +140,64 @@ describe('eval stall guard', () => {
     expect(attempts).toBe(1)
     expect(client.records).toHaveLength(1)
     expect(client.records[0]?.stalled).toBeFalsy()
+  })
+
+  it('does not retry a stream that already sent a chunk', async () => {
+    vi.useFakeTimers()
+    let attempts = 0
+    const inner: AiClient = {
+      provider: 'hang',
+      defaultModel: 'hang-model',
+      async generateObject<T>(): Promise<{
+        object: T
+        usage: { inputTokens: number; outputTokens: number }
+        model: string
+      }> {
+        throw new Error('unused')
+      },
+      streamText(args: StreamTextArgs) {
+        attempts += 1
+        const signal = args.signal
+        const textStream = (async function* () {
+          yield 'hello '
+          await hangUntilAborted(signal)
+          throw new Error('unreachable')
+        })()
+        const final = (async () => {
+          await hangUntilAborted(signal)
+          throw new Error('unreachable')
+        })()
+        return { textStream, final }
+      },
+    }
+    const client = new EvalClient({ inner, profile: CLOUD, lang: 'ko', callsDir })
+    const stream = client.streamText({
+      task: { name: 'draft-chapter', input: {} },
+      system: 'sys',
+      prompt: 'draft',
+      effort: 'high',
+      maxTokens: 16000,
+    })
+    const seen: string[] = []
+    let streamError: unknown = null
+    const reader = (async () => {
+      try {
+        for await (const chunk of stream.textStream) seen.push(chunk)
+      } catch (error) {
+        streamError = error
+      }
+    })()
+    const assertion = expect(stream.final).rejects.toThrow(STALLED_PARTIAL_MESSAGE)
+    // draft-chapter streams cut at STREAM timeout (280s) + 60s grace.
+    await vi.advanceTimersByTimeAsync(280_000 + 60_000 + 1000)
+    await assertion
+    await reader
+    expect(attempts).toBe(1)
+    expect(client.records).toHaveLength(1)
+    expect(client.records[0]).toMatchObject({ stalled: true })
+    expect(seen).toEqual(['hello '])
+    expect(streamError).toBeInstanceOf(Error)
+    expect((streamError as Error).message).toBe(STALLED_PARTIAL_MESSAGE)
   })
 
   it('counts stalls in the harness, and old runs give 0', () => {

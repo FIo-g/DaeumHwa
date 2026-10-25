@@ -115,6 +115,37 @@ describe('codeSceneFindings: repeat', () => {
     expect(repeats.map((f) => f.scene).sort()).toEqual([2, 3])
     expect(repeats[0].note).toBe('바람이 창문을 두드렸다')
   })
+
+  it('keeps at most 3 repeat findings per scene, the most repeated ones', () => {
+    const grams = [
+      { phrase: 'alpha beta gamma', count: 6 },
+      { phrase: 'delta epsilon zeta', count: 5 },
+      { phrase: 'theta iota kappa', count: 4 },
+      { phrase: 'lambda mu nu', count: 3 },
+      { phrase: 'omicron pi rho', count: 3 },
+    ]
+    let filler = 0
+    const parts: string[] = []
+    for (const gram of grams) {
+      for (let i = 0; i < gram.count; i++) {
+        parts.push(gram.phrase)
+        filler += 1
+        parts.push(`uq${filler}`)
+      }
+    }
+    const text = parts.join(' ')
+    const findings = codeSceneFindings(text, {
+      spans: sceneSpans(text, 1),
+      requests: NO_REQUESTS,
+      names: NO_NAMES,
+      card: null,
+    })
+    const repeats = findings.filter((f) => f.reason === 'repeat')
+    expect(repeats).toHaveLength(3)
+    expect(repeats.map((f) => f.note).sort()).toEqual(
+      ['alpha beta gamma', 'delta epsilon zeta', 'theta iota kappa'].sort(),
+    )
+  })
 })
 
 describe('codeSceneFindings: scene-length', () => {
