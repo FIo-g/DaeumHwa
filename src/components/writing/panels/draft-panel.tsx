@@ -109,6 +109,10 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   const [planEdits, setPlanEdits] = useState<PlanEdits>(NO_EDITS)
   // The scene summaries the server sent with the current card: a summary that differs is a text edit.
   const [baseSummaries, setBaseSummaries] = useState<string[]>([])
+  // The author's revision notes of the current card chain, oldest first. A revision sends them as
+  // earlierNotes and a plan draft sends them as planNotes. A new plan, an instruction edit or a
+  // chapter change clears them.
+  const [planNotes, setPlanNotes] = useState<string[]>([])
   const [planning, setPlanning] = useState(false)
   // The instruction box: when checked, the next plan or quick draft also keeps the instruction as a request.
   const [keepInstruction, setKeepInstruction] = useState(false)
@@ -150,6 +154,14 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       live = false
     }
   }, [data.workId])
+
+  // A new chapter starts its own revision chain. The chapter id is stored with the render, so a
+  // chapter change clears the notes without an effect.
+  const [notesChapter, setNotesChapter] = useState(data.chapter.id)
+  if (notesChapter !== data.chapter.id) {
+    setNotesChapter(data.chapter.id)
+    setPlanNotes([])
+  }
 
   /**
    * Keeps the instruction as a request when its box is checked, then unchecks the box. It runs
@@ -204,6 +216,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       plan?: DraftPlanCard
       planRunId?: string
       planEdits?: PlanEdits
+      planNotes?: string[]
     },
   ): Promise<boolean> {
     try {
@@ -304,11 +317,14 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         instructions: instructions.trim(),
         targetChars: target,
         entryIds,
-        ...(revising ? { revision: { card, note } } : {}),
+        ...(revising && note ? { revision: { card, note, earlierNotes: planNotes } } : {}),
       }),
     )
     setPlanning(false)
     if (!result) return
+    // A new plan starts its own revision chain; a revision adds its note to the chain.
+    if (revising && note) setPlanNotes((prev) => [...prev, note].slice(-5))
+    else if (!revising) setPlanNotes([])
     // The text edits of the card being replaced are kept in the counts, as a revision adds to them.
     const replacedEdits = revising && card ? countTextEdits(card, baseSummaries) : 0
     setCard(result.card)
@@ -349,6 +365,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         ? {
             plan: card,
             planRunId,
+            planNotes,
             planEdits: {
               ...planEdits,
               textEdits: planEdits.textEdits + countTextEdits(card, baseSummaries),
@@ -433,7 +450,10 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           id="draft-instructions"
           value={instructions}
           placeholder={INSTRUCTION_PLACEHOLDER}
-          onChange={(event) => setInstructions(event.target.value)}
+          onChange={(event) => {
+            setInstructions(event.target.value)
+            setPlanNotes([])
+          }}
           rows={4}
           maxLength={5000}
           disabled={streaming}

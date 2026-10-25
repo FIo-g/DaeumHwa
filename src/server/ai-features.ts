@@ -511,7 +511,7 @@ export async function planDraft(
     instructions: string
     targetChars?: number
     entryIds: string[]
-    revision?: { card: DraftPlanCard; note: string }
+    revision?: { card: DraftPlanCard; note: string; earlierNotes?: string[] }
   },
   client?: AiClient,
   signal?: AbortSignal,
@@ -539,7 +539,9 @@ export async function planDraft(
         revision ? revision.card.scenes.length : draftLengthPlan(targetChars).sceneCount,
       ),
       advice: await latestAdviceText(db, actor, workId),
-      revision,
+      revision: revision
+        ? { card: revision.card, note: revision.note, earlierNotes: revision.earlierNotes ?? [] }
+        : null,
     },
     client,
   )
@@ -595,6 +597,8 @@ export async function startDraft(
     planRunId?: string
     /** How the author changed the card; counted as plan_edited. */
     planEdits?: PlanEdits
+    /** The author's revision notes of the current card chain, oldest first. Kept in the run output. */
+    planNotes?: string[]
     /** Comparison only: `scenes` writes one call per scene. Default from AI_DRAFT_MODE. Needs `plan`. */
     mode?: DraftMode
     /**
@@ -741,13 +745,17 @@ export async function startDraft(
   // The plan joins the run output once the text is final, so the stored text is still the one streamed.
   // The text is already stored and streamed here, so a lost plan annotation must not fail the draft.
   // The request check runs on the final text, after the plan merge. Its failures are never thrown.
+  // The instructions and the revision notes join the output next to the plan, on both paths.
+  const storedInstructions = instructions === '' ? null : instructions.slice(0, 5000)
+  const storedPlanNotes = normalizePlanNotes(input.planNotes)
   const done = drafted.then(async (text) => {
-    if (card) {
-      try {
-        await keepPlanInRun(db, first.runId, card, input.planRunId)
-      } catch (error) {
-        console.warn('plan merge into the draft run failed', error)
-      }
+    try {
+      await keepPlanInRun(db, first.runId, card, input.planRunId, {
+        instructions: storedInstructions,
+        planNotes: storedPlanNotes,
+      })
+    } catch (error) {
+      console.warn('plan merge into the draft run failed', error)
     }
     await keepDirectiveFindings(db, actor, {
       runId: first.runId,
@@ -1247,14 +1255,16 @@ async function streamScene(
 }
 
 /**
- * Adds the approved card and its plan run id to a finished draft run. The other keys of the output
- * (text, warnings) are kept as they are.
+ * Adds the approved card and its plan run id to a finished draft run, with the instruction text and
+ * the revision notes of the card chain. Without a card (the quick path) only the instructions and
+ * the notes are kept. The other keys of the output (text, warnings) are kept as they are.
  */
 async function keepPlanInRun(
   db: Db,
   runId: string,
-  card: DraftPlanCard,
+  card: DraftPlanCard | null,
   planRunId: string | undefined,
+  o: { instructions: string | null; planNotes: string[] },
 ): Promise<void> {
   const [row] = await db
     .select({ output: aiRuns.output })
@@ -1262,7 +1272,22 @@ async function keepPlanInRun(
     .where(eq(aiRuns.id, runId))
     .limit(1)
   const output = row?.output && typeof row.output === 'object' ? row.output : {}
-  await replaceRunOutput(db, runId, { ...output, plan: card, planRunId: planRunId ?? null })
+  await replaceRunOutput(db, runId, {
+    ...output,
+    ...(card ? { plan: card, planRunId: planRunId ?? null } : {}),
+    instructions: o.instructions,
+    planNotes: o.planNotes,
+  })
+}
+
+/** Trims revision notes to the prompt limits: at most 5 notes of 300 characters, oldest first. */
+function normalizePlanNotes(notes: string[] | undefined): string[] {
+  if (!notes) return []
+  return notes
+    .map((note) => note.trim())
+    .filter((note) => note !== '')
+    .slice(-5)
+    .map((note) => note.slice(0, 300))
 }
 
 /**

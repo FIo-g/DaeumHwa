@@ -185,7 +185,13 @@ describe('startDraft from an approved plan card', () => {
 
     expect(streamed).toBe(text)
     const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
-    expect(row.output).toEqual({ text, plan: planned.card, planRunId: planned.runId })
+    expect(row.output).toEqual({
+      text,
+      plan: planned.card,
+      planRunId: planned.runId,
+      instructions: null,
+      planNotes: [],
+    })
 
     const events = await db
       .select()

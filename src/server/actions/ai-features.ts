@@ -38,7 +38,7 @@ const RepairDraftSchema = z.object({
   runId: z.uuid(),
 })
 
-const PlanDraftSchema = z.object({
+export const PlanDraftSchema = z.object({
   workId: z.uuid(),
   chapterId: z.uuid().nullish(),
   instructions: z.string().max(5000),
@@ -48,6 +48,7 @@ const PlanDraftSchema = z.object({
     .object({
       card: DraftPlanCardSchema,
       note: z.string().trim().min(1).max(300),
+      earlierNotes: z.array(z.string().trim().min(1).max(300)).max(5).default([]),
     })
     .optional(),
 })

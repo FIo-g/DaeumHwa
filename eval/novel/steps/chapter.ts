@@ -364,7 +364,7 @@ async function planCard(
   key: string,
   workId: string,
   instructions: string,
-  revision?: { card: DraftPlanCard; note: string },
+  revision?: { card: DraftPlanCard; note: string; earlierNotes?: string[] },
 ): Promise<{ runId: string; card: DraftPlanCard } | null> {
   const entries = await listEntries(ctx.db, ctx.actor, workId)
   const entryIds = selectDraftEntries(
@@ -440,11 +440,13 @@ async function approvedPlan(
     }
 
     // The re-plan runs before the note counts. A pause during it leaves the review pending with its
-    // answer, so the resumed worker repeats the re-plan with the same note.
+    // answer, so the resumed worker repeats the re-plan with the same note. Every revision call
+    // carries the notes the author gave before it for this chapter.
     const note = verdict.note ?? ''
     const replanned = await planCard(ctx, state, key, workId, instructions, {
       card: entry.card,
       note,
+      earlierNotes: [...entry.notes],
     })
     entry.notes.push(note)
     if (replanned) {
@@ -506,6 +508,7 @@ export const draft: StepFn = async (ctx, key, state) => {
         ? {
             plan: plan.card,
             planRunId: plan.runId,
+            planNotes: [...plan.notes],
             planEdits: {
               revisions: plan.notes.length,
               removed: 0,

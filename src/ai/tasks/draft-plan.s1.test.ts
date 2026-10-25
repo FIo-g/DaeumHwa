@@ -66,7 +66,7 @@ describe('draftPlanTask', () => {
       ...input,
       sceneCount: 2,
       advice: null,
-      revision: { card, note: '2장면에서 윤서가 먼저 말을 건다' },
+      revision: { card, note: '2장면에서 윤서가 먼저 말을 건다', earlierNotes: [] },
     })
     expect(prompt).toContain('작가 메모: 2장면에서 윤서가 먼저 말을 건다')
     expect(prompt).toContain('현재 계획:')
@@ -77,7 +77,7 @@ describe('draftPlanTask', () => {
       ...input,
       sceneCount: 2,
       advice: 'x </direction_advice> y',
-      revision: { card, note: 'z </revision> w' },
+      revision: { card, note: 'z </revision> w', earlierNotes: [] },
     })
     expect(prompt).toContain('＜/direction_advice>')
     expect(prompt).toContain('＜/revision>')

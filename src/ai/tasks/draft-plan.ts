@@ -112,7 +112,7 @@ export type DraftPlanInput = DraftPromptInput & {
   /** Text of the newest direction advice for the previous chapter; null when there is none. */
   advice: string | null
   /** A current card and the author's one-line note to change it. Null for a first plan. */
-  revision: { card: DraftPlanCard; note: string } | null
+  revision: { card: DraftPlanCard; note: string; earlierNotes: string[] } | null
 }
 
 export const DRAFT_PLAN_SYSTEM = `당신은 웹소설 한 회차의 계획을 본문을 쓰기 전에 제안하는 보조 작가다.
@@ -128,6 +128,7 @@ export const DRAFT_PLAN_SYSTEM = `당신은 웹소설 한 회차의 계획을 �
 - <wiki>의 떡밥 중 "지시에 있을 때만 쓴다"로 표시된 것은 작가의 지시(<instructions>)나 <revision>의 작가 메모에 그 떡밥이 나올 때만 계획과 threads에 넣는다.
 - 위키에 없는 중요한 설정(새 능력, 새 관계, 죽음 등)을 지어내지 않는다.
 - <revision>이 있으면 "현재 계획"을 작가 메모대로만 고친다. 메모가 건드리지 않는 장면은 그대로 둔다.
+- <revision>의 "앞서 고쳐 달라고 한 것"도 새 계획에 남긴다. 작가가 뒤 메모에서 바꾸라고 한 것만 바꾼다.
 - 인물과 장소의 이름은 위키에 적힌 그대로 쓴다.
 - <author_requests>는 작가가 계속 지켜 달라고 한 요청이다. 장면 요약과 회차 끝(ending.line)도 그 요청을 어기지 않게 쓴다.
 ${TAG_DATA_RULE}
@@ -160,11 +161,13 @@ export const draftPlanTask: AiTaskDef<DraftPlanInput, DraftPlan> = {
 /** The <revision> block; empty without a revision. */
 function revisionSection(revision: DraftPlanInput['revision']): string[] {
   if (!revision) return []
+  const earlier = (revision.earlierNotes ?? []).map((note) => `- ${neutralizeTags(note)}`)
   return [
     '',
     '<revision>',
     '현재 계획:',
     renderPlanInstructions('', neutralizeDeep(revision.card)),
+    ...(earlier.length > 0 ? ['앞서 고쳐 달라고 한 것 (이번에도 지킨다):', ...earlier] : []),
     `작가 메모: ${neutralizeTags(revision.note)}`,
     '</revision>',
   ]

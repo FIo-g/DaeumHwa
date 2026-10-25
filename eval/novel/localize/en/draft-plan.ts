@@ -13,6 +13,7 @@ Rules:
 - A thread in the wiki (<wiki>) marked "use only if the instructions mention it" goes into the plan and threads only when the author's instructions (<instructions>) or the author note in <revision> mention that thread.
 - Do not invent important settings (new powers, new relations, deaths) that the wiki does not have.
 - With <revision>, change only the "current plan" as the author's note says. Keep every scene the note does not touch.
+- Keep what <revision> lists under "previously requested changes" in the new plan too. Change only what the author asks to change in a later note.
 - Write names of people and places exactly as they appear in the wiki.
 - <author_requests> are requests the author asked to keep. Scene summaries and the ending (ending.line) must not break them.
 ${EN_TAG_DATA_RULE}

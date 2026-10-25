@@ -99,6 +99,6 @@ describe('POST /api/works/[workId]/draft with a plan card', () => {
     const text = await res.text()
 
     const [row] = await (state.db as Db).select().from(aiRuns).where(eq(aiRuns.id, runId))
-    expect(row.output).toEqual({ text, plan: card, planRunId })
+    expect(row.output).toEqual({ text, plan: card, planRunId, instructions: null, planNotes: [] })
   })
 })

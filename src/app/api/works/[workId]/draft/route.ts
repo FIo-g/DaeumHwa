@@ -30,6 +30,8 @@ const DraftBodySchema = z.object({
   plan: DraftPlanCardSchema.optional(),
   planRunId: z.uuid().optional(),
   planEdits: PlanEditsSchema.optional(),
+  // The author's revision notes of the current card chain, oldest first; the service keeps them.
+  planNotes: z.array(z.string().trim().min(1).max(300)).max(5).optional(),
   // Set by a client that can show the replace record (see src/lib/draft-stream.ts). Without it the
   // draft is not expanded, so an older panel build never receives a record it cannot read.
   acceptsReplace: z.boolean().optional(),
