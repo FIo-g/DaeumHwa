@@ -69,6 +69,7 @@ import {
 import {
   normalizeCard,
   planWarnings,
+  stripEndingLabel,
   type DraftPlanCard,
   type PlanEdits,
   renderPlanInstructions,
@@ -851,6 +852,37 @@ function stripStreamMarks(text: string): string {
   return text.replace(STREAM_MARKS, '')
 }
 
+/**
+ * Drops a trailing plan label copied from the card. Only when the client accepts a replace
+ * record (the expand path condition): the stripped text is stored and sent as a replace.
+ * Otherwise the text is left as is. Stored and streamed text always match.
+ */
+async function stripLabelTail(
+  db: Db,
+  runId: string,
+  pipe: TextPipe,
+  text: string,
+  canReplace: boolean,
+): Promise<string> {
+  const stripped = stripEndingLabel(text)
+  if (stripped === text || !canReplace) return text
+  const [row] = await db
+    .select({ output: aiRuns.output })
+    .from(aiRuns)
+    .where(eq(aiRuns.id, runId))
+    .limit(1)
+  const output =
+    row?.output && typeof row.output === 'object' ? (row.output as Record<string, unknown>) : {}
+  try {
+    await replaceRunOutput(db, runId, { ...output, text: stripped })
+  } catch (error) {
+    pipe.fail(error)
+    throw error
+  }
+  pipe.replace(stripped)
+  return stripped
+}
+
 /** How a short draft is filled (spec 6.4): `expand` by default, `continue` for the append path. */
 export type DraftLengthMode = 'expand' | 'continue'
 
@@ -910,8 +942,9 @@ async function continueDraft(
   )
   // Skips are not failures: they make no call and record no warning.
   if (plan === null || signal?.aborted || remaining < MIN_CONTINUATION_MS) {
+    const final = await stripLabelTail(db, first.runId, pipe, firstText, ctx.expandLength)
     pipe.end()
-    return firstText
+    return final
   }
 
   let addition: string
@@ -939,8 +972,9 @@ async function continueDraft(
     const reason = isAppError(error) ? error.code : 'UNKNOWN'
     const detail = error instanceof Error ? error.message : String(error)
     await recordWarnings(db, first.runId, firstText, [continueFailedWarning(reason, detail)])
+    const final = await stripLabelTail(db, first.runId, pipe, firstText, ctx.expandLength)
     pipe.end()
-    return firstText
+    return final
   }
 
   const text = addition.trimStart()
@@ -948,8 +982,9 @@ async function continueDraft(
     await recordWarnings(db, first.runId, firstText, [
       continueFailedWarning('EMPTY', 'The continuation is empty.'),
     ])
+    const final = await stripLabelTail(db, first.runId, pipe, firstText, ctx.expandLength)
     pipe.end()
-    return firstText
+    return final
   }
   // A draft that already ends on its final line makes some models explain why they will not add
   // more. That note must never be glued to the story, so the shorter draft stands.
@@ -957,8 +992,9 @@ async function continueDraft(
     await recordWarnings(db, first.runId, firstText, [
       continueFailedWarning('COMMENTARY', text.slice(0, 300)),
     ])
+    const final = await stripLabelTail(db, first.runId, pipe, firstText, ctx.expandLength)
     pipe.end()
-    return firstText
+    return final
   }
 
   const joined = firstText + continuationSeparator(firstText) + text
@@ -970,8 +1006,9 @@ async function continueDraft(
     throw error
   }
   pipe.push(joined.slice(firstText.length))
+  const final = await stripLabelTail(db, first.runId, pipe, joined, ctx.expandLength)
   pipe.end()
-  return joined
+  return final
 }
 
 /** What became of one picked span: it never started, or its expansion text or its error. */
@@ -1051,8 +1088,9 @@ async function expandDraft(
       await recordWarnings(db, first.runId, text, warnings)
     }
   }
+  const final = await stripLabelTail(db, first.runId, pipe, text, ctx.expandLength)
   pipe.end()
-  return text
+  return final
 }
 
 /**

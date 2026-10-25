@@ -179,3 +179,24 @@ function orNone(text: string): string {
 function formatCount(n: number): string {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
+
+/**
+ * Drops a trailing plan label the draft copied from the card ("회차 끝" line). Only the last
+ * non-empty line is checked: with surrounding spaces, brackets, dashes and `*` removed it must
+ * be exactly `회차 끝`, `Ending` or `End of chapter` (English case-insensitive). The label line
+ * and the blank lines before it are removed; anything else is returned unchanged.
+ */
+export function stripEndingLabel(text: string): string {
+  const lines = text.split('\n')
+  let last = lines.length - 1
+  while (last >= 0 && lines[last].trim() === '') last -= 1
+  if (last < 0) return text
+  const cleaned = lines[last].replace(/^[\s[\]()\-–—*]+|[\s[\]()\-–—*]+$/g, '')
+  const lower = cleaned.toLowerCase()
+  const isLabel = cleaned === '회차 끝' || lower === 'ending' || lower === 'end of chapter'
+  if (!isLabel) return text
+  let prev = last - 1
+  while (prev >= 0 && lines[prev].trim() === '') prev -= 1
+  if (prev < 0) return ''
+  return lines.slice(0, prev + 1).join('\n')
+}

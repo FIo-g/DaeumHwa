@@ -57,6 +57,9 @@ export const META_PATTERNS: RegExp[] = [
   /^Chapter \d+[:.]/m,
   /^Title:/m,
   /^Note:/m,
+  // A trailing plan label copied from the card ("회차 끝" line).
+  /^\s*[\[(\-–—*]*\s*회차 끝\s*[\])\-–—*]*\s*$/m,
+  /^\s*[\[(\-–—*]*\s*(Ending|End of chapter)\s*[\])\-–—*]*\s*$/im,
 ]
 
 const CLEAN_ENDINGS = new Set([...'.!?…"”\'’」』)~', ...'다요까네지죠'])
