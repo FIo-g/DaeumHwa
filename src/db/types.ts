@@ -179,6 +179,9 @@ export const USAGE_EVENT_KINDS = [
   'plan_edited',
   'directive_added',
   'directive_violation',
+  'check_flagged',
+  'scene_fix_applied',
+  'scene_fix_discarded',
 ] as const
 export type UsageEventKind = (typeof USAGE_EVENT_KINDS)[number]
 

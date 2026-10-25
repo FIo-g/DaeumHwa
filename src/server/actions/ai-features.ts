@@ -20,6 +20,7 @@ import type { AppliedRefinement } from '@/lib/draft-refine'
 import type { DraftPlanCard } from '@/lib/draft-plan'
 import type { ActionResult } from '@/lib/result'
 import { applyDraftRefinement } from '@/server/draft-refine'
+import { applySceneFix, discardSceneFix } from '@/server/draft-check'
 import { recordDraftUse } from '@/server/usage-events'
 
 const ReaderSimulationSchema = z.object({
@@ -132,6 +133,34 @@ export async function applyDraftRefinementAction(
     const applied = await applyDraftRefinement(db, actor, data)
     revalidateWork(data.workId)
     return applied
+  })
+}
+
+const SceneFixActionSchema = z.object({
+  workId: z.uuid(),
+  runId: z.uuid(),
+  token: z.string(),
+})
+
+export async function applySceneFixAction(
+  input: unknown,
+): Promise<ActionResult<{ runId: string; text: string }>> {
+  return withAction(async (db, actor) => {
+    const data = SceneFixActionSchema.parse(input)
+    const applied = await applySceneFix(db, actor, data)
+    revalidateWork(data.workId)
+    return applied
+  })
+}
+
+export async function discardSceneFixAction(
+  input: unknown,
+): Promise<ActionResult<{ runId: string }>> {
+  return withAction(async (db, actor) => {
+    const data = SceneFixActionSchema.parse(input)
+    const discarded = await discardSceneFix(db, actor, data)
+    revalidateWork(data.workId)
+    return discarded
   })
 }
 
