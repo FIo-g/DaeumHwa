@@ -1007,6 +1007,8 @@ export function buildRunSummary(
       drafts: state.data.drafts,
       plans: state.data.plans,
       voiceApplied: state.data.voiceApplied,
+      learnedAdded: state.data.learnedAdded,
+      inferMs: state.data.inferMs,
       // Ledger mode: the planted probe texts count as chapter 1 instruction text. Derived here, so
       // resummarize rebuilds the same number from the state.
       ledgerChars: state.data.planted ? ledgerCharsOf(state.data.planted, lang) : 0,

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -8,8 +8,9 @@ import { authorDirectives } from '@/db/schema'
 import { FakeAiClient } from '@/test/fake-ai'
 import { loadBible } from './bible'
 import { createRun, openRun, runUntilBlocked } from './run'
-import { loadConfig, loadState } from './state'
+import { loadConfig, loadState, newState } from './state'
 import { readCallRecords } from './steps/util'
+import { buildRunSummary, readSummaryInputs } from './steps/finish'
 import { readPending } from './author-io'
 import { fakeAnswer } from './fake-author'
 import { initRun } from './cli'
@@ -271,5 +272,36 @@ describe('learn hunks only', () => {
     seenPrompt = rec?.prompt ?? ''
     expect(seenPrompt).toContain('[수정')
     expect(seenPrompt).not.toContain(FAR)
+  })
+})
+
+describe('learn harness summary', () => {
+  it('carries learnedAdded and inferMs from state into run-summary and resummarize', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'novel-finish-learn-s4-'))
+    dirs.push(dir)
+    mkdirSync(join(dir, 'chapters'), { recursive: true })
+    writeFileSync(join(dir, 'chapters', '01.md'), '세린이 웃었다.\n')
+    writeFileSync(
+      join(dir, 'config.json'),
+      JSON.stringify({ lang: 'ko', modelId: 'fake', chapters: 1 }),
+    )
+    const state = newState({
+      runId: 'test',
+      modelId: 'fake',
+      lang: 'ko',
+      chapters: 1,
+      questions: 1,
+      maxDraftAttempts: 2,
+      createdAt: '2026-10-20T00:00:00.000Z',
+      commit: 'test',
+    })
+    state.data.learnedAdded = { 1: 2 }
+    state.data.inferMs = { 1: 123 }
+    const summary = buildRunSummary([], state, 'ko', readSummaryInputs(dir))
+    expect(summary.harness?.chapters[0]?.learnedAdded).toBe(2)
+    expect(summary.harness?.chapters[0]?.inferMs).toBe(123)
+    const rebuilt = buildRunSummary([], state, 'ko', readSummaryInputs(dir))
+    expect(rebuilt.harness?.chapters[0]?.learnedAdded).toBe(2)
+    expect(rebuilt.harness?.chapters[0]?.inferMs).toBe(123)
   })
 })
