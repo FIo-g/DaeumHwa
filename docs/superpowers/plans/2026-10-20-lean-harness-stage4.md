@@ -196,7 +196,7 @@ M3 run `2026-10-25-s3sp2` ended its chapter with a literal line `회차 끝` aft
 
 ## Measurement M4 (orchestrator)
 
-Worktree `../DaeumHwa-s4` detached at the reviewed commit, set up as in M0.
+Worktree `../DaeumHwa-s4` detached at the reviewed commit, set up as in M0. Every run passes `--deploy-settings --directives ledger --speech on` (the product defaults since M3: the check on, speech on; the eval keeps speech off unless `--speech on`), plus its own flags. Runners, authors and reviewers are OpenCode sessions on Muse Spark, as in M3, and the baseline is M3 (`docs/eval/harness/2026-10-25-stage3-check.md`).
 
 - [ ] **Probes:** `probe-gateway --model haiku-5.5 --ttl 1h --gap 400` and `--model luna-6 --ttl 1h --gap 400` (luna uses retention). Record `accepted` and whether the second call read the cache after the 5-minute default would have expired.
 - [ ] **Runs (6):**
