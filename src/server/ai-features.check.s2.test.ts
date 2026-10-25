@@ -86,6 +86,10 @@ describe('draft request findings (stage 2)', () => {
     expect(text).toBe(DRAFT)
     const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId)).limit(1)
     expect(row.status).toBe('done')
-    expect(row.output).toEqual({ text: DRAFT })
+    expect(row.output).toEqual({
+      text: DRAFT,
+      instructions: '서윤이 골목을 걷는다.',
+      planNotes: [],
+    })
   })
 })

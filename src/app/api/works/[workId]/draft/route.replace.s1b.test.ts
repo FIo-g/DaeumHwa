@@ -101,7 +101,11 @@ describe('POST /api/works/[workId]/draft and the replace record', () => {
     // The stored text is the shown text.
     const runId = res.headers.get('x-run-id') ?? ''
     const [row] = await (state.db as Db).select().from(aiRuns).where(eq(aiRuns.id, runId))
-    expect(row.output).toEqual({ text: DRAFT })
+    expect(row.output).toEqual({
+      text: DRAFT,
+      instructions: '서윤이 편지를 발견한다.',
+      planNotes: [],
+    })
   })
 
   it('sends no replace record when acceptsReplace is false', async () => {

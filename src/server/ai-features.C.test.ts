@@ -85,7 +85,12 @@ describe('repairDraftForeignScript', () => {
     const { runId, client } = await draftOf(db, actor, workId, HAN_TEXT)
     const result = await repairDraftForeignScript(db, actor, { workId, runId }, client)
 
-    expect(await outputOf(db, runId)).toEqual({ text: result.text, rawText: HAN_TEXT })
+    expect(await outputOf(db, runId)).toEqual({
+      text: result.text,
+      rawText: HAN_TEXT,
+      instructions: INSTRUCTIONS,
+      planNotes: [],
+    })
     const chapter = await createChapterFromDraft(db, actor, { workId, runId })
     expect(chapter.body).toBe(result.text)
   })
@@ -124,7 +129,7 @@ describe('repairDraftForeignScript', () => {
     expect(result.text).toBe(text)
     expect(result.replaced).toBe(0)
     expect(result.unresolved.map((span) => span.text)).toEqual(['嬷嬷'])
-    expect(await outputOf(db, runId)).toEqual({ text })
+    expect(await outputOf(db, runId)).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
   })
 
   it('fixes the rest of the sentences in a second round', async () => {
@@ -226,7 +231,11 @@ describe('repairDraftForeignScript', () => {
     )
     expect(error).toBeInstanceOf(AppError)
     expect(error).toMatchObject({ code: 'NOT_FOUND' })
-    expect(await outputOf(db, runId)).toEqual({ text: HAN_TEXT })
+    expect(await outputOf(db, runId)).toEqual({
+      text: HAN_TEXT,
+      instructions: INSTRUCTIONS,
+      planNotes: [],
+    })
   })
 
   it('repairing twice keeps the first raw draft', async () => {

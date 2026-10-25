@@ -112,7 +112,7 @@ describe('draft expansion asks for 1.1 times the share (F5)', () => {
     expect(text).not.toContain('</scene>')
     expect(text.split(BREAK).sort()).toEqual([...expansions].sort())
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
   })
 
   it('refuses an expansion with a closing tag in the middle as a note and keeps the span', async () => {

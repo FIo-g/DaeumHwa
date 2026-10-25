@@ -101,7 +101,7 @@ describe('draft expansion runs a second round (F5b)', () => {
     // The stored text is the round-2 splice: span 2 takes the first round-2 output, span 1 the second.
     expect(text).toBe([round1[0], round2[1], round2[0]].join(BREAK))
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
   })
 
   it('asks 1.2 times the span when round 1 ends near target and the gap is small', async () => {
@@ -196,7 +196,7 @@ describe('draft expansion runs a second round (F5b)', () => {
     expect(spy.mock.calls.filter((c) => c[0].task.name === 'draft-expand')).toHaveLength(3)
     expect(text).toBe(outputs.join(BREAK))
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
   })
 
   it('streams one replace record per round that accepts a rewrite, and the last equals the stored text', async () => {
@@ -217,7 +217,7 @@ describe('draft expansion runs a second round (F5b)', () => {
     expect(streamed.split(DRAFT_REPLACE_MARK)).toHaveLength(5)
     expect(parseDraftStream(streamed).text).toBe(text)
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
   })
 
   it('keeps the round-1 EXPAND_REJECTED warning after round 2 succeeds', async () => {

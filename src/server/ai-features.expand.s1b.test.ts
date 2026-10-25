@@ -156,7 +156,7 @@ describe('draft expansion', () => {
     // The breaks stay where they were; each scene is one of the expansions, in some order.
     expect(text.split(BREAK).sort()).toEqual([...expansions].sort())
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
   })
 
   it('makes no expansion call when the draft reaches the target', async () => {
@@ -371,7 +371,7 @@ describe('draft expansion', () => {
     expect(await done).toBe(DRAFT)
     expect(spy.mock.calls.filter((c) => c[0].task.name === 'draft-expand')).toHaveLength(0)
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text: DRAFT })
+    expect(row.output).toEqual({ text: DRAFT, instructions: INSTRUCTIONS, planNotes: [] })
     expect(row.output).not.toHaveProperty('warnings')
   })
 
@@ -409,7 +409,7 @@ describe('draft expansion', () => {
     // All four spans are spliced and none was refused by the run cap.
     expect(text.split(BREAK).sort()).toEqual([...expansions].sort())
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
     expect(await peak).toBeLessThanOrEqual(2)
     expect(client.maxInFlight).toBe(2)
     const expandRows = await runsOf('draft-expand')
@@ -489,7 +489,7 @@ describe('draft expansion', () => {
     expect(pieces.filter((piece) => originals.includes(piece))).toHaveLength(2)
     expect(pieces.filter((piece) => expansions.includes(piece))).toHaveLength(2)
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
     expect(row.output).not.toHaveProperty('warnings')
   })
 

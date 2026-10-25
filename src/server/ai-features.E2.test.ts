@@ -91,6 +91,8 @@ describe('repairDraft', () => {
       text: expected,
       originalText: text,
       repair: { flagged: 1, applied: 1 },
+      instructions: INSTRUCTIONS,
+      planNotes: [],
     })
 
     const chapter = await createChapterFromDraft(db, actor, { workId, runId })

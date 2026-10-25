@@ -216,7 +216,11 @@ describe('draft', () => {
     const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
     expect(row.task).toBe('draft-chapter')
     expect(row.status).toBe('done')
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({
+      text,
+      instructions: '서윤이 편지를 발견한다. 편지에는 날짜가 적혀 있다.',
+      planNotes: [],
+    })
   })
 
   it('puts work cards, selected entry cards and the previous chapter tail into the prompt', async () => {
@@ -441,7 +445,7 @@ describe('draft continuation', () => {
     )
 
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
     const [cont] = await continuationRows()
     expect(cont.status).toBe('done')
   })
@@ -451,7 +455,7 @@ describe('draft continuation', () => {
     const { runId, done } = await startDraft(db, actor, draftInput(), client)
     const text = await done
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
   })
 
   it('does not continue when the first draft reaches the target', async () => {
@@ -476,7 +480,7 @@ describe('draft continuation', () => {
     expect(spy).toHaveBeenCalledTimes(2)
     expect(text.endsWith(SHORT_CONTINUATION)).toBe(true)
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text })
+    expect(row.output).toEqual({ text, instructions: INSTRUCTIONS, planNotes: [] })
   })
 
   it('createChapterFromDraft keeps the continuation', async () => {
@@ -654,7 +658,11 @@ describe('draft continuation', () => {
     expect(await done).toBe(FIRST_DRAFT)
     expect(spy).toHaveBeenCalledTimes(1)
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text: FIRST_DRAFT })
+    expect(row.output).toEqual({
+      text: FIRST_DRAFT,
+      instructions: INSTRUCTIONS,
+      planNotes: [],
+    })
   })
 
   it('skips the continuation when under 30 seconds of the 290 second budget remain, with no warning', async () => {
@@ -674,7 +682,11 @@ describe('draft continuation', () => {
     expect(await done).toBe(FIRST_DRAFT)
     expect(spy).toHaveBeenCalledTimes(1)
     const row = await outputOf(runId)
-    expect(row.output).toEqual({ text: FIRST_DRAFT })
+    expect(row.output).toEqual({
+      text: FIRST_DRAFT,
+      instructions: INSTRUCTIONS,
+      planNotes: [],
+    })
   })
 })
 
