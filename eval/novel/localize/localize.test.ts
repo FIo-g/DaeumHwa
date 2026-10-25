@@ -22,6 +22,7 @@ import { interviewQuestionSample } from './samples/interview-question'
 import { paragraphTrimSample } from './samples/paragraph-trim'
 import { proofreadSample } from './samples/proofread'
 import { readerSimSample } from './samples/reader-sim'
+import { sceneFixSample } from './samples/scene-fix'
 import { sceneRewriteSample } from './samples/scene-rewrite'
 import { styleSuggestSample } from './samples/style-suggest'
 import { countHangul, findHangul, translateScaffold } from './scaffold'
@@ -45,8 +46,7 @@ const PROMPTS: Record<AiTaskName, string> = {
   'draft-repair': draftRepairSample,
   'draft-beats': draftBeatsSample,
   'draft-check': draftCheckSample,
-  // Placeholder until task 3 wires the scene-fix sample.
-  'scene-fix': 'Mina closed the gate quietly.',
+  'scene-fix': sceneFixSample,
   'draft-plan': draftPlanSample,
   // Scene calls are built on the draft prompt (stage 1, draft-scene); the sample is the draft prompt.
   'draft-scene': draftSample,
