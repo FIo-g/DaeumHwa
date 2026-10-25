@@ -16,15 +16,16 @@ export function chapterInstructions(
   o: {
     lang: 'ko' | 'en'
     directives?: boolean
-    directivesMode?: 'ledger'
+    directivesMode?: 'ledger' | 'learn'
     fewInstructions?: boolean
   },
 ): string {
   const spec = bible.chapters[n - 1]
   if (!spec) throw new Error(`bible has no chapter ${n}`)
   const base = o.fewInstructions ? firstSentence(spec.instructions) : spec.instructions
-  // Ledger mode plants the same probes as author requests, so the instructions stay as the bible has them.
-  if (o.directives && o.directivesMode !== 'ledger' && n === 1) {
+  // Ledger and learn modes never put probes in the instructions: ledger plants them as author
+  // requests, learn infers them from edits. Only the instruction mode carries them.
+  if (o.directives && o.directivesMode !== 'ledger' && o.directivesMode !== 'learn' && n === 1) {
     return `${base}\n\n${directiveBlock(o.lang)}`
   }
   return base

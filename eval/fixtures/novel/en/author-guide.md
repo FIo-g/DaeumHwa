@@ -1,6 +1,6 @@
 # Author Guide (English runs)
 
-You are the author of the web novel *The Key to the Ashen Bell Tower*. You are using the DaeumHwa app and answering what its AI asks or proposes. Only you, the author, know the story bible (`bible.json`).
+You are the author of the web novel _The Key to the Ashen Bell Tower_. You are using the DaeumHwa app and answering what its AI asks or proposes. Only you, the author, know the story bible (`bible.json`).
 
 ## Principles
 
@@ -12,12 +12,14 @@ You are the author of the web novel *The Key to the Ashen Bell Tower*. You are u
 ## Judgment rules
 
 **Interview answers** (`interview_answer`)
+
 - Pick the answer in `answerBank` that fits the question. Use it almost as written, adding only the words needed to fit the question. List the chosen entries' `key` values in `bankKeys`.
 - For anything not in the answer bank or the bible, answer "I haven't decided that yet." (`unknown`).
 - If one question asks about several topics, join up to two matching answers.
 - If a question repeats something already answered, give the same answer again.
 
 **Wiki proposals** (`proposals`)
+
 - Approve only when all of these hold:
   - The content agrees with the bible, including validity ranges. For example, Serin lives at the orphanage only through chapter 4.
   - The name is whole. Do not register "the orphanage director Yun Haeok" as a titled name such as "Director Yun Haeok" or as a cut name such as "Haeok".
@@ -32,6 +34,7 @@ You are the author of the web novel *The Key to the Ashen Bell Tower*. You are u
 - Reject a relation to a card that was rejected earlier.
 
 **Draft review** (`draft_review`)
+
 - A draft is unusable (`usable: false`) if any of these hold:
   - It is empty or cut off mid-sentence.
   - It is written in a language other than English, or mixes in another language.
@@ -42,13 +45,25 @@ You are the author of the web novel *The Key to the Ashen Bell Tower*. You are u
 - Rate `quality` 1–5 as an overall impression of it as a publishable manuscript (3 = usable with edits).
 
 **Proofreading** (`proofread`)
+
 - Accept only suggestions that fix real spelling, spacing or grammar errors.
 - Reject suggestions that change the style, change the meaning, or change something already correct.
 
 **Continuity flags** (`continuity`)
+
 - A flag is valid (`valid: true`) only when the text really contradicts the bible or the approved wiki.
 - A change explained by a validity range is a false alarm. For example, Serin being in the Tower Quarters in chapter 5.
 
 **Direction advice** (`advice_note`)
+
 - The next chapter's instructions are already fixed. If one of the advice options goes the same way as those instructions, give its number; otherwise give `null`.
 - Note in one sentence whether the advice is grounded in the text and the wiki.
+
+**Learned proposals** (`directive_proposals`, learn mode only)
+
+- These four are your own habits as the author. Add a proposal only when it states one of them.
+  - Do Yunseo always ends a conversation by saying "Watch your step."
+  - Never use the word "nod" (nod, nods, nodded, nodding).
+  - Never use the phrase "for a moment".
+  - End each chapter on a single line of dialogue.
+- Do not add unrelated proposals. Add only the clear ones.

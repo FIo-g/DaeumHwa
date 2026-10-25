@@ -11,6 +11,8 @@ import {
   runReaderSimulation,
   startDraft,
 } from '@/server/ai-features'
+import { applyAuthorEdits } from '../learn-edits'
+import { decideInferred, inferDirectives } from '@/server/directive-infer'
 import { type DraftPlanCard, renderPlanInstructions } from '@/lib/draft-plan'
 import { aiRuns } from '@/db/schema'
 import { replaceRunOutput } from '@/ai/run'
@@ -751,12 +753,17 @@ export const draft: StepFn = async (ctx, key, state) => {
   const chosen = pickAttempt(attempts)
   // The saved chapter is the attempt file the author reviewed, not the run's stored text.
   const chosenFile = `chapters/${pad(n)}.attempt-${attempts.indexOf(chosen) + 1}.md`
+  const rawBody = readRunFile(ctx.dir, chosenFile)
+  // Learn mode: the simulated author edits the AI draft before the first product save, so the
+  // edit ratio and the stage 4 inference see these edits.
+  const learnOn = (ctx.config as { directivesMode?: string }).directivesMode === 'learn'
+  const body = learnOn ? applyAuthorEdits(rawBody, ctx.config.lang) : rawBody
   const chapter = await guarded(ctx, state, key, () =>
     createChapterFromDraft(ctx.db, ctx.actor, {
       workId,
       runId: chosen.runId,
       title: spec.title,
-      body: readRunFile(ctx.dir, chosenFile),
+      body,
     }),
   )
   if (chapter) state.data.chapterIds[n] = chapter.id
@@ -768,6 +775,7 @@ export const proofread: StepFn = async (ctx, key, state) => {
   const n = chapterOf(key)
   const chapterId = state.data.chapterIds[n]
   if (!chapterId) return 'done'
+  const workId = requireWorkId(state)
   const beforeFile = `chapters/${pad(n)}.draft.md`
   const afterFile = `chapters/${pad(n)}.md`
   const suggestionsFile = `chapters/${pad(n)}.proofread.json`
@@ -836,6 +844,64 @@ export const proofread: StepFn = async (ctx, key, state) => {
     await setChapterStatus(ctx.db, ctx.actor, chapterId, 'done')
     mark(ctx, state, statusMark)
   }
+
+  // Learn mode: when the chapter is set to done, run the inference and let the author decide.
+  const learnMark = `${key}:learn`
+  if (
+    (ctx.config as { directivesMode?: string }).directivesMode === 'learn' &&
+    !isMarked(state, learnMark)
+  ) {
+    const started = Date.now()
+    const inferred = await withModelRetry(ctx, state, `${key}:infer`, () =>
+      inferDirectives(ctx.db, ctx.actor, { workId, chapterId }, ctx.client as never),
+    )
+    const elapsed = Date.now() - started
+    state.data.inferMs = { ...state.data.inferMs, [n]: elapsed }
+    persist(ctx, state)
+    if (inferred && inferred.proposals.length > 0) {
+      let pending = pendingFor(ctx.dir, key, 'directive_proposals')
+      if (!pending) {
+        pending = {
+          kind: 'directive_proposals',
+          step: key,
+          chapter: n,
+          proposals: inferred.proposals.map((p) => ({ index: p.index, text: p.text })),
+        }
+      }
+      const answer = consult(ctx, pending) as Extract<
+        Answer,
+        { kind: 'directive_proposals' }
+      > | null
+      if (!answer) {
+        persist(ctx, state)
+        return 'pending'
+      }
+      const wanted = new Set(answer.add)
+      let added = 0
+      for (const proposal of inferred.proposals) {
+        const decision = wanted.has(proposal.index) ? 'add' : 'ignore'
+        try {
+          const outcome = await decideInferred(ctx.db, ctx.actor, {
+            workId,
+            runId: proposal.runId,
+            index: proposal.index,
+            decision,
+          })
+          if (outcome.decision === 'added') added += 1
+        } catch {
+          // A concurrent decision already settled this proposal; count what succeeded.
+        }
+      }
+      state.data.learnedAdded = { ...state.data.learnedAdded, [n]: added }
+      persist(ctx, state)
+      settle(ctx, pending, answer)
+    } else {
+      state.data.learnedAdded = { ...state.data.learnedAdded, [n]: 0 }
+      persist(ctx, state)
+    }
+    mark(ctx, state, learnMark)
+  }
+
   const finalText = readRunFile(ctx.dir, afterFile)
   writeRunFile(
     ctx.dir,

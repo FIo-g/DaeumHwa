@@ -140,6 +140,12 @@ export const PendingSchema = z.discriminatedUnion('kind', [
     result: AdviceSchema,
     nextInstructions: z.string(),
   }),
+  z.object({
+    kind: z.literal('directive_proposals'),
+    step: z.string(),
+    chapter: z.number().int(),
+    proposals: z.array(z.object({ index: z.number().int().nonnegative(), text: z.string() })),
+  }),
 ])
 
 export type Pending = z.infer<typeof PendingSchema>
@@ -178,6 +184,10 @@ export const AnswerSchema = z.discriminatedUnion('kind', [
     kind: z.literal('plan_review'),
     approve: z.boolean(),
     note: z.string().max(150).optional(),
+  }),
+  z.object({
+    kind: z.literal('directive_proposals'),
+    add: z.array(z.number().int().nonnegative()),
   }),
 ])
 

@@ -20,6 +20,10 @@ export type HarnessInput = {
   ledgerChars?: number
   /** Applied voice-fix lines per chapter, from the run state. Absent on old runs. */
   voiceApplied?: Record<number, number>
+  /** Learn mode: proposals the author added per chapter. Absent on old runs. */
+  learnedAdded?: Record<number, number>
+  /** Learn mode: directive-infer time per chapter in ms. Absent on old runs. */
+  inferMs?: Record<number, number>
 }
 
 const CountSchema = z.number().int().nonnegative()
@@ -63,6 +67,9 @@ export const HarnessSummarySchema = z.object({
       voiceFixes: CountSchema.default(0),
       voiceProposed: CountSchema.default(0),
       checkMs: MsSchema.default(0),
+      // Stage 4 learn: proposals the author added and the inference time. Older runs read as 0.
+      learnedAdded: CountSchema.default(0),
+      inferMs: MsSchema.default(0),
     }),
   ),
   interview: z.object({
@@ -247,6 +254,12 @@ export function harnessSummary(records: CallRecord[], o: HarnessInput): HarnessS
             call.task === VOICE_FIX_TASK,
         )
         .reduce((sum, call) => sum + call.durationMs, 0),
+      learnedAdded: o.learnedAdded?.[n] ?? 0,
+      inferMs:
+        o.inferMs?.[n] ??
+        mine
+          .filter((call) => call.task === 'directive-infer')
+          .reduce((sum, call) => sum + call.durationMs, 0),
     })
   }
 

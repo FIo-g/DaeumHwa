@@ -21,7 +21,7 @@ Resolve every repo-relative path below (for example `eval/fixtures/novel/<lang>/
    - `draft_review`, `proofread`, `continuity`: read `textFile`.
    - `plan_review`: the plan card is in `pending.json` (`card`). Read nothing else.
    - `proposals` with `source` = `post_chapter`: read `chapterFile` when it is not null.
-   - `interview_answer`, `proposals` from `interview` or `style`, `advice_note`: the pending file carries the material you need. Do not look for more than pending.json and, for these two kinds, author-context.json.
+   - `interview_answer`, `proposals` from `interview` or `style`, `advice_note`, `directive_proposals`: the pending file carries the material you need. Do not look for more than pending.json and, for these two kinds, author-context.json.
    - `interview_answer` and `proposals` (every `source`): also read `<dir>/author-context.json` if it exists (see "Reading author-context.json" below). If it is missing, judge without it. A `post_chapter` proposal needs both `chapterFile` and `author-context.json`.
 5. Write `<dir>/answer.json`. It must be one JSON object of the exact shape for the kind (see the table below), with the `kind` field equal to the pending `kind`.
 6. Re-read `answer.json` once to confirm it is valid JSON with the right fields.
@@ -31,15 +31,16 @@ Resolve every repo-relative path below (for example `eval/fixtures/novel/<lang>/
 
 Write exactly these fields. Extra fields are not allowed. Every `id` in a `decisions` array must match an `id` in the pending `items`, each exactly once, and no id may be missing.
 
-| kind               | answer.json shape                                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| `interview_answer` | `{"kind":"interview_answer","answer":"<string>","bankKeys":["<string>", ...]}`                          |
-| `proposals`        | `{"kind":"proposals","decisions":[{"id":"<string>","approve":true or false,"reason":"<string>"}, ...]}` |
-| `draft_review`     | `{"kind":"draft_review","usable":true or false,"quality":<integer 1-5>,"reason":"<string>"}`            |
-| `proofread`        | `{"kind":"proofread","decisions":[{"id":"<string>","accept":true or false,"reason":"<string>"}, ...]}`  |
-| `continuity`       | `{"kind":"continuity","decisions":[{"id":"<string>","valid":true or false,"reason":"<string>"}, ...]}`  |
-| `advice_note`      | `{"kind":"advice_note","matchingOption":<integer or null>,"note":"<string>"}`                           |
-| `plan_review`      | `{"kind":"plan_review","approve":true}` or `{"kind":"plan_review","approve":false,"note":"<string>"}`   |
+| kind                  | answer.json shape                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| `interview_answer`    | `{"kind":"interview_answer","answer":"<string>","bankKeys":["<string>", ...]}`                          |
+| `proposals`           | `{"kind":"proposals","decisions":[{"id":"<string>","approve":true or false,"reason":"<string>"}, ...]}` |
+| `draft_review`        | `{"kind":"draft_review","usable":true or false,"quality":<integer 1-5>,"reason":"<string>"}`            |
+| `proofread`           | `{"kind":"proofread","decisions":[{"id":"<string>","accept":true or false,"reason":"<string>"}, ...]}`  |
+| `continuity`          | `{"kind":"continuity","decisions":[{"id":"<string>","valid":true or false,"reason":"<string>"}, ...]}`  |
+| `advice_note`         | `{"kind":"advice_note","matchingOption":<integer or null>,"note":"<string>"}`                           |
+| `plan_review`         | `{"kind":"plan_review","approve":true}` or `{"kind":"plan_review","approve":false,"note":"<string>"}`   |
+| `directive_proposals` | `{"kind":"directive_proposals","add":[<index>, ...]}`                                                   |
 
 Field notes:
 
@@ -47,6 +48,7 @@ Field notes:
 - `draft_review`: `quality` is an integer from 1 to 5. Three means usable with edits.
 - `advice_note`: `matchingOption` is the number of the advice option that matches the next chapter's fixed instructions, or `null` when none does. `note` is one sentence.
 - `plan_review`: `note` is 1 to 150 characters, and only when `approve` is `false`. Leave it out when `approve` is `true`.
+- `directive_proposals`: `add` lists the `index` values to add as lasting requests. In learn mode only, add a proposal only when it states one of your own habits (the four probes in the guide). Otherwise leave `add` empty.
 
 ## Reading author-context.json
 
@@ -69,6 +71,7 @@ Field notes:
 - `continuity`: a flag is valid only when the text really contradicts the bible or approved wiki. A change explained by a validity range is a false alarm.
 - `advice_note`: the next chapter's instructions are fixed. Match the advice option that goes the same way; otherwise `null`.
 - `plan_review`: treat `intention` and `mustInclude` in `pending.json` as what you, the author, want in this chapter. Approve when the card (`card`) covers them in a sensible order and nothing in it contradicts them. Otherwise write one note of at most 150 characters asking for the single most important fix. Do not ask for style changes.
+- `directive_proposals`: the proposals were inferred from places you edited an AI draft. Add one only when it states one of your own habits from the guide (learn mode). Otherwise add none.
 
 ## Rules
 

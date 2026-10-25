@@ -158,7 +158,8 @@ export type InitOptions = {
   speech?: string
   twoStep?: string
   directives?: boolean
-  directivesMode?: 'ledger'
+  directivesMode?: 'ledger' | 'learn'
+  exampleBank?: boolean
   fewInstructions?: boolean
   quick?: boolean
   draftMode?: string
@@ -198,11 +199,12 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (refusal) throw new Error(refusal)
   }
   const twoStepSuffix = twoStep ? '-twostep' : ''
-  // Ledger mode is a directives run too: the ledger flag alone turns the measurement on.
+  // Ledger and learn modes are directives runs too: the mode flag alone turns the measurement on.
   const ledger = o.directivesMode === 'ledger'
-  const directives = o.directives === true || ledger
+  const learn = o.directivesMode === 'learn'
+  const directives = o.directives === true || ledger || learn
   const fewInstructions = o.fewInstructions === true
-  const directivesSuffix = ledger ? '-ledger' : directives ? '-directives' : ''
+  const directivesSuffix = learn ? '-learn' : ledger ? '-ledger' : directives ? '-directives' : ''
   const fewSuffix = fewInstructions ? '-few' : ''
   const quick = o.quick === true
   const quickSuffix = quick ? '-quick' : ''
@@ -212,11 +214,13 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
   const lengthSuffix = continueLength ? '-cont' : ''
   const sceneFix = o.sceneFix !== false
   const nofixSuffix = sceneFix ? '' : '-nofix'
+  const exampleBank = o.exampleBank === true
+  const bankSuffix = exampleBank ? '-bank' : ''
   const dir = path.resolve(
     o.dir ??
       path.join(
         RESULTS_DIR,
-        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${quickSuffix}${scenesSuffix}${lengthSuffix}${nofixSuffix}${deploySuffix}`,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${quickSuffix}${scenesSuffix}${lengthSuffix}${nofixSuffix}${bankSuffix}${deploySuffix}`,
       ),
   )
 
@@ -244,7 +248,8 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (
       o.directives !== undefined &&
       (directives !== (existing.directives ?? false) ||
-        ledger !== (existing.directivesMode === 'ledger'))
+        ledger !== (existing.directivesMode === 'ledger') ||
+        learn !== (existing.directivesMode === 'learn'))
     ) {
       throw new Error(`run exists with another directives: ${dir}`)
     }
@@ -266,6 +271,9 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
     if (o.sceneFix !== undefined && sceneFix !== (existing.sceneFix ?? true)) {
       throw new Error(`run exists with another sceneFix: ${dir}`)
     }
+    if (o.exampleBank !== undefined && exampleBank !== (existing.exampleBank ?? false)) {
+      throw new Error(`run exists with another exampleBank: ${dir}`)
+    }
   } else {
     createRun(dir, {
       modelId: model,
@@ -280,7 +288,8 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       speech: speech || undefined,
       twoStep: twoStep || undefined,
       directives: directives || undefined,
-      directivesMode: ledger ? 'ledger' : undefined,
+      directivesMode: learn ? 'learn' : ledger ? 'ledger' : undefined,
+      exampleBank: exampleBank || undefined,
       fewInstructions: fewInstructions || undefined,
       quick: quick || undefined,
       draftMode: draftMode === 'scenes' ? 'scenes' : undefined,
@@ -381,19 +390,32 @@ export function draftModeFlag(flags: Flags): string | undefined {
 }
 
 /**
- * The --directives value, or undefined when the flag is absent. `on` and `ledger` are accepted; a
- * bare flag is refused, so a directive run is never created silently without its setting.
+ * The --directives value, or undefined when the flag is absent. `on`, `ledger` and `learn` are
+ * accepted; a bare flag is refused, so a directive run is never created silently without its setting.
  */
 export function directivesFlag(flags: Flags): boolean | undefined {
   const value = flags.directives
   if (value === undefined) return undefined
-  if (value === 'on' || value === 'ledger') return true
+  if (value === 'on' || value === 'ledger' || value === 'learn') return true
   throw new Error(`unknown directives value: ${String(value)}`)
 }
 
-/** The ledger mode of --directives: `ledger` when given, else undefined (the instruction mode). */
-export function directivesModeFlag(flags: Flags): 'ledger' | undefined {
-  return flags.directives === 'ledger' ? 'ledger' : undefined
+/** The mode of --directives: `ledger` or `learn` when given, else undefined (the instruction mode). */
+export function directivesModeFlag(flags: Flags): 'ledger' | 'learn' | undefined {
+  if (flags.directives === 'ledger') return 'ledger'
+  if (flags.directives === 'learn') return 'learn'
+  return undefined
+}
+
+/**
+ * The --example-bank value, or undefined when the flag is absent. Only `on` is accepted; a bare
+ * flag is refused, so a bank run is never created silently without its setting.
+ */
+export function exampleBankFlag(flags: Flags): boolean | undefined {
+  const value = flags['example-bank']
+  if (value === undefined) return undefined
+  if (value === 'on') return true
+  throw new Error(`unknown example-bank value: ${String(value)}`)
 }
 
 /**
@@ -879,6 +901,7 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         twoStep: twoStepFlag(flags),
         directives: directivesFlag(flags),
         directivesMode: directivesModeFlag(flags),
+        exampleBank: exampleBankFlag(flags),
         fewInstructions: fewInstructionsFlag(flags),
         quick: quickFlag(flags),
         draftMode: draftModeFlag(flags),

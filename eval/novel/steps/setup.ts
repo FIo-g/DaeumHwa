@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import { createWork } from '@/server/works'
 import { createNamingRule } from '@/server/naming'
 import { createStyleCard } from '@/server/styles'
@@ -8,6 +10,31 @@ import { isMarked, mark, persist, requireWorkId } from './util'
 
 // Creates the eval user and the work, then seeds what the author types in the UI before the
 // interview: naming rules, planned threads and the work style card. Nothing else is seeded.
+
+/** Bank passages for --example-bank on, resolved from the repo root. Empty when missing. */
+export function exampleBankPassages(lang: 'ko' | 'en'): string[] {
+  const candidates = [
+    path.resolve(process.cwd(), `eval/fixtures/novel/${lang}/example-bank.json`),
+    path.join(
+      path.dirname(new URL(import.meta.url).pathname),
+      `../../fixtures/novel/${lang}/example-bank.json`,
+    ),
+  ]
+  for (const file of candidates) {
+    try {
+      if (!existsSync(file)) continue
+      const parsed = JSON.parse(readFileSync(file, 'utf8')) as unknown
+      if (Array.isArray(parsed)) return parsed.filter((p): p is string => typeof p === 'string')
+      if (typeof parsed === 'object' && parsed !== null && 'passages' in parsed) {
+        const list = (parsed as { passages: unknown }).passages
+        if (Array.isArray(list)) return list.filter((p): p is string => typeof p === 'string')
+      }
+    } catch {
+      continue
+    }
+  }
+  return []
+}
 
 export const setup: StepFn = async (ctx, _key, state) => {
   if (!state.data.userId) {
@@ -52,13 +79,19 @@ export const setup: StepFn = async (ctx, _key, state) => {
 
   const style = ctx.bible.workStyle
   if (!isMarked(state, 'setup:style')) {
+    const banked =
+      (ctx.config as { exampleBank?: boolean }).exampleBank === true
+        ? exampleBankPassages(ctx.config.lang)
+        : []
+    const examples =
+      banked.length > 0 ? `${style.examples}\n\n${banked.join('\n\n')}` : style.examples
     await createStyleCard(ctx.db, ctx.actor, {
       workId,
       entryId: null,
       name: style.name,
       tone: style.tone,
       rules: style.rules,
-      examples: style.examples,
+      examples,
     })
     mark(ctx, state, 'setup:style')
   }

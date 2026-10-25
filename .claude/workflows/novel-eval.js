@@ -88,6 +88,8 @@ const ALLOWED_RUN_FLAGS = [
   '--deploy-settings',
   '--directives on',
   '--directives ledger',
+  '--directives learn',
+  '--example-bank on',
   '--draft-mode scenes',
   '--few-instructions',
   '--length-mode continue',

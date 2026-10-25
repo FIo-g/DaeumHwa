@@ -62,5 +62,7 @@ export function fakeAnswer(p: Pending, bible: Bible): Answer {
         note: 'fake author',
       }
     }
+    case 'directive_proposals':
+      return { kind: 'directive_proposals', add: [] }
   }
 }

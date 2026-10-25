@@ -29,7 +29,9 @@ export type RunConfig = {
   /** Chapter 1's instructions get the planted author directives, and their kept/broken counts are measured (`--directives on`). Absent means off. */
   directives?: boolean
   /** Ledger mode (`--directives ledger`): the probes are planted as author requests, not in chapter 1's instructions. Absent means the instructions carry them. */
-  directivesMode?: 'ledger'
+  directivesMode?: 'ledger' | 'learn'
+  /** Example bank on (`--example-bank on`): setup appends the bank passages to the style card. Absent means off. */
+  exampleBank?: boolean
   /** Chapter instructions are only the first sentence and the draft review gets no mustInclude list (`--few-instructions`). Absent means off. */
   fewInstructions?: boolean
   /** No plan card: the draft is written at once, as before stage 1 (`--quick`). Absent means off. */
@@ -80,6 +82,10 @@ export type RunData = {
   planted?: PlantedLedger
   /** Applied voice-fix lines per chapter, set when the draft step applies its fix. */
   voiceApplied?: Record<number, number>
+  /** Learn mode: proposals the author added per chapter. Absent on old runs. */
+  learnedAdded?: Record<number, number>
+  /** Learn mode: directive-infer time per chapter in ms. Absent on old runs. */
+  inferMs?: Record<number, number>
 }
 
 export type RunState = {
