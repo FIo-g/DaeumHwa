@@ -165,6 +165,7 @@ export const AI_TASKS = [
   'draft-check',
   'scene-fix',
   'voice-fix',
+  'directive-infer',
 ] as const
 export type AiTaskName = (typeof AI_TASKS)[number]
 
@@ -193,7 +194,13 @@ export type DirectiveScope = (typeof DIRECTIVE_SCOPES)[number]
 export const DIRECTIVE_KINDS = ['style', 'speech', 'ban', 'length', 'content'] as const
 export type DirectiveKind = (typeof DIRECTIVE_KINDS)[number]
 
-export const DIRECTIVE_SOURCES = ['author', 'instruction', 'revision', 'suggested'] as const
+export const DIRECTIVE_SOURCES = [
+  'author',
+  'instruction',
+  'revision',
+  'suggested',
+  'inferred',
+] as const
 export type DirectiveSource = (typeof DIRECTIVE_SOURCES)[number]
 
 export const DIRECTIVE_STATUSES = ['active', 'off'] as const

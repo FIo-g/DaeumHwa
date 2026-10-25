@@ -13,6 +13,7 @@ import { DIRECTION_ADVICE_SYSTEM } from './en/direction-advice'
 import { DRAFT_BEATS_SYSTEM } from './en/draft-beats'
 import { DRAFT_CHECK_SYSTEM } from './en/draft-check'
 import { DRAFT_PLAN_SYSTEM } from './en/draft-plan'
+import { DIRECTIVE_INFER_SYSTEM } from './en/directive-infer'
 import { DRAFT_CHAPTER_SYSTEM } from './en/draft-chapter'
 import { DRAFT_EXPAND_SYSTEM } from './en/draft-expand'
 import { DRAFT_REPAIR_SYSTEM } from './en/draft-repair'
@@ -60,4 +61,5 @@ export const EN_SYSTEMS: Record<AiTaskName, string> = {
   'chapter-extract-facts': CHAPTER_EXTRACT_FACTS_SYSTEM,
   'chapter-extract-threads': CHAPTER_EXTRACT_THREADS_SYSTEM,
   'chapter-extract-relations': CHAPTER_EXTRACT_RELATIONS_SYSTEM,
+  'directive-infer': DIRECTIVE_INFER_SYSTEM,
 }

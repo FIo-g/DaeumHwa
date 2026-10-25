@@ -10,6 +10,7 @@ import { chapterExtractRelationsSample } from './samples/chapter-extract-relatio
 import { chapterExtractThreadsSample } from './samples/chapter-extract-threads'
 import { continuityCheckSample } from './samples/continuity-check'
 import { directionAdviceSample } from './samples/direction-advice'
+import { directiveInferSample } from './samples/directive-infer'
 import { draftBeatsSample } from './samples/draft-beats'
 import { draftCheckSample } from './samples/draft-check'
 import { draftSample } from './samples/draft-chapter'
@@ -58,6 +59,7 @@ const PROMPTS: Record<AiTaskName, string> = {
   'chapter-extract-facts': chapterExtractFactsSample,
   'chapter-extract-threads': chapterExtractThreadsSample,
   'chapter-extract-relations': chapterExtractRelationsSample,
+  'directive-infer': directiveInferSample,
 }
 
 describe('EN_SYSTEMS', () => {

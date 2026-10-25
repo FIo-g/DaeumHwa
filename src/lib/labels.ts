@@ -63,6 +63,7 @@ export const DIRECTIVE_SOURCE_LABEL: Record<DirectiveSource, string> = {
   instruction: '지시',
   revision: '계획 수정',
   suggested: 'AI 제안',
+  inferred: '수정에서 찾음',
 }
 
 export const SPEECH_LEVEL_LABEL: Record<SpeechLevel, string> = {

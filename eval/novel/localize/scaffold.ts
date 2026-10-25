@@ -102,6 +102,12 @@ const RULES: readonly Rule[] = [
   ['회차 끝 (질문): ', 'Ending (question): '],
   ['회차 끝 (위기): ', 'Ending (crisis): '],
   ['회차 끝 (반전): ', 'Ending (twist): '],
+  // Inferred-request edits (stage 4, directive-infer): the per-hunk header and the before/after
+  // labels. The header rule comes first: it carries the number the generic chapter rule below
+  // would otherwise match.
+  [/\[수정 (\d+)\]/g, '[Edit $1]'],
+  ['- 전: ', '- Before: '],
+  ['- 후: ', '- After: '],
   ['작가 메모: ', 'Author note: '],
   ['현재 계획:', 'Current plan:'],
   ['일어나는 일: ', 'What happens: '],
