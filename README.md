@@ -108,6 +108,7 @@ pnpm dev                     # http://localhost:3000
 - **모델 학습 주의**: `*-contributor` 모델(`muse-spark-1.3-contributor`, `muse-spark-1.2-contributor`)은 보낸 프롬프트와 응답이 모델 학습에 쓰일 수 있습니다(ZDR 아님). 공개 전 원고나 설정을 보낸다면 다른 모델을 쓰세요. 기본 모델 또는 가져오기 모델이 이런 모델이면 화면 상단에 경고가 뜹니다. `claude-haiku-5-5`, `gpt-6-luna`, `gpt-5.6-luna`, `grok-4.7` 은 학습에 쓰지 않고 30일 보관합니다.
 - Muse Spark 모델은 지역 제한이 있습니다. 한국에서의 제공 여부는 확인되지 않았습니다. 호출이 실패하면 다른 모델을 쓰세요.
 - `gemini-4-argon-contributor` 같은 Gemini Contributor 모델도 학습 경고 대상이지만, 이 앱의 형식 자동 선택 목록에는 없습니다.
+- OpenCode Go 요청에는 `x-opencode-session` 헤더(서버 프로세스마다 하나)와 `User-Agent: daeumhwa/0.1` 을 붙입니다. 게이트웨이는 이 헤더가 없는 요청을 거부합니다(`MissingSessionID`). 키가 만료되면 `Invalid credential` 로 실패하므로 `OPENCODE_API_KEY` 를 새 키로 바꿉니다.
 - 원고 가져오기는 Inngest 키가 없으면 브라우저가 50화 단위로 나눠 단계별로 진행합니다. 키가 있으면 백그라운드에서 진행합니다.
 
 ## 명령어
@@ -174,4 +175,3 @@ drizzle/            마이그레이션 파일
 - HWP, HWPX 파일 가져오기는 지원하지 않습니다. `.txt`, `.md`, `.docx` 만 됩니다.
 - 여러 명이 같은 원고를 실시간으로 함께 편집하지 않습니다.
 - 위키 변경은 작가 작업이나 승인된 제안으로만 반영됩니다. AI가 직접 위키를 고치지 않습니다. 작가 요청 장부도 같습니다. AI가 찾은 요청은 작가가 추가해야 들어갑니다.
-- 2026-10-28 현재 OpenCode Go 게이트웨이가 `x-opencode-session` 헤더가 없는 요청을 거부합니다(`MissingSessionID`). 그래서 OpenCode 경로의 AI 호출이 실패합니다. 대화마다 고정된 세션 ID를 보내도록 고칠 예정입니다. Anthropic 경로는 영향이 없습니다.
