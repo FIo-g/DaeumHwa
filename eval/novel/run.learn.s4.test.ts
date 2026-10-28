@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { authorDirectives } from '@/db/schema'
 import { FakeAiClient } from '@/test/fake-ai'
-import { loadBible } from './bible'
+import { loadBible, type Bible } from './bible'
 import { createRun, openRun, runUntilBlocked } from './run'
 import { loadConfig, loadState, newState } from './state'
 import { readCallRecords } from './steps/util'
@@ -58,8 +58,16 @@ describe('learn mode config', () => {
   })
 })
 
+// True when the passage names at least one bible character, by canonical name or alias. A bank
+// passage that only invents people returns false, so the check in the bank test can fail.
+function namesBibleCharacter(passage: string, bible: Bible): boolean {
+  return bible.characters.some((character) =>
+    [character.name, ...character.aliases].some((name) => passage.includes(name)),
+  )
+}
+
 describe('example bank', () => {
-  it('has 10 passages per language and only bible names', async () => {
+  it('has 10 passages per language and each names a bible character', async () => {
     for (const lang of ['ko', 'en'] as const) {
       const raw = readFileSync(
         new URL(`../fixtures/novel/${lang}/example-bank.json`, import.meta.url),
@@ -70,13 +78,7 @@ describe('example bank', () => {
       const list = Array.isArray(passages) ? passages : []
       expect(list).toHaveLength(10)
       const bible = loadBible(lang)
-      const known = new Set([
-        ...bible.characters.map((c) => c.name),
-        ...bible.characters.flatMap((c) => c.aliases),
-        ...bible.places.map((p) => p.name),
-        ...bible.places.flatMap((p) => p.aliases),
-      ])
-      for (const passage of list) {
+      for (const [index, passage] of list.entries()) {
         // 2-4 paragraphs.
         const paras = passage
           .split(/\n\s*\n/)
@@ -86,15 +88,35 @@ describe('example bank', () => {
         expect(paras.length).toBeLessThanOrEqual(4)
         // At least one dialogue line.
         expect(passage).toMatch(/["“「『]/)
-        // Every bible-like name token present must be known: check character names.
-        for (const name of known) {
-          if (passage.includes(name)) expect(known.has(name)).toBe(true)
-        }
+        // At least one bible character is named, by name or alias.
+        expect(namesBibleCharacter(passage, bible), `passage ${index} (${lang})`).toBe(true)
+      }
+      // The plan's character × feeling pairs include these three, so the bank as a whole names them.
+      const planCharacters = {
+        ko: ['한세린', '도윤서', '한서연'],
+        en: ['Han Serin', 'Do Yunseo', 'Han Seoyeon'],
+      }[lang]
+      const bankText = list.join('\n')
+      for (const name of planCharacters) {
+        const character = bible.characters.find((c) => c.name === name)
+        const found =
+          character !== undefined &&
+          [character.name, ...character.aliases].some((alias) => bankText.includes(alias))
+        expect(found, `${name} (${lang})`).toBe(true)
       }
       // No chapter-instruction event is told: bank must not contain the tower-top first-visit summary.
       expect(raw).not.toContain('9층 꼭대기에 처음')
       expect(raw).not.toContain('climbs all the way to the top')
     }
+  })
+
+  it('does not count a passage that only invents characters', () => {
+    expect(namesBibleCharacter('김철수가 종루에 올랐다. "여기 있었어?"', loadBible('ko'))).toBe(
+      false,
+    )
+    expect(
+      namesBibleCharacter('Kim Cheolsu climbed the bell tower. "Were you here?"', loadBible('en')),
+    ).toBe(false)
   })
 
   it('--example-bank on seeds the style card with the 10 passages', async () => {
