@@ -87,7 +87,8 @@ export function examplePassages(
 }
 
 export type SelectExamplesOptions = {
-  names: string[]
+  /** One group per character: the canonical name first, then its aliases. */
+  names: string[][]
   cue: string
   draftText?: string
   max?: number
@@ -95,8 +96,8 @@ export type SelectExamplesOptions = {
 }
 
 /**
- * Picks the passages closest to this chapter. Score is 2 per chapter name present plus the
- * character-bigram Dice with the cue; ties keep input order. A passage whose sentences already
+ * Picks the passages closest to this chapter. Score is 2 per character with any name present plus
+ * the character-bigram Dice with the cue; ties keep input order. A passage whose sentences already
  * appear in draftText (the findDraftFlags sample-copy check) is skipped. Stops at max or when
  * the next passage would pass the budget.
  */
@@ -107,7 +108,9 @@ export function selectExamples(
   const max = o.max ?? EXAMPLE_MAX
   const budget = o.budget ?? EXAMPLE_BUDGET
   const scored = passages.map((passage, index) => {
-    const nameCount = o.names.filter((name) => name !== '' && passage.text.includes(name)).length
+    const nameCount = o.names.filter((group) =>
+      group.some((name) => name !== '' && passage.text.includes(name)),
+    ).length
     return { passage, index, score: 2 * nameCount + bigramDice(passage.text, o.cue) }
   })
   scored.sort((a, b) => b.score - a.score || a.index - b.index)

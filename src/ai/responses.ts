@@ -19,8 +19,12 @@ import {
 } from '@/ai/types'
 
 const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
-/** Per-call overrides: the caller's cancel signal and time limit. */
-type CallOptions = { signal?: AbortSignal; timeoutMs?: number }
+/** Per-call overrides: the caller's cancel signal, time limit, and headers. */
+type CallOptions = {
+  signal?: AbortSignal
+  timeoutMs?: number
+  headers?: Record<string, string>
+}
 const FORMAT_NAME = 'daeumhwa_answer'
 /** A 400 that names the structured-output parameter. Triggers one JSON-mode retry. */
 const FORMAT_REJECTED = /text\.format|json_schema|response_format/i
@@ -219,6 +223,7 @@ export class ResponsesAiClient implements AiClient {
       'content-type': 'application/json',
       ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
       ...this.headers,
+      ...call.headers,
     }
     const payload = JSON.stringify(body)
     const timeoutMs = call.timeoutMs ?? this.timeoutMs

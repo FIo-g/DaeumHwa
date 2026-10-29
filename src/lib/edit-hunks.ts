@@ -15,11 +15,12 @@ const VAGUE_KO = [
   '더 재미있게',
   '생생하게',
   '깔끔하게',
-  '잘',
   '좋게',
   '몰입감',
   '매끄럽게',
 ]
+
+const VAGUE_KO_WORD = /(^|\s)잘(\s|$)/
 
 const VAGUE_EN = ['concise', 'natural', 'more fun', 'vivid', 'smoother', 'better', 'engaging']
 
@@ -33,7 +34,9 @@ export function isVagueRequest(text: string, names: string[]): boolean {
   if (/\d/.test(text)) return false
   const lower = text.toLowerCase()
   return (
-    VAGUE_KO.some((word) => text.includes(word)) || VAGUE_EN.some((word) => lower.includes(word))
+    VAGUE_KO.some((word) => text.includes(word)) ||
+    VAGUE_KO_WORD.test(text) ||
+    VAGUE_EN.some((word) => lower.includes(word))
   )
 }
 

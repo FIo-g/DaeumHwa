@@ -503,8 +503,7 @@ export async function buildDraftContext(
     ])
     const names = characters
       .filter((entry) => wanted.has(entry.id))
-      .flatMap((entry) => [entry.name, ...entry.aliases])
-      .filter((name) => name.trim() !== '')
+      .map((entry) => [entry.name, ...entry.aliases].filter((name) => name.trim() !== ''))
     const plan = input.plan ?? null
     const cue = plan
       ? [instructions, ...plan.scenes.flatMap((scene) => [scene.trigger, scene.summary])]

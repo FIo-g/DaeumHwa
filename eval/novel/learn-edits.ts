@@ -41,8 +41,22 @@ function fixBan1(text: string, lang: 'ko' | 'en'): string {
 function fixBan2(text: string, lang: 'ko' | 'en'): string {
   if (lang === 'ko') {
     let out = text.replace(/입꼬리가\s+(?:살짝\s+)?올라갔다/g, '웃었다')
-    // Other mouth-corner phrases drop the clause up to the next comma or sentence end.
-    out = out.replace(/입꼬리[^.,.!?…\n]*[,.]?/g, '')
+    // Other mouth-corner phrases become a stiff expression when the clause has a verb ending in
+    // 다/며/고 within three words. Without one, only the phrase leaves the sentence.
+    out = out.replace(
+      /입꼬리(?:가|를|는|도)?((?:\s+[^\s.!?…\n]+){0,3})/g,
+      (_match, tail: string) => {
+        if (tail === '') return ''
+        const words = tail.trimStart().split(/\s+/)
+        const index = words.findIndex((word) => /(다|며|고)$/.test(word))
+        if (index === -1) return tail.replace(/^\s+/, '')
+        const ending = /(다|며|고)$/.exec(words[index])?.[1]
+        if (!ending) return tail.replace(/^\s+/, '')
+        const replacement =
+          ending === '다' ? '표정이 굳었다' : ending === '며' ? '표정이 굳으며' : '표정이 굳고'
+        return [...words.slice(0, index), replacement, ...words.slice(index + 1)].join(' ')
+      },
+    )
     out = out.replace(/[ \t]{2,}/g, ' ')
     out = out.replace(/\n{3,}/g, '\n\n')
     return out
@@ -135,10 +149,20 @@ function endsOnDialogue(text: string, lang: 'ko' | 'en'): boolean {
   return openers.some((q) => last.startsWith(q)) && closers.some((q) => last.endsWith(q))
 }
 
+/** Trims spaces and the quote marks around a question, keeping any apostrophe inside it. */
+function stripQuestionQuotes(text: string): string {
+  let out = text.trim()
+  for (;;) {
+    const next = out.replace(/^["“”「」『』'‘’\s]+|["“”「」『』'‘’\s]+$/g, '')
+    if (next === out || next === '') return out
+    out = next
+  }
+}
+
 function lastQuestion(text: string): string | null {
   const matches = text.match(/[^.!?…\n]*\?/g)
   if (!matches || matches.length === 0) return null
-  const last = matches[matches.length - 1]?.trim() ?? ''
+  const last = stripQuestionQuotes(matches[matches.length - 1] ?? '')
   if (last === '' || last.length > 120) return null
   return last
 }
@@ -148,9 +172,7 @@ function fixEnding(text: string, lang: 'ko' | 'en'): string {
   const trimmed = text.trimEnd()
   const question = lastQuestion(trimmed)
   const fallback = lang === 'ko' ? '…이제 어떻게 할 거야?' : '…What now?'
-  const line = question ? `“${question}”` : lang === 'ko' ? `"${fallback}"` : `"${fallback}"`
   // Use straight quotes for the appended line so both languages share the dialogue check.
-  const dialogue = lang === 'ko' && question ? `"${question}"` : `"${fallback}"`
-  void line
+  const dialogue = `"${question ?? fallback}"`
   return `${trimmed}\n\n${dialogue}`
 }

@@ -315,7 +315,11 @@ export function createAnthropicSdk(): Anthropic {
  * so it does not bound a streamed or slow body. The signal therefore joins the caller's cancel
  * with a time limit that covers the whole request, body included. Unset values are left out.
  */
-function requestOptions(args: { signal?: AbortSignal; timeoutMs?: number }) {
+function requestOptions(args: {
+  signal?: AbortSignal
+  timeoutMs?: number
+  headers?: Record<string, string>
+}) {
   const timeoutSignal =
     args.timeoutMs !== undefined ? AbortSignal.timeout(args.timeoutMs) : undefined
   const signal =
@@ -325,6 +329,7 @@ function requestOptions(args: { signal?: AbortSignal; timeoutMs?: number }) {
   return {
     ...(signal ? { signal } : {}),
     ...(args.timeoutMs !== undefined ? { timeout: args.timeoutMs } : {}),
+    ...(args.headers ? { headers: args.headers } : {}),
   }
 }
 

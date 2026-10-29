@@ -21,7 +21,11 @@ import {
   listDirectives,
   updateDirective,
 } from '@/server/directives'
-import { decideInferred } from '@/server/directive-infer'
+import {
+  decideInferred,
+  listInferredProposals,
+  type InferredProposal,
+} from '@/server/directive-infer'
 import { archiveFact, createFact, supersedeFact, updateFact } from '@/server/facts'
 import { archiveNamingRule, createNamingRule, updateNamingRule } from '@/server/naming'
 import { archiveStyleCard, createStyleCard, updateStyleCard } from '@/server/styles'
@@ -263,6 +267,18 @@ export async function listDirectivesAction(
   return withAction(async (db, actor) => {
     const { workId } = z.object({ workId: z.uuid() }).parse(input)
     return listDirectives(db, actor, workId)
+  })
+}
+
+const ListInferredSchema = z.object({ workId: z.uuid(), chapterId: z.uuid().optional() })
+
+/** Undecided inferred proposals, optionally only those of one chapter. Read-only. */
+export async function listInferredProposalsAction(
+  input: unknown,
+): Promise<ActionResult<InferredProposal[]>> {
+  return withAction(async (db, actor) => {
+    const { workId, chapterId } = ListInferredSchema.parse(input)
+    return listInferredProposals(db, actor, workId, chapterId ? { chapterId } : {})
   })
 }
 

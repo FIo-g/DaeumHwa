@@ -79,10 +79,7 @@ export const setup: StepFn = async (ctx, _key, state) => {
 
   const style = ctx.bible.workStyle
   if (!isMarked(state, 'setup:style')) {
-    const banked =
-      (ctx.config as { exampleBank?: boolean }).exampleBank === true
-        ? exampleBankPassages(ctx.config.lang)
-        : []
+    const banked = ctx.config.exampleBank === true ? exampleBankPassages(ctx.config.lang) : []
     const examples =
       banked.length > 0 ? `${style.examples}\n\n${banked.join('\n\n')}` : style.examples
     await createStyleCard(ctx.db, ctx.actor, {

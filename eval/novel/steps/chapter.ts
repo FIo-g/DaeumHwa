@@ -28,6 +28,7 @@ import {
   overlongParagraphs,
   PARAGRAPH_MAX_SENTENCES,
 } from '@/lib/korean/paragraphs'
+import { AppError } from '@/lib/errors'
 import { type ProofreadSuggestion, runChapterCheck, runProofread } from '@/server/chapter-check'
 import { getChapter, listChapters, saveChapter, setChapterStatus } from '@/server/chapters'
 import { listIssues, resolveIssue } from '@/server/issues'
@@ -756,7 +757,7 @@ export const draft: StepFn = async (ctx, key, state) => {
   const rawBody = readRunFile(ctx.dir, chosenFile)
   // Learn mode: the simulated author edits the AI draft before the first product save, so the
   // edit ratio and the stage 4 inference see these edits.
-  const learnOn = (ctx.config as { directivesMode?: string }).directivesMode === 'learn'
+  const learnOn = ctx.config.directivesMode === 'learn'
   const body = learnOn ? applyAuthorEdits(rawBody, ctx.config.lang) : rawBody
   const chapter = await guarded(ctx, state, key, () =>
     createChapterFromDraft(ctx.db, ctx.actor, {
@@ -847,13 +848,10 @@ export const proofread: StepFn = async (ctx, key, state) => {
 
   // Learn mode: when the chapter is set to done, run the inference and let the author decide.
   const learnMark = `${key}:learn`
-  if (
-    (ctx.config as { directivesMode?: string }).directivesMode === 'learn' &&
-    !isMarked(state, learnMark)
-  ) {
+  if (ctx.config.directivesMode === 'learn' && !isMarked(state, learnMark)) {
     const started = Date.now()
     const inferred = await withModelRetry(ctx, state, `${key}:infer`, () =>
-      inferDirectives(ctx.db, ctx.actor, { workId, chapterId }, ctx.client as never),
+      inferDirectives(ctx.db, ctx.actor, { workId, chapterId }, ctx.client),
     )
     const elapsed = Date.now() - started
     state.data.inferMs = { ...state.data.inferMs, [n]: elapsed }
@@ -888,8 +886,12 @@ export const proofread: StepFn = async (ctx, key, state) => {
             decision,
           })
           if (outcome.decision === 'added') added += 1
-        } catch {
+        } catch (error) {
           // A concurrent decision already settled this proposal; count what succeeded.
+          if (error instanceof AppError && error.code === 'BAD_STATE') continue
+          const message = error instanceof Error ? error.message : String(error)
+          state.failed.push({ step: `${key}:learn`, message })
+          persist(ctx, state)
         }
       }
       state.data.learnedAdded = { ...state.data.learnedAdded, [n]: added }

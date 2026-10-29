@@ -43,7 +43,7 @@ describe('selectExamples', () => {
       source: 'card' as const,
     }
     const picked = selectExamples([highDice, withNames], {
-      names: ['세린', '도윤서'],
+      names: [['세린'], ['도윤서']],
       cue,
     })
     expect(picked[0].text).toBe(withNames.text)

@@ -34,6 +34,8 @@ export interface GenerateObjectArgs<T> {
   promptPrefix?: string[]
   /** Routes requests of one work to the same provider cache. Not sent where unsupported. */
   cacheKey?: string
+  /** Per-request headers the provider client adds to its own (used for the OpenCode session id). */
+  headers?: Record<string, string>
 }
 
 export interface StreamTextArgs {
@@ -49,6 +51,8 @@ export interface StreamTextArgs {
   promptPrefix?: string[]
   /** Routes requests of one work to the same provider cache. Not sent where unsupported. */
   cacheKey?: string
+  /** Per-request headers the provider client adds to its own (used for the OpenCode session id). */
+  headers?: Record<string, string>
 }
 
 export interface AiClient {

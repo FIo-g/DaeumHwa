@@ -22,7 +22,11 @@ import {
   planDraftAction,
   recordDraftUseAction,
 } from '@/server/actions/ai-features'
-import { createDirectiveAction, listDirectivesAction } from '@/server/actions/wiki'
+import {
+  createDirectiveAction,
+  listDirectivesAction,
+  listInferredProposalsAction,
+} from '@/server/actions/wiki'
 import type { WorkspaceApi, WritingData } from '../types'
 import { DraftPlanCardView, type PlanEditKind } from './draft-plan-card'
 import { DraftCheck } from './draft-check'
@@ -86,29 +90,6 @@ async function countActiveRequests(workId: string): Promise<number | null> {
   try {
     const result = await listDirectivesAction({ workId })
     return result.ok ? result.data.filter((row) => row.status === 'active').length : null
-  } catch {
-    return null
-  }
-}
-
-/** Inferred proposals of one chapter, or null when the read fails. */
-async function countInferredProposals(workId: string, chapterId: string): Promise<number | null> {
-  try {
-    const response = await fetch(`/api/works/${workId}/directives/infer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chapterId }),
-    })
-    if (!response.ok) return null
-    // Draft streams carry X-Run-Id; the infer route does not. A mocked draft response in older
-    // tests must not be consumed as JSON here, or the draft reader breaks.
-    if (response.headers.get('X-Run-Id')) return null
-    const payload = (await response.json().catch(() => null)) as {
-      ok?: boolean
-      data?: { proposals?: unknown[] }
-    } | null
-    if (!payload || payload.ok !== true || !Array.isArray(payload.data?.proposals)) return null
-    return payload.data?.proposals.length ?? null
   } catch {
     return null
   }
@@ -186,9 +167,13 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
   useEffect(() => {
     if (data.chapter.status !== 'done') return
     let live = true
-    void countInferredProposals(data.workId, data.chapter.id).then((count) => {
-      if (live && count !== null) setInferredCount(count)
-    })
+    void listInferredProposalsAction({ workId: data.workId, chapterId: data.chapter.id })
+      .then((result) => {
+        if (live && result.ok) setInferredCount(result.data.length)
+      })
+      .catch(() => {
+        // A failed read leaves the count line out.
+      })
     return () => {
       live = false
     }

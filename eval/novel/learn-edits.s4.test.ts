@@ -74,3 +74,39 @@ describe('applyAuthorEdits en', () => {
     expect(keptAll(applyAuthorEdits(EN_BEFORE, 'en'), 'en')).toBe(true)
   })
 })
+
+// Stage 4 review G6: the simulated edits read like an author's.
+describe('applyAuthorEdits review fixes (s4)', () => {
+  it('appends the last question of an English narration ending', () => {
+    const before =
+      'The fog was thick. "Did you hear that?" she asked.\n\nThe night was deep and no bell rang.'
+    const after = applyAuthorEdits(before, 'en')
+    expect(after.endsWith('\n\n"Did you hear that?"')).toBe(true)
+    expect(after).not.toContain('What now?')
+  })
+
+  it('keeps exactly one pair of quote marks around a Korean question', () => {
+    const before = '안개가 짙게 깔렸다.\n\n"정말 갈 거야?"\n\n밤은 깊었고 종소리는 들리지 않았다.'
+    const after = applyAuthorEdits(before, 'ko')
+    expect(after.endsWith('\n\n"정말 갈 거야?"')).toBe(true)
+    expect(after).not.toContain('""')
+  })
+
+  it('turns a mouth-corner clause into a stiff expression without breaking the sentence', () => {
+    const before = '그녀는 입꼬리를 비틀며 말했다.'
+    const after = applyAuthorEdits(before, 'ko')
+    expect(after.split('\n')[0]).toBe('그녀는 표정이 굳으며 말했다.')
+    expect(after).not.toContain('입꼬리')
+  })
+
+  it('stays idempotent on the review cases', () => {
+    for (const [text, lang] of [
+      ['The fog was thick. "Did you hear that?" she asked.\n\nThe night was deep.', 'en'],
+      ['안개가 짙게 깔렸다.\n\n"정말 갈 거야?"\n\n밤은 깊었고 종소리는 들리지 않았다.', 'ko'],
+      ['그녀는 입꼬리를 비틀며 말했다.', 'ko'],
+    ] as const) {
+      const once = applyAuthorEdits(text, lang)
+      expect(applyAuthorEdits(once, lang)).toBe(once)
+    }
+  })
+})

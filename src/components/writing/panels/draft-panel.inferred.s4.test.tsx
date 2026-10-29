@@ -3,7 +3,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChapterRow, Role } from '@/db/types'
-import { listDirectivesAction } from '@/server/actions/wiki'
+import { listDirectivesAction, listInferredProposalsAction } from '@/server/actions/wiki'
 import type { WorkspaceApi, WritingData } from '../types'
 import { DraftPanel } from './draft-panel'
 
@@ -25,6 +25,7 @@ vi.mock('@/server/actions/ai-features', () => ({
 vi.mock('@/server/actions/wiki', () => ({
   createDirectiveAction: vi.fn(),
   listDirectivesAction: vi.fn(),
+  listInferredProposalsAction: vi.fn(),
 }))
 
 function makeData(): WritingData {
@@ -69,15 +70,11 @@ function makeApi(): WorkspaceApi {
 
 beforeEach(() => {
   vi.mocked(listDirectivesAction).mockResolvedValue({ ok: true, data: [] } as never)
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      Response.json({
-        ok: true,
-        data: { runId: 'run-1', proposals: [{ index: 0 }, { index: 1 }] },
-      }),
-    ),
-  )
+  vi.mocked(listInferredProposalsAction).mockResolvedValue({
+    ok: true,
+    data: [{ index: 0 }, { index: 1 }],
+  } as never)
+  vi.stubGlobal('fetch', vi.fn())
 })
 
 afterEach(() => {
@@ -87,19 +84,24 @@ afterEach(() => {
 })
 
 describe('DraftPanel inferred line (s4)', () => {
-  it('shows the inferred count with a link to the requests tab', async () => {
+  it('shows the inferred count with a link to the requests tab without calling the infer route', async () => {
     render(<DraftPanel data={makeData()} api={makeApi()} />)
     expect(await screen.findByText('새 요청 제안 2개')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '보기' })).toHaveAttribute(
       'href',
       '/works/work-1/wiki?tab=requests',
     )
+    expect(vi.mocked(listInferredProposalsAction)).toHaveBeenCalledWith({
+      workId: 'work-1',
+      chapterId: 'c1',
+    })
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
   })
 
-  it('hides the line when there are no proposals and shows nothing on 500', async () => {
-    vi.mocked(fetch).mockResolvedValue(new Response('error', { status: 500 }))
+  it('hides the line when the read fails', async () => {
+    vi.mocked(listInferredProposalsAction).mockResolvedValue({ ok: false } as never)
     render(<DraftPanel data={makeData()} api={makeApi()} />)
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
+    await waitFor(() => expect(vi.mocked(listInferredProposalsAction)).toHaveBeenCalled())
     expect(screen.queryByText(/새 요청 제안/)).not.toBeInTheDocument()
   })
 })

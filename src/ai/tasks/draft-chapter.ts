@@ -94,9 +94,7 @@ export function voiceExamplesBlock(passages: string[]): string {
 export function buildDraftPrefix(raw: DraftPromptInput): string[] {
   const input = neutralizeDeep(raw)
   const cards =
-    input.styleCards.length > 0
-      ? input.styleCards.map((card) => renderCard(card)).join('\n\n')
-      : '(없음)'
+    input.styleCards.length > 0 ? input.styleCards.map(renderCard).join('\n\n') : '(없음)'
   const blockA = [
     renderRequestsBlock(input.requests ?? []),
     voicesBlock(input.voices),
@@ -216,14 +214,10 @@ function voicesBlock(voices: DraftPromptInput['voices']): string {
   ].join('\n')
 }
 
-export function renderCard(
-  card: DraftPromptInput['styleCards'][number],
-  examplesOverride?: unknown,
-): string {
+export function renderCard(card: DraftPromptInput['styleCards'][number]): string {
   const scope = card.entryName ? `인물 ${card.entryName}` : '작품 전체'
   const lines = [`[${scope}] ${card.name}`, `- 말투: ${card.tone || '(없음)'}`]
   lines.push(`- 규칙: ${card.rules || '(없음)'}`)
-  const examples = typeof examplesOverride === 'string' ? examplesOverride : card.examples
-  if (examples) lines.push(`- 예시:\n${examples}`)
+  if (card.examples) lines.push(`- 예시:\n${card.examples}`)
   return lines.join('\n')
 }

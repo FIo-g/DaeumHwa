@@ -14,6 +14,14 @@ const USER_AGENT = 'daeumhwa/0.1'
 const SESSION_ID = `daeumhwa-${randomUUID()}`
 const SHARED_HEADERS = { 'x-opencode-session': SESSION_ID, 'User-Agent': USER_AGENT }
 
+/**
+ * Session headers for one call: a conversation (work) reuses its own session id so the gateway can
+ * route and cache it; a call without a cache key keeps the per-process id from SHARED_HEADERS.
+ */
+function sessionHeaders(cacheKey: string | undefined): { headers?: Record<string, string> } {
+  return cacheKey ? { headers: { 'x-opencode-session': `daeumhwa-${cacheKey}` } } : {}
+}
+
 /** Headers every OpenCode request carries. Copied so callers cannot change the shared object. */
 export function opencodeHeaders(): Record<string, string> {
   return { ...SHARED_HEADERS }
@@ -124,12 +132,16 @@ export class OpencodeAiClient implements AiClient {
 
   generateObject<T>(args: GenerateObjectArgs<T>) {
     const model = args.model ?? this.defaultModel
-    return this.clientFor(model).generateObject({ ...args, model })
+    return this.clientFor(model).generateObject({
+      ...args,
+      model,
+      ...sessionHeaders(args.cacheKey),
+    })
   }
 
   streamText(args: StreamTextArgs) {
     const model = args.model ?? this.defaultModel
-    return this.clientFor(model).streamText({ ...args, model })
+    return this.clientFor(model).streamText({ ...args, model, ...sessionHeaders(args.cacheKey) })
   }
 
   private clientFor(model: string): AiClient {

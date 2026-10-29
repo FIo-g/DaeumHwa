@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { replaceRunOutput, runAiTask } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
@@ -26,6 +26,9 @@ const MIN_EDIT_RATIO = 0.05
 
 /** Undecided proposals kept in the run output, newest runs first. */
 const MAX_LIST_PROPOSALS = 10
+
+/** A running inference older than this is treated as abandoned, as run.ts does. */
+const RUNNING_STALE_MS = 10 * 60 * 1000
 
 export type InferredProposal = {
   runId: string
@@ -150,6 +153,21 @@ export async function inferDirectives(
     }
   }
 
+  const [running] = await db
+    .select({ id: aiRuns.id })
+    .from(aiRuns)
+    .where(
+      and(
+        eq(aiRuns.workId, input.workId),
+        eq(aiRuns.chapterId, input.chapterId),
+        eq(aiRuns.task, 'directive-infer'),
+        eq(aiRuns.status, 'running'),
+        gte(aiRuns.createdAt, new Date(Date.now() - RUNNING_STALE_MS)),
+      ),
+    )
+    .limit(1)
+  if (running) return { runId: null, proposals: [] }
+
   const used = await db
     .select()
     .from(aiUsageEvents)
@@ -235,14 +253,19 @@ export async function listInferredProposals(
   db: Db,
   actor: Actor,
   workId: string,
+  o: { chapterId?: string } = {},
 ): Promise<InferredProposal[]> {
   await requireWorkRole(db, workId, actor.userId, 'viewer')
+  const conditions = [
+    eq(aiRuns.workId, workId),
+    eq(aiRuns.task, 'directive-infer'),
+    eq(aiRuns.status, 'done'),
+  ]
+  if (o.chapterId) conditions.push(eq(aiRuns.chapterId, o.chapterId))
   const runs = await db
     .select()
     .from(aiRuns)
-    .where(
-      and(eq(aiRuns.workId, workId), eq(aiRuns.task, 'directive-infer'), eq(aiRuns.status, 'done')),
-    )
+    .where(and(...conditions))
     .orderBy(desc(aiRuns.createdAt))
     .limit(20)
   const entries = await characterEntries(db, workId)
@@ -284,13 +307,30 @@ export async function decideInferred(
   }
 
   const decided = input.decision === 'add' ? 'added' : 'ignored'
-  let directiveId: string | null = null
-  if (input.decision === 'add') {
-    const entries = await characterEntries(db, input.workId)
-    const entryId = proposal.entryName
+  const entries = input.decision === 'add' ? await characterEntries(db, input.workId) : []
+  const entryId =
+    input.decision === 'add' && proposal.entryName
       ? (resolveEntry(proposal.entryName, entries)?.id ?? null)
       : null
-    const created = await createDirective(db, actor, {
+
+  // The decision and the ledger row commit together. The update only matches while the proposal
+  // is undecided, so a concurrent decision on the same proposal throws instead of writing twice.
+  const directiveId = await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(aiRuns)
+      .set({
+        output: sql`jsonb_set(coalesce(${aiRuns.output}, '{}'::jsonb), ${`{decided,${input.index}}`}::text[], ${JSON.stringify(decided)}::jsonb, true)`,
+      })
+      .where(
+        and(
+          eq(aiRuns.id, run.id),
+          sql`NOT (coalesce(${aiRuns.output}->'decided', '{}'::jsonb) ? ${String(input.index)})`,
+        ),
+      )
+      .returning({ id: aiRuns.id })
+    if (updated.length === 0) throw new AppError('BAD_STATE', '이미 정한 제안입니다.')
+    if (input.decision === 'ignore') return null
+    const created = await createDirective(tx, actor, {
       workId: input.workId,
       scope: entryId ? 'character' : 'work',
       kind: proposal.kind,
@@ -299,7 +339,10 @@ export async function decideInferred(
       pattern: proposal.pattern,
       source: 'inferred',
     })
-    directiveId = created.id
+    return created.id
+  })
+
+  if (input.decision === 'add') {
     try {
       await recordUsageEvent(db, actor, {
         workId: input.workId,
@@ -313,21 +356,5 @@ export async function decideInferred(
     }
   }
 
-  // The update is conditional on the proposal still being undecided, so a concurrent decision
-  // on the same proposal throws instead of overwriting it.
-  const [current] = await db.select().from(aiRuns).where(eq(aiRuns.id, run.id)).limit(1)
-  const currentStored = readStored(current?.output)
-  if (currentStored.decided[String(input.index)] !== undefined) {
-    throw new AppError('BAD_STATE', '이미 정한 제안입니다.')
-  }
-  await db
-    .update(aiRuns)
-    .set({
-      output: {
-        proposals: currentStored.proposals,
-        decided: { ...currentStored.decided, [input.index]: decided },
-      },
-    })
-    .where(eq(aiRuns.id, run.id))
   return { runId: run.id, index: input.index, decision: decided, directiveId }
 }
