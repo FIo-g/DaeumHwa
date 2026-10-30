@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { relations, threadEntries, threads, wikiEntries } from '@/db/schema'
-import type { Actor, EntryKind, EntryRow, Role, ThreadStatus } from '@/db/types'
+import type { Actor, ContextTier, EntryKind, EntryRow, Role, ThreadStatus } from '@/db/types'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import { AppError } from '@/lib/errors'
 import { requireRowWork, requireWorkRole } from '@/server/access'
@@ -20,6 +20,7 @@ export type EntryInput = {
   body?: string
   fields?: Record<string, string>
   customFields?: { key: string; value: string }[]
+  contextTier?: ContextTier
 }
 
 export type EntryDetail = EntryRow & {
@@ -79,6 +80,7 @@ function normalizeEntry(input: EntryInput) {
     body: input.body ?? '',
     fields,
     customFields,
+    contextTier: input.contextTier ?? 'mention',
   }
 }
 
@@ -246,6 +248,7 @@ export async function updateEntry(
     body: patch.body ?? current.body,
     fields: patch.fields ?? current.fields,
     customFields: patch.customFields ?? current.customFields,
+    contextTier: patch.contextTier ?? current.contextTier,
   })
   await assertEntryNameFree(db, workId, values.kind, values.name, entryId)
   const namesChanged = values.name !== current.name || !sameList(values.aliases, current.aliases)

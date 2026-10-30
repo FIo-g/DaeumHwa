@@ -16,11 +16,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import type { EntryKind } from '@/db/types'
+import type { ContextTier, EntryKind } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { CHARACTER_FIELD_LABELS, ENTRY_KIND_LABEL, PLACE_FIELD_LABELS } from '@/lib/labels'
 import { createEntryAction, updateEntryAction } from '@/server/actions/wiki'
 import { SelectField } from './select-field'
+import { CONTEXT_TIER_LABEL } from '@/lib/labels'
 
 /** The editable parts of a wiki card, as the detail page passes them in. */
 export type EditableEntry = {
@@ -32,6 +33,7 @@ export type EditableEntry = {
   body: string
   fields: Record<string, string>
   customFields: { key: string; value: string }[]
+  contextTier?: ContextTier
 }
 
 type EntryFormDialogProps = {
@@ -45,6 +47,10 @@ type EntryFormDialogProps = {
   triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost'
   triggerSize?: 'default' | 'sm'
 }
+
+const CONTEXT_TIER_OPTIONS: { value: ContextTier; label: string }[] = (
+  ['always', 'mention', 'never'] as const
+).map((value) => ({ value, label: CONTEXT_TIER_LABEL[value] }))
 
 const FIELD_LABELS: Partial<Record<EntryKind, Record<string, string>>> = {
   character: CHARACTER_FIELD_LABELS,
@@ -108,6 +114,7 @@ function EntryFormFields({
   const [body, setBody] = useState(entry?.body ?? '')
   const [fields, setFields] = useState<Record<string, string>>(entry?.fields ?? {})
   const [customFields, setCustomFields] = useState(entry?.customFields ?? [])
+  const [contextTier, setContextTier] = useState<ContextTier>(entry?.contextTier ?? 'mention')
   const [pending, setPending] = useState(false)
 
   const fieldLabels = FIELD_LABELS[kind] ?? {}
@@ -131,6 +138,7 @@ function EntryFormFields({
       customFields: customFields
         .map((c) => ({ key: c.key.trim(), value: c.value.trim() }))
         .filter((c) => c.key !== ''),
+      contextTier,
     }
     setPending(true)
     const saved =
@@ -167,6 +175,16 @@ function EntryFormFields({
         onChange={setAliases}
       />
       <TextField id="entry-summary" label="한 줄 요약" value={summary} onChange={setSummary} />
+      <p className="-mt-2 text-xs text-muted-foreground">
+        짧게 쓸수록 AI가 같은 묘사를 덜 반복합니다.
+      </p>
+      <SelectField
+        id="entry-context-tier"
+        label="AI 문맥"
+        value={contextTier}
+        options={CONTEXT_TIER_OPTIONS}
+        onChange={setContextTier}
+      />
       {Object.entries(fieldLabels).map(([key, label]) => (
         <TextField
           key={key}

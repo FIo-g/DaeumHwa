@@ -1,0 +1,35 @@
+{
+  "title": "숫자 점검용 소설",
+  "note": "numeric recall set for track P13 (round 2). Chapters 1-4 are Korean, chapters 5-6 are English, on purpose: the numeric check reads both. Every planted error is one plain sentence about a card whose wiki fact states the same kind of number. Not a copy of eval/fixtures/continuity or continuity-planted.",
+  "chapters": [
+    { "position": 1, "title": "새벽 부두", "summary": "" },
+    { "position": 2, "title": "석실의 지도", "summary": "" },
+    { "position": 3, "title": "은빛 등대", "summary": "" },
+    { "position": 4, "title": "새벽 호위대", "summary": "" },
+    { "position": 5, "title": "The Gate", "summary": "" },
+    { "position": 6, "title": "The Ledgers", "summary": "" }
+  ],
+  "entries": [
+    { "key": "hajun", "name": "서하준", "kind": "character", "aliases": ["하준"], "summary": "부두를 지키는 검사. 말수가 적다." },
+    { "key": "yeonseo", "name": "오연서", "kind": "character", "aliases": ["연서"], "summary": "부두에서 조개를 파는 소녀." },
+    { "key": "kingdom", "name": "잿빛 왕국", "kind": "organization", "aliases": ["왕국"], "summary": "오래전에 사라진 왕국. 지도와 기록만 남았다." },
+    { "key": "lighthouse", "name": "은빛 등대", "kind": "place", "aliases": ["등대"], "summary": "항구 어귀의 석조 등대." },
+    { "key": "guard", "name": "새벽 호위대", "kind": "organization", "aliases": ["호위대"], "summary": "부두 입구를 지키는 호위 부대." },
+    { "key": "mara", "name": "Mara Voss", "kind": "character", "aliases": ["Mara"], "summary": "A courier who carries messages between the keep and the harbor." },
+    { "key": "keep", "name": "Harrow Keep", "kind": "place", "aliases": [], "summary": "A stone fortress above the harbor road." },
+    { "key": "ironwatch", "name": "Ironwatch", "kind": "organization", "aliases": [], "summary": "The garrison that holds the keep wall." }
+  ],
+  "facts": [
+    { "entry": "hajun", "content": "서하준의 나이는 31살이다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "yeonseo", "content": "오연서의 나이는 18살이다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "kingdom", "content": "잿빛 왕국은 412년에 건국되었다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "lighthouse", "content": "은빛 등대는 12층 높이의 석조 건물이다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "guard", "content": "새벽 호위대는 모두 7명이다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "mara", "content": "Mara Voss is nineteen years old.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "keep", "content": "Harrow Keep is a nine-story stone fortress.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "keep", "content": "Harrow Keep was built in 1204.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "ironwatch", "content": "Ironwatch has only twelve guards.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null }
+  ],
+  "threads": [],
+  "namingRules": []
+}

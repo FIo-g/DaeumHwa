@@ -19,19 +19,30 @@ import {
   type InterviewTurnRow,
   type ProposalRow,
 } from '@/db/types'
-import { AppError } from '@/lib/errors'
+import { AppError, isAppError } from '@/lib/errors'
 import { runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
 import { extractionToProposals, type ExtractionContext } from '@/ai/extraction'
+import { isStyleTopic, styleCardFromAnswer } from '@/ai/interview-style'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
-import { type InterviewQuestionInput, interviewQuestionTask } from '@/ai/tasks/interview-question'
+import { isSpeechStyleEnabled } from '@/ai/voice'
+import {
+  CORE_TOPICS,
+  type InterviewQuestionInput,
+  interviewQuestionTask,
+} from '@/ai/tasks/interview-question'
 import { ReaderSimSchema } from '@/ai/tasks/reader-sim'
+import { normalizeQuestion, planInterviewTopics, violatesPlan } from '@/lib/interview-plan'
+import { extractNameCandidates, findUngroundedNames, groundingTexts } from '@/lib/interview-names'
+import type { NewProposal } from '@/lib/proposal-payloads'
+import { isUndecidedOnlyAnswer } from '@/lib/undecided-answer'
 import { requireRowWork, requireWorkRole } from '@/server/access'
-import { loadKnownEntries } from '@/server/known-entries'
+import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { insertProposals } from '@/server/proposal-store'
 
 // F1 interview service. Questions and answers are stored as interview_sessions / interview_turns.
 // Answers go through the AI extraction task and become pending proposals (source 'interview').
+// A style-topic answer becomes one style_card proposal with no AI call, like an undecided-only answer.
 // Nothing here writes wiki tables; approval happens later through the proposal engine.
 
 const COVERED_LIMIT = 120
@@ -44,6 +55,8 @@ const ENTRY_SUMMARY_CHARS = 40
 const THREAD_LIMIT = 30
 const SUMMARY_LIMIT = 5
 const READER_LIMIT = 3
+// Known facts sent to the extraction prompt; pending facts come first, so they are kept.
+const PROMPT_FACT_LIMIT = 100
 const READER_DIGEST_CHARS = 200
 const ENDED_MESSAGE = '이미 끝난 인터뷰입니다.'
 
@@ -88,9 +101,9 @@ export async function startInterview(
 
 /**
  * Asks the next question. If a question is still waiting for an answer, that one is returned
- * instead of calling the AI again. A question that repeats an earlier one of the work is asked
- * once more with the repeated text in `rejected`; a repeat on the second try is stored anyway.
- * Editors and above.
+ * instead of calling the AI again. A question that repeats an earlier one of the work, or asks a
+ * topic the plan has closed, is asked once more with the repeated text in `rejected`; a question
+ * that breaks the plan again is stored anyway. Editors and above.
  */
 export async function askNextQuestion(
   db: Db,
@@ -117,15 +130,24 @@ export async function askNextQuestion(
     client,
   )
   const earlier = await loadQuestionKeys(db, workId)
-  if (earlier.has(normalizeQuestion(output.question))) {
+  const needsNewQuestion =
+    earlier.has(normalizeQuestion(output.question)) ||
+    (base.plan !== undefined && violatesPlan(output, base.plan, CORE_TOPICS))
+  const unknownNames = await unknownQuestionNames(db, workId, base, output.question)
+  if (needsNewQuestion || unknownNames.length > 0) {
     const repeated = output.question
-    ;({ output } = await runAiTask(
-      db,
-      meta,
-      interviewQuestionTask,
-      { ...base, rejected: repeated },
-      client,
-    ))
+    const retryInput: InterviewQuestionInput = {
+      ...base,
+      rejected: repeated,
+      ...(unknownNames.length > 0 ? { unknownNames } : {}),
+    }
+    try {
+      ;({ output } = await runAiTask(db, meta, interviewQuestionTask, retryInput, client))
+    } catch (error) {
+      // The name check is a soft guard: when only it asked for the retry and the retry failed,
+      // the first question stands. A repeat or a plan break, and every cancel, still fail.
+      if (needsNewQuestion || !isSoftAiFailure(error)) throw error
+    }
   }
 
   throwIfCancelled(signal)
@@ -167,53 +189,90 @@ export async function answerTurn(
   const turn = await loadTurn(db, input.turnId)
   await assertTurnOpen(db, turn)
 
-  const known = await loadKnownEntries(db, workId)
-  const { output } = await runAiTask(
-    db,
-    { userId: actor.userId, workId, signal },
-    interviewExtractTask,
-    {
-      topic: turn.topic,
-      focus: turn.focus,
-      question: turn.question,
-      answer,
-      known: [
-        ...known.active.map((e) => ({
-          name: e.name,
-          kind: e.kind,
-          aliases: e.aliases,
-          pending: false,
-        })),
-        ...known.pending.map((e) => ({
-          name: e.name,
-          kind: e.kind,
-          aliases: e.aliases,
-          pending: true,
-        })),
-      ],
-      threads: [
-        ...known.threads.map((t) => ({ title: t.title, pending: false })),
-        ...known.pendingThreadTitles.map((title) => ({ title, pending: true })),
-      ],
-    },
-    client,
-  )
-
-  const pendingTitles = new Set(known.pendingThreadTitles)
-  const context: ExtractionContext = {
-    source: 'interview',
-    sourceRef: turn.id,
-    chapterId: null,
-    chapterPosition: null,
-    existingEntries: known.active,
-    pendingEntries: known.pending,
-    threadRefs: new Map(),
-    factRefs: new Map(),
-    existingThreads: known.threads,
-    pendingThreadTitles: pendingTitles,
-    pendingThreadCreateTitles: pendingTitles,
+  // An answer that only says the topic is undecided has nothing to extract: no AI call, no proposals.
+  // A style-topic answer becomes one style card proposal, built without an AI call.
+  const undecidedOnly = isUndecidedOnlyAnswer(answer)
+  const styleTurn = isStyleTopic(turn.topic)
+  let items: NewProposal[] = []
+  if (!undecidedOnly && styleTurn) {
+    const card = styleCardFromAnswer(turn.topic, answer)
+    if (card) {
+      items = [
+        {
+          type: 'style_card',
+          payload: card,
+          source: 'interview',
+          sourceRef: turn.id,
+          chapterId: null,
+        },
+      ]
+    }
   }
-  const { proposals: items } = extractionToProposals(output, context)
+  if (!undecidedOnly && !styleTurn) {
+    const known = await loadKnownEntries(db, workId)
+    // Pending facts come first (the loader orders them), so the prompt cap keeps them.
+    const factTexts = (await loadKnownFactTexts(db, workId)).map((f) => ({
+      ...f,
+      subjectName: known.active.find((e) => e.id === f.entryId)?.name ?? f.subjectName,
+    }))
+    const { output } = await runAiTask(
+      db,
+      { userId: actor.userId, workId, signal },
+      interviewExtractTask,
+      {
+        topic: turn.topic,
+        focus: turn.focus,
+        question: turn.question,
+        answer,
+        known: [
+          ...known.active.map((e) => ({
+            name: e.name,
+            kind: e.kind,
+            aliases: e.aliases,
+            pending: false,
+          })),
+          ...known.pending.map((e) => ({
+            name: e.name,
+            kind: e.kind,
+            aliases: e.aliases,
+            pending: true,
+          })),
+        ],
+        threads: [
+          ...known.threads.map((t) => ({ title: t.title, pending: false })),
+          ...known.pendingThreadTitles.map((title) => ({ title, pending: true })),
+        ],
+        knownFacts: factTexts
+          .slice(0, PROMPT_FACT_LIMIT)
+          .map(({ subjectName, content, pending }) => ({ subjectName, content, pending })),
+      },
+      client,
+    )
+
+    const pendingTitles = new Set(known.pendingThreadTitles)
+    const context: ExtractionContext = {
+      source: 'interview',
+      sourceRef: turn.id,
+      chapterId: null,
+      chapterPosition: null,
+      existingEntries: known.active,
+      pendingEntries: known.pending,
+      threadRefs: new Map(),
+      factRefs: new Map(),
+      existingThreads: known.threads,
+      pendingThreadTitles: pendingTitles,
+      pendingThreadCreateTitles: pendingTitles,
+      sourceText: answer,
+      existingFacts: factTexts.map(({ entryId, subjectName, content }) => ({
+        entryId,
+        subjectName,
+        content,
+      })),
+      speechStyle: isSpeechStyleEnabled(),
+      pendingSpeechEntryIds: known.pendingSpeechEntryIds,
+    }
+    items = extractionToProposals(output, context).proposals
+  }
 
   throwIfCancelled(signal)
   return db.transaction(async (tx) => {
@@ -275,10 +334,8 @@ export async function completeInterview(
   return updated
 }
 
-/** Comparison key for questions: whitespace and punctuation removed. */
-export function normalizeQuestion(text: string): string {
-  return text.replace(/[\s\p{P}\p{S}]+/gu, '')
-}
+// Kept exported here so existing callers keep their import; the definition lives in lib.
+export { normalizeQuestion }
 
 // ---- helpers ----
 
@@ -351,6 +408,37 @@ async function loadQuestionKeys(db: Db, workId: string): Promise<Set<string>> {
   return new Set(rows.map((row) => normalizeQuestion(row.question)))
 }
 
+/** Every answer the author gave in this work, full text, across all its interview sessions. */
+async function loadAnswerTexts(db: Db, workId: string): Promise<string[]> {
+  const rows = await db
+    .select({ answer: interviewTurns.answer })
+    .from(interviewTurns)
+    .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
+    .where(and(eq(interviewSessions.workId, workId), isNotNull(interviewTurns.answer)))
+  return rows.flatMap((row) => (row.answer === null ? [] : [row.answer]))
+}
+
+/** Names or quoted terms of the question that the work never gave. No query unless the question has a candidate. */
+async function unknownQuestionNames(
+  db: Db,
+  workId: string,
+  base: Omit<InterviewQuestionInput, 'rejected'>,
+  question: string,
+): Promise<string[]> {
+  if (extractNameCandidates(question).length === 0) return []
+  const answers = await loadAnswerTexts(db, workId)
+  const coreTopics = CORE_TOPICS.flatMap((topic) => [topic.name, ...topic.aliases])
+  return findUngroundedNames(question, groundingTexts(base, [...answers, ...coreTopics]))
+}
+
+/** A failed, limited or concurrency-capped AI call; a cancel (CANCELLED) is not one. */
+function isSoftAiFailure(error: unknown): boolean {
+  return (
+    isAppError(error) &&
+    (error.code === 'AI_ERROR' || error.code === 'AI_LIMIT' || error.code === 'CONFLICT')
+  )
+}
+
 /** The first `max` characters of a text, trimmed. */
 function cut(text: string, max: number): string {
   return Array.from(text.trim()).slice(0, max).join('')
@@ -365,12 +453,14 @@ async function buildQuestionInput(
   const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1)
   if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
 
+  const speech = isSpeechStyleEnabled()
   const entries = await db
     .select({
       id: wikiEntries.id,
       name: wikiEntries.name,
       kind: wikiEntries.kind,
       summary: wikiEntries.summary,
+      fields: wikiEntries.fields,
     })
     .from(wikiEntries)
     .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
@@ -467,6 +557,20 @@ async function buildQuestionInput(
     .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
     .where(eq(interviewSessions.workId, workId))
 
+  // The plan reads every turn of the work, not the capped covered list, so a topic closed long
+  // ago stays closed.
+  const planRows = await db
+    .select({
+      topic: interviewTurns.topic,
+      answer: interviewTurns.answer,
+      skipped: interviewTurns.skipped,
+      focus: interviewTurns.focus,
+    })
+    .from(interviewTurns)
+    .innerJoin(interviewSessions, eq(interviewTurns.sessionId, interviewSessions.id))
+    .where(eq(interviewSessions.workId, workId))
+    .orderBy(asc(interviewTurns.createdAt))
+
   const recentRows = await db
     .select({
       topic: interviewTurns.topic,
@@ -496,6 +600,12 @@ async function buildQuestionInput(
         kind: e.kind,
         factCount: factCountByEntry.get(e.id) ?? 0,
         summary: cut(e.summary, ENTRY_SUMMARY_CHARS),
+        // Speech feature only: a character card without 말투 is marked in the question prompt.
+        ...(speech
+          ? {
+              hasSpeech: e.kind === 'character' ? (e.fields.speech ?? '').trim() !== '' : undefined,
+            }
+          : {}),
       })),
       openThreads: openThreads.map((t) => ({
         title: t.title,
@@ -540,6 +650,7 @@ async function buildQuestionInput(
       answer: turn.answer === null ? null : cut(turn.answer, RECENT_ANSWER_CHARS),
       skipped: turn.skipped,
     })),
+    plan: planInterviewTopics(planRows, CORE_TOPICS),
   }
 }
 

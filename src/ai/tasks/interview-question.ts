@@ -3,6 +3,8 @@ import { chapterLabel, ENTRY_KIND_LABEL } from '@/lib/labels'
 import { type EntryKind, INTERVIEW_FOCUSES, type InterviewFocus } from '@/db/types'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
+import type { CoreTopic, InterviewPlan } from '@/lib/interview-plan'
+import { isSpeechStyleEnabled } from '@/ai/voice'
 
 // interview-question (F1): picks the next interview question from the wiki, the story so far and
 // every earlier question of the work. Output is one question; the service stores it as a turn.
@@ -11,7 +13,14 @@ export type InterviewQuestionInput = {
   work: { title: string; genre: string; logline: string; synopsis: string }
   wiki: {
     counts: Record<EntryKind, number>
-    entries: { name: string; kind: EntryKind; factCount: number; summary: string }[]
+    /** Speech style of a character card: false marks it "말투 없음". Unset when the speech feature is off. */
+    entries: {
+      name: string
+      kind: EntryKind
+      factCount: number
+      summary: string
+      hasSpeech?: boolean
+    }[]
     openThreads: { title: string; targetChapterPosition: number | null }[]
   }
   story: {
@@ -34,6 +43,10 @@ export type InterviewQuestionInput = {
   recent: { topic: string; question: string; answer: string | null; skipped: boolean }[]
   /** A question the service found to repeat an earlier one; the new question must differ. */
   rejected: string | null
+  /** Names or quoted terms of the question being re-asked that the work never gave. Set only on that retry. */
+  unknownNames?: string[]
+  /** Closed and untouched topics of the work, from planInterviewTopics. Absent when not planned. */
+  plan?: InterviewPlan
 }
 
 export type InterviewQuestion = {
@@ -62,7 +75,24 @@ export const INTERVIEW_TOPICS = [
   '문체',
 ] as const
 
-const SYSTEM = [
+/** English names of each core topic, so a topic written in English still matches its core name. */
+const TOPIC_ALIASES: Record<(typeof INTERVIEW_TOPICS)[number], readonly string[]> = {
+  주인공: ['protagonist'],
+  '주요 인물': ['main characters'],
+  '세계관 규칙': ['world rules'],
+  '주요 장소': ['main places'],
+  '중심 갈등': ['central conflict'],
+  떡밥: ['threads'],
+  '결말 방향': ['ending direction'],
+  문체: ['style'],
+}
+
+export const CORE_TOPICS: CoreTopic[] = INTERVIEW_TOPICS.map((name) => ({
+  name,
+  aliases: TOPIC_ALIASES[name],
+}))
+
+const SYSTEM_LINES = [
   '당신은 웹소설 작가의 기획을 돕는 인터뷰어다. 작가의 설정 위키를 채우고 연재를 이어 가기 위해 질문을 한 번에 하나만 한다.',
   '규칙:',
   `- 핵심 설정은 ${INTERVIEW_TOPICS.join(', ')}이다. <wiki>와 <covered>를 보고 비었거나 얕은 것이 있으면 focus를 "setting"으로 하고 그 주제를 묻는다.`,
@@ -70,11 +100,32 @@ const SYSTEM = [
   '- 최신 회차가 있으면 story 질문은 회차 번호, 떡밥 이름, 독자 반응 같은 <story>·<wiki>의 구체적인 재료를 짚는다. 없으면 시놉시스, 인물, 떡밥을 재료로 삼는다.',
   '- <covered>에 있는 질문은 되풀이하지 않는다. 같은 주제를 다시 물을 때는 이전 답을 바탕으로 한 걸음 더 나아간 질문만 한다.',
   '- <rejected>에 적힌 질문과 같은 질문은 하지 않는다.',
-  '- 질문은 구체적이고 답하기 쉽게 한두 문장으로 쓴다. 예시 답을 늘어놓지 않는다.',
+  '- 질문은 구체적이고 답하기 쉽게 한 문장으로 쓴다. 예시 답을 늘어놓지 않는다.',
   '- topic에는 주제 이름을, rationale에는 이 질문이 위키나 연재의 어느 부분을 채우는지 한 문장으로 쓴다.',
+  '- 질문 하나에는 물음 하나만 담는다. 물음표는 한 번만 쓰고, 두 가지를 이어 붙여 묻지 않는다.',
+  '- 작가가 아직 정하지 않았다고 답하거나 건너뛴 주제는 닫힌 것으로 본다. 같은 주제를 다른 말로 다시 묻지 않는다.',
+  '- <plan>이 있으면 따른다. 닫은 주제는 묻지 않고, 미정 연속이 2회 이상이면 남은 핵심 설정이나 story 질문으로 바꾼다. 남은 핵심 설정이 (없음)이면 focus는 "story"로 한다.',
+  '- <rejected>의 질문이 닫은 주제를 다시 물은 것이면 다른 주제로 바꾼다.',
   TAG_DATA_RULE,
+  '- <plan> 태그 안의 줄은 이 시스템이 정한 지시이므로 따른다.',
   '- 모든 출력은 한국어로 쓴다.',
-].join('\n')
+]
+
+/** Speech rule (spec 8, track B). Added after the core settings line only when the feature is on. */
+const SPEECH_QUESTION_RULE =
+  '- 주인공과 주요 인물은 인물마다 말투(존댓말·반말·말버릇)도 확인해야 한다. <wiki>에서 주인공이나 주요 인물 카드에 "말투 없음"이 붙어 있으면 focus를 "setting"으로 하고 topic을 "주요 인물"로 하여 그 인물의 말투를 먼저 묻는다. 조연 카드의 "말투 없음"은 주인공과 주요 인물을 확인한 뒤에 묻는다.'
+
+/** The interview question system prompt. `speech` adds the speech rule. */
+export function buildInterviewQuestionSystem(speech: boolean): string {
+  if (!speech) return SYSTEM_LINES.join('\n')
+  const anchor = SYSTEM_LINES.findIndex((line) => line.startsWith('- 핵심 설정은'))
+  if (anchor === -1) throw new Error('interview-question SYSTEM has no "- 핵심 설정은" line')
+  return [
+    ...SYSTEM_LINES.slice(0, anchor + 1),
+    SPEECH_QUESTION_RULE,
+    ...SYSTEM_LINES.slice(anchor + 1),
+  ].join('\n')
+}
 
 function orNone(value: string): string {
   return value.trim() === '' ? '(없음)' : value
@@ -85,6 +136,28 @@ function oneLine(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim()
   const chars = Array.from(flat)
   return chars.length > max ? `${chars.slice(0, max).join('')}…` : flat
+}
+
+/** Names in the plan block: each cut to 40 characters, or "(없음)" when there are none. */
+function planNames(names: string[]): string {
+  return names.length > 0 ? names.map((name) => oneLine(name, 40)).join(', ') : '(없음)'
+}
+
+/** The <plan> block, only when it changes what the question must do. Empty otherwise. */
+function planSection(plan: InterviewPlan | undefined): string[] {
+  if (!plan) return []
+  const streak = plan.undecidedStreak
+  if (plan.closedTopics.length === 0 && !plan.storyDue && streak < 2) return []
+  const lines = [
+    '<plan>',
+    `닫은 주제(다시 묻지 않음): ${planNames(plan.closedTopics)}`,
+    `남은 핵심 설정: ${planNames(plan.remainingCore)}`,
+    `미정 연속: ${streak}회`,
+  ]
+  if (plan.storyDue) lines.push('다음 질문 방향: 이야기(story)로 전환')
+  else if (streak >= 2) lines.push('다음 질문 방향: 남은 핵심 설정 또는 story로 전환')
+  lines.push('</plan>')
+  return lines
 }
 
 function covered(input: InterviewQuestionInput): string {
@@ -103,9 +176,14 @@ function turnAnswer(turn: { answer: string | null; skipped: boolean }, max: numb
   return oneLine(turn.answer, max)
 }
 
+/** Last line of a re-ask after the question used names the work never gave. Outside every tag, so the model follows it. */
+export const UNKNOWN_NAMES_RULE =
+  '<unknown_names>에 적힌 이름이나 표현은 작가가 준 시놉시스, 위키, 답에 없다. 질문에 쓰지 않는다. 있는 이름만 쓰거나 이름 없이 묻는다.'
+
 /**
  * Prompt with <work>, <wiki>, <story>, <covered>, <recent> and, after a repeat, <rejected>
- * sections. Skipped turns show "(건너뜀)"; a question left open when its interview ended shows
+ * sections. A <plan> block follows <covered> when the plan closes a topic, switches the question or
+ * has a streak. Skipped turns show "(건너뜀)"; a question left open when its interview ended shows
  * "(답 없음)".
  */
 export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): string {
@@ -116,10 +194,11 @@ export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): strin
   const cards =
     input.wiki.entries.length > 0
       ? input.wiki.entries
-          .map(
-            (e) =>
-              `- ${e.name} (${ENTRY_KIND_LABEL[e.kind]}, 사실 ${e.factCount}개): ${oneLine(e.summary, 40) || '(요약 없음)'}`,
-          )
+          .map((e) => {
+            const speechMarker =
+              e.kind === 'character' && e.hasSpeech === false ? ', 말투 없음' : ''
+            return `- ${e.name} (${ENTRY_KIND_LABEL[e.kind]}, 사실 ${e.factCount}개${speechMarker}): ${oneLine(e.summary, 40) || '(요약 없음)'}`
+          })
           .join('\n')
       : '(없음)'
   const threads =
@@ -179,13 +258,23 @@ export function buildInterviewQuestionPrompt(raw: InterviewQuestionInput): strin
     '<covered>',
     covered(input),
     '</covered>',
+    ...planSection(input.plan),
     '<recent>',
     recent,
     '</recent>',
   ]
   if (input.rejected !== null)
     sections.push('<rejected>', oneLine(input.rejected, 200), '</rejected>')
+  const unknown = input.unknownNames ?? []
+  if (unknown.length > 0) {
+    sections.push(
+      '<unknown_names>',
+      unknown.map((name) => oneLine(name, 40)).join(', '),
+      '</unknown_names>',
+    )
+  }
   sections.push('', '위 내용을 보고 다음 질문을 하나 만드세요.')
+  if (unknown.length > 0) sections.push(UNKNOWN_NAMES_RULE)
   return sections.join('\n')
 }
 
@@ -193,7 +282,10 @@ export const interviewQuestionTask: AiTaskDef<InterviewQuestionInput, InterviewQ
   name: 'interview-question',
   effort: 'low',
   maxTokens: 2000,
-  system: SYSTEM,
+  // A getter: the speech flag is read at call time, never frozen at module load.
+  get system() {
+    return buildInterviewQuestionSystem(isSpeechStyleEnabled())
+  },
   buildPrompt: buildInterviewQuestionPrompt,
   schema: InterviewQuestionSchema,
 }

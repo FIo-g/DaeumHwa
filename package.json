@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "e2e:ai-stub": "tsx e2e/ai-stub/server.ts",
-    "e2e:server": "rm -rf .data/e2e && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=anthropic ANTHROPIC_API_KEY=e2e-stub ANTHROPIC_BASE_URL=http://127.0.0.1:3199 AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 pnpm db:migrate && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=anthropic ANTHROPIC_API_KEY=e2e-stub ANTHROPIC_BASE_URL=http://127.0.0.1:3199 AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 next build && PGLITE_DATA_DIR=.data/e2e AI_PROVIDER=anthropic ANTHROPIC_API_KEY=e2e-stub ANTHROPIC_BASE_URL=http://127.0.0.1:3199 AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 next start -p 3100",
+    "e2e:server": "rm -rf .data/e2e && PGLITE_DATA_DIR=.data/e2e AI_SPEECH_STYLE=off AI_PROVIDER=anthropic ANTHROPIC_API_KEY=e2e-stub ANTHROPIC_BASE_URL=http://127.0.0.1:3199 AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 pnpm db:migrate && PGLITE_DATA_DIR=.data/e2e AI_SPEECH_STYLE=off AI_PROVIDER=anthropic ANTHROPIC_API_KEY=e2e-stub ANTHROPIC_BASE_URL=http://127.0.0.1:3199 AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 next build && PGLITE_DATA_DIR=.data/e2e AI_SPEECH_STYLE=off AI_PROVIDER=anthropic ANTHROPIC_API_KEY=e2e-stub ANTHROPIC_BASE_URL=http://127.0.0.1:3199 AUTH_RATE_LIMIT=off BETTER_AUTH_URL=http://localhost:3100 next start -p 3100",
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate-cli.ts",

@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeAiClient } from '@/test/fake-ai'
 import { setAiClientForTests } from '@/ai'
 import type { Db } from '@/db/client'
@@ -38,6 +38,15 @@ function context(workId: string) {
 }
 
 describe('POST /api/works/[workId]/draft', () => {
+  beforeEach(() => {
+    // These tests check the append continuation, which is the `continue` length mode.
+    vi.stubEnv('AI_DRAFT_LENGTH_MODE', 'continue')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   let workId: string
 
   beforeEach(async () => {
@@ -53,7 +62,7 @@ describe('POST /api/works/[workId]/draft', () => {
   it('returns 401 JSON when signed out', async () => {
     state.user = null
     const res = await POST(
-      request({ instructions: '서윤이 편지를 발견한다.', entryIds: [] }),
+      request({ instructions: '서윤이 편지를 발견한다.', targetChars: 500, entryIds: [] }),
       context(workId),
     )
     expect(res.status).toBe(401)
@@ -70,7 +79,7 @@ describe('POST /api/works/[workId]/draft', () => {
     const stranger = await createTestUser(state.db as Db, { email: 'stranger@example.com' })
     state.user = { id: stranger.id, name: stranger.name, email: stranger.email }
     const res = await POST(
-      request({ instructions: '서윤이 편지를 발견한다.', entryIds: [] }),
+      request({ instructions: '서윤이 편지를 발견한다.', targetChars: 500, entryIds: [] }),
       context(workId),
     )
     expect(res.status).toBe(404)
@@ -79,7 +88,7 @@ describe('POST /api/works/[workId]/draft', () => {
 
   it('streams plain text with the run id header', async () => {
     const res = await POST(
-      request({ instructions: '서윤이 편지를 발견한다.', entryIds: [] }),
+      request({ instructions: '서윤이 편지를 발견한다.', targetChars: 500, entryIds: [] }),
       context(workId),
     )
     expect(res.status).toBe(200)
@@ -87,6 +96,18 @@ describe('POST /api/works/[workId]/draft', () => {
     expect(res.headers.get('x-run-id')).toMatch(/^[0-9a-f-]{36}$/)
     const text = await res.text()
     expect(text.startsWith('(데모 초안) ')).toBe(true)
+  })
+
+  it('streams the continuation after the first part in one body', async () => {
+    const res = await POST(
+      request({ instructions: '서윤이 편지를 발견한다.', targetChars: 5000, entryIds: [] }),
+      context(workId),
+    )
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text.startsWith('(데모 초안) ')).toBe(true)
+    expect(text).toContain('(데모 이어쓰기) ')
+    expect(text.length).toBeGreaterThan('(데모 초안) '.length + 600)
   })
 
   it('marks the run done before the body closes', async () => {
@@ -103,7 +124,7 @@ describe('POST /api/works/[workId]/draft', () => {
     }
     setAiClientForTests(new SlowFinalClient())
     const res = await POST(
-      request({ instructions: '서윤이 편지를 발견한다.', entryIds: [] }),
+      request({ instructions: '서윤이 편지를 발견한다.', targetChars: 500, entryIds: [] }),
       context(workId),
     )
     const runId = res.headers.get('x-run-id') ?? ''
@@ -132,7 +153,7 @@ describe('POST /api/works/[workId]/draft', () => {
     }
     setAiClientForTests(new FailingMidwayClient())
     const res = await POST(
-      request({ instructions: '서윤이 편지를 발견한다.', entryIds: [] }),
+      request({ instructions: '서윤이 편지를 발견한다.', targetChars: 500, entryIds: [] }),
       context(workId),
     )
     expect(res.status).toBe(200)
@@ -157,7 +178,7 @@ describe('POST /api/works/[workId]/draft', () => {
     }
     setAiClientForTests(new BrokenClient())
     const res = await POST(
-      request({ instructions: '서윤이 편지를 발견한다.', entryIds: [] }),
+      request({ instructions: '서윤이 편지를 발견한다.', targetChars: 500, entryIds: [] }),
       context(workId),
     )
     const text = await res.text()

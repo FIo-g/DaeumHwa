@@ -57,6 +57,30 @@ export function findMentions(text: string, targets: MentionTarget[]): Mention[] 
   return mentions.sort((a, b) => b.count - a.count || a.firstIndex - b.firstIndex)
 }
 
+/**
+ * Finds every target whose name occurs anywhere in the text, with no word-start, particle or
+ * boundary rule. Used where a missed card costs more than a false hit, such as the continuity
+ * check (a card named only inside a compound like "종루지기" still counts). Names shorter than
+ * 2 characters are skipped, as in `findMentions`.
+ */
+export function findNamedAnywhere(
+  text: string,
+  targets: MentionTarget[],
+): { entryId: string; firstIndex: number }[] {
+  const hits: { entryId: string; firstIndex: number }[] = []
+  for (const target of targets) {
+    let firstIndex = -1
+    for (const raw of target.names) {
+      const name = raw.trim()
+      if (Array.from(name).length < 2) continue
+      const idx = text.indexOf(name)
+      if (idx !== -1 && (firstIndex === -1 || idx < firstIndex)) firstIndex = idx
+    }
+    if (firstIndex !== -1) hits.push({ entryId: target.id, firstIndex })
+  }
+  return hits.sort((a, b) => a.firstIndex - b.firstIndex || compare(a.entryId, b.entryId))
+}
+
 function isParticleRun(run: string, name: string): boolean {
   if (run === '') return true
   return canDecomposeJosa(run, 3, hasJongseong(name.charAt(name.length - 1)), MENTION_TOKENS)

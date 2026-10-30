@@ -62,7 +62,10 @@ export function mark(ctx: RunContext, state: RunState, key: string): void {
   }
 }
 
-/** Runs `fn`, retrying once on a model failure. External failures propagate to the runner. */
+/**
+ * Runs `fn`, retrying once on a model failure; a local call that was cut off or malformed is
+ * repeated with a changed budget. External failures propagate to the runner.
+ */
 export async function withModelRetry<T>(
   ctx: RunContext,
   state: RunState,
@@ -80,11 +83,15 @@ export async function withModelRetry<T>(
       if (attempt === 1) {
         state.retried[label] = (state.retried[label] ?? 0) + 1
         persist(ctx, state)
+        // The repeat may run with a changed budget (local profiles only, see EvalClient.beginRetry).
+        ctx.client.beginRetry()
         continue
       }
       state.failed.push({ step: label, message: failure.message })
       persist(ctx, state)
       return null
+    } finally {
+      if (attempt > 1) ctx.client.endRetry()
     }
   }
 }
@@ -165,7 +172,14 @@ export function readCallRecords(dir: string): CallRecord[] {
 
 /** Identity of a pending item: the same key means the same question is still waiting. */
 export function pendingKey(p: Pending): string {
-  const id = p.kind === 'interview_answer' ? p.turnId : p.kind === 'draft_review' ? p.attempt : ''
+  const id =
+    p.kind === 'interview_answer'
+      ? p.turnId
+      : p.kind === 'draft_review'
+        ? p.attempt
+        : p.kind === 'plan_review'
+          ? p.round
+          : ''
   return [p.step, p.kind, String(id)].join('|')
 }
 
@@ -312,4 +326,18 @@ export function pickAttempt(attempts: DraftAttempt[]): DraftAttempt {
   return attempts.reduce((best, attempt) =>
     (attempt.quality ?? 0) >= (best.quality ?? 0) ? attempt : best,
   )
+}
+
+/**
+ * Issue ids that the scene rewrite may use: high severity and marked valid by the author. A
+ * dismissed issue is never returned, so it is never rewritten.
+ */
+export function pickRewriteIssueIds(
+  items: { id: string; severity: string }[],
+  decisions: { id: string; valid: boolean }[],
+): string[] {
+  const valid = new Set(decisions.filter((decision) => decision.valid).map((d) => d.id))
+  return items
+    .filter((item) => item.severity === 'high' && valid.has(item.id))
+    .map((item) => item.id)
 }

@@ -11,8 +11,8 @@ import {
 import path from 'node:path'
 import { z } from 'zod'
 import { AdviceSchema } from '@/ai/tasks/direction-advice'
-import { ISSUE_KINDS, PROPOSAL_TYPES, SEVERITIES } from '@/db/types'
-import type { ChapterMetrics } from './metrics'
+import { ISSUE_KINDS, PROPOSAL_TYPES, type ProposalType, SEVERITIES } from '@/db/types'
+import type { ChapterMetrics, SceneLengths } from './metrics'
 
 // File protocol between the eval runner and the human (or fake) author. The runner writes
 // pending.json and waits for answer.json; a bad answer is moved aside and the pending item stays.
@@ -20,9 +20,9 @@ import type { ChapterMetrics } from './metrics'
 const PENDING_FILE = 'pending.json'
 const ANSWER_FILE = 'answer.json'
 const ERROR_FILE = 'answer.error.txt'
-const DECISIONS_FILE = 'author-decisions.jsonl'
+export const DECISIONS_FILE = 'author-decisions.jsonl'
 
-const MetricsSchema: z.ZodType<ChapterMetrics> = z.object({
+const MetricsSchema: z.ZodType<ChapterMetrics, unknown> = z.object({
   chars: z.number(),
   targetChars: z.number(),
   lengthOk: z.boolean(),
@@ -32,6 +32,28 @@ const MetricsSchema: z.ZodType<ChapterMetrics> = z.object({
   paragraphs: z.number(),
   avgParagraphChars: z.number(),
   dialogueLineRatio: z.number(),
+  // Saved runs from before E2 lack these two keys; the defaults keep them readable.
+  sampleCopyHits: z.number().default(0),
+  repeatedWords: z.array(z.object({ word: z.string(), count: z.number() })).default([]),
+  // Saved runs from before E1 lack this key.
+  overlongParagraphs: z.number().default(0),
+  // Saved runs from before P8 lack this key.
+  paragraphOpeners: z
+    .object({
+      counted: z.number(),
+      repeated: z.number(),
+      top: z.array(z.object({ word: z.string(), count: z.number() })),
+    })
+    .default({ counted: 0, repeated: 0, top: [] }),
+  // Stage 1 lengths; saved runs from before stage 1 lack this key.
+  sceneLengths: z
+    .object({
+      scenes: z.number(),
+      targets: z.array(z.number()).nullable(),
+      chars: z.array(z.number()),
+      within: z.number().nullable(),
+    })
+    .default({ scenes: 0, targets: null, chars: [], within: null }) as z.ZodType<SceneLengths>,
 })
 
 const ProposalItemSchema = z.object({
@@ -89,6 +111,15 @@ export const PendingSchema = z.discriminatedUnion('kind', [
     metrics: MetricsSchema,
   }),
   z.object({
+    kind: z.literal('plan_review'),
+    step: z.string(),
+    chapter: z.number().int(),
+    card: z.string(),
+    intention: z.string(),
+    mustInclude: z.array(z.string()),
+    round: z.number().int(),
+  }),
+  z.object({
     kind: z.literal('proofread'),
     step: z.string(),
     chapter: z.number().int(),
@@ -108,6 +139,12 @@ export const PendingSchema = z.discriminatedUnion('kind', [
     chapter: z.number().int(),
     result: AdviceSchema,
     nextInstructions: z.string(),
+  }),
+  z.object({
+    kind: z.literal('directive_proposals'),
+    step: z.string(),
+    chapter: z.number().int(),
+    proposals: z.array(z.object({ index: z.number().int().nonnegative(), text: z.string() })),
   }),
 ])
 
@@ -142,6 +179,16 @@ export const AnswerSchema = z.discriminatedUnion('kind', [
     matchingOption: z.number().int().nullable(),
     note: z.string(),
   }),
+  // approve false needs a note of 1 to 150 characters; answerProblems checks that.
+  z.object({
+    kind: z.literal('plan_review'),
+    approve: z.boolean(),
+    note: z.string().max(150).optional(),
+  }),
+  z.object({
+    kind: z.literal('directive_proposals'),
+    add: z.array(z.number().int().nonnegative()),
+  }),
 ])
 
 export type Answer = z.infer<typeof AnswerSchema>
@@ -163,6 +210,9 @@ function answerIds(a: Answer): string[] {
 
 /** Returns every problem with the answer, or an empty list when it is usable. */
 function answerProblems(answer: Answer, p: Pending): string[] {
+  if (answer.kind === 'plan_review' && !answer.approve && !(answer.note ?? '').trim()) {
+    return ['note is required when approve is false']
+  }
   const expected = itemIds(p)
   if (!expected) return []
   const given = answerIds(answer)
@@ -246,8 +296,77 @@ export function clearPending(dir: string): void {
   rmSync(path.join(dir, ANSWER_FILE), { force: true })
 }
 
+const LABEL_MAX = 120
+
+/**
+ * A short, human-readable name for a proposal, used in the decision log and in duplicate hints.
+ * Returns '' when the fields it needs are missing or not strings.
+ */
+export function proposalLabel(type: ProposalType, payload: Record<string, unknown>): string {
+  const text = (name: string): string => {
+    const value = payload[name]
+    return typeof value === 'string' ? value.trim() : ''
+  }
+  // Composite labels need every part; a partial one would read as a different item.
+  const joined = (...parts: string[]): string => (parts.some((part) => !part) ? '' : parts.join(''))
+  let label: string
+  switch (type) {
+    case 'entry_create':
+      label = text('name')
+      break
+    case 'entry_update':
+      label = text('entryName')
+      break
+    case 'fact_create':
+      label = joined(text('subjectName'), ': ', text('content'))
+      break
+    case 'thread_create':
+      label = text('title')
+      break
+    case 'thread_event':
+      label = joined(text('threadTitle'), ': ', text('kind'))
+      break
+    case 'relation_create':
+      label = joined(text('sourceName'), ' -> ', text('targetName'), ' (', text('kind'), ')')
+      break
+    case 'chapter_summary':
+      label = text('summary')
+      break
+    case 'style_card':
+      label = text('name')
+      break
+  }
+  return label.slice(0, LABEL_MAX)
+}
+
+/** Item-level detail for proposal decisions, so a later reader can match a card by its name. */
+function decisionDetail(p: Pending, a: Answer): Record<string, unknown> {
+  if (p.kind === 'interview_answer') return { topic: p.topic, question: p.question }
+  if (p.kind !== 'proposals' || a.kind !== 'proposals') return {}
+  const byId = new Map(p.items.map((item) => [item.id, item]))
+  const items = []
+  for (const decision of a.decisions) {
+    const item = byId.get(decision.id)
+    if (!item) continue
+    items.push({
+      id: item.id,
+      type: item.type,
+      label: proposalLabel(item.type, item.payload),
+      approve: decision.approve,
+      reason: decision.reason,
+    })
+  }
+  return { items }
+}
+
 export function logDecision(dir: string, p: Pending, a: Answer): void {
   mkdirSync(dir, { recursive: true })
-  const line = { at: new Date().toISOString(), step: p.step, kind: p.kind, answer: a }
+  const line = {
+    at: new Date().toISOString(),
+    step: p.step,
+    kind: p.kind,
+    answer: a,
+    ...decisionDetail(p, a),
+  }
   appendFileSync(path.join(dir, DECISIONS_FILE), `${JSON.stringify(line)}\n`)
 }

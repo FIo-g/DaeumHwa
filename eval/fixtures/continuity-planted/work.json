@@ -1,0 +1,56 @@
+{
+  "title": "재현율 점검용 소설",
+  "note": "continuity recall set for track H: every planted error is a plain sentence about a card that the pack selects by substring or by mention. Not a copy of eval/fixtures/continuity.",
+  "chapters": [
+    { "position": 1, "title": "청해항 입항", "summary": "" },
+    { "position": 2, "title": "잿빛 종루 아래", "summary": "" },
+    { "position": 3, "title": "열한 층", "summary": "" },
+    { "position": 4, "title": "은색 열쇠", "summary": "" }
+  ],
+  "entries": [
+    {
+      "key": "serin",
+      "name": "한세린",
+      "kind": "character",
+      "aliases": ["세린"],
+      "summary": "청해항 고아원에서 자란 소녀. 어머니의 편지를 쫓는다."
+    },
+    {
+      "key": "doyunseo",
+      "name": "도윤서",
+      "kind": "character",
+      "aliases": ["윤서"],
+      "summary": "청해항 출신의 검사. 말수가 적다."
+    },
+    {
+      "key": "jongru",
+      "name": "잿빛 종루",
+      "kind": "place",
+      "aliases": ["종루"],
+      "summary": "항구 북쪽 언덕 위의 석조 탑."
+    },
+    {
+      "key": "key",
+      "name": "은색 열쇠",
+      "kind": "item",
+      "aliases": ["열쇠"],
+      "summary": "어머니의 유품. 창고 자물쇠를 여는 데 쓰인다."
+    },
+    {
+      "key": "harbor",
+      "name": "청해항",
+      "kind": "place",
+      "aliases": [],
+      "summary": "남쪽 바다에 면한 항구 도시."
+    }
+  ],
+  "facts": [
+    { "entry": "serin", "content": "한세린의 나이는 16살이다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "doyunseo", "content": "도윤서는 단검을 오른손에 쥔다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "jongru", "content": "잿빛 종루는 9층 높이의 석조 건물이다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "key", "content": "은색 열쇠는 달이 찬 밤에만 자물쇠에 꽂을 수 있다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null },
+    { "entry": "harbor", "content": "청해항 시장은 낮에만 문을 연다.", "status": "confirmed", "sourceChapter": null, "validFromPosition": null, "validToPosition": null }
+  ],
+  "threads": [],
+  "namingRules": []
+}

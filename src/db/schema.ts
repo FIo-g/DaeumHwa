@@ -8,6 +8,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -20,6 +21,11 @@ import type {
   ChangeAction,
   ChangeTargetTable,
   ChapterStatus,
+  ContextTier,
+  DirectiveKind,
+  DirectiveScope,
+  DirectiveSource,
+  DirectiveStatus,
   EntryKind,
   FactSourceType,
   FactStatus,
@@ -35,8 +41,10 @@ import type {
   Role,
   ScheduleKind,
   Severity,
+  SpeechLevel,
   ThreadEventKind,
   ThreadStatus,
+  UsageEventKind,
   VersionSource,
   WorkSettings,
 } from './types'
@@ -162,6 +170,7 @@ export const wikiEntries = pgTable(
       .notNull()
       .default(sql`'[]'::jsonb`),
     createdByType: text('created_by_type').$type<ProposerType>().notNull().default('author'),
+    contextTier: text('context_tier').$type<ContextTier>().notNull().default('mention'),
     archivedAt: archivedAtColumn(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
@@ -201,6 +210,7 @@ export const facts = pgTable(
     evidence: text('evidence').notNull().default(''),
     validFromPosition: integer('valid_from_position'),
     validToPosition: integer('valid_to_position'),
+    revealAtPosition: integer('reveal_at_position'),
     supersededByFactId: uuid('superseded_by_fact_id'),
     createdByType: text('created_by_type').$type<ProposerType>().notNull().default('author'),
     archivedAt: archivedAtColumn(),
@@ -325,6 +335,31 @@ export const styleCards = pgTable(
     updatedAt: updatedAtColumn(),
   },
   (t) => [index('style_cards_work_idx').on(t.workId)],
+)
+
+export const authorDirectives = pgTable(
+  'author_directives',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workId: uuid('work_id')
+      .notNull()
+      .references(() => works.id, { onDelete: 'cascade' }),
+    entryId: uuid('entry_id').references(() => wikiEntries.id, { onDelete: 'set null' }),
+    scope: text('scope').$type<DirectiveScope>().notNull(),
+    kind: text('kind').$type<DirectiveKind>().notNull(),
+    text: text('text').notNull(),
+    pattern: text('pattern'),
+    speechLevel: text('speech_level').$type<SpeechLevel>(),
+    targetChars: integer('target_chars'),
+    chapterPosition: integer('chapter_position'),
+    source: text('source').$type<DirectiveSource>().notNull(),
+    status: text('status').$type<DirectiveStatus>().notNull().default('active'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    archivedAt: archivedAtColumn(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (t) => [index('author_directives_work_idx').on(t.workId)],
 )
 
 export const proposals = pgTable(
@@ -540,12 +575,40 @@ export const aiRuns = pgTable(
     model: text('model').notNull().default(''),
     inputTokens: integer('input_tokens').notNull().default(0),
     outputTokens: integer('output_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    /** Milliseconds from the stream call to the first non-empty text chunk. Null for non-streamed runs. */
+    firstTokenMs: integer('first_token_ms'),
     output: jsonb('output').$type<unknown>(),
     error: text('error'),
     createdAt: createdAtColumn(),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
   },
   (t) => [index('ai_runs_user_created_idx').on(t.userId, t.createdAt)],
+)
+
+/** Numbers-only usage events. Never stores manuscript or instruction text. */
+export const aiUsageEvents = pgTable(
+  'ai_usage_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workId: uuid('work_id')
+      .notNull()
+      .references(() => works.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'set null' }),
+    runId: uuid('run_id').references(() => aiRuns.id, { onDelete: 'set null' }),
+    kind: text('kind').$type<UsageEventKind>().notNull(),
+    value: real('value').notNull().default(0),
+    extra: jsonb('extra')
+      .$type<Record<string, number>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [index('ai_usage_events_work_kind_created_idx').on(t.workId, t.kind, t.createdAt)],
 )
 
 export const userWorkState = pgTable(

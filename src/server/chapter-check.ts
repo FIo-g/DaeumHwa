@@ -1,22 +1,40 @@
 import { and, eq, isNull } from 'drizzle-orm'
-import { buildContextPack, resolveRefs } from '@/ai/context'
-import { extractionToProposals } from '@/ai/extraction'
-import { runAiTask, throwIfCancelled } from '@/ai/run'
+import { getAiClient } from '@/ai'
+import { buildContextPack, CONTINUITY_BUDGET_CHARS, resolveRefs } from '@/ai/context'
+import {
+  type ExtractionContext,
+  type ExtractionDropped,
+  extractionToProposals,
+  type ExtractionStats,
+  type ExtractionWeak,
+} from '@/ai/extraction'
+import { isNearDuplicateFact } from '@/ai/guards'
+import { DEFAULT_AI_TIMEOUT_MS, isLocalProvider, runAiTask, throwIfCancelled } from '@/ai/run'
 import type { AiClient } from '@/ai/types'
-import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
+import { runChapterExtract } from '@/ai/chapter-extract-run'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
-import { type ProofreadKind, proofreadTask } from '@/ai/tasks/proofread'
+import { type ProofreadKind, type ProofreadOutput, proofreadTask } from '@/ai/tasks/proofread'
 import type { Db } from '@/db/client'
 import { chapters, facts, proposals, relations } from '@/db/schema'
 import type { Actor, ChapterRow, IssueRow, ProposalRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
-import { normalizeProposalText } from '@/lib/proposal-payloads'
 import { findNamingIssues } from '@/lib/korean/naming'
 import { ruleBasedSpellcheck } from '@/lib/korean/spelling-rules'
-import { locateQuote, sentenceAt } from '@/lib/korean/sentences'
+import {
+  mergeSuggestionGroups,
+  PROOFREAD_MAX_PARTS,
+  splitProofreadParts,
+} from '@/lib/korean/proofread-parts'
+import {
+  isWholeWordRange,
+  isWordChar,
+  locateAllQuotes,
+  locateQuote,
+  sentenceAt,
+} from '@/lib/korean/sentences'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
-import { loadKnownEntries } from '@/server/known-entries'
+import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { listNamingRules } from '@/server/naming'
 import { deletePendingProposals, insertProposals } from '@/server/proposal-store'
 
@@ -24,11 +42,16 @@ import { deletePendingProposals, insertProposals } from '@/server/proposal-store
 // AI output becomes issues (replaced on each run) and post_chapter proposals (also replaced).
 // Nothing here writes wiki rows.
 
+/** G2, G1 and P10 counters of one chapter extraction, for the eval run summary. */
+export type ExtractionCounts = ExtractionStats & ExtractionDropped & ExtractionWeak
+
 export type ChapterCheckResult = {
   issues: IssueRow[]
   proposals: ProposalRow[]
   runIds: string[]
   namingIssueCount: number
+  /** Counters of the extraction mapper (G2 stats, G1 dropped). Not shown to users. */
+  extraction?: ExtractionCounts
 }
 
 export type ProofreadSuggestion = {
@@ -71,34 +94,128 @@ export const ruleSpellChecker: SpellChecker = {
   },
 }
 
+/** Max occurrences one quote expands to. */
+const MAX_QUOTE_EXPANSION = 20
+
+/** Whether the characters around a range are word characters: [before, after]. */
+function boundaryOf(text: string, range: { start: number; end: number }): [boolean, boolean] {
+  return [isWordChar(text[range.start - 1]), isWordChar(text[range.end])]
+}
+
+/**
+ * Ranges where a model quote occurs. A quote of 2+ characters applies at every exact occurrence
+ * (up to MAX_QUOTE_EXPANSION). When some occurrence is a whole word, only the whole-word ones are
+ * used, so "할수" does not map into "할수록" while a real "할수" elsewhere is skipped. When every
+ * occurrence sits inside a longer word, the occurrences whose surroundings match the first one are
+ * used. A shorter quote, or one only found after whitespace is collapsed, maps to its first
+ * occurrence.
+ */
+function expandQuote(text: string, quote: string): { start: number; end: number }[] {
+  if (quote.trim().length >= 2) {
+    const all = locateAllQuotes(text, quote, Number.MAX_SAFE_INTEGER)
+    if (all.length > 0) {
+      // Whole-word hits win over hits inside a longer word (P14).
+      const whole = all.filter((r) => isWholeWordRange(text, r))
+      if (whole.length > 0) return whole.slice(0, MAX_QUOTE_EXPANSION)
+      // Every hit sits inside a longer word: keep the rule from the first hit's surroundings.
+      const [before, after] = boundaryOf(text, all[0])
+      return all
+        .filter((r) => {
+          const [b, a] = boundaryOf(text, r)
+          return b === before && a === after
+        })
+        .slice(0, MAX_QUOTE_EXPANSION)
+    }
+  }
+  const single = locateQuote(text, quote)
+  return single ? [single] : []
+}
+
+/**
+ * Locates the model's quotes in `text`. A range that overlaps an earlier range is dropped, so the
+ * result follows model output order, not text position.
+ */
+function locateAiSuggestions(
+  text: string,
+  suggestions: ProofreadOutput['suggestions'],
+): ProofreadSuggestion[] {
+  const result: ProofreadSuggestion[] = []
+  // Ranges already emitted. A later model item that overlaps one is dropped.
+  const emitted: { start: number; end: number }[] = []
+  for (const s of suggestions) {
+    for (const range of expandQuote(text, s.quote)) {
+      if (emitted.some((e) => range.start < e.end && e.start < range.end)) continue
+      emitted.push(range)
+      result.push({
+        source: 'ai',
+        // Equals the model quote for exact matches; the manuscript text otherwise.
+        quote: text.slice(range.start, range.end),
+        replacement: s.replacement,
+        kind: s.kind,
+        reason: s.reason,
+        start: range.start,
+        end: range.end,
+      })
+    }
+  }
+  return result
+}
+
+/**
+ * Total time for a split proofread (sequential parts). Stays under the route's 300 s limit.
+ * Each part gets this budget divided by the part count, capped at the default call limit.
+ */
+export const PROOFREAD_TOTAL_BUDGET_MS = 285_000
+
+/**
+ * Local servers answer slowly, so only they get a split proofread. Cloud providers keep one call
+ * (spec section 8: local-only behavior is gated by provider).
+ */
+function shouldSplitProofread(provider: string): boolean {
+  return isLocalProvider(provider)
+}
+
 /** Wraps the proofread task. `lastRunId` is the run of the most recent check call. */
 function aiSpellChecker(
   db: Db,
   meta: { userId: string; workId: string; chapterId: string; signal?: AbortSignal },
   client: AiClient | undefined,
-): SpellChecker & { lastRunId: () => string | null } {
+): SpellChecker & { lastRunId: () => string | null; runIds: () => string[] } {
   let runId: string | null = null
+  let runIds: string[] = []
   return {
     id: 'ai',
     lastRunId: () => runId,
+    runIds: () => runIds,
     async check(text) {
-      const result = await runAiTask(db, meta, proofreadTask, { text }, client)
-      runId = result.runId
-      const suggestions: ProofreadSuggestion[] = []
-      for (const s of result.output.suggestions) {
-        const range = locateQuote(text, s.quote)
-        if (!range) continue
-        suggestions.push({
-          source: 'ai',
-          quote: s.quote,
-          replacement: s.replacement,
-          kind: s.kind,
-          reason: s.reason,
-          start: range.start,
-          end: range.end,
-        })
+      const aiClient = client ?? getAiClient()
+      const parts = splitProofreadParts(
+        text,
+        shouldSplitProofread(aiClient.provider) ? PROOFREAD_MAX_PARTS : 1,
+      )
+      const partTimeout =
+        parts.length > 1
+          ? Math.min(DEFAULT_AI_TIMEOUT_MS, Math.floor(PROOFREAD_TOTAL_BUDGET_MS / parts.length))
+          : undefined
+      runIds = []
+      const groups: ProofreadOutput['suggestions'][] = []
+      // Parts run one after another: one local server, and the route's time limit is shared.
+      // Each part is its own run. A failing part fails the call; earlier runs stay stored.
+      for (const part of parts) {
+        throwIfCancelled(meta.signal)
+        const result = await runAiTask(
+          db,
+          partTimeout === undefined ? meta : { ...meta, timeoutMs: partTimeout },
+          proofreadTask,
+          { text: part.text },
+          aiClient,
+        )
+        runIds.push(result.runId)
+        runId = result.runId
+        groups.push(result.output.suggestions)
       }
-      return suggestions
+      // Quotes are located once, on the whole text, so offsets and the 20-occurrence cap are per chapter.
+      return locateAiSuggestions(text, mergeSuggestionGroups(groups))
     },
   }
 }
@@ -119,6 +236,13 @@ async function loadEditableChapter(
 }
 
 /**
+ * What the chapter check does with extraction items whose evidence does not name their subject
+ * or thread (round 2, P10). Count only: on the six saved runs the drop rule would remove about
+ * 70% of the facts and about 36 of those 47 are fine. Flip to 'drop' only with the R2b numbers.
+ */
+const EVIDENCE_ANCHOR: NonNullable<ExtractionContext['evidenceAnchor']> = 'count'
+
+/**
  * Runs the chapter check on the saved chapter text: deterministic naming rules, the continuity
  * check and chapter extraction (in parallel). Replaces the chapter's open issues and the pending
  * post_chapter proposals; resolved issues are kept.
@@ -126,7 +250,8 @@ async function loadEditableChapter(
 export async function runChapterCheck(
   db: Db,
   actor: Actor,
-  input: { chapterId: string },
+  /** scenePlan: eval only, two-step runs (see eval/novel/steps/chapter.ts). The product never passes it. */
+  input: { chapterId: string; scenePlan?: string | null },
   client?: AiClient,
   signal?: AbortSignal,
 ): Promise<ChapterCheckResult> {
@@ -141,7 +266,12 @@ export async function runChapterCheck(
     signal: signal ? AbortSignal.any([signal, sibling.signal]) : sibling.signal,
   }
 
-  const pack = await buildContextPack(db, workId, { text, position: chapter.position })
+  const pack = await buildContextPack(db, workId, {
+    text,
+    position: chapter.position,
+    keepNamed: true,
+    budgetChars: CONTINUITY_BUDGET_CHARS,
+  })
   const known = await loadKnownEntries(db, workId, { excludePostChapterOf: chapter.id })
   const rules = await listNamingRules(db, actor, workId)
   const relationRows = await db
@@ -165,16 +295,21 @@ export async function runChapterCheck(
       db,
       meta,
       continuityCheckTask,
-      { chapterText: text, chapterPosition: chapter.position, chapterTitle: chapter.title, pack },
+      {
+        chapterText: text,
+        chapterPosition: chapter.position,
+        chapterTitle: chapter.title,
+        pack,
+        ...(input.scenePlan ? { scenePlan: input.scenePlan } : {}),
+      },
       client,
     ).catch((error: unknown) => {
       sibling.abort()
       throw error
     }),
-    runAiTask(
+    runChapterExtract(
       db,
       meta,
-      chapterExtractTask,
       {
         chapterText: text,
         chapterPosition: chapter.position,
@@ -235,11 +370,18 @@ export async function runChapterCheck(
     issues: [...namingIssues, ...aiIssues],
   })
 
-  const { proposals: items } = extractionToProposals(extract.output, {
+  // Current wiki facts (pending ones are checked in the transaction below, after this chapter's
+  // own old proposals are deleted).
+  const wikiFacts = (await loadKnownFactTexts(db, workId)).filter((f) => !f.pending)
+
+  const extracted = extractionToProposals(extract.output, {
+    evidenceAnchor: EVIDENCE_ANCHOR,
+    existingFacts: wikiFacts,
     source: 'post_chapter',
     sourceRef: extract.runId,
     chapterId: chapter.id,
     chapterPosition: chapter.position,
+    sourceText: text,
     existingEntries: known.active,
     pendingEntries: known.pending,
     pendingThreadCreateTitles: new Set(known.pendingThreadTitles),
@@ -256,6 +398,10 @@ export async function runChapterCheck(
       endPosition: r.endPosition,
     })),
   })
+
+  const items = extracted.proposals
+  // Duplicates the transaction's race guard drops on top of the mapper's own count.
+  let raceDuplicates = 0
 
   throwIfCancelled(signal)
   const proposalRows = await db.transaction(async (tx) => {
@@ -283,31 +429,45 @@ export async function runChapterCheck(
           eq(proposals.type, 'fact_create'),
         ),
       )
-    const existingKeys = new Set([
-      ...existingFacts
-        .filter((f) => f.entryId !== null)
-        .map((f) => `${f.entryId}|${normalizeProposalText(f.content)}`),
-      ...pendingFacts.flatMap(({ payload }) => {
-        const p = payload as { entryId?: string | null; content?: string }
-        return p.entryId && p.content ? [`${p.entryId}|${normalizeProposalText(p.content)}`] : []
-      }),
-    ])
-    const fresh = items.filter(
-      (item) =>
-        !(
-          item.type === 'fact_create' &&
-          item.payload.entryId !== null &&
-          existingKeys.has(`${item.payload.entryId}|${normalizeProposalText(item.payload.content)}`)
-        ),
-    )
+    // Contents per card: current facts plus pending fact_create texts. A fact that repeats one of
+    // them (near-duplicate) is not proposed again.
+    const knownByEntry = new Map<string, string[]>()
+    const addKnown = (entryId: string, content: string) => {
+      knownByEntry.set(entryId, [...(knownByEntry.get(entryId) ?? []), content])
+    }
+    for (const f of existingFacts) {
+      if (f.entryId !== null) addKnown(f.entryId, f.content)
+    }
+    for (const { payload } of pendingFacts) {
+      const p = payload as { entryId?: string | null; content?: string }
+      if (p.entryId && p.content) addKnown(p.entryId, p.content)
+    }
+    // A state change (supersede) is never a duplicate of the fact it replaces.
+    const fresh = items.filter((item) => {
+      const duplicate =
+        item.type === 'fact_create' &&
+        item.payload.supersedesFactId === null &&
+        item.payload.entryId !== null &&
+        (knownByEntry.get(item.payload.entryId) ?? []).some((known) =>
+          isNearDuplicateFact(known, item.payload.content),
+        )
+      if (duplicate) raceDuplicates += 1
+      return !duplicate
+    })
     return insertProposals(tx, workId, fresh)
   })
 
   return {
     issues: issueRows,
     proposals: proposalRows,
-    runIds: [continuity.runId, extract.runId],
+    runIds: [continuity.runId, ...extract.runIds],
     namingIssueCount: namingIssues.length,
+    extraction: {
+      ...extracted.stats,
+      ...extracted.dropped,
+      duplicateFacts: extracted.dropped.duplicateFacts + raceDuplicates,
+      ...extracted.weak,
+    },
   }
 }
 
@@ -349,6 +509,14 @@ function namingIssuesFor(
   })
 }
 
+export type ProofreadResult = {
+  suggestions: ProofreadSuggestion[]
+  /** Run of the last AI part; kept for the panel and the eval. */
+  runId: string | null
+  /** One run per AI part, in order; [] when AI is off. */
+  runIds: string[]
+}
+
 /**
  * Proofreading: the rule checker always runs; the AI checker runs when `useAi` is set. AI
  * suggestions that overlap a rule suggestion are dropped. Result is sorted by offset.
@@ -359,7 +527,7 @@ export async function runProofread(
   input: { chapterId: string; text?: string; useAi: boolean },
   client?: AiClient,
   signal?: AbortSignal,
-): Promise<{ suggestions: ProofreadSuggestion[]; runId: string | null }> {
+): Promise<ProofreadResult> {
   const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId)
   const text = input.text ?? chapter.body
   if (input.useAi && text.length > MAX_PROOFREAD_AI_CHARS) {
@@ -381,5 +549,5 @@ export async function runProofread(
   const suggestions = [...ruleSuggestions, ...kept].sort(
     (a, b) => a.start - b.start || a.end - b.end,
   )
-  return { suggestions, runId: ai?.lastRunId() ?? null }
+  return { suggestions, runId: ai?.lastRunId() ?? null, runIds: ai?.runIds() ?? [] }
 }

@@ -4,6 +4,8 @@
 import { continuityCheckTask } from '@/ai/tasks/continuity-check'
 import { chapterExtractTask } from '@/ai/tasks/chapter-extract'
 import { DRAFT_SYSTEM } from '@/ai/tasks/draft-chapter'
+import { DRAFT_EXPAND_SYSTEM } from '@/ai/tasks/draft-expand'
+import { draftRepairTask } from '@/ai/tasks/draft-repair'
 import { directionAdviceTask } from '@/ai/tasks/direction-advice'
 import { interviewExtractTask } from '@/ai/tasks/interview-extract'
 import { interviewQuestionTask } from '@/ai/tasks/interview-question'
@@ -42,10 +44,38 @@ const ANSWERS: { task: string; system: string; answer: Answer }[] = [
   { task: 'reader-sim', system: readerSimTask.system, answer: readerSimAnswer },
   { task: 'direction-advice', system: directionAdviceTask.system, answer: adviceAnswer },
   { task: 'style-suggest', system: styleSuggestTask.system, answer: styleAnswer },
-  { task: 'draft-chapter', system: DRAFT_SYSTEM, answer: () => DRAFT_TEXT },
+  { task: 'draft-chapter', system: DRAFT_SYSTEM, answer: draftAnswer },
+  { task: 'draft-expand', system: DRAFT_EXPAND_SYSTEM, answer: expandAnswer },
+  { task: 'draft-repair', system: draftRepairTask.system, answer: () => ({ edits: [] }) },
 ]
 
 const DRAFT_TEXT = '서윤은 조용히 문을 열었다. 바람이 차가웠다.'
+const CONTINUE_TEXT = '바람은 밤새 잦아들었다. 아침 빛이 문틈으로 들어왔다.'
+
+/** The continuation shares the draft system prompt, so it is told apart by its <draft_so_far> section. */
+function draftAnswer(prompt: string): string {
+  return prompt.includes('<draft_so_far>') ? CONTINUE_TEXT : DRAFT_TEXT
+}
+
+/** New sentences, all different, that an expansion can add after the scene it was given. */
+const EXPAND_ADDITIONS = [
+  '서윤은 문고리를 잡은 손에 힘을 주었다.',
+  '낡은 경첩이 낮게 울었다.',
+  '복도 끝에서 희미한 불빛이 흔들렸다.',
+  '서윤은 숨을 고르고 문틈을 들여다보았다.',
+  '바깥에서 발소리가 멀어지는 소리가 났다.',
+  '창문의 유리가 얇게 떨렸다.',
+]
+
+/**
+ * The scene text followed by up to three of EXPAND_ADDITIONS that the scene does not have yet, so it
+ * grows and passes acceptExpansion. A second round adds the next ones, and never repeats a sentence.
+ */
+function expandAnswer(prompt: string): string {
+  const scene = section(prompt, 'scene').trim()
+  const added = EXPAND_ADDITIONS.filter((sentence) => !scene.includes(sentence)).slice(0, 3)
+  return [scene, ...added].join(' ')
+}
 
 /** Answers one request. Throws UnknownSystemError when the system prompt is not a known task. */
 export function respond(body: RespondBody): StubReply {

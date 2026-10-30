@@ -1,10 +1,31 @@
 'use server'
 
 import { z } from 'zod'
-import type { EntryRow, FactRow, NamingRuleRow, StyleCardRow } from '@/db/types'
-import { ENTRY_KINDS, FACT_SOURCE_TYPES, FACT_STATUSES } from '@/db/types'
+import type { AuthorDirectiveRow, EntryRow, FactRow, NamingRuleRow, StyleCardRow } from '@/db/types'
+import {
+  CONTEXT_TIERS,
+  DIRECTIVE_KINDS,
+  DIRECTIVE_SCOPES,
+  DIRECTIVE_SOURCES,
+  DIRECTIVE_STATUSES,
+  ENTRY_KINDS,
+  FACT_SOURCE_TYPES,
+  FACT_STATUSES,
+  SPEECH_LEVELS,
+} from '@/db/types'
 import type { ActionResult } from '@/lib/result'
 import { revalidateWork, withAction } from '@/server/action-helpers'
+import {
+  archiveDirective,
+  createDirective,
+  listDirectives,
+  updateDirective,
+} from '@/server/directives'
+import {
+  decideInferred,
+  listInferredProposals,
+  type InferredProposal,
+} from '@/server/directive-infer'
 import { archiveFact, createFact, supersedeFact, updateFact } from '@/server/facts'
 import { archiveNamingRule, createNamingRule, updateNamingRule } from '@/server/naming'
 import { archiveStyleCard, createStyleCard, updateStyleCard } from '@/server/styles'
@@ -21,6 +42,7 @@ const EntryFields = z.object({
     .array(z.object({ key: z.string().max(50), value: z.string().max(500) }))
     .max(30)
     .optional(),
+  contextTier: z.enum(CONTEXT_TIERS).optional(),
 })
 
 const CreateEntrySchema = EntryFields.extend({ workId: z.uuid() })
@@ -37,6 +59,7 @@ const FactFields = z.object({
   evidence: z.string().max(2000).optional(),
   validFromPosition: z.number().int().nullable().optional(),
   validToPosition: z.number().int().nullable().optional(),
+  revealAtPosition: z.number().int().nullable().optional(),
 })
 
 const CreateFactSchema = FactFields.extend({ workId: z.uuid() })
@@ -49,6 +72,7 @@ const SupersedeFactSchema = z.object({
   sourceType: z.enum(FACT_SOURCE_TYPES).optional(),
   evidence: z.string().max(2000).optional(),
   sourceChapterId: z.uuid().nullable().optional(),
+  revealAtPosition: z.number().int().min(1).nullable().optional(),
 })
 const FactIdSchema = z.object({ factId: z.uuid() })
 
@@ -74,6 +98,28 @@ const StyleCardFields = z.object({
 const CreateStyleCardSchema = StyleCardFields.extend({ workId: z.uuid() })
 const UpdateStyleCardSchema = StyleCardFields.partial().extend({ cardId: z.uuid() })
 const CardIdSchema = z.object({ cardId: z.uuid() })
+
+const DirectiveFields = z.object({
+  scope: z.enum(DIRECTIVE_SCOPES),
+  kind: z.enum(DIRECTIVE_KINDS),
+  // The service gives the Korean limit messages (300 for text, 100 for pattern); zod only bounds the input.
+  text: z.string().max(5000),
+  entryId: z.uuid().nullable().optional(),
+  chapterPosition: z.number().int().nullable().optional(),
+  pattern: z.string().max(300).nullable().optional(),
+  speechLevel: z.enum(SPEECH_LEVELS).nullable().optional(),
+  targetChars: z.number().int().nullable().optional(),
+})
+
+const CreateDirectiveSchema = DirectiveFields.extend({
+  workId: z.uuid(),
+  source: z.enum(DIRECTIVE_SOURCES),
+})
+const UpdateDirectiveSchema = DirectiveFields.partial().extend({
+  directiveId: z.uuid(),
+  status: z.enum(DIRECTIVE_STATUSES).optional(),
+})
+const DirectiveIdSchema = z.object({ directiveId: z.uuid() })
 
 // ---- Entries ----
 
@@ -210,5 +256,77 @@ export async function archiveStyleCardAction(input: unknown): Promise<ActionResu
     const card = await archiveStyleCard(db, actor, cardId)
     revalidateWork(card.workId)
     return card
+  })
+}
+
+// ---- Author requests ----
+
+export async function listDirectivesAction(
+  input: unknown,
+): Promise<ActionResult<(AuthorDirectiveRow & { entryName: string | null })[]>> {
+  return withAction(async (db, actor) => {
+    const { workId } = z.object({ workId: z.uuid() }).parse(input)
+    return listDirectives(db, actor, workId)
+  })
+}
+
+const ListInferredSchema = z.object({ workId: z.uuid(), chapterId: z.uuid().optional() })
+
+/** Undecided inferred proposals, optionally only those of one chapter. Read-only. */
+export async function listInferredProposalsAction(
+  input: unknown,
+): Promise<ActionResult<InferredProposal[]>> {
+  return withAction(async (db, actor) => {
+    const { workId, chapterId } = ListInferredSchema.parse(input)
+    return listInferredProposals(db, actor, workId, chapterId ? { chapterId } : {})
+  })
+}
+
+export async function createDirectiveAction(
+  input: unknown,
+): Promise<ActionResult<AuthorDirectiveRow>> {
+  return withAction(async (db, actor) => {
+    const data = CreateDirectiveSchema.parse(input)
+    const row = await createDirective(db, actor, data)
+    revalidateWork(row.workId)
+    return row
+  })
+}
+
+export async function updateDirectiveAction(
+  input: unknown,
+): Promise<ActionResult<AuthorDirectiveRow>> {
+  return withAction(async (db, actor) => {
+    const { directiveId, ...patch } = UpdateDirectiveSchema.parse(input)
+    const row = await updateDirective(db, actor, directiveId, patch)
+    revalidateWork(row.workId)
+    return row
+  })
+}
+
+export async function archiveDirectiveAction(
+  input: unknown,
+): Promise<ActionResult<AuthorDirectiveRow>> {
+  return withAction(async (db, actor) => {
+    const { directiveId } = DirectiveIdSchema.parse(input)
+    const row = await archiveDirective(db, actor, directiveId)
+    revalidateWork(row.workId)
+    return row
+  })
+}
+
+const DecideInferredSchema = z.object({
+  workId: z.uuid(),
+  runId: z.uuid(),
+  index: z.number().int().min(0),
+  decision: z.enum(['add', 'ignore']),
+})
+
+export async function decideInferredAction(input: unknown) {
+  return withAction(async (db, actor) => {
+    const data = DecideInferredSchema.parse(input)
+    const result = await decideInferred(db, actor, data)
+    revalidateWork(data.workId)
+    return result
   })
 }

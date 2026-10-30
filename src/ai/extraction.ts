@@ -9,6 +9,9 @@ import {
 import { hasJongseong, JOSA } from '@/lib/korean'
 import type { NewProposal, ProposalPayloadMap } from '@/lib/proposal-payloads'
 import { ROLE_WORDS } from '@/ai/extraction-rules'
+import { isNearDuplicateFact } from '@/ai/guards'
+import { verifyEvidenceQuote } from '@/lib/evidence-quote'
+import { evidenceHasThreadKeyword, evidenceNamesSubject } from '@/ai/evidence-anchor'
 
 // Structured-output schema shared by interview extraction (T12), chapter extraction (T13) and
 // import extraction (T16). Structured-output rules: no min/max/regex/default/optional; maps are
@@ -57,12 +60,44 @@ export const ExtractionSchema = z.object({
 
 export type Extraction = z.infer<typeof ExtractionSchema>
 
+// The split chapter extraction (local providers) asks for three parts, one call each. Each part
+// schema is a pick of the full schema, so the part outputs carry the same fields and rules.
+export const FactsPartSchema = ExtractionSchema.pick({ summary: true, entries: true, facts: true })
+export const ThreadsPartSchema = ExtractionSchema.pick({ threads: true })
+export const RelationsPartSchema = ExtractionSchema.pick({ relations: true })
+
+export type FactsPart = z.infer<typeof FactsPartSchema>
+export type ThreadsPart = z.infer<typeof ThreadsPartSchema>
+export type RelationsPart = z.infer<typeof RelationsPartSchema>
+
+/** Joins the three part outputs into one Extraction. Pure: no AI call. */
+export function mergeExtractionParts(parts: {
+  facts: FactsPart
+  threads: ThreadsPart
+  relations: RelationsPart
+}): Extraction {
+  return {
+    summary: parts.facts.summary,
+    entries: parts.facts.entries,
+    facts: parts.facts.facts,
+    threads: parts.threads.threads,
+    relations: parts.relations.relations,
+  }
+}
+
 export type ExtractionContext = {
   source: ProposalSource
   sourceRef: string | null
   chapterId: string | null
   chapterPosition: number | null
-  existingEntries: { id: string; name: string; aliases: string[]; kind: EntryKind }[]
+  /** `speech` is the card's 말투 field: undefined when unknown, '' when the card has none. */
+  existingEntries: {
+    id: string
+    name: string
+    aliases: string[]
+    kind: EntryKind
+    speech?: string
+  }[]
   /** Model-facing ref (e.g. "T1") to an existing thread. `status` is set for threads on the wiki. */
   threadRefs: Map<string, { id: string; title: string; status?: ThreadStatus }>
   /** Model-facing ref (e.g. "F1") to an existing fact. */
@@ -83,6 +118,29 @@ export type ExtractionContext = {
     directed: boolean
     endPosition: number | null
   }[]
+  /** Source text the model read. When set, every evidence quote must appear in it. */
+  sourceText?: string
+  /** Current wiki facts and pending fact_create texts. A near-duplicate of one of them is not proposed again. */
+  existingFacts?: ExistingFactText[]
+  /** Speech feature on (spec 8, track B): speech keys are normalized and an interview fills a missing speech. */
+  speechStyle?: boolean
+  /** Entries with a pending entry_update that already sets speech. They get no second speech update. */
+  pendingSpeechEntryIds?: string[]
+  /**
+   * Evidence-anchor check (round 2, P10). Default 'off'. 'count' keeps every item and counts the
+   * weak ones in `weak`; 'drop' leaves weak items out. Only chapter text is checked: interview
+   * answers name their subject in the question, so the interview and import callers leave it unset.
+   * Facts are checked after the duplicate checks, threads after the evidence quote is verified,
+   * so an item dropped for another reason is not counted.
+   */
+  evidenceAnchor?: 'off' | 'count' | 'drop'
+}
+
+/** A fact the work already has (or has pending), as the dedupe needs it. */
+export type ExistingFactText = {
+  entryId: string | null
+  subjectName: string
+  content: string
 }
 
 /** A thread event whose target is a pending (not yet approved) thread_create. T16 attaches these. */
@@ -92,8 +150,60 @@ export type PendingThreadEvent = {
   evidence: string
 }
 
+/** Items whose evidence does not name their subject or thread (round 2, P10). Counted only. */
+export type ExtractionWeak = {
+  /** Facts whose evidence sentence contains none of the subject's forms. */
+  weakFactEvidence: number
+  /** Threads whose evidence sentence shares no keyword with the title or description. */
+  weakThreadEvidence: number
+}
+
+/** Counters of what the mapper changed. Always present; zero until a rule counts into them. */
+export type ExtractionStats = {
+  /** Names rewritten from a tail fragment to a full card name (counts entries, fact subjects and relation ends). */
+  fragmentNamesFixed: number
+  /** relation_create candidates dropped because an end matched no card. */
+  relationsDropped: number
+}
+
+export type ExtractionDropped = {
+  /** Facts dropped as near-duplicates of an existing or earlier fact of this extraction. */
+  duplicateFacts: number
+  /** Facts, threads and relations dropped because their evidence is not in the source text. */
+  unverifiedEvidence: number
+}
+
 type ExistingEntry = ExtractionContext['existingEntries'][number]
 type ThreadTarget = { id: string; title: string; status?: ThreadStatus }
+
+/** Field keys the model may use for a character's speech style. All of them map to "speech". */
+const SPEECH_KEYS = new Set(['speech', '말투', '화법', '말버릇', 'voice'])
+
+function normalizeFieldKey(key: string): string {
+  const trimmed = key.trim()
+  return SPEECH_KEYS.has(trimmed.toLowerCase()) ? 'speech' : trimmed
+}
+
+/**
+ * Field values of one entry by key, trimmed. The first value of a key wins; with the speech
+ * feature on, speech keys share one key and the first non-empty speech wins.
+ */
+function fieldMapOf(
+  fields: { key: string; value: string }[],
+  speechStyle: boolean,
+): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const f of fields) {
+    const key = speechStyle ? normalizeFieldKey(f.key) : f.key.trim()
+    if (!key) continue
+    const value = f.value.trim()
+    const current = map.get(key)
+    if (current === undefined || (speechStyle && key === 'speech' && current === '')) {
+      map.set(key, value)
+    }
+  }
+  return map
+}
 
 /** The word with one trailing particle removed, for each particle that fits the word. */
 function oneParticleStripped(word: string): string[] {
@@ -140,6 +250,35 @@ const ROLE_SET: ReadonlySet<string> = new Set(ROLE_WORDS)
 /** True for a role word or pronoun (주인공, 주인공은). Such a word is never a name. */
 function isRoleName(name: string): boolean {
   return nameCandidates(name).some((form) => ROLE_SET.has(form))
+}
+
+/**
+ * The full character card name a tail fragment stands for ("세린" -> "한세린"). Only a character
+ * or unknown kind matches, only a single-word card name ending with the fragment, with a one or
+ * two syllable surname in front. Prefixes and middle matches do not count. Returns undefined when
+ * no card or more than one card qualifies, or when a form is already a card name.
+ */
+export function findFragmentCanonical(
+  name: string,
+  kind: EntryKind | undefined,
+  cardNames: readonly string[],
+): string | undefined {
+  if (kind !== undefined && kind !== 'character') return undefined
+  const forms = nameCandidates(name)
+  if (forms.some((form) => cardNames.includes(form))) return undefined
+  for (const form of forms) {
+    if (/\s/.test(form) || form.length < 2) continue
+    const matches = [
+      ...new Set(
+        cardNames.filter((card) => {
+          const extra = card.length - form.length
+          return !/\s/.test(card) && card.endsWith(form) && extra >= 1 && extra <= 2
+        }),
+      ),
+    ]
+    if (matches.length > 0) return matches.length === 1 ? matches[0] : undefined
+  }
+  return undefined
 }
 
 /**
@@ -248,9 +387,19 @@ function makeProposal<K extends NewProposal['type']>(
 export function extractionToProposals(
   x: Extraction,
   ctx: ExtractionContext,
-): { proposals: NewProposal[]; pendingThreadEvents: PendingThreadEvent[] } {
+): {
+  proposals: NewProposal[]
+  pendingThreadEvents: PendingThreadEvent[]
+  stats: ExtractionStats
+  dropped: ExtractionDropped
+  weak: ExtractionWeak
+} {
   const proposals: NewProposal[] = []
   const pendingThreadEvents: PendingThreadEvent[] = []
+  const stats: ExtractionStats = { fragmentNamesFixed: 0, relationsDropped: 0 }
+  const dropped: ExtractionDropped = { duplicateFacts: 0, unverifiedEvidence: 0 }
+  const weak: ExtractionWeak = { weakFactEvidence: 0, weakThreadEvidence: 0 }
+  const anchorMode = ctx.evidenceAnchor ?? 'off'
 
   // Cards a name can refer to, searched in this order: wiki cards, pending entry_create
   // proposals, then names created earlier in this extraction.
@@ -300,11 +449,71 @@ export function extractionToProposals(
     return undefined
   }
 
-  // Entries: a name that matches a card is skipped; an alias that matches a wiki card adds the
-  // new name to that card; anything else becomes entry_create (deduped by name).
+  // Evidence as stored: the raw text when no source is set, else the verified source slice. A
+  // quote that is not in the source is counted and returns null.
+  const evidenceOf = (raw: string): string | null => {
+    if (ctx.sourceText === undefined) return raw.trim()
+    const verified = verifyEvidenceQuote(ctx.sourceText, raw)
+    if (verified === null) dropped.unverifiedEvidence += 1
+    return verified
+  }
+  // Aliases of the card a fact subject resolved to, for the evidence check.
+  const aliasesOf = (subjectName: string, hit: Hit | undefined): string[] => {
+    if (hit?.source === 'wiki') return hit.entry.aliases
+    const name = hit?.name ?? subjectName
+    const pendingAliases = (ctx.pendingEntries ?? []).find((p) => p.name === name)?.aliases
+    return pendingAliases ?? x.entries.find((e) => e.name.trim() === name)?.aliases ?? []
+  }
+  // Fact texts already on the work for this card: a wiki card's facts, else the facts of a
+  // pending or new card that has no wiki id, matched by subject name.
+  const existingFactTexts = (subjectName: string, hit: Hit | undefined): string[] => {
+    const canonical = collapse(canonicalName(subjectName, hit))
+    return (ctx.existingFacts ?? [])
+      .filter((c) =>
+        hit?.source === 'wiki'
+          ? c.entryId === hit.entry.id
+          : c.entryId === null && collapse(c.subjectName) === canonical,
+      )
+      .map((c) => c.content)
+  }
+
+  // Character card names a tail fragment may complete: wiki and pending cards, then character
+  // entries of this extraction. A name's own entry is left out of its candidates, so an entry
+  // "세린" beside "한세린" can still be rewritten.
+  const dbNames = [
+    ...new Set(
+      [
+        ...ctx.existingEntries.filter((e) => e.kind === 'character').map((e) => e.name),
+        ...(ctx.pendingEntries ?? []).filter((p) => p.kind === 'character').map((p) => p.name),
+      ].map((n) => n.trim()),
+    ),
+  ]
+  const extractionNames = x.entries
+    .filter((e) => e.kind === 'character' && e.name.trim() && !isRoleName(e.name))
+    .map((e) => e.name.trim())
+  // The full card name for a tail fragment, or the name as given. A name that already matches a
+  // card is kept as is.
+  const resolveFragment = (raw: string, kind: EntryKind | undefined): string => {
+    const name = raw.trim()
+    if (locate(name, kind)) return name
+    const cardNames = [...new Set([...dbNames, ...extractionNames.filter((n) => n !== name)])]
+    const full = findFragmentCanonical(name, kind, cardNames)
+    if (full === undefined) return name
+    stats.fragmentNamesFixed += 1
+    return full
+  }
+
+  // Entries: a name that matches a card is skipped (a speech feature may still fill its speech);
+  // an alias that matches a wiki card adds the new name to that card; anything else becomes
+  // entry_create (deduped by name).
+  const speechStyle = ctx.speechStyle === true
+  const pendingSpeech = new Set(ctx.pendingSpeechEntryIds ?? [])
+  const speechUpdated = new Set<string>()
   for (const e of x.entries) {
     const name = e.name.trim()
     if (!name || isRoleName(name)) continue
+    // A tail fragment ("세린" for "한세린") is not a card of its own: the full card is elsewhere.
+    if (resolveFragment(name, e.kind) !== name) continue
 
     const aliases: string[] = []
     for (const raw of e.aliases) {
@@ -314,7 +523,32 @@ export function extractionToProposals(
       }
     }
 
-    if (locate(name, e.kind)) continue
+    const fieldMap = fieldMapOf(e.fields, speechStyle)
+    const hit = locate(name, e.kind)
+    if (hit) {
+      // Speech fills only a wiki card whose speech is empty, from an interview, once per card.
+      const speech = fieldMap.get('speech') ?? ''
+      if (
+        speechStyle &&
+        ctx.source === 'interview' &&
+        hit.source === 'wiki' &&
+        hit.entry.speech !== undefined &&
+        hit.entry.speech.trim() === '' &&
+        speech !== '' &&
+        !pendingSpeech.has(hit.entry.id) &&
+        !speechUpdated.has(hit.entry.id)
+      ) {
+        proposals.push(
+          makeProposal(ctx, 'entry_update', {
+            entryId: hit.entry.id,
+            entryName: hit.entry.name,
+            patch: { fields: { speech } },
+          }),
+        )
+        speechUpdated.add(hit.entry.id)
+      }
+      continue
+    }
 
     // Aliases match exactly or after a particle only (see NameIndex.find).
     const aliasHit = aliases
@@ -345,11 +579,6 @@ export function extractionToProposals(
 
     created.addCard(name, name, e.kind)
     created.add(aliases, name, e.kind)
-    const fieldMap = new Map<string, string>()
-    for (const f of e.fields) {
-      const k = f.key.trim()
-      if (k && !fieldMap.has(k)) fieldMap.set(k, f.value.trim())
-    }
     proposals.push(
       makeProposal(ctx, 'entry_create', {
         kind: e.kind,
@@ -363,16 +592,51 @@ export function extractionToProposals(
 
   // Facts: subject binds to a wiki card when one matches (pending and new entries stay null).
   const seenFacts = new Set<string>()
+  // Contents kept so far per card identity, for the near-duplicate check within this extraction.
+  const keptFacts = new Map<string, string[]>()
   for (const f of x.facts) {
     const content = collapse(f.content)
     if (!content) continue
-    const subjectName = f.subjectName.trim()
-    if (isRoleName(subjectName)) continue
-    const kind = kindOfEntry(subjectName)
+    const rawSubject = f.subjectName.trim()
+    if (isRoleName(rawSubject)) continue
+    const kind = kindOfEntry(rawSubject)
+    const subjectName = resolveFragment(rawSubject, kind)
     const hit = locate(subjectName, kind)
-    const key = `${identityOf(subjectName, hit)}|${content}`
+    const identity = identityOf(subjectName, hit)
+    const supersedesFactId = lookupRef(ctx.factRefs, f.supersedesFactRef)?.id ?? null
+    // A state change (supersede) is never a duplicate of the fact it replaces.
+    const isState = supersedesFactId !== null
+
+    if (
+      !isState &&
+      existingFactTexts(subjectName, hit).some((c) => isNearDuplicateFact(c, content))
+    ) {
+      dropped.duplicateFacts += 1
+      continue
+    }
+    const evidence = evidenceOf(f.evidence)
+    if (evidence === null) continue
+
+    const key = `${identity}|${content}`
     if (seenFacts.has(key)) continue
+    if (!isState && (keptFacts.get(identity) ?? []).some((c) => isNearDuplicateFact(c, content))) {
+      dropped.duplicateFacts += 1
+      continue
+    }
+    if (anchorMode !== 'off') {
+      const names = [
+        canonicalName(subjectName, hit),
+        ...aliasesOf(subjectName, hit),
+        ...nameCandidates(rawSubject),
+      ]
+      const subjectKind = hit?.source === 'wiki' ? hit.entry.kind : kind
+      if (!evidenceNamesSubject(evidence, names, subjectKind)) {
+        weak.weakFactEvidence += 1
+        if (anchorMode === 'drop') continue
+      }
+    }
     seenFacts.add(key)
+    keptFacts.set(identity, [...(keptFacts.get(identity) ?? []), content])
 
     proposals.push(
       makeProposal(ctx, 'fact_create', {
@@ -381,8 +645,8 @@ export function extractionToProposals(
         content,
         suggestedStatus: f.suggestedStatus,
         sourceChapterId: ctx.chapterId,
-        evidence: f.evidence.trim(),
-        supersedesFactId: lookupRef(ctx.factRefs, f.supersedesFactRef)?.id ?? null,
+        evidence,
+        supersedesFactId,
       }),
     )
   }
@@ -391,6 +655,8 @@ export function extractionToProposals(
   // title. Planted into an interview-planned thread -> one planted event. Other planted threads
   // -> thread_create, unless the wiki or a pending proposal already has them. developed/resolved
   // -> thread_event, or pending when the target is a not-yet-approved thread; anything else is dropped.
+  // A chapter (not an interview) plants the threads an interview planned.
+  const plantsPlanned = ctx.source !== 'interview' && Boolean(ctx.chapterId)
   const threadTargetOf = (
     ref: string | null,
     title: string,
@@ -403,8 +669,11 @@ export function extractionToProposals(
         status: byRef.status ?? ctx.existingThreads?.find((th) => th.id === byRef.id)?.status,
       }
     }
-    if (kind !== 'planted') return undefined
-    return ctx.existingThreads?.find((th) => collapse(th.title) === collapse(title))
+    const match = ctx.existingThreads?.find((th) => collapse(th.title) === collapse(title))
+    if (kind === 'planted') return match
+    // A developed or resolved mention without a usable ref still records the planting of a
+    // planned thread that a chapter now plants.
+    return match?.status === 'planned' && plantsPlanned ? match : undefined
   }
 
   const seenCreates = new Set<string>()
@@ -412,12 +681,17 @@ export function extractionToProposals(
   for (const t of x.threads) {
     const title = t.title.trim()
     if (!title) continue
+    const evidence = evidenceOf(t.evidence)
+    if (evidence === null) continue
     const description = t.description.trim()
-    const evidence = t.evidence.trim()
+    if (anchorMode !== 'off' && !evidenceHasThreadKeyword(evidence, [title, description])) {
+      weak.weakThreadEvidence += 1
+      if (anchorMode === 'drop') continue
+    }
 
     const target = threadTargetOf(t.existingThreadRef, title, t.kind)
     if (target) {
-      if (target.status === 'planned' && ctx.source !== 'interview' && ctx.chapterId) {
+      if (target.status === 'planned' && plantsPlanned) {
         // A chapter plants a thread that an interview already planned: record the planting.
         const key = `${target.id}|planted`
         if (!seenEvents.has(key)) {
@@ -488,15 +762,22 @@ export function extractionToProposals(
   // Relations: undirected, starting at the chapter position. A role word at either end is dropped.
   const seenRelations = new Set<string>()
   for (const r of x.relations) {
-    const sourceName = r.sourceName.trim()
-    const targetName = r.targetName.trim()
-    if (!sourceName || !targetName) continue
-    if (isRoleName(sourceName) || isRoleName(targetName)) continue
+    const rawSource = r.sourceName.trim()
+    const rawTarget = r.targetName.trim()
+    if (!rawSource || !rawTarget) continue
+    if (isRoleName(rawSource) || isRoleName(rawTarget)) continue
     const kind = collapse(r.kind)
-    const sourceKind = kindOfEntry(sourceName)
-    const targetKind = kindOfEntry(targetName)
+    const sourceKind = kindOfEntry(rawSource)
+    const targetKind = kindOfEntry(rawTarget)
+    const sourceName = resolveFragment(rawSource, sourceKind)
+    const targetName = resolveFragment(rawTarget, targetKind)
     const sourceHit = locate(sourceName, sourceKind)
     const targetHit = locate(targetName, targetKind)
+    // An end that matches no card anywhere would fail at approval, so the relation is not proposed.
+    if (!sourceHit || !targetHit) {
+      stats.relationsDropped += 1
+      continue
+    }
     // Relation ends are written as the card's own name, so they resolve at approval.
     if (
       sourceHit?.source === 'wiki' &&
@@ -507,6 +788,8 @@ export function extractionToProposals(
     ) {
       continue
     }
+    const evidence = evidenceOf(r.evidence)
+    if (evidence === null) continue
     const key = `${identityOf(sourceName, sourceHit)}|${identityOf(targetName, targetHit)}|${kind}`
     if (seenRelations.has(key)) continue
     seenRelations.add(key)
@@ -518,7 +801,7 @@ export function extractionToProposals(
         description: r.description.trim(),
         directed: false,
         startPosition: ctx.chapterPosition,
-        evidence: r.evidence.trim(),
+        evidence,
       }),
     )
   }
@@ -529,5 +812,5 @@ export function extractionToProposals(
     proposals.push(makeProposal(ctx, 'chapter_summary', { chapterId: ctx.chapterId, summary }))
   }
 
-  return { proposals, pendingThreadEvents }
+  return { proposals, pendingThreadEvents, stats, dropped, weak }
 }

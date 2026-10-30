@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import {
+  authorDirectives,
   changeLog,
   chapters,
   facts,
@@ -149,6 +150,7 @@ const WIKI_ENTRY_KEYS = [
   'body',
   'fields',
   'customFields',
+  'contextTier',
   'archivedAt',
 ] as const
 const FACT_KEYS = [
@@ -161,6 +163,7 @@ const FACT_KEYS = [
   'evidence',
   'validFromPosition',
   'validToPosition',
+  'revealAtPosition',
   'supersededByFactId',
   'archivedAt',
 ] as const
@@ -187,6 +190,18 @@ const RELATION_KEYS = [
 ] as const
 const NAMING_RULE_KEYS = ['canonical', 'variants', 'note', 'entryId', 'archivedAt'] as const
 const STYLE_CARD_KEYS = ['entryId', 'name', 'tone', 'rules', 'examples', 'archivedAt'] as const
+const AUTHOR_DIRECTIVE_KEYS = [
+  'entryId',
+  'scope',
+  'kind',
+  'text',
+  'pattern',
+  'speechLevel',
+  'targetChars',
+  'chapterPosition',
+  'status',
+  'archivedAt',
+] as const
 const CHAPTER_KEYS = ['summary'] as const
 
 /** Keeps the listed keys that are present in the snapshot. JSON strings for archivedAt become Dates. */
@@ -241,6 +256,11 @@ async function readRow(db: Db, table: ChangeTargetTable, id: string): Promise<Sn
       return (await db.select().from(namingRules).where(eq(namingRules.id, id)).limit(1))[0] ?? null
     case 'style_cards':
       return (await db.select().from(styleCards).where(eq(styleCards.id, id)).limit(1))[0] ?? null
+    case 'author_directives':
+      return (
+        (await db.select().from(authorDirectives).where(eq(authorDirectives.id, id)).limit(1))[0] ??
+        null
+      )
     case 'chapters':
       return (await db.select().from(chapters).where(eq(chapters.id, id)).limit(1))[0] ?? null
   }
@@ -306,6 +326,15 @@ async function writeRow(
         .update(styleCards)
         .set({ ...pick<typeof styleCards.$inferInsert>(snap, STYLE_CARD_KEYS), updatedAt: now })
         .where(eq(styleCards.id, id))
+      return
+    case 'author_directives':
+      await db
+        .update(authorDirectives)
+        .set({
+          ...pick<typeof authorDirectives.$inferInsert>(snap, AUTHOR_DIRECTIVE_KEYS),
+          updatedAt: now,
+        })
+        .where(eq(authorDirectives.id, id))
       return
     case 'chapters':
       await db

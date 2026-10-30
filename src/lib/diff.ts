@@ -13,6 +13,27 @@ export function diffTexts(a: string, b: string, mode: DiffMode = 'words'): DiffP
   return toParts(diffArrays(tokenizeWords(a), tokenizeWords(b)))
 }
 
+/**
+ * Same parts as diffTexts, but gives up after `timeoutMs` and returns null. For callers on the
+ * server that must not block the event loop on texts that have diverged (jsdiff checks the clock
+ * between edit lengths, so the real time can overshoot a little).
+ */
+export function diffTextsBounded(
+  a: string,
+  b: string,
+  mode: DiffMode,
+  options: { timeoutMs: number },
+): DiffPart[] | null {
+  const limits = { timeout: options.timeoutMs }
+  const changes =
+    mode === 'chars'
+      ? diffChars(a, b, limits)
+      : mode === 'lines'
+        ? diffLines(a, b, limits)
+        : diffArrays(tokenizeWords(a), tokenizeWords(b), limits)
+  return changes ? toParts(changes) : null
+}
+
 /** Inserted and deleted size in code points (so emoji and astral characters count once). */
 export function diffStats(parts: DiffPart[]): { inserted: number; deleted: number } {
   let inserted = 0

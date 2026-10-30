@@ -62,6 +62,7 @@ describe('EntryFormDialog', () => {
       body: '',
       fields: { speech: '짧고 단정하다' },
       customFields: [],
+      contextTier: 'mention',
     })
     await waitFor(() => expect(refresh).toHaveBeenCalled())
   })

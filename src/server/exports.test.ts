@@ -25,6 +25,7 @@ import {
 } from '@/test/factories'
 import { AppError } from '@/lib/errors'
 import { buildExportPayload } from './exports'
+import { createDirective } from './directives'
 
 let db: Db
 
@@ -267,5 +268,31 @@ describe('buildExportPayload', () => {
       'NOT_FOUND',
     )
     await expectAppError(buildExportPayload(db, { userId: owner.id }, 'not-a-uuid'), 'NOT_FOUND')
+  })
+})
+
+describe('buildExportPayload author requests', () => {
+  it('includes the work author requests, archived ones too', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const actor = { userId: owner.id }
+    const kept = await createDirective(db, actor, {
+      workId: work.id,
+      scope: 'work',
+      kind: 'style',
+      text: '짧게 쓴다',
+      source: 'author',
+    })
+    const other = await createTestWork(db, owner.id, { title: '다른 작품' })
+    await createDirective(db, actor, {
+      workId: other.id,
+      scope: 'work',
+      kind: 'style',
+      text: '다른 작품 요청',
+      source: 'author',
+    })
+
+    const payload = await buildExportPayload(db, actor, work.id)
+    expect(payload.authorDirectives.map((d) => d.id)).toEqual([kept.id])
   })
 })

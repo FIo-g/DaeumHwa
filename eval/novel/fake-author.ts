@@ -51,6 +51,8 @@ export function fakeAnswer(p: Pending, bible: Bible): Answer {
           reason: 'fake author accepts',
         })),
       }
+    case 'plan_review':
+      return { kind: 'plan_review', approve: true }
     case 'advice_note': {
       const { recommendedIndex, options } = p.result
       const inRange = recommendedIndex >= 0 && recommendedIndex < options.length
@@ -60,5 +62,7 @@ export function fakeAnswer(p: Pending, bible: Bible): Answer {
         note: 'fake author',
       }
     }
+    case 'directive_proposals':
+      return { kind: 'directive_proposals', add: [] }
   }
 }

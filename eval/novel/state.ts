@@ -1,6 +1,9 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { ModelId } from './models'
+import type { HelperThink, ModelId } from './models'
+import type { InterviewTurnStat } from './metrics-interview'
+import type { DraftPlanCard } from '@/lib/draft-plan'
+import type { PlantedLedger } from './directives'
 
 // Run config and resumable progress for one novel eval run. Both files live in the run directory.
 
@@ -13,6 +16,32 @@ export type RunConfig = {
   maxDraftAttempts: number
   createdAt: string
   commit: string
+  /** Think level for helper tasks (compare runs only). Absent means the profile's own think. */
+  helperThink?: HelperThink
+  /** Send the task's own maxTokens (compare runs only). Absent means the profile floor applies. */
+  productLimits?: boolean
+  /** The task's own effort and maxTokens are sent, as the product sends them (`--deploy-settings`). Absent means off. */
+  deploySettings?: boolean
+  /** Speech feature on for this run, with its bible copy (compare runs only). Absent means off. */
+  speech?: boolean
+  /** Two-step draft and scene rewrite also on a cloud profile (compare runs only). Absent means the profile's default. */
+  twoStep?: boolean
+  /** Chapter 1's instructions get the planted author directives, and their kept/broken counts are measured (`--directives on`). Absent means off. */
+  directives?: boolean
+  /** Ledger mode (`--directives ledger`): the probes are planted as author requests, not in chapter 1's instructions. Absent means the instructions carry them. */
+  directivesMode?: 'ledger' | 'learn'
+  /** Example bank on (`--example-bank on`): setup appends the bank passages to the style card. Absent means off. */
+  exampleBank?: boolean
+  /** Chapter instructions are only the first sentence and the draft review gets no mustInclude list (`--few-instructions`). Absent means off. */
+  fewInstructions?: boolean
+  /** No plan card: the draft is written at once, as before stage 1 (`--quick`). Absent means off. */
+  quick?: boolean
+  /** Comparison only: `scenes` writes one call per scene (`--draft-mode scenes`). Absent means `single`. */
+  draftMode?: 'single' | 'scenes'
+  /** A short draft is filled by the append continuation instead of scene expansion (`--length-mode continue`). Absent means expand. */
+  lengthMode?: 'continue'
+  /** Check-and-fix off for the draft step (`--scene-fix off`). Absent means on. */
+  sceneFix?: boolean
 }
 
 export type RunStatus =
@@ -23,6 +52,8 @@ export type DraftAttempt = {
   usable: boolean | null
   quality: number | null
   reason: string
+  /** Foreign-script repair of the attempt's draft (track C). Optional, so older state files load. */
+  foreign?: { found: number; replaced: number; unresolved: number }
 }
 
 export type RunData = {
@@ -40,6 +71,21 @@ export type RunData = {
   /** Ids of proposals returned by runChapterCheck for chapter n; read by the ch{n}:proposals step. */
   checkProposalIds?: Record<number, string[]>
   focusCounts: Record<string, number>
+  /** One entry per answered or skipped interview turn; optional so state files from before resume. */
+  interviewTurns?: InterviewTurnStat[]
+  /**
+   * The approved plan card of chapter n, with the run id of the plan call and the author's notes
+   * (few-instruction runs). Optional so state files from before stage 1 load.
+   */
+  plans?: Record<number, { runId: string; card: DraftPlanCard; notes: string[] }>
+  /** The author requests planted in ledger mode, with the scope each got. Absent on other runs. */
+  planted?: PlantedLedger
+  /** Applied voice-fix lines per chapter, set when the draft step applies its fix. */
+  voiceApplied?: Record<number, number>
+  /** Learn mode: proposals the author added per chapter. Absent on old runs. */
+  learnedAdded?: Record<number, number>
+  /** Learn mode: directive-infer time per chapter in ms. Absent on old runs. */
+  inferMs?: Record<number, number>
 }
 
 export type RunState = {

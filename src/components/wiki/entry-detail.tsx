@@ -89,6 +89,7 @@ export function EntryDetail({ workId, entry, canEdit, chapters, changes }: Entry
                     body: entry.body,
                     fields: entry.fields,
                     customFields: entry.customFields,
+                    contextTier: entry.contextTier,
                   }}
                   triggerLabel="수정"
                 />

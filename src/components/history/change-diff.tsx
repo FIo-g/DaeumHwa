@@ -1,9 +1,15 @@
 import { formatKoreanDateTime } from '@/lib/dates'
 import {
   CHARACTER_FIELD_LABELS,
+  CONTEXT_TIER_LABEL,
+  DIRECTIVE_KIND_LABEL,
+  DIRECTIVE_SCOPE_LABEL,
+  DIRECTIVE_SOURCE_LABEL,
+  DIRECTIVE_STATUS_LABEL,
   ENTRY_KIND_LABEL,
   FACT_STATUS_LABEL,
   PLACE_FIELD_LABELS,
+  SPEECH_LEVEL_LABEL,
   THREAD_EVENT_LABEL,
   THREAD_STATUS_LABEL,
 } from '@/lib/labels'
@@ -47,6 +53,15 @@ const FIELD_LABEL: Record<string, string> = {
   rules: '규칙',
   examples: '예문',
   archivedAt: '보관',
+  scope: '범위',
+  text: '요청',
+  pattern: '찾을 말',
+  speechLevel: '말투',
+  targetChars: '분량',
+  chapterPosition: '회차',
+  source: '출처',
+  contextTier: 'AI 문맥',
+  revealAtPosition: '공개 회차',
 }
 
 // Keys of structured `fields` objects (character and place cards).
@@ -55,7 +70,7 @@ const SUBFIELD_LABEL: Record<string, string> = {
   ...PLACE_FIELD_LABELS,
 }
 
-const SKIPPED_KEYS = new Set(['id', 'workId', 'createdAt', 'updatedAt'])
+const SKIPPED_KEYS = new Set(['id', 'workId', 'createdAt', 'updatedAt', 'createdBy'])
 
 function asSnapshot(value: unknown): Snapshot {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Snapshot) : {}
@@ -70,7 +85,20 @@ function fieldLabel(key: string, targetTable: ChangeTargetTable): string {
   return FIELD_LABEL[key] ?? key
 }
 
+/** Looks up a stored code's Korean label, or shows the code when it has none. */
+function labelOf(labels: Record<string, string>, value: string): string {
+  return labels[value] ?? value
+}
+
 function codeLabel(key: string, targetTable: ChangeTargetTable, value: string): string {
+  if (key === 'contextTier') return labelOf(CONTEXT_TIER_LABEL, value)
+  if (targetTable === 'author_directives') {
+    if (key === 'status') return labelOf(DIRECTIVE_STATUS_LABEL, value)
+    if (key === 'kind') return labelOf(DIRECTIVE_KIND_LABEL, value)
+    if (key === 'scope') return labelOf(DIRECTIVE_SCOPE_LABEL, value)
+    if (key === 'source') return labelOf(DIRECTIVE_SOURCE_LABEL, value)
+    if (key === 'speechLevel') return labelOf(SPEECH_LEVEL_LABEL, value)
+  }
   if (key === 'status') {
     if (targetTable === 'facts')
       return FACT_STATUS_LABEL[value as keyof typeof FACT_STATUS_LABEL] ?? value

@@ -8,6 +8,7 @@ import {
   startInterview,
 } from '@/server/interview'
 import { listProposals } from '@/server/proposals'
+import type { InterviewTurnStat } from '../metrics-interview'
 import type { Answer, Pending } from '../author-io'
 import type { RunContext, StepFn } from '../run'
 import {
@@ -103,6 +104,20 @@ export const interview: StepFn = async (ctx, _key, state) => {
         if (!extracted) await skipTurn(ctx.db, ctx.actor, turnId)
       }
       state.data.focusCounts[turn.focus] = (state.data.focusCounts[turn.focus] ?? 0) + 1
+      // Stats are read after the answer or skip is saved, so the reloaded row has the final answer.
+      const saved = await loadTurn(ctx, turnId)
+      state.data.interviewTurns ??= []
+      if (!state.data.interviewTurns.some((row) => row.turnId === turnId)) {
+        const stat: InterviewTurnStat = {
+          turnId,
+          focus: saved.focus,
+          topic: saved.topic,
+          question: saved.question,
+          answer: saved.answer,
+          skipped: saved.skipped,
+        }
+        state.data.interviewTurns.push(stat)
+      }
       mark(ctx, state, `${step}:answered`)
       // The answer's effects are saved. Log it if the question is still waiting for settling.
       const waiting = pendingFor(ctx.dir, step, 'interview_answer')

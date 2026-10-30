@@ -15,6 +15,7 @@ import { READER_PERSONAS } from '@/ai/personas'
 import { respond } from './responders'
 
 const CONTINUITY_PACK: ContextPack = {
+  core: [],
   position: 2,
   entries: [
     {
@@ -115,6 +116,7 @@ describe('respond: every structured task answers with schema-valid JSON', () => 
         answer: '서윤은 시계탑 수리공이다.',
         known: [],
         threads: [],
+        knownFacts: [],
       },
     ],
     [
@@ -163,6 +165,28 @@ describe('respond: every structured task answers with schema-valid JSON', () => 
     })
     expect(reply.task).toBe('draft-chapter')
     expect(reply.text.trim().length).toBeGreaterThan(0)
+  })
+
+  it('answers the continuation prompt with its own plain text, not the draft text', () => {
+    const draft = respond({
+      system: [{ type: 'text', text: DRAFT_SYSTEM }],
+      messages: [{ role: 'user', content: '<instructions>서윤이 시계탑에 오른다.</instructions>' }],
+      model: 'm',
+    })
+    const continuation = respond({
+      system: [{ type: 'text', text: DRAFT_SYSTEM }],
+      messages: [
+        {
+          role: 'user',
+          content:
+            '<instructions>서윤이 시계탑에 오른다.</instructions>\n\n<draft_so_far>\n서윤은 조용히 문을 열었다.\n</draft_so_far>\n<continue_length>지금까지 17자를 썼다.</continue_length>',
+        },
+      ],
+      model: 'm',
+    })
+    expect(continuation.task).toBe('draft-chapter')
+    expect(continuation.text.trim().length).toBeGreaterThan(0)
+    expect(continuation.text).not.toBe(draft.text)
   })
 })
 

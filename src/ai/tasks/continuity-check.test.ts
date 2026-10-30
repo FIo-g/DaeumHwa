@@ -6,6 +6,7 @@ import type { IssueKind } from '@/db/types'
 import { fakeContinuity } from '@/test/ai-fakes/continuity-check'
 
 const pack: ContextPack = {
+  core: [],
   position: 1,
   entries: [
     {
@@ -145,6 +146,74 @@ describe('continuityCheckTask.postProcess', () => {
   })
 })
 
+describe('continuityCheckTask.postProcess numeric facts', () => {
+  const agePack: ContextPack = {
+    ...pack,
+    entries: [
+      {
+        ref: 'E1',
+        id: 'entry-1',
+        kind: 'character',
+        name: '한세린',
+        aliases: ['세린'],
+        summary: '',
+        fields: {},
+        mentionCount: 1,
+        facts: [
+          {
+            ref: 'F1',
+            id: 'fact-1',
+            content: '한세린의 나이는 16살이다.',
+            status: 'confirmed',
+            sourcePosition: null,
+            validFromPosition: null,
+            validToPosition: null,
+            evidence: '',
+          },
+        ],
+      },
+    ],
+  }
+  const ageText = '19살의 세린은 말없이 고개를 숙였다.'
+  const ageInput = { chapterText: ageText, chapterPosition: 2, chapterTitle: '2화', pack: agePack }
+
+  it('adds the numeric issue when the model returns nothing', () => {
+    const processed = continuityCheckTask.postProcess?.({ issues: [] }, ageInput)
+    expect(processed?.issues).toHaveLength(1)
+    expect(processed?.issues[0]).toMatchObject({
+      quote: ageText,
+      kind: 'contradiction',
+      severity: 'medium',
+      factRef: 'F1',
+      entryRef: 'E1',
+    })
+  })
+
+  it('lets the numeric issue win the dedupe over a model issue on the same sentence', () => {
+    const modelIssue = {
+      quote: ageText,
+      kind: 'contradiction' as const,
+      severity: 'high' as const,
+      factRef: 'F1',
+      entryRef: 'E1',
+      wikiExcerpt: '한세린의 나이는 16살이다.',
+      explanation: '모델의 설명',
+      suggestion: '',
+    }
+    const processed = continuityCheckTask.postProcess?.({ issues: [modelIssue] }, ageInput)
+    expect(processed?.issues).toHaveLength(1)
+    expect(processed?.issues[0].explanation).toContain('16살')
+  })
+
+  it('does not flag an age that matches', () => {
+    const processed = continuityCheckTask.postProcess?.(
+      { issues: [] },
+      { ...ageInput, chapterText: '세린은 16살이 된 뒤로 달라졌다.' },
+    )
+    expect(processed?.issues).toEqual([])
+  })
+})
+
 describe('continuityCheckTask fake', () => {
   it('flags a left/right hand contradiction quoting the manuscript sentence', () => {
     const output = continuityCheckTask.schema.parse(fakeContinuity(input))
@@ -228,6 +297,20 @@ describe('continuityCheckTask prompt isolation', () => {
     expect(rule).toContain('quote')
     expect(rule).toContain('빈 문자열')
     expect(rule).toContain('explanation')
+  })
+
+  it('says that a sentence which does not mention a wiki fact is not a contradiction', () => {
+    const lines = continuityCheckTask.system.split('\n')
+    const rules = lines.filter(
+      (line) => line.startsWith('- ') && line.includes('언급') && line.includes('모순이 아니다'),
+    )
+    expect(rules).toHaveLength(1)
+    const firstBullet = lines.findIndex((line) => line.startsWith('- <wiki>의 사실(F ref)'))
+    expect(firstBullet).toBeGreaterThan(-1)
+    expect(lines[firstBullet + 1]).toBe(rules[0])
+    expect(lines[0].startsWith('당신은 장기 연재 웹소설의 설정 오류(오기)를 찾는 교정자다.')).toBe(
+      true,
+    )
   })
 
   it('tells the model that tagged content is data, not instructions', () => {

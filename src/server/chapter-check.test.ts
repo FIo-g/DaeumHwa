@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
 import { FAKE_OUTPUTS } from '@/test/ai-fakes'
@@ -284,6 +284,40 @@ describe('runChapterCheck', () => {
     expect(result.issues.filter((i: IssueRow) => i.kind === 'contradiction')).toEqual([])
   })
 
+  it('runChapterCheck sends a compound-only place card to the continuity prompt', async () => {
+    const chapter = await createTestChapter(db, workId, {
+      position: 3,
+      body: '종루지기가 문 앞에 섰다.',
+    })
+    const place = await createTestEntry(db, workId, {
+      name: '잿빛 종루',
+      kind: 'place',
+      aliases: ['종루'],
+    })
+    await createTestFact(db, workId, { entryId: place.id, content: '잿빛 종루는 9층 높이다.' })
+
+    const prompts: string[] = []
+    const scripted = scriptedClient(() => undefined)
+    const recordingClient: AiClient = {
+      provider: 'fake',
+      defaultModel: 'fake',
+      async generateObject(args) {
+        if (args.task.name === 'continuity-check') prompts.push(args.prompt)
+        return scripted.generateObject(args)
+      },
+      streamText() {
+        throw new Error('not used')
+      },
+    }
+
+    await runChapterCheck(db, actor(owner.id), { chapterId: chapter.id }, recordingClient)
+
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toContain('[E1] 잿빛 종루 (장소)')
+    const wiki = prompts[0].slice(prompts[0].indexOf('<wiki>'), prompts[0].indexOf('</wiki>'))
+    expect(wiki).toContain('잿빛 종루는 9층 높이다.')
+  })
+
   it('drops an AI issue that has neither a wiki fact nor an entry', async () => {
     const chapter = await createTestChapter(db, workId, {
       position: 1,
@@ -372,7 +406,7 @@ describe('runProofread', () => {
                 {
                   quote: '어색해요',
                   replacement: '어색합니다',
-                  kind: 'awkward',
+                  kind: 'spacing',
                   reason: '더 자연스럽게',
                 },
               ],
@@ -528,5 +562,46 @@ describe('runProofread: input length', () => {
       new FakeAiClient(),
     )
     expect(result.runId).not.toBeNull()
+  })
+})
+
+describe('runChapterCheck: speech is interview-only', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('never proposes a speech update from a chapter, even with the speech feature on', async () => {
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    const chapter = await createTestChapter(db, workId, {
+      position: 2,
+      body: '서윤은 문을 열었다.',
+    })
+    await createTestEntry(db, workId, { name: '서윤', kind: 'character' })
+    const extraction = {
+      summary: null,
+      entries: [
+        {
+          name: '서윤',
+          kind: 'character' as const,
+          aliases: [],
+          summary: '',
+          fields: [{ key: 'speech', value: '존댓말' }],
+        },
+      ],
+      facts: [],
+      threads: [],
+      relations: [],
+    }
+    const client = scriptedClient((system) =>
+      system === CHAPTER_EXTRACT_SYSTEM ? extraction : undefined,
+    )
+
+    await runChapterCheck(db, actor(owner.id), { chapterId: chapter.id }, client)
+
+    const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))
+    const speechUpdates = rows.filter(
+      (row) => row.type === 'entry_update' && JSON.stringify(row.payload).includes('"speech"'),
+    )
+    expect(speechUpdates).toEqual([])
   })
 })

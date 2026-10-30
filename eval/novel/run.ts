@@ -9,11 +9,27 @@ import type { Db } from '@/db/client'
 import { migrateDb } from '@/db/migrate'
 import * as schema from '@/db/schema'
 import type { Actor } from '@/db/types'
+import { buildAuthorContext, removeAuthorContext, writeAuthorContext } from './author-context'
 import { type Answer, type Pending, readPending } from './author-io'
-import { type Bible, loadBible } from './bible'
+import {
+  type Bible,
+  loadBible,
+  loadRunBible,
+  RUN_BIBLE_FILE,
+  withVoicesInAnswerBank,
+  writeRunBible,
+} from './bible'
 import { EvalClient } from './eval-client'
 import { fakeAnswer } from './fake-author'
-import { type ModelId, MODEL_PROFILES, createModelClient } from './models'
+import type { PowerReader } from './power'
+import {
+  type HelperThink,
+  type ModelClientOptions,
+  type ModelId,
+  MODEL_PROFILES,
+  createModelClient,
+  createRetryClient,
+} from './models'
 import {
   type RunConfig,
   type RunState,
@@ -83,11 +99,27 @@ export type RunCreateOptions = {
   questions: number
   maxDraftAttempts: number
   commit: string
+  helperThink?: HelperThink
+  productLimits?: boolean
+  deploySettings?: boolean
+  speech?: boolean
+  twoStep?: boolean
+  directives?: boolean
+  directivesMode?: 'ledger' | 'learn'
+  exampleBank?: boolean
+  fewInstructions?: boolean
+  quick?: boolean
+  draftMode?: 'single' | 'scenes'
+  lengthMode?: 'continue'
+  /** Check-and-fix off for the draft step. Absent means on. */
+  sceneFix?: boolean
 }
 
 /** Writes config.json and the first state.json for a new run directory. */
 export function createRun(dir: string, o: RunCreateOptions): RunConfig {
   if (existsSync(join(dir, 'config.json'))) throw new Error(`run already exists: ${dir}`)
+  // The bible copy is written before config.json, which marks the run as existing, so a retry after a crash rewrites it.
+  if (o.speech) writeRunBible(dir, withVoicesInAnswerBank(loadBible(o.lang)))
   const config: RunConfig = {
     runId: randomUUID(),
     modelId: o.modelId,
@@ -97,6 +129,23 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
     maxDraftAttempts: o.maxDraftAttempts,
     createdAt: new Date().toISOString(),
     commit: o.commit,
+    ...(o.helperThink ? { helperThink: o.helperThink } : {}),
+    ...(o.productLimits ? { productLimits: true } : {}),
+    ...(o.deploySettings ? { deploySettings: true } : {}),
+    ...(o.speech ? { speech: true } : {}),
+    ...(o.twoStep ? { twoStep: true } : {}),
+    ...(o.directives ? { directives: true } : {}),
+    ...(o.directivesMode === 'ledger'
+      ? { directivesMode: 'ledger' as const }
+      : o.directivesMode === 'learn'
+        ? { directivesMode: 'learn' as const }
+        : {}),
+    ...(o.exampleBank ? { exampleBank: true } : {}),
+    ...(o.fewInstructions ? { fewInstructions: true } : {}),
+    ...(o.quick ? { quick: true } : {}),
+    ...(o.draftMode === 'scenes' ? { draftMode: 'scenes' as const } : {}),
+    ...(o.lengthMode === 'continue' ? { lengthMode: 'continue' as const } : {}),
+    ...(o.sceneFix === false ? { sceneFix: false as const } : {}),
   }
   saveConfig(dir, config)
   saveState(dir, newState(config))
@@ -106,27 +155,50 @@ export function createRun(dir: string, o: RunCreateOptions): RunConfig {
 /** Opens the run's file-backed database and AI client. The caller must call `close`. */
 export async function openRun(
   dir: string,
-  o: { inner?: AiClient; autoAuthor?: boolean } = {},
+  o: { inner?: AiClient; autoAuthor?: boolean; readPower?: PowerReader } = {},
 ): Promise<RunContext & { close(): Promise<void> }> {
   const config = loadConfig(dir)
+  if (config.speech === true && !existsSync(join(dir, RUN_BIBLE_FILE))) {
+    throw new Error(`speech run has no ${RUN_BIBLE_FILE}: ${dir}`)
+  }
+  const bible = loadRunBible(dir, config.lang)
   const state = loadState(dir)
   const profile = MODEL_PROFILES[config.modelId]
   const pg = new PGlite(join(dir, 'db'))
   const db = drizzle(pg, { schema }) as unknown as Db
   await migrateDb(db, 'pglite')
-  const bible = loadBible(config.lang)
-  // The inner client reports Ollama timings to the eval client, which is built here first.
+  // The inner clients report Ollama timings to the eval client, which is built here first. The retry
+  // client (local profiles only) repeats a failed helper call with a lower think; a test inner gets none.
+  const wiring: ModelClientOptions = {
+    onStats: (s) => client.onOllamaStats(s),
+    onAttempt: (a) => client.onOllamaAttempt(a),
+    helperThink: config.helperThink,
+  }
   const client: EvalClient = new EvalClient({
-    inner: o.inner ?? createModelClient(profile, { onStats: (s) => client.onOllamaStats(s) }),
+    inner: o.inner ?? createModelClient(profile, wiring),
+    retryInner: o.inner ? undefined : createRetryClient(profile, wiring),
     profile,
     lang: config.lang,
     callsDir: join(dir, 'calls'),
     startSeq: Math.max(1, state.nextSeq),
+    helperThink: config.helperThink,
+    productLimits: config.productLimits,
+    deploySettings: config.deploySettings,
+    readPower: o.readPower,
   })
   setAiTimeoutOverride(profile.timeoutMs)
   // 0 disables the product's daily token limit for eval runs. close() puts the previous value back.
   const previousDailyLimit = process.env.AI_DAILY_TOKEN_LIMIT
   process.env.AI_DAILY_TOKEN_LIMIT = '0'
+  // The eval keeps the speech feature off unless the run was created with --speech on, so runs stay
+  // comparable with the 2026-10-18 baseline even when .env.local turns the product flag on. close()
+  // puts the previous value back.
+  const previousSpeechStyle = process.env.AI_SPEECH_STYLE
+  process.env.AI_SPEECH_STYLE = config.speech === true ? 'on' : 'off'
+  // The draft's short-length path follows the run's config, not the shell: absent means expand. close()
+  // puts the previous value back.
+  const previousLengthMode = process.env.AI_DRAFT_LENGTH_MODE
+  process.env.AI_DRAFT_LENGTH_MODE = config.lengthMode === 'continue' ? 'continue' : 'expand'
   return {
     dir,
     config,
@@ -140,8 +212,35 @@ export async function openRun(
       setAiTimeoutOverride(null)
       if (previousDailyLimit === undefined) delete process.env.AI_DAILY_TOKEN_LIMIT
       else process.env.AI_DAILY_TOKEN_LIMIT = previousDailyLimit
+      if (previousSpeechStyle === undefined) delete process.env.AI_SPEECH_STYLE
+      else process.env.AI_SPEECH_STYLE = previousSpeechStyle
+      if (previousLengthMode === undefined) delete process.env.AI_DRAFT_LENGTH_MODE
+      else process.env.AI_DRAFT_LENGTH_MODE = previousLengthMode
       await pg.close()
     },
+  }
+}
+
+/**
+ * Writes author-context.json for the item the author is about to judge (the approved wiki, the
+ * author's earlier decisions and hints). Any other wait, or a run with no work yet, gets no file, so
+ * a stale one cannot reach the author. A failed build never stops the run.
+ */
+async function refreshAuthorContext(ctx: RunContext, workId: string | null | undefined) {
+  try {
+    const pending = readPending(ctx.dir)
+    if (
+      !pending ||
+      !workId ||
+      (pending.kind !== 'interview_answer' && pending.kind !== 'proposals')
+    ) {
+      removeAuthorContext(ctx.dir)
+      return
+    }
+    const context = await buildAuthorContext(ctx.db, ctx.actor, workId, ctx.dir, pending)
+    writeAuthorContext(ctx.dir, context)
+  } catch {
+    removeAuthorContext(ctx.dir)
   }
 }
 
@@ -155,6 +254,7 @@ export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
     if (state.cursor >= state.plan.length) {
       state.status = 'done'
       state.message = null
+      removeAuthorContext(ctx.dir)
       persist(ctx, state)
       return state
     }
@@ -177,6 +277,7 @@ export async function runUntilBlocked(ctx: RunContext): Promise<RunState> {
       persist(ctx, state)
       continue
     }
+    await refreshAuthorContext(ctx, state.data.workId)
     if (!ctx.autoAuthor) {
       state.status = 'pending'
       state.message = null

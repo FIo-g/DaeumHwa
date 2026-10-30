@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import {
+  authorDirectives,
   changeLog,
   chapters,
   comments,
@@ -40,6 +41,7 @@ export type RowTable =
   | 'relations'
   | 'naming_rules'
   | 'style_cards'
+  | 'author_directives'
   | 'proposals'
   | 'issues'
   | 'comments'
@@ -147,6 +149,14 @@ async function findWorkId(db: Db, table: RowTable, id: string): Promise<string |
         .select({ workId: styleCards.workId })
         .from(styleCards)
         .where(eq(styleCards.id, id))
+        .limit(1)
+      return r?.workId
+    }
+    case 'author_directives': {
+      const [r] = await db
+        .select({ workId: authorDirectives.workId })
+        .from(authorDirectives)
+        .where(eq(authorDirectives.id, id))
         .limit(1)
       return r?.workId
     }

@@ -15,9 +15,21 @@ import { ollamaTransport } from '@/ai/ollama'
 import { seoulToday } from '@/lib/dates'
 import { readPending } from './author-io'
 import { loadBible } from './bible'
-import { chapterMetrics } from './metrics'
-import { MODEL_IDS, MODEL_PROFILES, type ModelId } from './models'
-import { buildRunSummary } from './steps/finish'
+import { publishReview, secondBlindDir, writeBlindCopy } from './blind'
+import { bibleExempt, chapterMetrics, planTargetsOf } from './metrics'
+import { type PowerInfo, type PowerReader, lowPowerWarning, readPowerInfo } from './power'
+import {
+  checkHelperThink,
+  checkTwoStep,
+  HELPER_THINKS,
+  type HelperThink,
+  MODEL_IDS,
+  MODEL_PROFILES,
+  type ModelId,
+} from './models'
+import { publishFile } from './publish'
+import { reviewGate } from './review-verdict'
+import { buildRunSummary, readSummaryInputs } from './steps/finish'
 import { readCallRecords } from './steps/util'
 import {
   type RunConfig,
@@ -32,7 +44,7 @@ import { acquireLock, releaseLock, workerAlive } from './worker-lock'
 
 // Command line for the novel eval. Every command prints exactly one JSON line on stdout. Long
 // steps run in a detached worker so they outlive the agent's command timeout.
-//   init | advance | worker | status | probe-ctx | resummarize
+//   init | advance | worker | status | probe-ctx | resummarize | blind | publish-review | publish | review-gate
 
 const RESULTS_DIR = 'eval/results/novel'
 const LANGS = ['ko', 'en'] as const
@@ -46,22 +58,57 @@ export type StatusJson = {
   step: string | null
   pendingKind: string | null
   message: string | null
+  /** Low Power warning for a local run; a view computed on demand, never saved. */
+  warning?: string
 }
 
 /** The documented status shape for one run. */
-export function formatStatus(state: RunState, pendingKind: string | null = null): StatusJson {
-  return {
+export function formatStatus(
+  state: RunState,
+  pendingKind: string | null = null,
+  warning: string | null = null,
+): StatusJson {
+  const status: StatusJson = {
     status: state.status,
     step: state.plan[state.cursor] ?? null,
     pendingKind,
     message: state.message,
   }
+  if (warning) status.warning = warning
+  return status
 }
 
-function summarize(dir: string, state: RunState = loadState(dir)): StatusJson {
+/**
+ * The power warning for a local run, or null. Fake and cloud runs return before any read. A
+ * finished run ignores the live reading; a missing config or a bad call file counts as no sample.
+ */
+function powerWarningFor(dir: string, state: RunState, readPower: PowerReader): string | null {
+  let modelId: ModelId
+  try {
+    modelId = loadConfig(dir).modelId
+  } catch {
+    return null
+  }
+  if (MODEL_PROFILES[modelId].queue !== 'local') return null
+  let samples: PowerInfo[] = []
+  try {
+    samples = readCallRecords(dir).flatMap((call) => (call.power ? [call.power] : []))
+  } catch {
+    samples = []
+  }
+  const live = state.status === 'done' ? null : readPower()
+  return lowPowerWarning({ live, samples })
+}
+
+function summarize(
+  dir: string,
+  state: RunState = loadState(dir),
+  readPower?: PowerReader,
+): StatusJson {
   let pendingKind: string | null = null
   if (state.status === 'pending') pendingKind = readPending(dir)?.kind ?? null
-  return formatStatus(state, pendingKind)
+  const warning = readPower ? powerWarningFor(dir, state, readPower) : null
+  return formatStatus(state, pendingKind, warning)
 }
 
 function gitCommit(): string {
@@ -86,6 +133,14 @@ function parseLang(value: string): 'ko' | 'en' {
   return value as 'ko' | 'en'
 }
 
+/** Operator message: this dev tool's errors stay English, like `unknown model:` above. */
+function parseHelperThink(value: string): HelperThink {
+  if (!(HELPER_THINKS as readonly string[]).includes(value)) {
+    throw new Error(`unknown helper think: ${value}`)
+  }
+  return value as HelperThink
+}
+
 function positiveInt(value: number, name: string): number {
   if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`)
   return value
@@ -97,20 +152,127 @@ export type InitOptions = {
   chapters?: number
   questions?: number
   dir?: string
+  helperThink?: string
+  productLimits?: boolean
+  deploySettings?: boolean
+  speech?: string
+  twoStep?: string
+  directives?: boolean
+  directivesMode?: 'ledger' | 'learn'
+  exampleBank?: boolean
+  fewInstructions?: boolean
+  quick?: boolean
+  draftMode?: string
+  lengthMode?: 'continue'
+  sceneFix?: boolean
 }
 
-/** Creates a run, or returns the existing one when it has the same model and lang. */
+/**
+ * Creates a run, or returns the existing one when it has the same model and lang. A helper think
+ * setting is fixed at creation: an existing run resumes without the flag, and a given flag must
+ * match what the run was created with.
+ */
 export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
   const model = parseModel(o.model)
   const lang = parseLang(o.lang)
   const chapters = positiveInt(o.chapters ?? 5, 'chapters')
   const questions = positiveInt(o.questions ?? 12, 'questions')
-  const dir = path.resolve(o.dir ?? path.join(RESULTS_DIR, `${seoulToday()}-${model}-${lang}`))
+  const helperThink = o.helperThink === undefined ? undefined : parseHelperThink(o.helperThink)
+  // Deploy settings send the product's own effort and limits; a helper think would change them, so they are refused together.
+  const deploySettings = o.deploySettings === true
+  if (deploySettings && helperThink !== undefined) {
+    throw new Error('--deploy-settings cannot be combined with --helper-think')
+  }
+  if (helperThink !== undefined) {
+    const refusal = checkHelperThink(MODEL_PROFILES[model], helperThink)
+    if (refusal) throw new Error(refusal)
+  }
+  const productLimits = deploySettings ? true : o.productLimits
+  const speech = o.speech === undefined ? false : parseSpeech(o.speech)
+  const helperSuffix = helperThink === undefined ? '' : `-helper-${helperThink}`
+  const limitsSuffix = productLimits ? '-product-limits' : ''
+  const deploySuffix = deploySettings ? '-deploy' : ''
+  const speechSuffix = speech ? '-speech' : ''
+  const twoStep = o.twoStep === undefined ? false : parseTwoStep(o.twoStep)
+  if (twoStep) {
+    const refusal = checkTwoStep(MODEL_PROFILES[model])
+    if (refusal) throw new Error(refusal)
+  }
+  const twoStepSuffix = twoStep ? '-twostep' : ''
+  // Ledger and learn modes are directives runs too: the mode flag alone turns the measurement on.
+  const ledger = o.directivesMode === 'ledger'
+  const learn = o.directivesMode === 'learn'
+  const directives = o.directives === true || ledger || learn
+  const fewInstructions = o.fewInstructions === true
+  const directivesSuffix = learn ? '-learn' : ledger ? '-ledger' : directives ? '-directives' : ''
+  const fewSuffix = fewInstructions ? '-few' : ''
+  const quick = o.quick === true
+  const quickSuffix = quick ? '-quick' : ''
+  const draftMode = o.draftMode === undefined ? 'single' : parseDraftMode(o.draftMode)
+  const scenesSuffix = draftMode === 'scenes' ? '-scenes' : ''
+  const continueLength = o.lengthMode === 'continue'
+  const lengthSuffix = continueLength ? '-cont' : ''
+  const sceneFix = o.sceneFix !== false
+  const nofixSuffix = sceneFix ? '' : '-nofix'
+  const exampleBank = o.exampleBank === true
+  const bankSuffix = exampleBank ? '-bank' : ''
+  const dir = path.resolve(
+    o.dir ??
+      path.join(
+        RESULTS_DIR,
+        `${seoulToday()}-${model}-${lang}${helperSuffix}${limitsSuffix}${speechSuffix}${twoStepSuffix}${directivesSuffix}${fewSuffix}${quickSuffix}${scenesSuffix}${lengthSuffix}${nofixSuffix}${bankSuffix}${deploySuffix}`,
+      ),
+  )
 
   if (existsSync(path.join(dir, 'config.json'))) {
     const existing: RunConfig = loadConfig(dir)
     if (existing.modelId !== model || existing.lang !== lang) {
       throw new Error(`run exists with another model or lang: ${dir}`)
+    }
+    if (helperThink !== undefined && existing.helperThink !== helperThink) {
+      throw new Error(`run exists with another helperThink: ${dir}`)
+    }
+    if (o.productLimits !== undefined && (existing.productLimits ?? false) !== o.productLimits) {
+      throw new Error(`run exists with another productLimits: ${dir}`)
+    }
+    // Checked without the flag too, so a deploy run is never resumed as a plain one.
+    if (deploySettings !== (existing.deploySettings ?? false)) {
+      throw new Error(`run exists with another deploySettings: ${dir}`)
+    }
+    if (speech && existing.speech !== true) {
+      throw new Error(`run exists with another speech setting: ${dir}`)
+    }
+    if (twoStep && existing.twoStep !== true) {
+      throw new Error(`run exists with another two-step setting: ${dir}`)
+    }
+    if (
+      o.directives !== undefined &&
+      (directives !== (existing.directives ?? false) ||
+        ledger !== (existing.directivesMode === 'ledger') ||
+        learn !== (existing.directivesMode === 'learn'))
+    ) {
+      throw new Error(`run exists with another directives: ${dir}`)
+    }
+    if (
+      o.fewInstructions !== undefined &&
+      fewInstructions !== (existing.fewInstructions ?? false)
+    ) {
+      throw new Error(`run exists with another fewInstructions: ${dir}`)
+    }
+    if (o.quick !== undefined && quick !== (existing.quick ?? false)) {
+      throw new Error(`run exists with another quick setting: ${dir}`)
+    }
+    if (o.draftMode !== undefined && draftMode !== (existing.draftMode ?? 'single')) {
+      throw new Error(`run exists with another draft mode: ${dir}`)
+    }
+    if (o.lengthMode !== undefined && continueLength !== (existing.lengthMode === 'continue')) {
+      throw new Error(`run exists with another length mode: ${dir}`)
+    }
+    if (o.sceneFix !== undefined && sceneFix !== (existing.sceneFix ?? true)) {
+      throw new Error(`run exists with another sceneFix: ${dir}`)
+    }
+    if (o.exampleBank !== undefined && exampleBank !== (existing.exampleBank ?? false)) {
+      throw new Error(`run exists with another exampleBank: ${dir}`)
     }
   } else {
     createRun(dir, {
@@ -120,16 +282,177 @@ export function initRun(o: InitOptions): { dir: string; status: RunStatus } {
       questions,
       maxDraftAttempts: 3,
       commit: gitCommit(),
+      helperThink,
+      productLimits,
+      deploySettings: deploySettings || undefined,
+      speech: speech || undefined,
+      twoStep: twoStep || undefined,
+      directives: directives || undefined,
+      directivesMode: learn ? 'learn' : ledger ? 'ledger' : undefined,
+      exampleBank: exampleBank || undefined,
+      fewInstructions: fewInstructions || undefined,
+      quick: quick || undefined,
+      draftMode: draftMode === 'scenes' ? 'scenes' : undefined,
+      lengthMode: continueLength ? 'continue' : undefined,
+      sceneFix: sceneFix ? undefined : false,
     })
   }
   return { dir, status: loadState(dir).status }
 }
 
+/** The --speech value. Only `on` is accepted; the default run is speech off. */
+function parseSpeech(value: string): true {
+  if (value !== 'on') throw new Error(`unknown speech value: ${value}`)
+  return true
+}
+
+/** The --two-step value. Only `on` is accepted; the default run keeps the profile's own setting. */
+function parseTwoStep(value: string): true {
+  if (value !== 'on') throw new Error(`unknown two-step value: ${value}`)
+  return true
+}
+
+/**
+ * The --two-step value, or undefined when the flag is absent. A bare flag is refused, so a compare
+ * run is never created silently without its setting.
+ */
+export function twoStepFlag(flags: Flags): string | undefined {
+  const value = flags['two-step']
+  if (value === true) throw new Error('unknown two-step value: true')
+  return value
+}
+
+/**
+ * The --speech value, or undefined when the flag is absent. A bare flag is refused, so a compare run
+ * is never created silently without its setting.
+ */
+export function speechFlag(flags: Flags): string | undefined {
+  const value = flags.speech
+  if (value === true) throw new Error('unknown speech value: true')
+  return value
+}
+
+/**
+ * The --deploy-settings value, or undefined when the flag is absent. A bare flag or `on` turns the
+ * option on, `off` turns it off; anything else is an error.
+ */
+export function deploySettingsFlag(flags: Flags): boolean | undefined {
+  const value = flags['deploy-settings']
+  if (value === undefined) return undefined
+  if (value === true || value === 'on') return true
+  if (value === 'off') return false
+  throw new Error(`unknown deploy-settings value: ${String(value)}`)
+}
+
+/** The --draft-mode value: `scenes` or `single`. Anything else is an error. */
+function parseDraftMode(value: string): 'single' | 'scenes' {
+  if (value === 'scenes' || value === 'single') return value
+  throw new Error(`unknown draft mode: ${value}`)
+}
+
+/** The --quick value. A bare flag turns the plan off; a value is an error. */
+export function quickFlag(flags: Flags): boolean | undefined {
+  const value = flags.quick
+  if (value === undefined) return undefined
+  if (value === true) return true
+  throw new Error(`unknown quick value: ${String(value)}`)
+}
+
+/**
+ * The --length-mode value, or undefined when the flag is absent. Only `continue` is accepted (the
+ * append path); a bare flag is refused, so a run is never created silently in the other mode.
+ */
+export function lengthModeFlag(flags: Flags): 'continue' | undefined {
+  const value = flags['length-mode']
+  if (value === undefined) return undefined
+  if (value === 'continue') return 'continue'
+  throw new Error(`unknown length mode: ${String(value)}`)
+}
+
+/**
+ * The --scene-fix value, or undefined when the flag is absent. `off` turns the draft check off
+ * (the default run checks); `on` or a bare flag keeps it on. Anything else is an error.
+ */
+export function sceneFixFlag(flags: Flags): boolean | undefined {
+  const value = flags['scene-fix']
+  if (value === undefined) return undefined
+  if (value === 'off') return false
+  if (value === true || value === 'on') return true
+  throw new Error(`unknown scene-fix value: ${String(value)}`)
+}
+
+/** The --draft-mode value, or undefined when the flag is absent. Checked by initRun. */
+export function draftModeFlag(flags: Flags): string | undefined {
+  const value = flags['draft-mode']
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') throw new Error('--draft-mode needs a value')
+  return value
+}
+
+/**
+ * The --directives value, or undefined when the flag is absent. `on`, `ledger` and `learn` are
+ * accepted; a bare flag is refused, so a directive run is never created silently without its setting.
+ */
+export function directivesFlag(flags: Flags): boolean | undefined {
+  const value = flags.directives
+  if (value === undefined) return undefined
+  if (value === 'on' || value === 'ledger' || value === 'learn') return true
+  throw new Error(`unknown directives value: ${String(value)}`)
+}
+
+/** The mode of --directives: `ledger` or `learn` when given, else undefined (the instruction mode). */
+export function directivesModeFlag(flags: Flags): 'ledger' | 'learn' | undefined {
+  if (flags.directives === 'ledger') return 'ledger'
+  if (flags.directives === 'learn') return 'learn'
+  return undefined
+}
+
+/**
+ * The --example-bank value, or undefined when the flag is absent. Only `on` is accepted; a bare
+ * flag is refused, so a bank run is never created silently without its setting.
+ */
+export function exampleBankFlag(flags: Flags): boolean | undefined {
+  const value = flags['example-bank']
+  if (value === undefined) return undefined
+  if (value === 'on') return true
+  throw new Error(`unknown example-bank value: ${String(value)}`)
+}
+
+/**
+ * The --few-instructions value, or undefined when the flag is absent. A bare flag or `on` turns the
+ * option on, `off` turns it off; anything else is an error.
+ */
+export function fewInstructionsFlag(flags: Flags): boolean | undefined {
+  const value = flags['few-instructions']
+  if (value === undefined) return undefined
+  if (value === true || value === 'on') return true
+  if (value === 'off') return false
+  throw new Error(`unknown few-instructions value: ${String(value)}`)
+}
+
+/**
+ * The --product-limits value, or undefined when the flag is absent. A bare flag or `on` turns the
+ * option on, `off` turns it off; anything else is an error.
+ */
+export function productLimitsFlag(flags: Flags): boolean | undefined {
+  const value = flags['product-limits']
+  if (value === undefined) return undefined
+  if (value === true || value === 'on') return true
+  if (value === 'off') return false
+  throw new Error(`unknown product-limits value: ${String(value)}`)
+}
+
 /** Runs the run to its next block in-process. The caller holds no lock; this takes it. */
-export async function runWorker(dir: string, o: { fakeAuthor: boolean }): Promise<StatusJson> {
+export async function runWorker(
+  dir: string,
+  o: { fakeAuthor: boolean; readPower?: PowerReader },
+): Promise<StatusJson> {
   if (!acquireLock(dir)) throw new Error(`worker already running: ${dir}`)
   try {
-    const ctx = await openRun(dir, { autoAuthor: o.fakeAuthor })
+    const ctx = await openRun(dir, {
+      autoAuthor: o.fakeAuthor,
+      readPower: o.readPower ?? readPowerInfo,
+    })
     try {
       const state = await runUntilBlocked(ctx)
       return summarize(dir, state)
@@ -188,10 +511,15 @@ function logTail(dir: string): string | null {
 }
 
 /** Marks the run paused-error with the reason a worker failed without saving a result. */
-function pausedError(dir: string, state: RunState, message: string): StatusJson {
+function pausedError(
+  dir: string,
+  state: RunState,
+  message: string,
+  readPower: PowerReader,
+): StatusJson {
   const next: RunState = { ...state, status: 'paused-error', message }
   saveState(dir, next)
-  return summarize(dir, next)
+  return summarize(dir, next, readPower)
 }
 
 export type AdvanceOptions = {
@@ -199,6 +527,7 @@ export type AdvanceOptions = {
   fakeAuthor?: boolean
   spawnWorker?: SpawnWorker
   pollMs?: number
+  readPower?: PowerReader
 }
 
 /** Starts a worker if none is alive, then waits up to maxSeconds for it to finish or block. */
@@ -206,6 +535,7 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
   const maxMs = (o.maxSeconds ?? 540) * 1000
   const pollMs = o.pollMs ?? 2000
   const fakeAuthor = o.fakeAuthor ?? false
+  const readPower = o.readPower ?? readPowerInfo
   const started = Date.now()
 
   // Settles when the spawned worker exits (ok) or fails to start (error). Kept on an object so
@@ -238,7 +568,7 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
   // A spawned child that has not exited yet may not hold the lock yet (startup gap), so it counts as live.
   const live = (spawned && !spawn.settled) || workerAlive(dir)
   if (live) {
-    const summary = summarize(dir, state)
+    const summary = summarize(dir, state, readPower)
     if (state.status === 'new' || state.status === 'running')
       return { ...summary, status: 'running' }
     return summary
@@ -246,12 +576,13 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
   // No live worker. A run still new or running, or a spawn failure, means the worker died
   // before it saved a result. Report it as paused-error so the caller stops retrying.
   if (spawn.error === null && state.status !== 'new' && state.status !== 'running') {
-    return summarize(dir, state)
+    return summarize(dir, state, readPower)
   }
   return pausedError(
     dir,
     state,
     spawn.error ?? logTail(dir) ?? 'worker exited without saving a result',
+    readPower,
   )
 }
 
@@ -259,7 +590,9 @@ export async function advanceRun(dir: string, o: AdvanceOptions = {}): Promise<S
 export function runStatus(o: {
   dir?: string
   all?: boolean
+  readPower?: PowerReader
 }): StatusJson | (StatusJson & { dir: string })[] {
+  const readPower = o.readPower ?? readPowerInfo
   if (o.all) {
     const root = path.resolve(RESULTS_DIR)
     if (!existsSync(root)) return []
@@ -269,11 +602,11 @@ export function runStatus(o: {
       )
       .map((entry) => {
         const dir = path.join(root, entry.name)
-        return { dir, ...summarize(dir) }
+        return { dir, ...summarize(dir, loadState(dir), readPower) }
       })
   }
   if (!o.dir) throw new Error('status needs --dir or --all')
-  return summarize(path.resolve(o.dir))
+  return summarize(path.resolve(o.dir), loadState(path.resolve(o.dir)), readPower)
 }
 
 type FetchFn = typeof fetch
@@ -425,7 +758,7 @@ export function resummarizeRun(dir: string): ResummarizeResult {
   if (workerAlive(dir)) throw new Error(`a worker is running in ${dir}; resummarize after it stops`)
   const config = loadConfig(dir)
   const state = loadState(dir)
-  const targetChars = loadBible(config.lang).targetChars
+  const bible = loadBible(config.lang)
 
   const chaptersDir = path.join(dir, 'chapters')
   const chapterFiles = existsSync(chaptersDir)
@@ -434,31 +767,64 @@ export function resummarizeRun(dir: string): ResummarizeResult {
         .sort()
     : []
   mkdirSync(path.join(dir, 'metrics'), { recursive: true })
+  // The same metric arguments for every copy, so the before and after numbers come from one code version.
+  const measure = (text: string, sceneTargets: number[] | null) =>
+    chapterMetrics(
+      text,
+      config.lang,
+      bible.targetChars,
+      [bible.workStyle.examples],
+      bibleExempt(bible),
+      sceneTargets,
+    )
   for (const file of chapterFiles) {
+    const chapterNo = file.slice(0, 2)
     const text = readFileSync(path.join(chaptersDir, file), 'utf8')
-    const metrics = chapterMetrics(text, config.lang, targetChars)
-    const name = `${file.slice(0, 2)}.json`
-    writeFileSync(path.join(dir, 'metrics', name), `${JSON.stringify(metrics, null, 2)}\n`)
+    // The plan's scene targets give the scene lengths (stage 1); a run without a plan has none.
+    const sceneTargets = planTargetsOf(state.data.plans?.[Number(chapterNo)])
+    writeFileSync(
+      path.join(dir, 'metrics', `${chapterNo}.json`),
+      `${JSON.stringify(measure(text, sceneTargets), null, 2)}\n`,
+    )
+    // The copy the D scene rewrite saved before it ran; its metrics are recomputed too.
+    const preFile = path.join(chaptersDir, `${chapterNo}.pre-rewrite.md`)
+    if (existsSync(preFile)) {
+      writeFileSync(
+        path.join(dir, 'metrics', `${chapterNo}.pre-rewrite.json`),
+        `${JSON.stringify(measure(readFileSync(preFile, 'utf8'), sceneTargets), null, 2)}\n`,
+      )
+    }
   }
 
   const calls = readCallRecords(dir)
-  const summary = buildRunSummary(calls, state, config.lang)
+  const summary = buildRunSummary(calls, state, config.lang, readSummaryInputs(dir))
   writeFileSync(path.join(dir, 'run-summary.json'), `${JSON.stringify(summary, null, 2)}\n`)
   return { dir, chapters: chapterFiles.length, calls: calls.length }
 }
 
-/** Resummarizes every run directory directly under a date folder, in name order. */
-export function resummarizeDate(folder: string): ResummarizeResult[] {
+/** A run the date pass left alone because a worker still holds it. */
+export type ResummarizeSkip = { dir: string; skipped: 'worker-running' }
+export type ResummarizeOutcome = ResummarizeResult | ResummarizeSkip
+
+/**
+ * Resummarizes every run directory directly under a date folder, in name order. A run whose worker
+ * is alive is skipped and listed as skipped, so one live run does not stop the rest of the date.
+ */
+export function resummarizeDate(folder: string): ResummarizeOutcome[] {
   return readdirSync(folder, { withFileTypes: true })
     .filter(
       (entry) => entry.isDirectory() && existsSync(path.join(folder, entry.name, 'config.json')),
     )
     .map((entry) => entry.name)
     .sort()
-    .map((name) => resummarizeRun(path.join(folder, name)))
+    .map((name): ResummarizeOutcome => {
+      const dir = path.join(folder, name)
+      if (workerAlive(dir)) return { dir, skipped: 'worker-running' }
+      return resummarizeRun(dir)
+    })
 }
 
-type Flags = Record<string, string | true>
+export type Flags = Record<string, string | true>
 
 function parseFlags(args: string[]): Flags {
   const flags: Flags = {}
@@ -477,9 +843,30 @@ function parseFlags(args: string[]): Flags {
   return flags
 }
 
+/**
+ * Whether --second is set. A bare flag is true; a value is refused, so a stray value never routes a
+ * second review into the first review's slot.
+ */
+export function secondFlag(flags: Flags): boolean {
+  const value = flags.second
+  if (value === undefined) return false
+  if (value !== true) throw new Error('--second takes no value')
+  return true
+}
+
 function stringFlag(flags: Flags, name: string): string {
   const value = flags[name]
   if (typeof value !== 'string') throw new Error(`missing --${name}`)
+  return value
+}
+
+/**
+ * The --helper-think value, or undefined when the flag is absent. A bare flag is refused, so a
+ * compare run is never created silently without its setting.
+ */
+export function helperThinkFlag(flags: Flags): string | undefined {
+  const value = flags['helper-think']
+  if (value === true) throw new Error('unknown helper think: true')
   return value
 }
 
@@ -507,6 +894,19 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
         chapters: optionalNumber(flags, 'chapters'),
         questions: optionalNumber(flags, 'questions'),
         dir: typeof flags.dir === 'string' ? flags.dir : undefined,
+        helperThink: helperThinkFlag(flags),
+        productLimits: productLimitsFlag(flags),
+        deploySettings: deploySettingsFlag(flags),
+        speech: speechFlag(flags),
+        twoStep: twoStepFlag(flags),
+        directives: directivesFlag(flags),
+        directivesMode: directivesModeFlag(flags),
+        exampleBank: exampleBankFlag(flags),
+        fewInstructions: fewInstructionsFlag(flags),
+        quick: quickFlag(flags),
+        draftMode: draftModeFlag(flags),
+        lengthMode: lengthModeFlag(flags),
+        sceneFix: sceneFixFlag(flags),
       })
     case 'advance':
       return advanceRun(path.resolve(stringFlag(flags, 'dir')), {
@@ -537,9 +937,36 @@ async function dispatch(command: string | undefined, flags: Flags): Promise<unkn
       }
       return resummarizeRun(path.resolve(stringFlag(flags, 'dir')))
     }
+    case 'blind': {
+      // The reviewer's copy of a run, with model names masked. --out overrides blind/<run name>;
+      // --second uses blind-2/<run name> instead, so the first copy is kept.
+      const run = path.resolve(stringFlag(flags, 'dir'))
+      const second = secondFlag(flags)
+      let out: string | undefined
+      if (flags.out !== undefined) out = path.resolve(stringFlag(flags, 'out'))
+      else if (second) out = secondBlindDir(run)
+      return writeBlindCopy(run, { out })
+    }
+    case 'publish-review':
+      return publishReview(
+        path.resolve(stringFlag(flags, 'dir')),
+        path.resolve(stringFlag(flags, 'to')),
+        { second: secondFlag(flags) },
+      )
+    case 'review-gate':
+      // Reads the first review's verdict block and says whether a second review is needed.
+      return reviewGate(path.resolve(stringFlag(flags, 'dir')))
+    case 'publish':
+      // Copies a run-side file into docs. A guard error exits 1; a copy failure is in the JSON status.
+      return publishFile({
+        src: stringFlag(flags, 'src'),
+        dest: stringFlag(flags, 'dest'),
+        ifMissing: flags['if-missing'] === true,
+        attempts: optionalNumber(flags, 'attempts'),
+      })
     default:
       throw new Error(
-        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize (got ${command ?? 'nothing'})`,
+        `usage: eval:novel init|advance|worker|status|probe-ctx|resummarize|blind|publish-review|publish|review-gate (got ${command ?? 'nothing'})`,
       )
   }
 }

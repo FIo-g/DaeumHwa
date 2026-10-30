@@ -61,7 +61,12 @@ interface TextStream {
   }>
 }
 
-type ResponseUsage = { input_tokens: number; output_tokens: number }
+type ResponseUsage = {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens?: number | null
+  cache_creation_input_tokens?: number | null
+}
 
 type ObjectResponse<T> = {
   parsed_output: T | null
@@ -126,7 +131,7 @@ export class AnthropicAiClient implements AiClient {
   ): Promise<ObjectResult<T>> {
     if (this.jsonFallback) return this.structuredThroughCreate(args, model)
     const system = systemBlocks(args.system)
-    const messages = [{ role: 'user' as const, content: args.prompt }]
+    const messages = [{ role: 'user' as const, content: userContent(args) }]
     if (this.usesServerFallback(model)) {
       const response = await this.sdk.beta.messages.parse(
         {
@@ -168,7 +173,7 @@ export class AnthropicAiClient implements AiClient {
         model,
         max_tokens: args.maxTokens,
         system: systemBlocks(args.system),
-        messages: [{ role: 'user' as const, content: args.prompt }],
+        messages: [{ role: 'user' as const, content: userContent(args) }],
         output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
       },
       requestOptions(args),
@@ -199,7 +204,7 @@ export class AnthropicAiClient implements AiClient {
           messages: [
             {
               role: 'user' as const,
-              content: `${args.prompt}\n\n${jsonInstruction(args.schema)}`,
+              content: userContent(args, `\n\n${jsonInstruction(args.schema)}`),
             },
           ],
         },
@@ -263,7 +268,7 @@ export class AnthropicAiClient implements AiClient {
       model,
       max_tokens: args.maxTokens,
       system: systemBlocks(args.system),
-      messages: [{ role: 'user' as const, content: args.prompt }],
+      messages: [{ role: 'user' as const, content: userContent(args) }],
       ...(sendEffort ? { output_config: { effort: args.effort } } : {}),
     }
     const options = requestOptions(args)
@@ -310,7 +315,11 @@ export function createAnthropicSdk(): Anthropic {
  * so it does not bound a streamed or slow body. The signal therefore joins the caller's cancel
  * with a time limit that covers the whole request, body included. Unset values are left out.
  */
-function requestOptions(args: { signal?: AbortSignal; timeoutMs?: number }) {
+function requestOptions(args: {
+  signal?: AbortSignal
+  timeoutMs?: number
+  headers?: Record<string, string>
+}) {
   const timeoutSignal =
     args.timeoutMs !== undefined ? AbortSignal.timeout(args.timeoutMs) : undefined
   const signal =
@@ -320,11 +329,41 @@ function requestOptions(args: { signal?: AbortSignal; timeoutMs?: number }) {
   return {
     ...(signal ? { signal } : {}),
     ...(args.timeoutMs !== undefined ? { timeout: args.timeoutMs } : {}),
+    ...(args.headers ? { headers: args.headers } : {}),
   }
 }
 
+/**
+ * `AI_CACHE_TTL` set to `1h` keeps cached prompt blocks for an hour instead of the
+ * default five minutes. Anything else (including unset) keeps today's object.
+ */
+export function anthropicCacheControl(): { type: 'ephemeral'; ttl?: '1h' } {
+  if (process.env.AI_CACHE_TTL?.trim() === '1h') return { type: 'ephemeral', ttl: '1h' }
+  return { type: 'ephemeral' }
+}
+
 export function systemBlocks(text: string) {
-  return [{ type: 'text' as const, text, cache_control: { type: 'ephemeral' as const } }]
+  return [{ type: 'text' as const, text, cache_control: anthropicCacheControl() }]
+}
+
+/**
+ * User message content. Without a prefix it is the plain text. With one, each prefix block gets a
+ * cache mark and the prompt comes last; `tail` (the JSON instruction in JSON mode) joins the prompt.
+ */
+export function userContent(
+  args: { prompt: string; promptPrefix?: string[] },
+  tail = '',
+): string | { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }[] {
+  const text = `${args.prompt}${tail}`
+  if (!args.promptPrefix?.length) return text
+  return [
+    ...args.promptPrefix.map((block) => ({
+      type: 'text' as const,
+      text: block,
+      cache_control: anthropicCacheControl(),
+    })),
+    { type: 'text' as const, text },
+  ]
 }
 
 /**
@@ -419,15 +458,41 @@ function aiErrorWithUsage(message: string, usage: AiUsage): AppError {
   return new AppError('AI_ERROR', message, { usage })
 }
 
+/**
+ * Anthropic reports cached input apart from `input_tokens`. Cache reads and writes are added to
+ * the input total, and each cache key is set only when the response carried it (0 included).
+ */
 function usageOf(usage: ResponseUsage): AiUsage {
-  return { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens }
+  const cacheRead = usage.cache_read_input_tokens
+  const cacheWrite = usage.cache_creation_input_tokens
+  const result: AiUsage = {
+    inputTokens:
+      usage.input_tokens +
+      (typeof cacheRead === 'number' ? cacheRead : 0) +
+      (typeof cacheWrite === 'number' ? cacheWrite : 0),
+    outputTokens: usage.output_tokens,
+  }
+  if (typeof cacheRead === 'number') result.cacheReadTokens = cacheRead
+  if (typeof cacheWrite === 'number') result.cacheWriteTokens = cacheWrite
+  return result
 }
 
 function addUsage(a: AiUsage, b: AiUsage): AiUsage {
-  return {
+  const result: AiUsage = {
     inputTokens: a.inputTokens + b.inputTokens,
     outputTokens: a.outputTokens + b.outputTokens,
   }
+  const cacheRead = sumCache(a.cacheReadTokens, b.cacheReadTokens)
+  const cacheWrite = sumCache(a.cacheWriteTokens, b.cacheWriteTokens)
+  if (cacheRead !== undefined) result.cacheReadTokens = cacheRead
+  if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite
+  return result
+}
+
+/** Sum of two optional cache counts; undefined when neither side has the key. */
+function sumCache(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined && b === undefined) return undefined
+  return (a ?? 0) + (b ?? 0)
 }
 
 /**

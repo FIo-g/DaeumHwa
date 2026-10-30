@@ -13,6 +13,7 @@ import {
   assertWithinLimit,
   getTodayUsage,
   listAiRuns,
+  replaceRunOutput,
   runAiTask,
   setAiTimeoutOverride,
   startAiStream,
@@ -315,6 +316,29 @@ describe('concurrent runs', () => {
     })
     const { output } = await runAiTask(db, { userId, workId }, task, { q: 'ok' }, taskClient())
     expect(output).toEqual({ text: '답: ok' })
+  })
+
+  it('lets a sub-run start past the cap but still checks the daily limit', async () => {
+    const { db, userId, workId } = await setup()
+    for (let i = 0; i < 3; i++)
+      await insertRun(db, userId, { inputTokens: 0, outputTokens: 0, status: 'running' })
+    const args = {
+      task: 'draft-expand' as const,
+      effort: 'low' as const,
+      maxTokens: 500,
+      system: 's',
+      prompt: 'p',
+      input: { instructions: '' },
+    }
+    const client = new FakeAiClient({ overrides: { 'draft-expand': () => '확장' } })
+    const stream = await startAiStream(db, { userId, workId, subRun: true }, args, client)
+    expect(await stream.done).toBe('확장')
+
+    process.env.AI_DAILY_TOKEN_LIMIT = '100'
+    await insertRun(db, userId, { inputTokens: 60, outputTokens: 50 })
+    await expect(
+      startAiStream(db, { userId, workId, subRun: true }, args, client),
+    ).rejects.toMatchObject({ code: 'AI_LIMIT' })
   })
 })
 
@@ -850,5 +874,53 @@ describe('setAiTimeoutOverride (eval seam)', () => {
     )
     await done
     expect(seen).toEqual([STREAM_AI_TIMEOUT_MS])
+  })
+})
+
+describe('replaceRunOutput', () => {
+  it('changes the output of a done run and keeps its status and tokens', async () => {
+    const { db, userId, workId } = await setup()
+    const client: AiClient = {
+      provider: 'test',
+      defaultModel: 'fake',
+      async generateObject() {
+        throw new Error('not used')
+      },
+      streamText() {
+        const text = '첫 글'
+        return {
+          textStream: (async function* () {
+            yield text
+          })(),
+          final: Promise.resolve({
+            text,
+            usage: { inputTokens: 7, outputTokens: 9 },
+            model: 'fake',
+          }),
+        }
+      },
+    }
+    const { runId, done } = await startAiStream(
+      db,
+      { userId, workId },
+      {
+        task: 'draft-chapter',
+        effort: 'high',
+        maxTokens: 500,
+        system: '시스템',
+        prompt: '초안',
+        input: { instructions: '' },
+      },
+      client,
+    )
+    await done
+
+    await replaceRunOutput(db, runId, { text: '첫 글 이어 쓴 글', warnings: [] })
+
+    const [row] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId))
+    expect(row.output).toEqual({ text: '첫 글 이어 쓴 글', warnings: [] })
+    expect(row.status).toBe('done')
+    expect(row.inputTokens).toBe(7)
+    expect(row.outputTokens).toBe(9)
   })
 })

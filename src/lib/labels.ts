@@ -1,6 +1,11 @@
 // Korean labels for database enum values. Keys are the stored values from src/db/types.ts.
 import type {
   ChapterStatus,
+  ContextTier,
+  DirectiveKind,
+  DirectiveScope,
+  DirectiveSource,
+  DirectiveStatus,
   EntryKind,
   FactSourceType,
   FactStatus,
@@ -12,6 +17,7 @@ import type {
   Role,
   ScheduleKind,
   Severity,
+  SpeechLevel,
   ThreadEventKind,
   ThreadStatus,
 } from '@/db/types'
@@ -25,6 +31,44 @@ export const ENTRY_KIND_LABEL: Record<EntryKind, string> = {
   event: '사건',
   term: '용어',
   other: '기타',
+}
+
+export const CONTEXT_TIER_LABEL: Record<ContextTier, string> = {
+  always: '항상 넣기',
+  mention: '이름이 나오면 넣기',
+  never: '넣지 않기',
+}
+
+export const DIRECTIVE_SCOPE_LABEL: Record<DirectiveScope, string> = {
+  work: '작품 전체',
+  character: '인물',
+  chapter: '한 회차만',
+}
+
+export const DIRECTIVE_KIND_LABEL: Record<DirectiveKind, string> = {
+  style: '문체',
+  speech: '말투',
+  ban: '쓰지 않을 말',
+  length: '분량',
+  content: '내용',
+}
+
+export const DIRECTIVE_STATUS_LABEL: Record<DirectiveStatus, string> = {
+  active: '적용 중',
+  off: '꺼 둠',
+}
+
+export const DIRECTIVE_SOURCE_LABEL: Record<DirectiveSource, string> = {
+  author: '작가',
+  instruction: '지시',
+  revision: '계획 수정',
+  suggested: 'AI 제안',
+  inferred: '수정에서 찾음',
+}
+
+export const SPEECH_LEVEL_LABEL: Record<SpeechLevel, string> = {
+  banmal: '반말',
+  jondaet: '존댓말',
 }
 
 export const FACT_STATUS_LABEL: Record<FactStatus, string> = {

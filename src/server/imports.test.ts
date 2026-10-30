@@ -7,6 +7,7 @@ import type { Db } from '@/db/client'
 import { aiRuns, chapters, importJobs, proposals, relations } from '@/db/schema'
 import type { Actor, ImportJobRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
+import { splitSentences } from '@/lib/korean/sentences'
 import { createTestDb } from '@/test/db'
 import {
   addTestMember,
@@ -113,9 +114,13 @@ const SEOYUN_ENTRY = {
   fields: [],
 }
 
-/** Chapter 1 introduces 서윤, every chapter adds one fact and a summary. */
+/**
+ * Chapter 1 introduces 서윤, every chapter adds one fact and a summary. The evidence is the first
+ * sentence of the chapter body in the prompt, so it is verbatim in the source.
+ */
 function basicRespond(prompt: string): Extraction {
   const position = positionOf(prompt)
+  const body = /<manuscript [^>]*>\n([\s\S]*?)\n<\/manuscript>/.exec(prompt)?.[1] ?? ''
   return emptyExtraction({
     summary: `${position}화 요약`,
     entries: position === 1 || position === 2 ? [SEOYUN_ENTRY] : [],
@@ -123,7 +128,7 @@ function basicRespond(prompt: string): Extraction {
       {
         subjectName: '서윤',
         content: `${position}화에서 서윤의 설정이 드러난다.`,
-        evidence: '서윤은 말이 없었다.',
+        evidence: splitSentences(body)[0]?.text ?? '',
         suggestedStatus: 'confirmed',
         supersedesFactRef: null,
       },
@@ -548,8 +553,8 @@ describe('import jobs', () => {
 
     it('does not propose a fact or relation that repeats one this job already proposed', async () => {
       const jobId = await startedJob([
-        { title: '1화', body: '서윤과 지후가 만났다.' },
-        { title: '2화', body: '다시 만났다.' },
+        { title: '1화', body: '서윤은 말이 없었다. 서윤과 지후가 만났다.' },
+        { title: '2화', body: '서윤은 말이 없었다. 다시 만났다.' },
       ])
       const fact = {
         subjectName: '서윤',
@@ -565,7 +570,11 @@ describe('import jobs', () => {
         description: '같은 학교',
         evidence: '만났다.',
       }
-      const first = emptyExtraction({ facts: [fact], relations: [relation] })
+      const first = emptyExtraction({
+        entries: [entryNamed('서윤'), entryNamed('지후')],
+        facts: [fact],
+        relations: [relation],
+      })
       // Same fact with extra spacing, and the same pair reversed with the same kind.
       const second = emptyExtraction({
         facts: [{ ...fact, content: '서윤은  고아다.' }],
@@ -641,7 +650,7 @@ describe('import jobs', () => {
       const planted = {
         title: '잃어버린 편지',
         description: '',
-        evidence: '편지',
+        evidence: '서윤은 말이 없었다.',
         targetChapterPosition: null,
       }
       const client = new ScriptedClient((prompt) => {

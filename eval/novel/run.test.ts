@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -12,11 +20,14 @@ import { MAX_PROOFREAD_AI_CHARS } from '@/server/chapter-check'
 import { listNamingRules } from '@/server/naming'
 import { listThreads } from '@/server/threads'
 import { FakeAiClient } from '@/test/fake-ai'
-import { readPending } from './author-io'
-import { loadBible } from './bible'
+import type { AuthorContext } from './author-context'
+import { type Pending, readPending } from './author-io'
+import { type Bible, loadBible } from './bible'
 import { fakeAnswer } from './fake-author'
 import { createRun, openRun, runUntilBlocked } from './run'
-import { applySuggestions, selectDraftEntries } from './steps/util'
+import { RunSummarySchema } from './steps/finish'
+import { applySuggestions, pendingKey, selectDraftEntries } from './steps/util'
+import type { RunState } from './state'
 
 type OpenRun = Awaited<ReturnType<typeof openRun>>
 
@@ -150,6 +161,30 @@ function decisionKinds(dir: string): string[] {
     .map((line) => (JSON.parse(line) as { kind: string }).kind)
 }
 
+/**
+ * Plays the author by hand: answers each pending item with fakeAnswer until one matches `stopAt`.
+ * Returns the run state and the matching item (null when the run ends first).
+ */
+async function driveUntil(
+  ctx: OpenRun,
+  dir: string,
+  bible: Bible,
+  stopAt: (p: Pending) => boolean,
+): Promise<{ state: RunState; pending: Pending | null }> {
+  for (;;) {
+    const state = await runUntilBlocked(ctx)
+    if (state.status !== 'pending') return { state, pending: null }
+    const pending = readPending(dir)
+    if (!pending) throw new Error('run is pending but pending.json is missing')
+    if (stopAt(pending)) return { state, pending }
+    writeFileSync(join(dir, 'answer.json'), JSON.stringify(fakeAnswer(pending, bible)))
+  }
+}
+
+function readAuthorContext(dir: string): AuthorContext {
+  return JSON.parse(readFileSync(join(dir, 'author-context.json'), 'utf8')) as AuthorContext
+}
+
 describe('novel eval step machine', () => {
   it('fake run reaches done', async () => {
     const dir = newDir()
@@ -174,6 +209,16 @@ describe('novel eval step machine', () => {
     expect(summary.speed.overall.source).toBe('wall')
     expect(typeof summary.speed.byTask['draft-chapter']?.medianFirstTokenMs).toBe('number')
     expect(summary.speed.perChapterMs['1']).toBeDefined()
+
+    // Measurement blocks (HX5): the summary parses, the check step wrote the counters per chapter,
+    // and the fake proofread returns no AI items, so the proofread block is absent.
+    const parsed = RunSummarySchema.parse(summary)
+    expect(parsed.timeouts).toEqual({ total: 0, byTask: {} })
+    for (let n = 1; n <= 5; n++) {
+      expect(existsSync(join(dir, 'chapters', `0${n}.extraction.json`))).toBe(true)
+    }
+    expect(parsed.extraction?.chapters).toBe(5)
+    expect(parsed).not.toHaveProperty('proofread')
 
     const decisions = readFileSync(join(dir, 'author-decisions.jsonl'), 'utf8')
       .trim()
@@ -212,6 +257,72 @@ describe('novel eval step machine', () => {
     const next = readPending(dir)
     expect(next).not.toBeNull()
     expect(next?.kind === 'interview_answer' && next.turnId === first.turnId).toBe(false)
+  }, 120_000)
+
+  it('writes author-context.json while waiting for a proposals judgment', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const ctx = await open(dir)
+    const { pending } = await driveUntil(ctx, dir, loadBible('ko'), (p) => p.kind === 'proposals')
+    if (pending?.kind !== 'proposals') throw new Error('expected a proposals wait')
+
+    const context = readAuthorContext(dir)
+    expect(context.pendingRef.key).toBe(pendingKey(pending))
+    expect(context.pendingRef.itemIds).toEqual(pending.items.map((item) => item.id))
+  }, 120_000)
+
+  it('context shows a card approved earlier (end to end through the hook)', async () => {
+    const dir = newDir()
+    // With one chapter the first post-chapter batch is the first wait with a wiki, so it is empty.
+    // The second chapter's batch sees the cards chapter 1 approved.
+    makeRun(dir, 2, 2)
+    const ctx = await open(dir)
+    const { pending } = await driveUntil(
+      ctx,
+      dir,
+      loadBible('ko'),
+      (p) => p.kind === 'proposals' && p.source === 'post_chapter' && p.chapter === 2,
+    )
+    expect(pending).not.toBeNull()
+    if (pending?.kind !== 'proposals') throw new Error('expected a proposals wait')
+
+    const context = readAuthorContext(dir)
+    expect(context.wiki.entries.length).toBeGreaterThanOrEqual(1)
+    expect(context.decisions.approvedCount).toBeGreaterThan(0)
+    expect(context.pendingRef.key).toBe(pendingKey(pending))
+  }, 120_000)
+
+  it('removes a stale author-context.json at a wait that needs none', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    writeFileSync(join(dir, 'author-context.json'), '{"stale": true}')
+    const ctx = await open(dir)
+    const { pending } = await driveUntil(
+      ctx,
+      dir,
+      loadBible('ko'),
+      (p) => p.kind === 'draft_review',
+    )
+    expect(pending?.kind).toBe('draft_review')
+    expect(existsSync(join(dir, 'author-context.json'))).toBe(false)
+  }, 120_000)
+
+  it('leaves no author-context.json when the run is done', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    const ctx = await open(dir, { autoAuthor: true })
+    const state = await runUntilBlocked(ctx)
+    expect(state.status).toBe('done')
+    expect(existsSync(join(dir, 'author-context.json'))).toBe(false)
+  }, 120_000)
+
+  it('a failing context build does not stop the run', async () => {
+    const dir = newDir()
+    makeRun(dir, 1, 2)
+    mkdirSync(join(dir, 'author-context.json'))
+    const ctx = await open(dir)
+    const state = await runUntilBlocked(ctx)
+    expect(state.status).toBe('pending')
   }, 120_000)
 
   it('external limit pauses and resumes', async () => {

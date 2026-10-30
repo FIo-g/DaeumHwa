@@ -1,5 +1,6 @@
 import type {
   aiRuns,
+  authorDirectives,
   changeLog,
   chapterVersions,
   chapters,
@@ -100,6 +101,7 @@ export const CHANGE_TARGETS = [
   'naming_rules',
   'style_cards',
   'chapters',
+  'author_directives',
 ] as const
 export type ChangeTargetTable = (typeof CHANGE_TARGETS)[number]
 
@@ -149,11 +151,69 @@ export const AI_TASKS = [
   'direction-advice',
   'draft-chapter',
   'style-suggest',
+  'draft-continue',
+  'paragraph-trim',
+  'draft-repair',
+  'draft-beats',
+  'scene-rewrite',
+  'chapter-extract-facts',
+  'chapter-extract-threads',
+  'chapter-extract-relations',
+  'draft-plan',
+  'draft-scene',
+  'draft-expand',
+  'draft-check',
+  'scene-fix',
+  'voice-fix',
+  'directive-infer',
 ] as const
 export type AiTaskName = (typeof AI_TASKS)[number]
 
 export const AI_RUN_STATUSES = ['running', 'done', 'error'] as const
 export type AiRunStatus = (typeof AI_RUN_STATUSES)[number]
+
+/** Numbers-only usage events (stages 0 and 2). Stages 1 and 3 add kinds. */
+export const USAGE_EVENT_KINDS = [
+  'draft_started',
+  'draft_used',
+  'draft_edit_ratio',
+  'plan_shown',
+  'plan_edited',
+  'directive_added',
+  'directive_violation',
+  'directive_inferred',
+  'directive_inferred_added',
+  'check_flagged',
+  'scene_fix_applied',
+  'scene_fix_discarded',
+] as const
+export type UsageEventKind = (typeof USAGE_EVENT_KINDS)[number]
+
+/** Author request ledger (stage 2). Scope says what a request applies to. */
+export const DIRECTIVE_SCOPES = ['work', 'character', 'chapter'] as const
+export type DirectiveScope = (typeof DIRECTIVE_SCOPES)[number]
+
+export const DIRECTIVE_KINDS = ['style', 'speech', 'ban', 'length', 'content'] as const
+export type DirectiveKind = (typeof DIRECTIVE_KINDS)[number]
+
+export const DIRECTIVE_SOURCES = [
+  'author',
+  'instruction',
+  'revision',
+  'suggested',
+  'inferred',
+] as const
+export type DirectiveSource = (typeof DIRECTIVE_SOURCES)[number]
+
+export const DIRECTIVE_STATUSES = ['active', 'off'] as const
+export type DirectiveStatus = (typeof DIRECTIVE_STATUSES)[number]
+
+export const SPEECH_LEVELS = ['banmal', 'jondaet'] as const
+export type SpeechLevel = (typeof SPEECH_LEVELS)[number]
+
+/** How much of a wiki entry the writing prompts carry (stage 2). */
+export const CONTEXT_TIERS = ['always', 'mention', 'never'] as const
+export type ContextTier = (typeof CONTEXT_TIERS)[number]
 
 // ---- Actor and work settings ----
 
@@ -203,6 +263,7 @@ export type ThreadEntryRow = typeof threadEntries.$inferSelect
 export type RelationRow = typeof relations.$inferSelect
 export type NamingRuleRow = typeof namingRules.$inferSelect
 export type StyleCardRow = typeof styleCards.$inferSelect
+export type AuthorDirectiveRow = typeof authorDirectives.$inferSelect
 export type ProposalRow = typeof proposals.$inferSelect
 export type ChangeRow = typeof changeLog.$inferSelect
 export type IssueRow = typeof issues.$inferSelect
@@ -257,6 +318,7 @@ export interface ExportPayload {
   relations: RelationRow[]
   namingRules: NamingRuleRow[]
   styleCards: StyleCardRow[]
+  authorDirectives: AuthorDirectiveRow[]
   changes: ChangeRow[]
   scheduleItems: ScheduleItemRow[]
 }

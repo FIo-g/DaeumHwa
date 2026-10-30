@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { aiRuns } from '@/db/schema'
@@ -11,6 +12,7 @@ import {
   type AiTaskDef,
   type AiUsage,
 } from '@/ai/types'
+import { TextChannel } from '@/ai/anthropic'
 import { seoulDayStart } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
 import { requireWorkRole } from '@/server/access'
@@ -41,7 +43,9 @@ export function setAiTimeoutOverride(ms: number | null): void {
 
 /**
  * `signal` cancels the call (the run is recorded as `error` with 취소했습니다.). `timeoutMs`
- * overrides the task's own limit.
+ * overrides the task's own limit. `subRun` marks a run that belongs to another run which already
+ * passed the cap (the expansions of one draft): it still checks the daily token limit but is not
+ * refused for the number of runs in flight, and the caller keeps its own parallelism small.
  */
 export type AiRunMeta = {
   userId: string
@@ -49,6 +53,7 @@ export type AiRunMeta = {
   chapterId?: string | null
   signal?: AbortSignal
   timeoutMs?: number
+  subRun?: true
 }
 
 export interface StreamRunArgs {
@@ -59,6 +64,24 @@ export interface StreamRunArgs {
   system: string
   prompt: string
   model?: string
+  /** Leading blocks sent ahead of `prompt`; see AiTaskDef.buildPromptPrefix. */
+  promptPrefix?: string[]
+}
+
+/**
+ * Provider cache key for one work: the same work always gets the same key, and no work's text is
+ * sent in clear. 16 hex characters of a SHA-256 of the work id, prefixed with `w`.
+ */
+export function cacheKeyFor(workId: string): string {
+  return `w${createHash('sha256').update(workId).digest('hex').slice(0, 16)}`
+}
+
+/** Prefix and cache key for one call. Each is left out when there is nothing to send. */
+function cacheArgs(meta: AiRunMeta, promptPrefix: string[] | undefined) {
+  return {
+    ...(promptPrefix?.length ? { promptPrefix } : {}),
+    ...(meta.workId ? { cacheKey: cacheKeyFor(meta.workId) } : {}),
+  }
 }
 
 /**
@@ -86,7 +109,7 @@ export async function runAiTask<I, O>(
   input: I,
   client: AiClient = getAiClient(),
 ): Promise<{ output: O; runId: string }> {
-  await assertCanStartRun(db, meta.userId)
+  await assertCanStartRun(db, meta)
   const taskModel = task.model?.()
   const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
   let usage: AiUsage | undefined
@@ -98,6 +121,7 @@ export async function runAiTask<I, O>(
       task: { name: task.name, input },
       system: task.system,
       prompt: task.buildPrompt(input),
+      ...cacheArgs(meta, task.buildPromptPrefix?.(input)),
       schema: task.schema,
       effort: task.effort,
       maxTokens: task.maxTokens,
@@ -128,6 +152,173 @@ export async function runAiTask<I, O>(
   }
 }
 
+/** Parts of a split run that cloud providers keep in flight at once (both clients retry 429 once). */
+export const DEFAULT_CLOUD_SPLIT_CONCURRENCY = 2
+
+/**
+ * Runs one task as several calls, one per part, and stores them as ONE `ai_runs` row. Parts run in
+ * a small pool. The first failure aborts the running siblings and fails the whole run. `runAiTask`
+ * is not changed: use this only when the parts can be merged back into one output.
+ */
+export async function runAiTaskSplit<I, O>(
+  db: Db,
+  meta: AiRunMeta,
+  task: AiTaskDef<I, O>,
+  parts: I[],
+  merge: (outputs: O[], parts: I[]) => O,
+  client: AiClient = getAiClient(),
+  options?: {
+    concurrency?: number
+    onPart?: (info: { index: number; elapsedMs: number; ok: boolean }) => void
+  },
+): Promise<{ output: O; runId: string }> {
+  if (parts.length === 0) throw new AppError('VALIDATION', '실행할 항목이 없습니다.')
+  await assertCanStartRun(db, meta)
+  const taskModel = task.model?.()
+  const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
+  const timeoutMs = resolveSplitTimeoutMs(meta, task)
+  const defaultConcurrency = isLocalProvider(client.provider) ? 1 : DEFAULT_CLOUD_SPLIT_CONCURRENCY
+  // A NaN or infinite request would start no worker and store an empty merge as a done run.
+  const requestedOption = options?.concurrency
+  const requested =
+    requestedOption !== undefined && Number.isFinite(requestedOption)
+      ? requestedOption
+      : (splitConcurrencyFromEnv() ?? defaultConcurrency)
+  const concurrency = Math.max(1, Math.min(Math.floor(requested), parts.length))
+  const abortSiblings = new AbortController()
+  const outputs: O[] = []
+  // An object, not loose lets: the pool writes these from closures.
+  const state: { usage: AiUsage; model?: string; failure?: AppError } = {
+    usage: { inputTokens: 0, outputTokens: 0 },
+  }
+
+  const reportPart = (index: number, elapsedMs: number, ok: boolean) => {
+    try {
+      options?.onPart?.({ index, elapsedMs, ok })
+    } catch {
+      // A hook must not change the run.
+    }
+  }
+
+  const runPart = async (index: number): Promise<void> => {
+    if (state.failure || meta.signal?.aborted) return
+    const part = parts[index]
+    let deadline: AbortSignal | undefined
+    try {
+      const prompt = task.buildPrompt(part)
+      const promptPrefix = task.buildPromptPrefix?.(part)
+      const partSignal = meta.signal
+        ? AbortSignal.any([meta.signal, abortSiblings.signal])
+        : abortSiblings.signal
+      const callTime = callSignals({ ...meta, signal: partSignal }, timeoutMs)
+      deadline = callTime.deadline
+      const startedAt = Date.now()
+      let result: { object: O; usage: AiUsage; model: string } | undefined
+      try {
+        result = await client.generateObject({
+          task: { name: task.name, input: part },
+          system: task.system,
+          prompt,
+          ...cacheArgs(meta, promptPrefix),
+          schema: task.schema,
+          effort: task.effort,
+          maxTokens: task.maxTokens,
+          model: taskModel,
+          signal: callTime.signal,
+          timeoutMs,
+        })
+      } finally {
+        reportPart(index, Date.now() - startedAt, result !== undefined)
+      }
+      state.usage = addUsage(state.usage, result.usage)
+      if (index === 0) state.model = result.model
+      outputs[index] = task.postProcess ? task.postProcess(result.object, part) : result.object
+    } catch (error) {
+      state.usage = addUsage(state.usage, usageFromError(error))
+      if (!state.failure) {
+        // The first failure is the one reported. A sibling abort caused by it is not.
+        state.failure = toRunError(error, meta.signal, deadline)
+        abortSiblings.abort()
+      }
+    }
+  }
+
+  let nextIndex = 0
+  const worker = async (): Promise<void> => {
+    while (nextIndex < parts.length) {
+      const index = nextIndex
+      nextIndex += 1
+      await runPart(index)
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, () => worker()))
+
+  if (meta.signal?.aborted && !state.failure) state.failure = cancelledError()
+  if (state.failure) {
+    await finishRun(db, runId, {
+      status: 'error',
+      error: state.failure.message,
+      usage: state.usage,
+    })
+    throw state.failure
+  }
+
+  let output: O
+  try {
+    output = merge(outputs, parts)
+    // A cancel that landed while the parts were merging wins, as in runAiTask.
+    if (meta.signal?.aborted) throw cancelledError()
+  } catch (error) {
+    const aiError = toRunError(error, meta.signal)
+    await finishRun(db, runId, { status: 'error', error: aiError.message, usage: state.usage })
+    throw aiError
+  }
+  await finishRun(db, runId, {
+    status: 'done',
+    usage: state.usage,
+    model: state.model ?? client.defaultModel,
+    output,
+  })
+  return { output, runId }
+}
+
+/** Time limit for each part of a split run: same precedence as runAiTask. */
+function resolveSplitTimeoutMs(meta: AiRunMeta, task: { timeoutMs?: number }): number {
+  return timeoutOverrideMs ?? meta.timeoutMs ?? task.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS
+}
+
+/** Local providers serve one request at a time, so their parts run in order by default. */
+export function isLocalProvider(provider: string): boolean {
+  return provider === 'ollama' || provider === 'eval:ollama'
+}
+
+/** `AI_SPLIT_CONCURRENCY` when it is a positive integer, otherwise undefined. */
+function splitConcurrencyFromEnv(): number | undefined {
+  const raw = process.env.AI_SPLIT_CONCURRENCY?.trim()
+  if (!raw || !/^\d+$/.test(raw)) return undefined
+  const parsed = Number(raw)
+  return parsed > 0 ? parsed : undefined
+}
+
+function addUsage(total: AiUsage, usage: AiUsage | undefined): AiUsage {
+  if (!usage) return total
+  const result: AiUsage = {
+    inputTokens: total.inputTokens + usage.inputTokens,
+    outputTokens: total.outputTokens + usage.outputTokens,
+  }
+  const cacheRead = sumCache(total.cacheReadTokens, usage.cacheReadTokens)
+  const cacheWrite = sumCache(total.cacheWriteTokens, usage.cacheWriteTokens)
+  if (cacheRead !== undefined) result.cacheReadTokens = cacheRead
+  if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite
+  return result
+}
+
+/** Sum of two optional cache counts; undefined when neither side has the key. */
+function sumCache(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined && b === undefined) return undefined
+  return (a ?? 0) + (b ?? 0)
+}
+
 /**
  * Starts a streaming text task. The caller reads `textStream` for live text; `done` resolves
  * with the full text once the stream completes and the run is stored with `output: { text }`.
@@ -138,17 +329,20 @@ export async function startAiStream(
   args: StreamRunArgs,
   client: AiClient = getAiClient(),
 ): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
-  await assertCanStartRun(db, meta.userId)
+  await assertCanStartRun(db, meta)
   const runId = await insertRun(db, meta, args.task, args.model ?? client.defaultModel)
   const timeoutMs = timeoutOverrideMs ?? meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS
   const { signal, deadline } = callSignals(meta, timeoutMs)
   let stream: ReturnType<AiClient['streamText']>
+  let firstTokenMs: number | undefined
+  const startedAt = Date.now()
   try {
     if (meta.signal?.aborted) throw cancelledError()
     stream = client.streamText({
       task: { name: args.task, input: args.input },
       system: args.system,
       prompt: args.prompt,
+      ...cacheArgs(meta, args.promptPrefix),
       effort: args.effort,
       maxTokens: args.maxTokens,
       model: args.model,
@@ -164,29 +358,66 @@ export async function startAiStream(
     })
     throw aiError
   }
+  const pumped = pumpText(stream.textStream, startedAt, (ms) => {
+    firstTokenMs = ms
+  })
   const done = stream.final.then(
     async (result) => {
+      await pumped.settled
       await finishRun(db, runId, {
         status: 'done',
         usage: result.usage,
         model: result.model,
         output: { text: result.text },
+        firstTokenMs,
       })
       return result.text
     },
     async (error: unknown) => {
       const aiError = toRunError(error, meta.signal, deadline)
+      // Not awaiting the pump here: a source that failed or was aborted may never end.
       await finishRun(db, runId, {
         status: 'error',
         error: aiError.message,
         usage: usageFromError(error),
+        firstTokenMs,
       })
       throw aiError
     },
   )
   // Callers that only read the text stream should not trigger an unhandled rejection.
   done.catch(() => {})
-  return { runId, textStream: stream.textStream, done }
+  return { runId, textStream: pumped.textStream, done }
+}
+
+/**
+ * Reads the client's text stream from the start, whether or not the caller reads it, and hands each
+ * chunk on through a buffer, unchanged. The first non-empty chunk sets the first-token time when the
+ * model sent it. `settled` resolves once the source has ended (a failed source settles too), so on
+ * the success path that time is final. Only the success path waits for it.
+ */
+function pumpText(
+  source: AsyncIterable<string>,
+  startedAt: number,
+  onFirst: (ms: number) => void,
+): { textStream: AsyncIterable<string>; settled: Promise<void> } {
+  const channel = new TextChannel()
+  const settled = (async () => {
+    let seen = false
+    try {
+      for await (const chunk of source) {
+        if (!seen && chunk !== '') {
+          seen = true
+          onFirst(Date.now() - startedAt)
+        }
+        channel.push(chunk)
+      }
+      channel.close()
+    } catch (error) {
+      channel.fail(error)
+    }
+  })()
+  return { textStream: channel.iterable(), settled }
 }
 
 /** Sum of input and output tokens of the user's runs since Seoul midnight containing `now`. */
@@ -215,12 +446,14 @@ export async function assertWithinLimit(db: Db, userId: string): Promise<void> {
 }
 
 /**
- * Checks both the daily token limit and the per-user concurrency cap before a run starts.
- * The concurrency error uses CONFLICT, not AI_LIMIT, so import jobs do not pause on it.
+ * Checks both the daily token limit and the per-user concurrency cap before a run starts. A
+ * `subRun` skips the concurrency cap only. The concurrency error uses CONFLICT, not AI_LIMIT, so
+ * import jobs do not pause on it.
  */
-async function assertCanStartRun(db: Db, userId: string): Promise<void> {
-  await assertWithinLimit(db, userId)
-  const running = await countRunningRuns(db, userId)
+async function assertCanStartRun(db: Db, meta: AiRunMeta): Promise<void> {
+  await assertWithinLimit(db, meta.userId)
+  if (meta.subRun) return
+  const running = await countRunningRuns(db, meta.userId)
   if (running >= MAX_RUNNING_RUNS) throw new AppError('CONFLICT', CONCURRENCY_MESSAGE)
 }
 
@@ -291,8 +524,14 @@ async function insertRun(
 }
 
 type RunOutcome =
-  | { status: 'done'; usage: AiUsage; model: string; output: unknown }
-  | { status: 'error'; error: string; usage?: AiUsage }
+  | {
+      status: 'done'
+      usage: AiUsage
+      model: string
+      output: unknown
+      firstTokenMs?: number
+    }
+  | { status: 'error'; error: string; usage?: AiUsage; firstTokenMs?: number }
 
 async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<void> {
   if (outcome.status === 'done') {
@@ -302,6 +541,9 @@ async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<vo
         status: 'done',
         inputTokens: outcome.usage.inputTokens,
         outputTokens: outcome.usage.outputTokens,
+        cacheReadTokens: outcome.usage.cacheReadTokens ?? 0,
+        cacheWriteTokens: outcome.usage.cacheWriteTokens ?? 0,
+        firstTokenMs: outcome.firstTokenMs ?? null,
         model: outcome.model,
         output: outcome.output,
         finishedAt: new Date(),
@@ -316,9 +558,20 @@ async function finishRun(db: Db, runId: string, outcome: RunOutcome): Promise<vo
       error: outcome.error,
       inputTokens: outcome.usage?.inputTokens ?? 0,
       outputTokens: outcome.usage?.outputTokens ?? 0,
+      cacheReadTokens: outcome.usage?.cacheReadTokens ?? 0,
+      cacheWriteTokens: outcome.usage?.cacheWriteTokens ?? 0,
+      firstTokenMs: outcome.firstTokenMs ?? null,
       finishedAt: new Date(),
     })
     .where(eq(aiRuns.id, runId))
+}
+
+/**
+ * Replaces the stored output of a finished run, keeping its status and tokens. Used when a draft
+ * gains a continuation or a warning after its stream has already been stored.
+ */
+export async function replaceRunOutput(db: Db, runId: string, output: unknown): Promise<void> {
+  await db.update(aiRuns).set({ output }).where(eq(aiRuns.id, runId))
 }
 
 /** Token usage the AI client attached to an error after the API call was billed, if any. */
@@ -330,7 +583,10 @@ function usageFromError(error: unknown): AiUsage | undefined {
   if (!usage || !isTokenCount(usage.inputTokens) || !isTokenCount(usage.outputTokens)) {
     return undefined
   }
-  return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+  const billed: AiUsage = { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+  if (isTokenCount(usage.cacheReadTokens)) billed.cacheReadTokens = usage.cacheReadTokens
+  if (isTokenCount(usage.cacheWriteTokens)) billed.cacheWriteTokens = usage.cacheWriteTokens
+  return billed
 }
 
 function isTokenCount(value: unknown): value is number {

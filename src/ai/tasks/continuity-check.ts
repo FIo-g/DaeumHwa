@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { type ContextPack, renderContextPack, resolveRefs } from '@/ai/context'
+import { findNumericFactMismatches } from '@/ai/numeric-facts'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import { ISSUE_KINDS, type IssueKind, SEVERITIES, type Severity } from '@/db/types'
@@ -31,7 +32,16 @@ export type ContinuityInput = {
   chapterPosition: number
   chapterTitle: string
   pack: ContextPack
+  /** Local eval only: place, people and object locations of the draft's scenes, already rendered. Empty or null adds no section. */
+  scenePlan?: string | null
 }
+
+/**
+ * Prompt rule for the scene location list (P3). It sits outside the tag on purpose: CONTINUITY_SYSTEM
+ * ends with TAG_DATA_RULE, which says text inside tags is data, so the rule must not be inside it.
+ */
+export const SCENE_PLAN_RULE =
+  '아래 장면 목록은 이 원고의 초안을 쓸 때 만든 계획이다. 위키가 아니다. 장면마다 장소와 그 자리의 인물, 물건의 위치를 위키와 견주는 데만 쓰고, 목록과 원고가 다르다는 이유만으로는 지적하지 않는다. 지적에는 위키 근거가 있어야 한다.'
 
 /** An issue after post-processing: quote located in the chapter, refs resolved to record ids. */
 export type ResolvedContinuityIssue = {
@@ -50,6 +60,7 @@ export type ResolvedContinuityIssue = {
 export const CONTINUITY_SYSTEM = `당신은 장기 연재 웹소설의 설정 오류(오기)를 찾는 교정자다. <wiki>는 작가가 승인한 설정 위키이고, <manuscript>는 점검할 회차 원고다.
 규칙:
 - <wiki>의 사실(F ref)이나 카드(E ref)와 원고 문장이 어긋나는 곳만 지적한다. 위키 근거가 없는 지적은 하지 않는다.
+- 원고가 위키의 내용을 언급하지 않았거나 위키에 없는 내용을 새로 쓴 것은 모순이 아니다. 위키와 정면으로 어긋나는 문장만 지적하고, "언급이 없다"는 이유로는 지적하지 않는다.
 - quote에는 문제가 되는 원고 문장을 한 글자도 바꾸지 말고 그대로 옮긴다.
 - wikiExcerpt에는 근거가 된 위키 문구를 그대로 옮기고, factRef 또는 entryRef에 그 ref를 넣는다.
 - 위키의 사실에 "N화부터", "~N화" 같은 유효 범위가 있으면 이 회차 시점에 유효한 것만 기준으로 삼는다. 이야기 속에서 상태가 바뀌는 전개 자체는 오기가 아니다. 설명 없이 위키와 어긋날 때만 지적한다.
@@ -68,6 +79,30 @@ function usableSuggestion(issue: ContinuityIssue): string {
   if (issue.kind === 'thread' || issue.kind === 'timeline') return ''
   if (issue.suggestion.trim() === issue.quote.trim()) return ''
   return issue.suggestion
+}
+
+/**
+ * Numeric mismatches (age, year, floor count, headcount) found in code (numeric-facts), as
+ * contradiction issues. They do not depend on the model answer. A bug here must not fail the
+ * whole check, so any error gives no numeric issues.
+ */
+function numericIssues(input: ContinuityInput): ContinuityIssue[] {
+  try {
+    return findNumericFactMismatches({ chapterText: input.chapterText, pack: input.pack }).map(
+      (hit) => ({
+        quote: hit.quote,
+        kind: 'contradiction',
+        severity: 'medium',
+        factRef: hit.factRef,
+        entryRef: hit.entryRef,
+        wikiExcerpt: hit.wikiExcerpt,
+        explanation: hit.explanation,
+        suggestion: hit.suggestion,
+      }),
+    )
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -134,9 +169,16 @@ export function resolveContinuityIssues(
   }))
 }
 
+function scenePlanSection(plan: ContinuityInput['scenePlan']): string[] {
+  if (!plan) return []
+  return ['', SCENE_PLAN_RULE, '<scene_plan>', plan, '</scene_plan>']
+}
+
 export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> = {
   name: 'continuity-check',
-  effort: 'high',
+  // Stage 0 effort tests (docs/eval/harness/2026-10-20-stage0-baseline.md): low found as many
+  // planted contradictions as high on both models, with no trap false positives.
+  effort: 'low',
   maxTokens: 16000,
   system: CONTINUITY_SYSTEM,
   buildPrompt: (raw) => {
@@ -147,12 +189,15 @@ export const continuityCheckTask: AiTaskDef<ContinuityInput, ContinuityOutput> =
       `<manuscript position="${input.chapterPosition}" title="${input.chapterTitle.replace(/"/g, "'")}">`,
       input.chapterText,
       '</manuscript>',
+      ...scenePlanSection(input.scenePlan),
     ].join('\n')
   },
   schema: ContinuitySchema,
   postProcess(output, input) {
+    // Numeric issues go first, so they win the same-range dedupe over a model issue.
+    const combined = { issues: [...numericIssues(input), ...output.issues] }
     return {
-      issues: locateIssues(output, input).map((l) => ({
+      issues: locateIssues(combined, input).map((l) => ({
         ...l.issue,
         factRef: l.issue.factRef,
         entryRef: l.issue.entryRef,

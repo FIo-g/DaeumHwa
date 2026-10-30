@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { getDb } from '@/db/client'
+import { DraftPlanCardSchema } from '@/ai/tasks/draft-plan'
 import { draftErrorRecord, DRAFT_FAILED_MESSAGE } from '@/lib/draft-stream'
 import { type ErrorCode, isAppError } from '@/lib/errors'
 import { startDraft } from '@/server/ai-features'
@@ -13,11 +14,27 @@ import { getSessionUser } from '@/server/session'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
+const PlanEditsSchema = z.object({
+  revisions: z.number().int().min(0).max(1000),
+  removed: z.number().int().min(0).max(1000),
+  moved: z.number().int().min(0).max(1000),
+  textEdits: z.number().int().min(0).max(1000),
+})
+
 const DraftBodySchema = z.object({
   chapterId: z.uuid().nullable().optional(),
   instructions: z.string().max(5000),
   targetChars: z.number().int().min(500).max(20000).optional(),
   entryIds: z.array(z.uuid()).max(50),
+  // The approved plan card, re-checked by DraftPlanCardSchema; its targets are recomputed by the service.
+  plan: DraftPlanCardSchema.optional(),
+  planRunId: z.uuid().optional(),
+  planEdits: PlanEditsSchema.optional(),
+  // The author's revision notes of the current card chain, oldest first; the service keeps them.
+  planNotes: z.array(z.string().trim().min(1).max(300)).max(5).optional(),
+  // Set by a client that can show the replace record (see src/lib/draft-stream.ts). Without it the
+  // draft is not expanded, so an older panel build never receives a record it cannot read.
+  acceptsReplace: z.boolean().optional(),
 })
 
 const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
@@ -58,6 +75,8 @@ export async function POST(
     return Response.json({ error: '입력값이 올바르지 않습니다.' }, { status: 400 })
   }
 
+  const { acceptsReplace, ...draftInput } = parsed.data
+
   // Aborted by the browser (request.signal) or by the body stream being cancelled.
   const abort = new AbortController()
   const stopOnRequestAbort = () => abort.abort()
@@ -68,7 +87,7 @@ export async function POST(
     const { runId, textStream, done } = await startDraft(
       getDb(),
       { userId: user.id },
-      { workId, ...parsed.data },
+      { workId, ...draftInput, expandLength: acceptsReplace === true },
       undefined,
       abort.signal,
     )

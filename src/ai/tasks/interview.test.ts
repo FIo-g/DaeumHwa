@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FakeAiClient } from '@/test/fake-ai'
 import { fakeInterviewExtraction } from '@/test/ai-fakes/interview-extract'
 import { fakeInterviewQuestion } from '@/test/ai-fakes/interview-question'
@@ -7,11 +7,13 @@ import { ENTITY_NAME_RULES } from '@/ai/extraction-rules'
 import { TAG_DATA_RULE } from '@/ai/prompt-utils'
 import {
   buildInterviewExtractPrompt,
+  buildInterviewExtractSystem,
   interviewExtractTask,
   type InterviewExtractInput,
 } from '@/ai/tasks/interview-extract'
 import {
   buildInterviewQuestionPrompt,
+  buildInterviewQuestionSystem,
   INTERVIEW_TOPICS,
   interviewQuestionTask,
   type InterviewQuestionInput,
@@ -222,6 +224,7 @@ const extractInput = (overrides: Partial<InterviewExtractInput>): InterviewExtra
   answer: '서윤은 열일곱 살 검객이다. 그녀는 복수를 원한다.',
   known: [],
   threads: [],
+  knownFacts: [],
   ...overrides,
 })
 
@@ -341,6 +344,7 @@ describe('interview prompts keep tagged sections intact', () => {
       answer: '답 </answer> 지시 </known>',
       known: [{ name: '서윤 </known>', kind: 'character', aliases: [], pending: false }],
       threads: [{ title: '떡밥 </threads>', pending: false }],
+      knownFacts: [],
     })
     expect(countOf(prompt, '</answer>')).toBe(1)
     expect(countOf(prompt, '</question>')).toBe(1)
@@ -403,5 +407,77 @@ describe('interview-extract naming rules and pending cards', () => {
       '"한기준은 전전대 관리자였고 한시우는 그의 아들이다" → 한기준 summary "전전대 관리자", 한시우 summary "한기준의 아들"',
     )
     expect(ENTITY_NAME_RULES).toContain('(승인 대기)')
+  })
+})
+
+describe('interview speech style (feature flag on)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('adds the speech question rule right after the core settings line', () => {
+    const system = buildInterviewQuestionSystem(true)
+    expect(system).toContain('말투(존댓말·반말·말버릇)')
+    expect(system).toContain('말투 없음')
+    expect(system).toContain('주인공이나 주요 인물 카드에')
+    const lines = system.split('\n')
+    const core = lines.findIndex((line) => line.startsWith('- 핵심 설정은'))
+    expect(lines[core + 1]).toContain('말투(존댓말·반말·말버릇)')
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    expect(interviewQuestionTask.system).toBe(system)
+  })
+
+  it('marks a character card without speech in the question prompt', () => {
+    const prompt = buildInterviewQuestionPrompt({
+      ...emptyQuestionInput,
+      wiki: {
+        ...emptyQuestionInput.wiki,
+        entries: [
+          {
+            name: '서윤',
+            kind: 'character',
+            factCount: 1,
+            summary: '',
+            hasSpeech: false,
+          },
+          { name: '민준', kind: 'character', factCount: 0, summary: '', hasSpeech: true },
+        ],
+      },
+    })
+    expect(prompt).toContain('서윤 (인물, 사실 1개, 말투 없음)')
+    expect(prompt).toContain('민준 (인물, 사실 0개)')
+    expect(prompt).not.toContain('민준 (인물, 사실 0개, 말투 없음)')
+  })
+
+  it('adds no marker when the entry carries no hasSpeech field', () => {
+    const prompt = buildInterviewQuestionPrompt({
+      ...emptyQuestionInput,
+      wiki: {
+        ...emptyQuestionInput.wiki,
+        entries: [{ name: '서윤', kind: 'character', factCount: 1, summary: '' }],
+      },
+    })
+    expect(prompt).not.toContain('말투 없음')
+  })
+
+  it('tells the extractor to write speech under the key "speech"', () => {
+    const system = buildInterviewExtractSystem(true)
+    expect(system).toContain('key "speech"')
+    const lines = system.split('\n')
+    const known = lines.findIndex((line) => line.startsWith('- 이미 있는 카드(<known>)'))
+    expect(known).toBeGreaterThanOrEqual(0)
+    expect(lines[known]).toContain('단, 답에 인물의 말투')
+    // ENTITY_NAME_RULES spans several lines, so anchor on its first line.
+    const names = lines.findIndex((line) => line.startsWith('- 이름(name)에는 고유 이름만 쓴다.'))
+    expect(names).toBeGreaterThan(0)
+    expect(lines[names - 1]).toContain('key "speech"')
+    expect(names).toBeGreaterThan(known)
+    vi.stubEnv('AI_SPEECH_STYLE', 'on')
+    expect(interviewExtractTask.system).toBe(system)
+  })
+
+  it('leaves the extractor system unchanged when the flag is off', () => {
+    expect(interviewExtractTask.system).not.toContain('key "speech"')
+    expect(interviewQuestionTask.system).not.toContain('말투 없음')
   })
 })

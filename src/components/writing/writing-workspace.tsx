@@ -168,7 +168,10 @@ export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorksp
 
   async function applyStatus(next: ChapterStatus) {
     const result = await runAction(setChapterStatusAction({ chapterId: chapter.id, status: next }))
-    if (result) router.refresh()
+    if (result) {
+      if (next === 'done') fireDirectiveInfer(workId, chapter.id)
+      router.refresh()
+    }
   }
 
   async function changeStatus(next: ChapterStatus) {
@@ -339,6 +342,15 @@ function readCurrentVersion(details: unknown): number | null {
   if (typeof details !== 'object' || details === null || !('currentVersion' in details)) return null
   const value = details.currentVersion
   return typeof value === 'number' ? value : null
+}
+
+/** Fires the inferred-request inference after a chapter is done. Never waits and never shows errors. */
+function fireDirectiveInfer(workId: string, chapterId: string) {
+  void fetch(`/api/works/${workId}/directives/infer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chapterId }),
+  }).catch(() => {})
 }
 
 /** Brings the offset into view. The textarea grows with its content, so the page is what scrolls. */

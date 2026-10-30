@@ -3,10 +3,10 @@ import path from 'node:path'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getAiClient } from '@/ai'
-import { buildContextPack } from '@/ai/context'
+import { buildContextPack, CONTINUITY_BUDGET_CHARS, renderContextPack } from '@/ai/context'
 import { FakeAiClient } from '@/test/fake-ai'
 import { runAiTask } from '@/ai/run'
-import type { AiClient } from '@/ai/types'
+import type { AiClient, AiEffort } from '@/ai/types'
 import { continuityCheckTask, resolveContinuityIssues } from '@/ai/tasks/continuity-check'
 import type { Db } from '@/db/client'
 import { chapters, namingRules, threads } from '@/db/schema'
@@ -28,15 +28,25 @@ import {
   createTestUser,
   createTestWork,
 } from '@/test/factories'
-import { type ExpectedIssue, type FoundIssue, type IssueScore, scoreIssues } from './score'
+import { withEffort } from './effort-client'
+import { type CoverageCard, packCoverage } from './coverage'
+import {
+  type ExpectedIssue,
+  type FoundIssue,
+  type IssueScore,
+  scoreIssues,
+  scoreNotDefects,
+} from './score'
 
 // Continuity accuracy eval (spec §12). Loads the made-up fixture novel into an in-memory database,
 // runs the continuity check on every chapter, and scores the reported issues against answers.json.
 //
 //   pnpm eval:continuity           real API (needs ANTHROPIC_API_KEY or OPENCODE_API_KEY), otherwise prints a skip message
 //   pnpm eval:continuity --fake    deterministic fake client, checks the run flow only
+//   --fixture <name>               a set under eval/fixtures (default: continuity)
+//   --budget <n>                   continuity context budget in characters (default: CONTINUITY_BUDGET_CHARS)
+//   --effort <low|medium|high>     run every call at this effort (default: each task's own effort)
 
-const FIXTURE_DIR = path.resolve(process.cwd(), 'eval/fixtures/continuity')
 const RESULTS_DIR = path.resolve(process.cwd(), 'eval/results')
 const SKIP_MESSAGE =
   'AI 키(ANTHROPIC_API_KEY 또는 OPENCODE_API_KEY)가 없어 평가를 건너뜁니다. --fake로 실행 흐름만 확인할 수 있습니다.'
@@ -101,18 +111,61 @@ type ChapterFixture = { position: number; title: string; body: string }
 type ChapterRun = {
   position: number
   title: string
-  pack: { entries: number; threads: number; approxChars: number }
+  pack: {
+    entries: number
+    threads: number
+    approxChars: number
+    /** Cards named in the manuscript, and how many of them reach the rendered pack. */
+    named: number
+    namedInPack: number
+  }
   issues: { quote: string; kind: IssueKind; severity: string; explanation: string }[]
   error: string | null
 }
 
-function readJson(file: string): unknown {
-  return JSON.parse(readFileSync(path.join(FIXTURE_DIR, file), 'utf8'))
+/** Value of a `--flag <value>` pair, or undefined when the flag is absent. */
+function argValue(name: string): string | undefined {
+  const index = process.argv.indexOf(name)
+  if (index === -1) return undefined
+  const value = process.argv[index + 1]
+  if (value === undefined || value.startsWith('--')) throw new Error(`${name} 값이 없습니다.`)
+  return value
 }
 
-function loadChapterBodies(work: WorkFixture): ChapterFixture[] {
+function parseBudget(): number {
+  const raw = argValue('--budget')
+  if (raw === undefined) return CONTINUITY_BUDGET_CHARS
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value <= 0)
+    throw new Error(`--budget 값이 올바르지 않습니다: ${raw}`)
+  return value
+}
+
+const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high']
+
+/** The --effort value, or 'task' when the flag is absent (each task keeps its own effort). */
+function parseEffort(): AiEffort | 'task' {
+  const raw = argValue('--effort')
+  if (raw === undefined) return 'task'
+  if (!(EFFORTS as readonly string[]).includes(raw)) {
+    throw new Error(`--effort 값이 올바르지 않습니다: ${raw}`)
+  }
+  return raw as AiEffort
+}
+
+function parseFixtureDir(): string {
+  const name = argValue('--fixture') ?? 'continuity'
+  if (!/^[a-z0-9-]+$/.test(name)) throw new Error(`--fixture 이름이 올바르지 않습니다: ${name}`)
+  return path.resolve(process.cwd(), 'eval/fixtures', name)
+}
+
+function readJson(dir: string, file: string): unknown {
+  return JSON.parse(readFileSync(path.join(dir, file), 'utf8'))
+}
+
+function loadChapterBodies(dir: string, work: WorkFixture): ChapterFixture[] {
   return work.chapters.map((ch) => {
-    const file = path.join(FIXTURE_DIR, 'chapters', `${String(ch.position).padStart(2, '0')}.md`)
+    const file = path.join(dir, 'chapters', `${String(ch.position).padStart(2, '0')}.md`)
     return { position: ch.position, title: ch.title, body: readFileSync(file, 'utf8').trim() }
   })
 }
@@ -211,23 +264,30 @@ async function checkChapter(
   meta: { userId: string; workId: string; chapterId: string },
   chapter: ChapterFixture,
   client: AiClient,
+  options: { cards: CoverageCard[]; budgetChars: number },
 ): Promise<ChapterRun> {
   const run: ChapterRun = {
     position: chapter.position,
     title: chapter.title,
-    pack: { entries: 0, threads: 0, approxChars: 0 },
+    pack: { entries: 0, threads: 0, approxChars: 0, named: 0, namedInPack: 0 },
     issues: [],
     error: null,
   }
   try {
+    // Same options as the product continuity check (chapter-check.ts).
     const pack = await buildContextPack(db, meta.workId, {
       text: chapter.body,
       position: chapter.position,
+      keepNamed: true,
+      budgetChars: options.budgetChars,
     })
+    const coverage = packCoverage(chapter.body, options.cards, renderContextPack(pack))
     run.pack = {
       entries: pack.entries.length,
       threads: pack.threads.length,
       approxChars: pack.stats.approxChars,
+      named: coverage.named.length,
+      namedInPack: coverage.named.length - coverage.missing.length,
     }
     const input = {
       chapterText: chapter.body,
@@ -258,12 +318,19 @@ function percent(value: number): string {
   return `${(value * 100).toFixed(1)}%`
 }
 
+type RunExtras = {
+  trapHits: FoundIssue[]
+  coverage: { named: number; inPack: number; rate: number }
+  overBudgetChapters: number
+}
+
 function printSummary(
   positions: number[],
   expected: ExpectedIssue[],
   found: FoundIssue[],
   runs: ChapterRun[],
   totals: IssueScore,
+  extras: RunExtras,
 ): void {
   const rows = positions.map((position) => {
     const exp = expected.filter((e) => e.chapter === position)
@@ -284,28 +351,36 @@ function printSummary(
   console.log(
     `합계: 정답 ${expected.length}건 · 적중 ${totals.hits} · 놓침 ${totals.misses.length} · 오탐 ${totals.falsePositives.length} · 정밀도 ${percent(totals.precision)} · 재현율 ${percent(totals.recall)}`,
   )
+  console.log(
+    `함정 오탐 ${extras.trapHits.length}건 · 맥락 포함률 ${percent(extras.coverage.rate)} (${extras.coverage.inPack}/${extras.coverage.named}) · 예산 초과 ${extras.overBudgetChapters}장`,
+  )
 }
 
 async function main(): Promise<void> {
   const useFake = process.argv.includes('--fake')
+  const fixtureDir = parseFixtureDir()
+  const budgetChars = parseBudget()
+  const effort = parseEffort()
   if (!useFake && getAiProvider() === null) {
     console.log(SKIP_MESSAGE)
     return
   }
 
-  const work = WorkFixtureSchema.parse(readJson('work.json'))
-  const answers = AnswersSchema.parse(readJson('answers.json'))
-  const bodies = loadChapterBodies(work)
+  const work = WorkFixtureSchema.parse(readJson(fixtureDir, 'work.json'))
+  const answers = AnswersSchema.parse(readJson(fixtureDir, 'answers.json'))
+  const bodies = loadChapterBodies(fixtureDir, work)
   checkAnswers(answers, bodies)
+  const cards: CoverageCard[] = work.entries.map((e) => ({ name: e.name, aliases: e.aliases }))
 
-  const client: AiClient = useFake ? new FakeAiClient() : getAiClient()
+  const baseClient: AiClient = useFake ? new FakeAiClient() : getAiClient()
+  const client: AiClient = effort === 'task' ? baseClient : withEffort(baseClient, effort)
   const db = await createTestDb()
   const owner = await createTestUser(db)
   const workRow = await createTestWork(db, owner.id, { title: work.title })
   const chapterRows = await loadWork(db, workRow.id, work, bodies)
 
   console.log(
-    `${work.title} · ${bodies.length}화 · 모델 ${client.defaultModel}${useFake ? ' (--fake, 가짜 응답)' : ''}`,
+    `${work.title} · ${bodies.length}화 · 모델 ${client.defaultModel}${useFake ? ' (--fake, 가짜 응답)' : ''} · 예산 ${budgetChars}자 · 노력 ${effort}`,
   )
 
   const runs: ChapterRun[] = []
@@ -319,6 +394,7 @@ async function main(): Promise<void> {
         { userId: owner.id, workId: workRow.id, chapterId: row.id },
         chapter,
         client,
+        { cards, budgetChars },
       ),
     )
   }
@@ -333,8 +409,16 @@ async function main(): Promise<void> {
   )
   const totals = scoreIssues(expected, found)
   const positions = bodies.map((c) => c.position)
+  const trapHits = scoreNotDefects(answers.notDefects, found)
+  const named = runs.reduce((sum, run) => sum + run.pack.named, 0)
+  const inPack = runs.reduce((sum, run) => sum + run.pack.namedInPack, 0)
+  const extras: RunExtras = {
+    trapHits,
+    coverage: { named, inPack, rate: named === 0 ? 1 : inPack / named },
+    overBudgetChapters: runs.filter((run) => run.pack.approxChars > budgetChars).length,
+  }
 
-  printSummary(positions, expected, found, runs, totals)
+  printSummary(positions, expected, found, runs, totals, extras)
   if (useFake) {
     console.log('※ --fake 실행입니다. 가짜 응답으로 흐름만 확인했으며 점수는 모델 품질이 아닙니다.')
   }
@@ -352,9 +436,15 @@ async function main(): Promise<void> {
         mode: client.provider,
         model: client.defaultModel,
         createdAt: new Date().toISOString(),
+        fixture: path.basename(fixtureDir),
+        budgetChars,
+        effort,
         expected,
         notDefects: answers.notDefects,
         totals,
+        trapHits,
+        coverage: extras.coverage,
+        overBudgetChapters: extras.overBudgetChapters,
         runs,
       },
       null,

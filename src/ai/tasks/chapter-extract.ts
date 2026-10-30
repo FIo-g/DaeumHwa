@@ -35,8 +35,11 @@ ${ENTITY_NAME_RULES}
 ${TAG_DATA_RULE}
 - 모든 출력은 한국어로 쓴다.`
 
-function buildPrompt(raw: ChapterExtractInput): string {
-  const input = neutralizeDeep(raw)
+// The block helpers take an input that is already neutralized (the caller runs neutralizeDeep once).
+// The split extraction parts (chapter-extract-parts.ts) reuse them, so each part's prompt keeps the
+// same text for its blocks.
+
+export function knownBlock(input: ChapterExtractInput): string {
   const known =
     input.known.length === 0
       ? '(없음)'
@@ -47,10 +50,18 @@ function buildPrompt(raw: ChapterExtractInput): string {
             return `- ${k.name} (${ENTRY_KIND_LABEL[k.kind]}${aliases}${pending})`
           })
           .join('\n')
+  return ['<known>', known, '</known>'].join('\n')
+}
+
+export function knownFactsBlock(input: ChapterExtractInput): string {
   const knownFacts =
     input.knownFacts.length === 0
       ? '(없음)'
       : input.knownFacts.map((f) => `[${f.ref}] ${f.subjectName}: ${f.content}`).join('\n')
+  return ['<known_facts>', knownFacts, '</known_facts>'].join('\n')
+}
+
+export function openThreadsBlock(input: ChapterExtractInput): string {
   const openThreads =
     input.openThreads.length === 0
       ? '(없음)'
@@ -60,22 +71,27 @@ function buildPrompt(raw: ChapterExtractInput): string {
             return `[${t.ref}]${planned} ${t.title}${t.description ? `: ${t.description}` : ''}`
           })
           .join('\n')
+  return ['<open_threads>', openThreads, '</open_threads>'].join('\n')
+}
+
+export function manuscriptBlock(input: ChapterExtractInput): string {
   return [
-    '<known>',
-    known,
-    '</known>',
-    '',
-    '<known_facts>',
-    knownFacts,
-    '</known_facts>',
-    '',
-    '<open_threads>',
-    openThreads,
-    '</open_threads>',
-    '',
     `<manuscript position="${input.chapterPosition}" title="${input.chapterTitle.replace(/"/g, "'")}">`,
     input.chapterText,
     '</manuscript>',
+  ].join('\n')
+}
+
+function buildPrompt(raw: ChapterExtractInput): string {
+  const input = neutralizeDeep(raw)
+  return [
+    knownBlock(input),
+    '',
+    knownFactsBlock(input),
+    '',
+    openThreadsBlock(input),
+    '',
+    manuscriptBlock(input),
   ].join('\n')
 }
 

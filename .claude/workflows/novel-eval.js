@@ -1,17 +1,36 @@
 export const meta = {
   name: 'novel-eval',
   description:
-    'Run the novel quality eval per model and language: advance each run, let author agents answer pending items, then write reviews and (optionally) a summary',
+    'Run the novel quality eval per model and language, with optional per-run init flags (runs[i].flags): advance each run, let author agents answer pending items, then write reviews and (optionally) a summary',
   whenToUse:
-    'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. A run whose review.md already exists is not reviewed again unless args.rereview is true. Pass summary: true on a final invocation with runs: [] to write the cross-run summary.',
+    'DaeumHwa lightweight-model novel eval (eval/novel). Requires args.date (YYYY-MM-DD). Invoke once per model (each invocation is capped at 1000 agents). Resume by rerunning with the same date and runs. A run whose review.md already exists is not reviewed again unless args.rereview is true. Pass summary: true on a final invocation with runs: [] to write the cross-run summary. A run near the pass line (Q mean 3.65 to 3.85, or one failed threshold) also gets an independent second review; pass secondReview: false to turn that off. Optional args.repo is the absolute path of the checkout to run in, for example a worktree; the default is the main checkout.',
   phases: [
     { title: 'Run', detail: 'init and advance each run; author agents answer pending items' },
-    { title: 'Review', detail: 'Sonnet reviewer per finished run, then a copy into docs' },
+    {
+      title: 'Review',
+      detail:
+        'Sonnet reviewer per finished run, an independent second reviewer near the pass line, then a copy into docs',
+    },
     { title: 'Summary', detail: 'cross-run summary, only when args.summary is true' },
   ],
 }
 
-const REPO = '/Users/taehyeong/Documents/GitHub/DaeumHwa'
+// The checkout the eval runs in when args.repo is not given.
+const DEFAULT_REPO = '/Users/taehyeong/Documents/GitHub/DaeumHwa'
+
+// The checkout root for every command and agent input. args.repo may name another checkout, such as
+// a worktree. The value goes into shell commands that runner agents execute, so only plain path
+// characters are accepted; this script has no Node API, so the check is a regex.
+function resolveRepo(raw) {
+  if (raw === undefined || raw === null) return DEFAULT_REPO
+  const bad =
+    'args.repo must be an absolute path made of letters, digits, _ . - and / (no spaces, no ..)'
+  if (typeof raw !== 'string') throw new Error(bad)
+  const repo = raw.replace(/\/+$/, '')
+  if (!/^\/[\w./-]+$/.test(repo) || /(^|\/)\.\.(\/|$)/.test(repo)) throw new Error(bad)
+  return repo
+}
+
 const ALL_MODELS = ['qwen3.8-27b', 'gpt-oss-20b', 'exaone3.5-32b', 'haiku-5.5', 'luna-6']
 // Canonical order for opaque run dir numbers. Never reorder: NN must stay stable across invocations.
 const CANONICAL_MODELS = [
@@ -53,13 +72,51 @@ if (!args || typeof args.date !== 'string' || !/^\d{4}-\d{2}-\d{2}(-[a-z0-9]+)?$
   throw new Error('args.date (YYYY-MM-DD or YYYY-MM-DD-suffix) is required')
 }
 const date = args.date
+const REPO = resolveRepo(args.repo)
 const chapters = args.chapters || 5
 const withSummary = args.summary === true
 const rereview = args.rereview === true
+// On by default; only an explicit false turns it off. It runs only after a first review exists.
+const secondReview = args.secondReview !== false
 const runs = Array.isArray(args.runs)
   ? args.runs
   : ALL_MODELS.flatMap((model) => LANGS.map((lang) => ({ model, lang })))
 
+// The init flags a run may pass (runs[i].flags), each the exact text of one flag. The text goes into
+// a shell command, so anything not listed here is refused before any agent starts.
+const ALLOWED_RUN_FLAGS = [
+  '--deploy-settings',
+  '--directives on',
+  '--directives ledger',
+  '--directives learn',
+  '--example-bank on',
+  '--draft-mode scenes',
+  '--few-instructions',
+  '--length-mode continue',
+  '--product-limits',
+  '--quick',
+  '--scene-fix off',
+  '--speech on',
+  '--two-step on',
+  '--helper-think off',
+  '--helper-think low',
+  '--helper-think medium',
+  '--helper-think high',
+]
+// The init flags of one run as the text that follows --dir in the init command.
+function flagText(run) {
+  return (run.flags ?? []).map((flag) => ' ' + flag).join('')
+}
+const flagError = runs.reduce((error, run) => {
+  if (error) return error
+  const flags = run.flags ?? []
+  if (!Array.isArray(flags)) return 'flags must be a list of strings'
+  const bad = flags.find((flag) => !ALLOWED_RUN_FLAGS.includes(flag))
+  return bad === undefined ? null : `unknown flag: ${bad}`
+}, null)
+if (flagError) return { error: flagError }
+
+log(`repo root: ${REPO}`)
 if (runs.length > 4) {
   log(
     `warning: ${runs.length} runs in this invocation; invoke once per model; each invocation is capped at 1000 agents`,
@@ -70,11 +127,20 @@ if (runs.length === 0 && !withSummary) {
 }
 
 // Opaque run dir: the model id must not appear in any path an author or reviewer sees.
-const runDir = (run) => {
+const runName = (run) => {
   const n = CANONICAL_MODELS.indexOf(run.model) + 1
-  return `eval/results/novel/${date}/run-${String(n).padStart(2, '0')}-${run.lang}`
+  return 'run-' + String(n).padStart(2, '0') + '-' + run.lang
 }
+const runDir = (run) => 'eval/results/novel/' + date + '/' + runName(run)
+// The reviewer reads only this blinded copy of a run (built by `eval:novel blind`), never the run.
+const blindDir = (run) => 'eval/results/novel/' + date + '/blind/' + runName(run)
+// The second reviewer reads its own blinded copy, which never holds the first review.
+const blindDir2 = (run) => 'eval/results/novel/' + date + '/blind-2/' + runName(run)
 const docsReviewPath = (run) => `docs/eval/novel/${date}/${run.model}-${run.lang}.md`
+const docsSecondReviewPath = (run) => `docs/eval/novel/${date}/second/${run.model}-${run.lang}.md`
+// The summary agent writes on the run side; the workflow copies it into docs after the agent returns.
+const summaryResultPath = () => `eval/results/novel/${date}/summary.md`
+const docsSummaryPath = () => `docs/eval/novel/${date}/summary.md`
 
 function errorText(err) {
   return err && err.message ? err.message : String(err)
@@ -107,7 +173,7 @@ function pendingKeyOf(detail) {
   try {
     const parsed = JSON.parse(detail)
     return `${parsed.step}|${parsed.pendingKind}`
-  } catch (err) {
+  } catch {
     return detail
   }
 }
@@ -116,7 +182,7 @@ function runnerPrompt(run, dir, first) {
   const initStep = first
     ? [
         'Step 1. Run this command once, from the repository root:',
-        `  cd ${REPO} && pnpm eval:novel init --model ${run.model} --lang ${run.lang} --chapters ${chapters} --dir ${dir}`,
+        `  cd ${REPO} && pnpm eval:novel init --model ${run.model} --lang ${run.lang} --chapters ${chapters} --dir ${dir}${flagText(run)}`,
         'If the command fails, or its JSON line has an "error" field, return status "error" with the error text as detail, and stop.',
         'Otherwise go to step 2.',
       ].join('\n')
@@ -150,10 +216,22 @@ function reviewExistsPrompt(dir) {
   ].join('\n')
 }
 
+// Builds the blinded copy the reviewer reads. The command prints one JSON line.
+function blindPrompt(dir, second) {
+  return [
+    'You are a runner. Use only the Bash tool. Do not edit any file. Do not read any file.',
+    '',
+    'Run this command from the repository root, with the Bash timeout set to 600000 ms:',
+    `  cd ${REPO} && pnpm eval:novel blind --dir ${dir}${second ? ' --second' : ''}`,
+    'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail, and stop.',
+    'Otherwise return status "blinded" and detail = the "dir" value from that JSON line.',
+  ].join('\n')
+}
+
 function authorPrompt(dir, lang) {
   return [
     `Follow the instructions in ${REPO}/eval/novel/agents/author.md.`,
-    `Inputs: dir = ${REPO}/${dir}, lang = ${lang}.`,
+    `Inputs: root = ${REPO}, dir = ${REPO}/${dir}, lang = ${lang}.`,
     'Answer the pending item in dir and write answer.json as the instructions say.',
   ].join('\n')
 }
@@ -166,21 +244,49 @@ function reviewerPrompt(dir, lang) {
   ].join('\n')
 }
 
-function copyPrompt(run, dir) {
+// Adds the model header to the blind review as <dir>/review.md and writes the docs copy. The
+// command prints one JSON line.
+function reviewHeaderPrompt(run, dir, second) {
+  const to = second ? docsSecondReviewPath(run) : docsReviewPath(run)
   return [
     'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself; run only the commands below.',
     '',
     'Run this command from the repository root:',
-    `  cd ${REPO} && mkdir -p docs/eval/novel/${date} && cp ${dir}/review.md ${docsReviewPath(run)}`,
-    'If the command succeeds, return status "copied" and detail = the destination path.',
-    'If it fails, return status "failed" and the error text as detail.',
+    `  cd ${REPO} && pnpm eval:novel publish-review --dir ${dir} --to ${to}${second ? ' --second' : ''}`,
+    'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail.',
+    'Otherwise return status "copied" and detail = the "docsPath" value from that JSON line.',
+  ].join('\n')
+}
+
+// Asks the gate whether the run needs a second review. The command prints one JSON line with a
+// decision. Only the decision and that line matter; the runner never opens a file.
+function gatePrompt(dir) {
+  return [
+    'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself; run only the command below.',
+    '',
+    'Run this command from the repository root:',
+    `  cd ${REPO} && pnpm eval:novel review-gate --dir ${dir}`,
+    'The command prints one JSON line on stdout. If that line has an "error" field, or the command exits non-zero, return status "failed" and the error text as detail.',
+    'Otherwise return status = the "decision" value from that JSON line ("needed", "not-needed" or "already-done"), and detail = the JSON line verbatim.',
+  ].join('\n')
+}
+
+// Copies one run-side file into docs. The command prints one JSON line with a status.
+function publishPrompt(src, dest, ifMissing) {
+  return [
+    'You are a runner. Use only the Bash tool. Do not edit any file. Do not open any file yourself; run only the command below.',
+    '',
+    'Run this command from the repository root, with the Bash timeout set to 120000 ms:',
+    `  cd ${REPO} && pnpm eval:novel publish --src ${src} --dest ${dest}${ifMissing ? ' --if-missing' : ''}`,
+    'The command prints one JSON line on stdout. If that line has a "status" field, return that status ("copied", "skipped" or "failed") and detail = the JSON line verbatim, whatever the exit code.',
+    'If that line has only an "error" field, or no JSON line is printed, return status "failed" and detail = the error text or the command output.',
   ].join('\n')
 }
 
 function resumePrompt(run, dir, status, detail) {
   return [
     `Follow the instructions in ${REPO}/eval/novel/agents/resume-note.md.`,
-    `Inputs: dir = ${REPO}/${dir}, status = ${status}, detail = ${detail}, date = ${date}, runs = ${JSON.stringify(runs)}, chapters = ${chapters}.`,
+    `Inputs: root = ${REPO}, dir = ${REPO}/${dir}, status = ${status}, detail = ${detail}, date = ${date}, runs = ${JSON.stringify(runs)}, chapters = ${chapters}.`,
     'Write RESUME.md in dir as the instructions say.',
   ].join('\n')
 }
@@ -195,17 +301,68 @@ function summaryPrompt(results) {
   })
   return [
     `Follow the instructions in ${REPO}/eval/novel/agents/summary.md.`,
-    `Inputs: date = ${date}, runs = ${JSON.stringify(list)}.`,
-    'Also read every review document in docs/eval/novel/<date>/ named <model>-<lang>.md, including runs from earlier invocations that are not listed in runs.',
-    `Write ${REPO}/docs/eval/novel/${date}/summary.md as the instructions say.`,
+    `Inputs: root = ${REPO}, date = ${date}, runs = ${JSON.stringify(list)}.`,
+    `Also read every review document in ${REPO}/docs/eval/novel/${date}/ named <model>-<lang>.md, including runs from earlier invocations that are not listed in runs.`,
+    `Also read every second review in ${REPO}/docs/eval/novel/${date}/second/ named <model>-<lang>.md, if any.`,
+    `Write ${REPO}/${summaryResultPath()} as the instructions say. Do not write under docs/.`,
   ].join('\n')
 }
 
 const reviews = []
 const results = []
 
+// A copy failure a retry cannot fix: the source is missing, or the CLI refused the paths.
+const NO_RETRY = /source not found|publish: src must be under/
+
+// Runs one copy command through a runner agent, at most two runner calls. A step whose status is in
+// accept ends the loop and is returned. A failure a retry cannot fix ends it at once.
+async function copyCommand(prompt, label, accept) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const step = await agentLogged(prompt, {
+      label,
+      phase: 'Review',
+      model: 'haiku',
+      schema: RUNNER_SCHEMA,
+    })
+    const status = runnerStatus(step)
+    if (accept.includes(status)) return step
+    const detail = step && typeof step.detail === 'string' ? step.detail : 'no result'
+    log(`${label}: ${status}: ${detail}`)
+    if (NO_RETRY.test(detail)) break
+  }
+  return null
+}
+
+// Copies a run-side file into docs. An existing docs file is kept when ifMissing is set (skipped).
+// Returns the accepted runner step (its detail is the JSON line), or null when the copy failed.
+async function publish(src, dest, ifMissing, label) {
+  const accept = ifMissing ? ['copied', 'skipped'] : ['copied']
+  const step = await copyCommand(publishPrompt(src, dest, ifMissing), `publish ${label}`, accept)
+  if (step === null) return null
+  log(`publish ${label}: ${runnerStatus(step)}`)
+  return step
+}
+
+// Copies a finished run's review into docs. The header step adds the model line to <dir>/review.md
+// and writes the docs copy; the copy then puts that run-side file into docs with the retried publish.
+// With second, the same steps write the second review: review-2.md on the run side and docs/second.
+async function copyReview(run, dir, label, second) {
+  const header = await copyCommand(
+    reviewHeaderPrompt(run, dir, second),
+    `review header ${label}${second ? ' second' : ''}`,
+    ['copied'],
+  )
+  if (header === null) return null
+  if (second) {
+    return publish(`${dir}/review-2.md`, docsSecondReviewPath(run), false, `${label} second`)
+  }
+  return publish(`${dir}/review.md`, docsReviewPath(run), false, label)
+}
+
 // Reviews a finished run and copies the review into docs. A run that already has review.md keeps
-// it (its notes are never overwritten) unless args.rereview is true. Returns null on failure.
+// it (its notes are never overwritten) unless args.rereview is true; then only a missing docs copy
+// is made. Returns 'skipped' when the review was kept, the copy's detail when a review was written,
+// or null on failure.
 async function reviewRun(run, dir, label) {
   if (!rereview) {
     const found = await agentLogged(reviewExistsPrompt(dir), {
@@ -216,7 +373,9 @@ async function reviewRun(run, dir, label) {
     })
     const foundStatus = runnerStatus(found)
     if (foundStatus === 'exists') {
-      log(`${label}: review.md exists, review and copy skipped (args.rereview is not true)`)
+      const copied = await publish(`${dir}/review.md`, docsReviewPath(run), true, label)
+      if (copied === null) return null
+      log(`${label}: review.md exists, reviewer skipped; docs copy: ${runnerStatus(copied)}`)
       return 'skipped'
     }
     if (foundStatus !== 'missing') {
@@ -224,7 +383,17 @@ async function reviewRun(run, dir, label) {
       return null
     }
   }
-  const reviewed = await agentLogged(reviewerPrompt(dir, run.lang), {
+  const blinded = await agentLogged(blindPrompt(dir), {
+    label: `blind ${label}`,
+    phase: 'Review',
+    model: 'haiku',
+    schema: RUNNER_SCHEMA,
+  })
+  if (runnerStatus(blinded) !== 'blinded') {
+    log(`${label}: blind copy did not succeed: ${blinded ? blinded.detail : 'no result'}`)
+    return null
+  }
+  const reviewed = await agentLogged(reviewerPrompt(blindDir(run), run.lang), {
     label: `review ${label}`,
     phase: 'Review',
     model: 'sonnet',
@@ -233,17 +402,89 @@ async function reviewRun(run, dir, label) {
     log(`${label}: review returned no result, copy skipped`)
     return null
   }
-  const copied = await agentLogged(copyPrompt(run, dir), {
-    label: `copy review ${label}`,
+  const copied = await copyReview(run, dir, label)
+  if (copied === null) {
+    log(`${label}: review copy did not succeed`)
+    return null
+  }
+  return copied.detail
+}
+
+// Asks the gate whether a finished run sits near the pass line. When it does, a second reviewer
+// scores it from its own blinded copy (blind-2) and writes review-2.md. Returns 'off', 'not-needed',
+// 'already-done' or 'reviewed', or null when the second review did not finish. The caller does not
+// let a failure here fail the run.
+async function secondReviewRun(run, dir, label) {
+  if (!secondReview) return 'off'
+  const gate = await agentLogged(gatePrompt(dir), {
+    label: `gate ${label}`,
     phase: 'Review',
     model: 'haiku',
     schema: RUNNER_SCHEMA,
   })
-  if (runnerStatus(copied) !== 'copied') {
-    log(`${label}: review copy did not succeed: ${copied ? copied.detail : 'no result'}`)
+  const decision = runnerStatus(gate)
+  const detail = gate && typeof gate.detail === 'string' ? gate.detail : 'no result'
+
+  if (decision === 'not-needed') {
+    log(`${label}: second review not needed`)
+    return 'not-needed'
+  }
+  if (decision === 'already-done') {
+    const copied = await publish(
+      `${dir}/review-2.md`,
+      docsSecondReviewPath(run),
+      true,
+      `${label} second`,
+    )
+    if (copied === null) return null
+    log(`${label}: review-2.md exists, second reviewer skipped`)
+    return 'already-done'
+  }
+  if (decision !== 'needed') {
+    log(`${label}: review gate did not decide, second review skipped: ${detail}`)
     return null
   }
-  return copied.detail
+
+  log(`${label}: near the pass line, second review: ${detail}`)
+  const blinded = await agentLogged(blindPrompt(dir, true), {
+    label: `blind 2 ${label}`,
+    phase: 'Review',
+    model: 'haiku',
+    schema: RUNNER_SCHEMA,
+  })
+  if (runnerStatus(blinded) !== 'blinded') {
+    log(`${label}: second blind copy did not succeed: ${blinded ? blinded.detail : 'no result'}`)
+    return null
+  }
+  // Same prompt text as the first reviewer: the second reviewer is not told it is second.
+  const reviewed = await agentLogged(reviewerPrompt(blindDir2(run), run.lang), {
+    label: `review 2 ${label}`,
+    phase: 'Review',
+    model: 'sonnet',
+  })
+  if (reviewed === null) {
+    log(`${label}: second review returned no result, copy skipped`)
+    return null
+  }
+  const copied = await copyReview(run, dir, label, true)
+  if (copied === null) {
+    log(`${label}: second review copy did not succeed`)
+    return null
+  }
+  return 'reviewed'
+}
+
+// The first review, then the near-the-line check. A second review failure is logged and ignored, so
+// the run keeps its first review. Returns the first review's result (null when it failed).
+async function reviewAndGate(run, dir, label) {
+  const first = await reviewRun(run, dir, label)
+  if (first === null) return null
+  try {
+    await secondReviewRun(run, dir, label)
+  } catch (err) {
+    log(`${label}: second review error: ${errorText(err)}`)
+  }
+  return first
 }
 
 // Returns the run's final status. Throws only for errors the caller must record.
@@ -307,7 +548,7 @@ async function executeRun(run) {
 
     if (status === 'done') {
       reviews.push(
-        reviewRun(run, dir, label).catch((err) => {
+        reviewAndGate(run, dir, label).catch((err) => {
           log(`${label}: review error: ${errorText(err)}`)
           return null
         }),
@@ -368,11 +609,17 @@ log(`reviews finished: ${reviewResults.filter(Boolean).length}/${reviews.length}
 
 if (withSummary) {
   phase('Summary')
-  await agentLogged(summaryPrompt(results), {
+  const summary = await agentLogged(summaryPrompt(results), {
     label: 'summary',
     phase: 'Summary',
     model: 'sonnet',
   })
+  if (summary === null) {
+    log('summary copy skipped: the summary agent returned no result')
+  } else {
+    const copied = await publish(summaryResultPath(), docsSummaryPath(), false, 'summary')
+    log(`summary copy: ${copied === null ? 'failed' : 'copied'}`)
+  }
 } else {
   log('summary skipped (args.summary is not true)')
 }

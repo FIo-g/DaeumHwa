@@ -58,6 +58,7 @@ function fact(overrides: Partial<FactRow>): FactRow {
     evidence: '',
     validFromPosition: null,
     validToPosition: null,
+    revealAtPosition: null,
     supersededByFactId: null,
     createdByType: 'author',
     archivedAt: null,

@@ -70,3 +70,22 @@ export function scoreIssues(expected: ExpectedIssue[], found: FoundIssue[]): Iss
     recall: expected.length === 0 ? 1 : hits / expected.length,
   }
 }
+
+/**
+ * Found issues that hit a notDefect (a sentence the answer key says is correct). Only the found
+ * quote containing the trap fragment counts. The reverse direction used by `isHit` is left out,
+ * so a very short found quote cannot count as a trap false positive.
+ */
+export function scoreNotDefects(
+  notDefects: { chapter: number; quoteIncludes: string }[],
+  found: FoundIssue[],
+): FoundIssue[] {
+  return found.filter((issue) =>
+    notDefects.some(
+      (trap) =>
+        trap.chapter === issue.chapter &&
+        trap.quoteIncludes !== '' &&
+        issue.quote.includes(trap.quoteIncludes),
+    ),
+  )
+}

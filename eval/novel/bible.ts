@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { IMPORTANCE } from '@/db/types'
@@ -87,4 +87,47 @@ export function bibleDir(lang: 'ko' | 'en'): string {
 export function loadBible(lang: 'ko' | 'en'): Bible {
   const raw = readFileSync(path.join(bibleDir(lang), 'bible.json'), 'utf8')
   return BibleSchema.parse(JSON.parse(raw))
+}
+
+/** File name of a run's copy of the bible (--speech on runs). */
+export const RUN_BIBLE_FILE = 'bible.json'
+const SPEECH_LABEL = { ko: '말투', en: 'speech' } as const
+
+/**
+ * Copy of the bible whose answer bank also carries each character's voice. The input is not
+ * changed. Throws when a character has no answer bank entry, so a speech run never measures an
+ * incomplete bank.
+ */
+export function withVoicesInAnswerBank(bible: Bible): Bible {
+  const extra = new Map<string, string[]>() // bank key -> lines, in character order
+  for (const character of bible.characters) {
+    const voice = character.voice.trim()
+    if (voice === '') continue
+    const entry =
+      bible.answerBank.find((item) => item.topics.includes(character.name)) ??
+      bible.answerBank.find((item) => character.aliases.some((a) => item.topics.includes(a)))
+    if (!entry) throw new Error(`answer bank has no entry for character ${character.key}`)
+    const line = `${character.name} ${SPEECH_LABEL[bible.lang]}: ${voice}`
+    extra.set(entry.key, [...(extra.get(entry.key) ?? []), line])
+  }
+  return {
+    ...bible,
+    answerBank: bible.answerBank.map((item) => {
+      const lines = extra.get(item.key)
+      return lines ? { ...item, answer: `${item.answer} ${lines.join(' ')}` } : item
+    }),
+  }
+}
+
+/** Writes a run's bible copy into the run directory. */
+export function writeRunBible(dir: string, bible: Bible): void {
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(path.join(dir, RUN_BIBLE_FILE), JSON.stringify(bible, null, 2) + '\n')
+}
+
+/** The run's bible copy when it exists, otherwise the fixture for the language. */
+export function loadRunBible(dir: string, lang: 'ko' | 'en'): Bible {
+  const file = path.join(dir, RUN_BIBLE_FILE)
+  if (!existsSync(file)) return loadBible(lang)
+  return BibleSchema.parse(JSON.parse(readFileSync(file, 'utf8')))
 }

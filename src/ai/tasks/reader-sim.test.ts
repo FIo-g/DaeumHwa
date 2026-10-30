@@ -57,6 +57,7 @@ describe('readerSimTask', () => {
       '- reaction은 confused(헷갈림), bored(지루함), excited(몰입), dropoff(이탈 위험), moved(감동) 중 하나다.',
       '- rating은 1~5 정수, dropOffRisk는 low, medium, high 중 하나다.',
       '- 칭찬과 문제점을 모두 구체적으로 쓰고, 작가가 고칠 수 있는 지점을 짚는다.',
+      '- 이전 회차에 대해서는 <previous_summaries>에 적힌 내용만 말한다. 거기에 없는 이전 회차를 읽었다거나, 이전 회차에서 비슷한 표현을 본 적 있다고 쓰지 않는다. (없음)이면 이번 원고만 근거로 삼는다.',
       TAG_DATA_RULE,
       '- 모든 출력은 한국어로 쓴다.',
     ])

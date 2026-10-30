@@ -19,8 +19,12 @@ import {
 } from '@/ai/types'
 
 const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
-/** Per-call overrides: the caller's cancel signal and time limit. */
-type CallOptions = { signal?: AbortSignal; timeoutMs?: number }
+/** Per-call overrides: the caller's cancel signal, time limit, and headers. */
+type CallOptions = {
+  signal?: AbortSignal
+  timeoutMs?: number
+  headers?: Record<string, string>
+}
 const FORMAT_NAME = 'daeumhwa_answer'
 /** A 400 that names the structured-output parameter. Triggers one JSON-mode retry. */
 const FORMAT_REJECTED = /text\.format|json_schema|response_format/i
@@ -59,7 +63,11 @@ type ResponseBody = {
   status?: string
   incomplete_details?: { reason?: string } | null
   output?: OutputItem[]
-  usage?: { input_tokens?: number; output_tokens?: number }
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    input_tokens_details?: { cached_tokens?: number } | null
+  }
   error?: { message?: string } | null
 }
 
@@ -182,18 +190,31 @@ export class ResponsesAiClient implements AiClient {
 
   private requestBody(
     input: string,
-    args: { system: string; maxTokens: number; effort: AiEffort },
+    args: {
+      system: string
+      maxTokens: number
+      effort: AiEffort
+      promptPrefix?: string[]
+      cacheKey?: string
+    },
     model: string,
     mode: Mode,
   ): Record<string, unknown> {
+    // The prefix blocks come first, then the prompt; without a prefix this is one part, as before.
+    const parts = [...(args.promptPrefix ?? []), input].map((text) => ({
+      type: 'input_text',
+      text,
+    }))
     const body: Record<string, unknown> = {
       model,
       instructions: args.system,
-      input: [{ role: 'user', content: [{ type: 'input_text', text: input }] }],
+      input: [{ role: 'user', content: parts }],
       max_output_tokens: args.maxTokens,
       store: false,
     }
     if (mode.reasoning) body.reasoning = { effort: reasoningEffortFor(args.effort) }
+    if (args.cacheKey && isPromptCacheKeyEnabled()) body.prompt_cache_key = args.cacheKey
+    if (isCacheRetentionEnabled()) body.prompt_cache_retention = '24h'
     return body
   }
 
@@ -202,6 +223,7 @@ export class ResponsesAiClient implements AiClient {
       'content-type': 'application/json',
       ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
       ...this.headers,
+      ...call.headers,
     }
     const payload = JSON.stringify(body)
     const timeoutMs = call.timeoutMs ?? this.timeoutMs
@@ -300,6 +322,22 @@ export class ResponsesAiClient implements AiClient {
   }
 }
 
+/**
+ * `AI_PROMPT_CACHE_KEY` set to 1, true or on sends `prompt_cache_key`. Off by default until the
+ * gateway is shown to accept the field (see `probe-gateway --cache-key`).
+ */
+export function isPromptCacheKeyEnabled(): boolean {
+  return /^(1|true|on)$/i.test(process.env.AI_PROMPT_CACHE_KEY?.trim() ?? '')
+}
+
+/**
+ * `AI_CACHE_RETENTION` set to `24h` sends `prompt_cache_retention: '24h'` so cached
+ * input stays available for a day. Anything else (including unset) sends nothing.
+ */
+export function isCacheRetentionEnabled(): boolean {
+  return process.env.AI_CACHE_RETENTION?.trim() === '24h'
+}
+
 /** Maps OpenCode Go effort levels to the Responses reasoning effort. xhigh and max become high. */
 export function reasoningEffortFor(effort: AiEffort): 'low' | 'medium' | 'high' {
   if (effort === 'low') return 'low'
@@ -373,14 +411,32 @@ function textOf(output: OutputItem[] | undefined): string {
 }
 
 function usageOf(usage: ResponseBody['usage']): AiUsage {
-  return { inputTokens: usage?.input_tokens ?? 0, outputTokens: usage?.output_tokens ?? 0 }
+  const result: AiUsage = {
+    inputTokens: usage?.input_tokens ?? 0,
+    outputTokens: usage?.output_tokens ?? 0,
+  }
+  // Cached input is part of input_tokens here; the key is set only when the gateway reported it.
+  const cached = usage?.input_tokens_details?.cached_tokens
+  if (typeof cached === 'number') result.cacheReadTokens = cached
+  return result
 }
 
 function addUsage(a: AiUsage, b: AiUsage): AiUsage {
-  return {
+  const result: AiUsage = {
     inputTokens: a.inputTokens + b.inputTokens,
     outputTokens: a.outputTokens + b.outputTokens,
   }
+  const cacheRead = sumCache(a.cacheReadTokens, b.cacheReadTokens)
+  const cacheWrite = sumCache(a.cacheWriteTokens, b.cacheWriteTokens)
+  if (cacheRead !== undefined) result.cacheReadTokens = cacheRead
+  if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite
+  return result
+}
+
+/** Sum of two optional cache counts; undefined when neither side has the key. */
+function sumCache(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined && b === undefined) return undefined
+  return (a ?? 0) + (b ?? 0)
 }
 
 /** Usage billed by one failed attempt, so the retry counts still include it. */

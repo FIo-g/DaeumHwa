@@ -2,11 +2,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { PROPOSAL_TYPES } from '@/db/types'
 import {
   AnswerSchema,
   PendingSchema,
   clearPending,
   logDecision,
+  proposalLabel,
   readAnswer,
   readPending,
   writePending,
@@ -230,6 +232,73 @@ describe('logDecision', () => {
     const lines = readFileSync(path.join(dir, 'author-decisions.jsonl'), 'utf8').trim().split('\n')
     expect(lines).toHaveLength(2)
     expect(JSON.parse(lines[0])).toMatchObject({ step: 'ch1:draft', kind: 'draft_review' })
+  })
+})
+
+describe('proposalLabel', () => {
+  it.each([
+    ['entry_create', { name: '해연' }, '해연'],
+    ['entry_update', { entryName: '해연' }, '해연'],
+    ['fact_create', { subjectName: '해연', content: '열쇠를 쥔다' }, '해연: 열쇠를 쥔다'],
+    ['thread_create', { title: '봉인' }, '봉인'],
+    ['thread_event', { threadTitle: '봉인', kind: 'developed' }, '봉인: developed'],
+    ['relation_create', { sourceName: 'A', targetName: 'B', kind: '동료' }, 'A -> B (동료)'],
+    ['chapter_summary', { summary: '1화 요약' }, '1화 요약'],
+    ['style_card', { name: '해연 말투' }, '해연 말투'],
+  ] as const)('names a %s proposal', (type, payload, label) => {
+    expect(proposalLabel(type, payload)).toBe(label)
+  })
+
+  it('gives an empty label for an empty payload of every type', () => {
+    for (const type of PROPOSAL_TYPES) {
+      expect(proposalLabel(type, {})).toBe('')
+    }
+  })
+
+  it('gives an empty label when a name field is not a string', () => {
+    expect(proposalLabel('entry_create', { name: 5 })).toBe('')
+  })
+
+  it('cuts a label at 120 characters', () => {
+    expect(proposalLabel('entry_create', { name: 'a'.repeat(300) })).toHaveLength(120)
+  })
+})
+
+describe('logDecision details', () => {
+  it('stores item labels for proposals', () => {
+    logDecision(dir, proposals, {
+      kind: 'proposals',
+      decisions: [
+        { id: 'a', approve: true, reason: 'ok' },
+        { id: 'b', approve: false, reason: 'x' },
+      ],
+    })
+    const line = JSON.parse(readFileSync(path.join(dir, 'author-decisions.jsonl'), 'utf8'))
+    expect(line.items).toEqual([
+      { id: 'a', type: 'entry_create', label: '해연', approve: true, reason: 'ok' },
+      { id: 'b', type: 'thread_create', label: '봉인', approve: false, reason: 'x' },
+    ])
+    expect(line).toMatchObject({
+      step: 'ch1:proposals',
+      kind: 'proposals',
+      answer: {
+        kind: 'proposals',
+        decisions: [
+          { id: 'a', approve: true, reason: 'ok' },
+          { id: 'b', approve: false, reason: 'x' },
+        ],
+      },
+    })
+  })
+
+  it('stores topic and question for interview answers', () => {
+    logDecision(dir, interviewPending, { kind: 'interview_answer', answer: '세 겹', bankKeys: [] })
+    const line = JSON.parse(readFileSync(path.join(dir, 'author-decisions.jsonl'), 'utf8'))
+    expect(line).toMatchObject({
+      topic: '도시',
+      question: '도시의 성벽은 몇 겹인가요?',
+    })
+    expect(line.items).toBeUndefined()
   })
 })
 

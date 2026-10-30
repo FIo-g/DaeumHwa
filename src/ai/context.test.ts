@@ -248,3 +248,94 @@ describe('renderContextPack', () => {
     expect(text).toContain('<naming>')
   })
 })
+
+describe('buildContextPack with keepNamed', () => {
+  it('keeps a compound-only name out by default (draft path)', async () => {
+    await createTestEntry(db, workId, { name: '잿빛 종루', aliases: ['종루'] })
+    const pack = await buildContextPack(db, workId, {
+      text: '종루지기가 문을 열었다.',
+      position: 1,
+    })
+    expect(pack.entries).toEqual([])
+  })
+
+  it('adds a compound-only card after the mention cards', async () => {
+    await createTestEntry(db, workId, { name: '이서윤', aliases: ['서윤'] })
+    await createTestEntry(db, workId, { name: '잿빛 종루', aliases: ['종루'] })
+    const pack = await buildContextPack(db, workId, {
+      text: '서윤이 왔다. 종루지기가 웃었다.',
+      position: 1,
+      keepNamed: true,
+    })
+    expect(pack.entries.map((e) => e.name)).toEqual(['이서윤', '잿빛 종루'])
+    expect(pack.entries.map((e) => e.ref)).toEqual(['E1', 'E2'])
+  })
+
+  it('keeps a named entry over budget and trims its facts instead', async () => {
+    const seoyun = await createTestEntry(db, workId, { name: '이서윤', aliases: ['서윤'] })
+    for (let i = 0; i < 10; i++) {
+      await createTestFact(db, workId, { entryId: seoyun.id, content: '가'.repeat(100) })
+    }
+    await createTestEntry(db, workId, { name: '민준', summary: '가'.repeat(600) })
+    const pack = await buildContextPack(db, workId, {
+      text: '서윤은 웃었다. 서윤은 떠났다. 서윤은 왔다. 민준은 울었다.',
+      position: 1,
+      budgetChars: 1500,
+      keepNamed: true,
+    })
+    expect(pack.entries.map((e) => e.name)).toEqual(['이서윤', '민준'])
+    expect(pack.stats.approxChars).toBeLessThanOrEqual(1500)
+    expect(pack.entries[0].facts.length).toBeLessThan(10)
+  })
+
+  it('returns all named entries without throwing when the budget is impossible', async () => {
+    const seoyun = await createTestEntry(db, workId, { name: '이서윤', aliases: ['서윤'] })
+    for (let i = 0; i < 10; i++) {
+      await createTestFact(db, workId, { entryId: seoyun.id, content: '가'.repeat(100) })
+    }
+    await createTestEntry(db, workId, { name: '민준', summary: '가'.repeat(600) })
+    const pack = await buildContextPack(db, workId, {
+      text: '서윤은 웃었다. 서윤은 떠났다. 서윤은 왔다. 민준은 울었다.',
+      position: 1,
+      budgetChars: 50,
+      keepNamed: true,
+    })
+    expect(pack.entries.map((e) => e.name)).toEqual(['이서윤', '민준'])
+    expect(pack.entries.every((e) => e.facts.length === 0)).toBe(true)
+  })
+
+  it('bounds the overflow of named entries', async () => {
+    const text: string[] = []
+    for (let i = 0; i < 40; i++) {
+      const name = `인물${String.fromCharCode(0xac00 + i)}`
+      const entry = await createTestEntry(db, workId, { name, summary: '가'.repeat(300) })
+      for (let f = 0; f < 3; f++) {
+        await createTestFact(db, workId, { entryId: entry.id, content: '나'.repeat(100) })
+      }
+      text.push(name)
+    }
+    const pack = await buildContextPack(db, workId, {
+      text: text.join(' '),
+      position: 1,
+      budgetChars: 2000,
+      keepNamed: true,
+    })
+    expect(pack.entries).toHaveLength(40)
+    expect(pack.entries.every((e) => e.facts.length === 0)).toBe(true)
+    expect(pack.entries.every((e) => e.summary.length <= 201)).toBe(true)
+    expect(pack.stats.approxChars).toBeLessThanOrEqual(40 * 400)
+  })
+
+  it('does not protect an extra entry id when trimming', async () => {
+    await createTestEntry(db, workId, { name: '이서윤', aliases: ['서윤'] })
+    const extra = await createTestEntry(db, workId, { name: '민준', summary: '가'.repeat(600) })
+    const pack = await buildContextPack(db, workId, {
+      text: '서윤은 웃었다.',
+      position: 1,
+      extraEntryIds: [extra.id],
+      budgetChars: 500,
+      keepNamed: true,
+    })
+    expect(pack.entries.map((e) => e.name)).toEqual(['이서윤'])
+  })
+})
