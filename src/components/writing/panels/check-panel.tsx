@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
@@ -31,13 +31,14 @@ type CheckPanelProps = {
   data: WritingData
   api: WorkspaceApi
   text: string
+  autoRun?: boolean
 }
 
 /**
  * Chapter check (F7). Runs the saved chapter through the naming rules, the continuity check and
  * chapter extraction. Each open issue shows the manuscript sentence next to its wiki evidence.
  */
-export function CheckPanel({ data, api, text }: CheckPanelProps) {
+export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
   const editable = canEditChapter(data)
   const [issues, setIssues] = useState<IssueRow[]>(data.issues)
   // Re-sync when the page reloads the chapter's open issues.
@@ -76,7 +77,7 @@ export function CheckPanel({ data, api, text }: CheckPanelProps) {
     return () => api.setHighlights('check', [])
   }, [api])
 
-  async function runCheck() {
+  async function runCheck(opts?: { openApproval?: boolean }) {
     // A route handler, not a Server Action: the check can run for minutes, and Server Actions
     // run one at a time, so autosave and navigation would wait behind it.
     const result = await ai.run(async (signal) => {
@@ -92,9 +93,22 @@ export function CheckPanel({ data, api, text }: CheckPanelProps) {
     })
     if (!result) return
     setIssues(result.issues)
-    if (result.proposals.length > 0) setApprovalOpen(true)
+    if ((opts?.openApproval ?? true) && result.proposals.length > 0) setApprovalOpen(true)
     api.refresh()
   }
+
+  const autoRan = useRef(false)
+  const runCheckRef = useRef(runCheck)
+  useEffect(() => {
+    runCheckRef.current = runCheck
+  })
+  useEffect(() => {
+    if (!autoRun || !editable) return
+    if (autoRan.current) return
+    autoRan.current = true
+    void runCheckRef.current({ openApproval: false })
+    window.history.replaceState(null, '', window.location.pathname)
+  }, [autoRun, editable])
 
   function focusIssue(issue: IssueRow) {
     const range = rangeOf(text, issue.quote, issue.quoteStart)

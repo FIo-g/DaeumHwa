@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { isSampleChapter } from '@/lib/client/sample-session'
 import { CheckPanel } from './panels/check-panel'
 import { CommentsPanel } from './panels/comments-panel'
 import { DraftPanel } from './panels/draft-panel'
@@ -27,8 +28,11 @@ const TABS: { value: TabKey; label: string }[] = [
  * The writing screen's side panels. Every panel stays mounted (inactive ones are hidden), so a
  * running draft or a loaded check result survives switching tabs.
  */
-export function WritingSidePanel({ data, api, text, position }: WritingSidePanelProps) {
-  const [tab, setTab] = useState<TabKey>('related')
+export function WritingSidePanel({ data, api, text, position, autoCheck }: WritingSidePanelProps) {
+  // The panel only mounts on the client (after the layout effect), so the session read is safe.
+  const [tab, setTab] = useState<TabKey>(() =>
+    autoCheck || isSampleChapter(data.chapter.id) ? 'check' : 'related',
+  )
 
   return (
     <div data-chapter-position={position} className="flex min-w-0 flex-col gap-3">
@@ -55,7 +59,7 @@ export function WritingSidePanel({ data, api, text, position }: WritingSidePanel
           <OpenThreads data={data} api={api} />
         </TabsContent>
         <TabsContent value="check" keepMounted>
-          <CheckPanel data={data} api={api} text={text} />
+          <CheckPanel data={data} api={api} text={text} autoRun={autoCheck} />
         </TabsContent>
         <TabsContent value="proofread" keepMounted>
           <ProofreadPanel data={data} api={api} text={text} />

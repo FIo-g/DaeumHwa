@@ -32,6 +32,7 @@ type WritingWorkspaceProps = {
   loadServerCopy: LoadServerCopy
   /** Signed-in user, so device drafts are kept per user. Without it no draft is kept on this device. */
   userId?: string
+  autoCheck?: boolean
 }
 
 const ignore = () => {}
@@ -40,7 +41,12 @@ const ignore = () => {}
  * The writing screen: toolbar, manuscript editor and the side panel. Owns the autosave loop and
  * exposes the WorkspaceApi that side panels use to read and change the text.
  */
-export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorkspaceProps) {
+export function WritingWorkspace({
+  data,
+  loadServerCopy,
+  userId,
+  autoCheck,
+}: WritingWorkspaceProps) {
   const router = useRouter()
   const { chapter, role, workId } = data
   const canEdit = (role === 'owner' || role === 'editor') && !chapter.archivedAt
@@ -231,7 +237,7 @@ export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorksp
     router.refresh()
   }
 
-  const panelProps = { data, api, text: body, position: chapter.position }
+  const panelProps = { data, api, text: body, position: chapter.position, autoCheck }
 
   const mobilePanel = wide ? null : (
     <Sheet>
