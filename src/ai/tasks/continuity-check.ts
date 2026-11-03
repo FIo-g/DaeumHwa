@@ -1,6 +1,13 @@
 import { z } from 'zod'
-import { type ContextPack, renderContextPack, resolveRefs } from '@/ai/context'
+import {
+  type ContextPack,
+  type PackEntry,
+  type PackFact,
+  renderContextPack,
+  resolveRefs,
+} from '@/ai/context'
 import { findNumericFactMismatches } from '@/ai/numeric-facts'
+import { stripPackRefs } from '@/ai/pack-refs'
 import { neutralizeDeep, TAG_DATA_RULE } from '@/ai/prompt-utils'
 import type { AiTaskDef } from '@/ai/types'
 import { ISSUE_KINDS, type IssueKind, SEVERITIES, type Severity } from '@/db/types'
@@ -105,22 +112,25 @@ function numericIssues(input: ContinuityInput): ContinuityIssue[] {
   }
 }
 
-/**
- * Locates each issue's quote in the chapter and resolves its refs. Drops issues whose quote is not
- * in the chapter, issues with neither a valid fact nor a valid entry ref, and duplicate ranges.
- */
-function locateIssues(
-  output: ContinuityOutput,
-  input: ContinuityInput,
-): {
+/** A located issue plus the pack records its refs resolved to. */
+type LocatedIssue = {
   issue: ContinuityIssue
   start: number
   end: number
   factId: string | null
   entryId: string | null
-}[] {
+  /** The resolved pack records, kept so the evidence text can come from the wiki, not the model. */
+  fact: (PackFact & { entryId: string }) | undefined
+  entry: PackEntry | undefined
+}
+
+/**
+ * Locates each issue's quote in the chapter and resolves its refs. Drops issues whose quote is not
+ * in the chapter, issues with neither a valid fact nor a valid entry ref, and duplicate ranges.
+ */
+function locateIssues(output: ContinuityOutput, input: ContinuityInput): LocatedIssue[] {
   const { facts, entries } = resolveRefs(input.pack)
-  const located: ReturnType<typeof locateIssues> = []
+  const located: LocatedIssue[] = []
   const seen = new Set<string>()
   for (const issue of output.issues) {
     const range = locateQuote(input.chapterText, issue.quote)
@@ -145,9 +155,31 @@ function locateIssues(
       end: range.end,
       factId: fact?.id ?? null,
       entryId: entry?.id ?? fact?.entryId ?? null,
+      fact,
+      entry,
     })
   }
   return located
+}
+
+/** Every text the card shows: its name, aliases, summary and field values. */
+function entryText(entry: PackEntry): string {
+  return [entry.name, ...entry.aliases, entry.summary, ...Object.values(entry.fields)].join('\n')
+}
+
+/**
+ * The evidence cell quotes the wiki, not the model. A fact ref gives the fact's own content. An
+ * entry ref keeps the model text only when the card itself contains it, and uses the card summary
+ * otherwise. Without a resolved record the model text stays, minus the leaked refs.
+ */
+function evidenceText(located: LocatedIssue): string {
+  const ai = stripPackRefs(located.issue.wikiExcerpt)
+  if (located.fact) return located.fact.content
+  if (located.entry) {
+    if (ai && entryText(located.entry).includes(ai)) return ai
+    return located.entry.summary || ai
+  }
+  return ai
 }
 
 /** Post-processed issues with record ids and quote offsets (used by chapter-check). */
@@ -163,8 +195,8 @@ export function resolveContinuityIssues(
     severity: l.issue.severity,
     factId: l.factId,
     entryId: l.entryId,
-    wikiExcerpt: l.issue.wikiExcerpt,
-    explanation: l.issue.explanation,
+    wikiExcerpt: evidenceText(l),
+    explanation: stripPackRefs(l.issue.explanation),
     suggestion: l.issue.suggestion,
   }))
 }
