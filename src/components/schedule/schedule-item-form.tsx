@@ -17,47 +17,69 @@ import { Textarea } from '@/components/ui/textarea'
 import { SCHEDULE_KINDS, type ScheduleKind } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { SCHEDULE_KIND_LABEL } from '@/lib/labels'
-import { createScheduleItemAction } from '@/server/actions/schedule'
+import { createScheduleItemAction, updateScheduleItemAction } from '@/server/actions/schedule'
+import type { ScheduleItemView } from './schedule-item-list'
 
 type ScheduleItemFormProps = {
   workId: string
   /** Default start date (today in Seoul). */
   today: string
   chapters: { id: string; position: number; title: string }[]
+  /** When given, the form edits this item instead of adding a new one. */
+  item?: ScheduleItemView
+  onDone?: () => void
 }
 
-/** Adds a schedule item: deadline, publish, hiatus, or other event. Editor only. */
-export function ScheduleItemForm({ workId, today, chapters }: ScheduleItemFormProps) {
+/** Adds a schedule item or edits an existing one: deadline, publish, hiatus, or other event. Editor only. */
+export function ScheduleItemForm({ workId, today, chapters, item, onDone }: ScheduleItemFormProps) {
   const router = useRouter()
-  const [kind, setKind] = useState<ScheduleKind>('deadline')
-  const [title, setTitle] = useState('')
-  const [date, setDate] = useState(today)
-  const [endDate, setEndDate] = useState('')
-  const [chapterId, setChapterId] = useState<string | null>(null)
-  const [note, setNote] = useState('')
+  const [kind, setKind] = useState<ScheduleKind>(item?.kind ?? 'deadline')
+  const [title, setTitle] = useState(item?.title ?? '')
+  const [date, setDate] = useState(item?.date ?? today)
+  const [endDate, setEndDate] = useState(item?.endDate ?? '')
+  const [chapterId, setChapterId] = useState<string | null>(item?.chapterId ?? null)
+  const [note, setNote] = useState(item?.note ?? '')
   const [pending, setPending] = useState(false)
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setPending(true)
     try {
-      const created = await runAction(
-        createScheduleItemAction({
-          workId,
-          kind,
-          title,
-          date,
-          endDate: kind === 'hiatus' && endDate ? endDate : null,
-          chapterId,
-          note,
-        }),
-        { success: '일정을 추가했습니다.' },
-      )
-      if (created) {
-        setTitle('')
-        setEndDate('')
-        setChapterId(null)
-        setNote('')
+      const resolvedEndDate = kind === 'hiatus' && endDate ? endDate : null
+      const saved = item
+        ? await runAction(
+            updateScheduleItemAction({
+              itemId: item.id,
+              kind,
+              title,
+              date,
+              endDate: resolvedEndDate,
+              chapterId,
+              note,
+            }),
+            { success: '일정을 고쳤습니다.' },
+          )
+        : await runAction(
+            createScheduleItemAction({
+              workId,
+              kind,
+              title,
+              date,
+              endDate: resolvedEndDate,
+              chapterId,
+              note,
+            }),
+            { success: '일정을 추가했습니다.' },
+          )
+      if (saved) {
+        if (item) {
+          onDone?.()
+        } else {
+          setTitle('')
+          setEndDate('')
+          setChapterId(null)
+          setNote('')
+        }
         router.refresh()
       }
     } finally {
@@ -142,7 +164,7 @@ export function ScheduleItemForm({ workId, today, chapters }: ScheduleItemFormPr
         />
       </div>
       <div className="sm:col-span-2">
-        <SubmitButton pending={pending}>일정 추가</SubmitButton>
+        <SubmitButton pending={pending}>{item ? '저장' : '추가'}</SubmitButton>
       </div>
     </form>
   )
