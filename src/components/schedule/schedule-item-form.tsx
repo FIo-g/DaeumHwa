@@ -164,7 +164,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
         />
       </div>
       <div className="sm:col-span-2">
-        <SubmitButton pending={pending}>{item ? '저장' : '추가'}</SubmitButton>
+        <SubmitButton pending={pending}>{item ? '저장' : '일정 추가'}</SubmitButton>
       </div>
     </form>
   )

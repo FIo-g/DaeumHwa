@@ -73,9 +73,9 @@ describe('ScheduleItemForm edit', () => {
 
     render(<ScheduleItemForm workId="w1" today="2026-11-10" chapters={[]} />)
 
-    expect(screen.getByRole('button', { name: '추가' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '일정 추가' })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '3화 마감' } })
-    fireEvent.click(screen.getByRole('button', { name: '추가' }))
+    fireEvent.click(screen.getByRole('button', { name: '일정 추가' }))
 
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     expect(create).toHaveBeenCalledWith(

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Db } from '@/db/client'
 import { AppError } from '@/lib/errors'
 import { createTestDb } from '@/test/db'
-import { createTestEntry, createTestUser, createTestWork } from '@/test/factories'
+import { createTestEntry, createTestFact, createTestUser, createTestWork } from '@/test/factories'
 import { createFact, updateFact } from './facts'
 
 const RANGE_START_MESSAGE = '유효 회차는 1 이상으로 적어 주세요.'
@@ -102,5 +102,19 @@ describe('fact valid range', () => {
     )
 
     expect(err.message).toBe(RANGE_ORDER_MESSAGE)
+  })
+
+  it('lets a status-only update succeed even when the stored range is invalid', async () => {
+    const { work, entry, actor } = await setup()
+    const stored = await createTestFact(db, work.id, {
+      content: '서윤은 왕녀다.',
+      entryId: entry.id,
+      validFromPosition: 5,
+      validToPosition: 2,
+    })
+
+    const updated = await updateFact(db, actor, stored.id, { status: 'assumed' })
+
+    expect(updated.status).toBe('assumed')
   })
 })

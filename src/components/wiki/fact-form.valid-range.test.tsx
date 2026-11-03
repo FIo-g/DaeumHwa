@@ -85,6 +85,23 @@ describe('FactFormDialog valid range', () => {
     expect(screen.getByLabelText('유효 시작 회차')).toHaveValue(2)
   })
 
+  it('keeps the native required check on the content field', async () => {
+    render(
+      <FactFormDialog
+        workId="w1"
+        mode="create"
+        entryId="e1"
+        chapters={[]}
+        triggerLabel="사실 추가"
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '사실 추가' }))
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+
+    expect(create).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('사실 내용')).toBeInvalid()
+  })
+
   it('rejects an end before the start without calling the action', async () => {
     render(
       <FactFormDialog

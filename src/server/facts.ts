@@ -352,11 +352,13 @@ export async function updateFact(
     set.revealAtPosition = requireReveal(patch.revealAtPosition)
   }
 
-  const mergedFrom =
-    patch.validFromPosition !== undefined ? patch.validFromPosition : current.validFromPosition
-  const mergedTo =
-    patch.validToPosition !== undefined ? patch.validToPosition : current.validToPosition
-  assertValidRange(mergedFrom, mergedTo)
+  if (patch.validFromPosition !== undefined || patch.validToPosition !== undefined) {
+    const mergedFrom =
+      patch.validFromPosition !== undefined ? patch.validFromPosition : current.validFromPosition
+    const mergedTo =
+      patch.validToPosition !== undefined ? patch.validToPosition : current.validToPosition
+    assertValidRange(mergedFrom, mergedTo)
+  }
 
   return db.transaction(async (tx) => {
     const [row] = await tx

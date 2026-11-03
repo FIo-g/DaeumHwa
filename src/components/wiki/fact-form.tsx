@@ -168,7 +168,7 @@ function FactFormFields({
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fact-content">사실 내용</Label>
         <Textarea
@@ -211,7 +211,6 @@ function FactFormFields({
             <Input
               id="fact-valid-from"
               type="number"
-              min={1}
               step={1}
               value={validFrom}
               onChange={(e) => setValidFrom(e.target.value)}
@@ -222,7 +221,6 @@ function FactFormFields({
             <Input
               id="fact-valid-to"
               type="number"
-              min={1}
               step={1}
               value={validTo}
               onChange={(e) => setValidTo(e.target.value)}
