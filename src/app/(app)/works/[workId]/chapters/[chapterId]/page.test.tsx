@@ -25,6 +25,7 @@ const chapter = { id: 'chapter-1', position: 3, title: '숨은 계약', body: ''
 async function renderPage() {
   const element = await ChapterWritingPage({
     params: Promise.resolve({ workId: 'work-1', chapterId: 'chapter-1' }),
+    searchParams: Promise.resolve({}),
   })
   return render(element)
 }

@@ -165,7 +165,12 @@ export function ScheduleView({ workId, today, canEdit, isOwner, input, items }: 
             </CardContent>
           </Card>
         )}
-        <ScheduleItemList items={items} chapters={input.chapters} canEdit={canEdit} />
+        <ScheduleItemList
+          workId={workId}
+          items={items}
+          chapters={input.chapters}
+          canEdit={canEdit}
+        />
       </section>
 
       <section aria-label="연재 설정" className="flex flex-col gap-3">

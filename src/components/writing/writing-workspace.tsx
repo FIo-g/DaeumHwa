@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CompleteConfirmDialog } from '@/components/chapters/complete-confirm-dialog'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import type { ChapterStatus } from '@/db/types'
 import { lengthShortfall, shortfallMessage } from '@/lib/chapter-length'
+import { isSampleChapter } from '@/lib/client/sample-session'
 import { type AutosaveInput, type AutosaveResult, useAutosave } from '@/lib/client/use-autosave'
 import { runAction } from '@/lib/client/run-action'
 import { countChars } from '@/lib/korean/chars'
@@ -32,6 +33,7 @@ type WritingWorkspaceProps = {
   loadServerCopy: LoadServerCopy
   /** Signed-in user, so device drafts are kept per user. Without it no draft is kept on this device. */
   userId?: string
+  autoCheck?: boolean
 }
 
 const ignore = () => {}
@@ -40,7 +42,12 @@ const ignore = () => {}
  * The writing screen: toolbar, manuscript editor and the side panel. Owns the autosave loop and
  * exposes the WorkspaceApi that side panels use to read and change the text.
  */
-export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorkspaceProps) {
+export function WritingWorkspace({
+  data,
+  loadServerCopy,
+  userId,
+  autoCheck,
+}: WritingWorkspaceProps) {
   const router = useRouter()
   const { chapter, role, workId } = data
   const canEdit = (role === 'owner' || role === 'editor') && !chapter.archivedAt
@@ -231,10 +238,17 @@ export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorksp
     router.refresh()
   }
 
-  const panelProps = { data, api, text: body, position: chapter.position }
+  // On a narrow screen the panel is inside a sheet. The sample auto check must run, and its panel
+  // only mounts while the sheet is open, so the sheet starts open for that case. An explicit
+  // close or open by the author wins over the default.
+  const sampleChapter = useIsSampleChapter(chapter.id)
+  const [panelOverride, setPanelOverride] = useState<boolean | null>(null)
+  const panelOpen = panelOverride ?? (autoCheck || sampleChapter)
+
+  const panelProps = { data, api, text: body, position: chapter.position, autoCheck }
 
   const mobilePanel = wide ? null : (
-    <Sheet>
+    <Sheet open={panelOpen} onOpenChange={setPanelOverride}>
       <SheetTrigger render={<Button variant="outline" size="sm" />}>패널 열기</SheetTrigger>
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
         <SheetHeader>
@@ -321,6 +335,19 @@ export function WritingWorkspace({ data, loadServerCopy, userId }: WritingWorksp
         }}
       />
     </div>
+  )
+}
+
+function subscribeNoop(): () => void {
+  return () => {}
+}
+
+/** Reads the per-tab sample flag after hydration, so the server and client first render agree. */
+function useIsSampleChapter(chapterId: string): boolean {
+  return useSyncExternalStore(
+    subscribeNoop,
+    () => isSampleChapter(chapterId),
+    () => false,
   )
 }
 

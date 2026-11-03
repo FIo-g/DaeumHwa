@@ -123,6 +123,8 @@ function FactItem({
                   sourceChapterId: fact.sourceChapterId,
                   evidence: fact.evidence,
                   revealAtPosition: fact.revealAtPosition,
+                  validFromPosition: fact.validFromPosition,
+                  validToPosition: fact.validToPosition,
                 }}
                 triggerLabel="내용 수정"
               />

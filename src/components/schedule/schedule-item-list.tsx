@@ -2,15 +2,24 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
 import { ConfirmButton } from '@/components/app/confirm-button'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import type { ScheduleKind } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { chapterLabel, SCHEDULE_KIND_LABEL } from '@/lib/labels'
 import { formatKoreanDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { deleteScheduleItemAction, setScheduleItemDoneAction } from '@/server/actions/schedule'
+import { ScheduleItemForm } from './schedule-item-form'
 
 export type ScheduleItemView = {
   id: string
@@ -24,6 +33,7 @@ export type ScheduleItemView = {
 }
 
 type ScheduleItemListProps = {
+  workId: string
   items: ScheduleItemView[]
   chapters: { id: string; position: number; title: string }[]
   canEdit: boolean
@@ -35,8 +45,39 @@ function itemDateText(item: ScheduleItemView): string {
   return `${formatKoreanDate(item.date)} ~ ${formatKoreanDate(item.endDate)}`
 }
 
-/** Schedule items in date order. Editors can mark them done or delete them. */
-export function ScheduleItemList({ items, chapters, canEdit }: ScheduleItemListProps) {
+/** Dialog that edits one schedule item, opened from the list. */
+function ScheduleItemEditDialog({
+  workId,
+  item,
+  chapters,
+}: {
+  workId: string
+  item: ScheduleItemView
+  chapters: { id: string; position: number; title: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>수정</DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>일정 수정</DialogTitle>
+        </DialogHeader>
+        <ScheduleItemForm
+          workId={workId}
+          today={item.date}
+          chapters={chapters}
+          item={item}
+          onDone={() => setOpen(false)}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Schedule items in date order. Editors can mark them done, edit them, or delete them. */
+export function ScheduleItemList({ workId, items, chapters, canEdit }: ScheduleItemListProps) {
   const router = useRouter()
   const [pendingId, setPendingId] = useState<string | null>(null)
   const chapterById = new Map(chapters.map((c) => [c.id, c]))
@@ -98,17 +139,20 @@ export function ScheduleItemList({ items, chapters, canEdit }: ScheduleItemListP
               {item.note && <p className="text-sm whitespace-pre-line">{item.note}</p>}
             </div>
             {canEdit && (
-              <ConfirmButton
-                title="일정을 삭제할까요?"
-                description="삭제한 일정은 되돌릴 수 없습니다."
-                confirmLabel="삭제"
-                variant="ghost"
-                size="sm"
-                disabled={pendingId === item.id}
-                onConfirm={() => remove(item.id)}
-              >
-                삭제
-              </ConfirmButton>
+              <div className="flex items-center gap-1">
+                <ScheduleItemEditDialog workId={workId} item={item} chapters={chapters} />
+                <ConfirmButton
+                  title="일정을 삭제할까요?"
+                  description="삭제한 일정은 되돌릴 수 없습니다."
+                  confirmLabel="삭제"
+                  variant="ghost"
+                  size="sm"
+                  disabled={pendingId === item.id}
+                  onConfirm={() => remove(item.id)}
+                >
+                  삭제
+                </ConfirmButton>
+              </div>
             )}
           </li>
         )

@@ -254,6 +254,19 @@ function requireReveal(position: number | null | undefined): number | null | und
   return position
 }
 
+/** The chapter range a fact holds for. Null or undefined means open at that end. */
+function assertValidRange(from: number | null | undefined, to: number | null | undefined): void {
+  if (from !== null && from !== undefined && (!Number.isInteger(from) || from < 1)) {
+    throw new AppError('VALIDATION', '유효 회차는 1 이상으로 적어 주세요.')
+  }
+  if (to !== null && to !== undefined && (!Number.isInteger(to) || to < 1)) {
+    throw new AppError('VALIDATION', '유효 회차는 1 이상으로 적어 주세요.')
+  }
+  if (from !== null && from !== undefined && to !== null && to !== undefined && to < from) {
+    throw new AppError('VALIDATION', '끝 회차는 시작 회차보다 앞설 수 없습니다.')
+  }
+}
+
 export async function createFact(
   db: Db,
   actor: Actor,
@@ -276,6 +289,7 @@ export async function createFact(
   if (input.sourceChapterId) {
     await assertChapterInWork(db, input.workId, input.sourceChapterId)
   }
+  assertValidRange(input.validFromPosition, input.validToPosition)
 
   return db.transaction(async (tx) => {
     const [row] = await tx
@@ -336,6 +350,14 @@ export async function updateFact(
   if (patch.validToPosition !== undefined) set.validToPosition = patch.validToPosition
   if (patch.revealAtPosition !== undefined) {
     set.revealAtPosition = requireReveal(patch.revealAtPosition)
+  }
+
+  if (patch.validFromPosition !== undefined || patch.validToPosition !== undefined) {
+    const mergedFrom =
+      patch.validFromPosition !== undefined ? patch.validFromPosition : current.validFromPosition
+    const mergedTo =
+      patch.validToPosition !== undefined ? patch.validToPosition : current.validToPosition
+    assertValidRange(mergedFrom, mergedTo)
   }
 
   return db.transaction(async (tx) => {

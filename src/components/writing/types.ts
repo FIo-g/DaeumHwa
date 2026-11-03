@@ -51,4 +51,5 @@ export type WritingSidePanelProps = {
   api: WorkspaceApi
   text: string
   position: number
+  autoCheck?: boolean
 }

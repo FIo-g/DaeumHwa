@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/app/page-header'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ResumeBanner } from '@/components/works/resume-banner'
+import { SampleWorkButton } from '@/components/works/sample-work-button'
 import { WorkCard } from '@/components/works/work-card'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getResumePoint } from '@/server/user-state'
@@ -23,9 +24,12 @@ export default async function WorksPage() {
       <PageHeader
         title="내 작품"
         actions={
-          <Link href="/works/new" className={buttonVariants({ variant: 'default' })}>
-            새 작품
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {active.length > 0 && <SampleWorkButton variant="outline" />}
+            <Link href="/works/new" className={buttonVariants({ variant: 'default' })}>
+              새 작품
+            </Link>
+          </div>
         }
       />
 
@@ -36,9 +40,12 @@ export default async function WorksPage() {
           title="아직 작품이 없습니다"
           description="새 작품을 만들어 설정과 원고를 정리해 보세요."
           action={
-            <Link href="/works/new" className={buttonVariants({ variant: 'outline' })}>
-              새 작품 만들기
-            </Link>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <SampleWorkButton variant="outline" />
+              <Link href="/works/new" className={buttonVariants({ variant: 'outline' })}>
+                새 작품 만들기
+              </Link>
+            </div>
           }
         />
       ) : (
