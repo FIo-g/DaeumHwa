@@ -142,6 +142,8 @@ describe('FactList', () => {
       sourceChapterId: null,
       evidence: '',
       revealAtPosition: null,
+      validFromPosition: null,
+      validToPosition: null,
     })
   })
 })

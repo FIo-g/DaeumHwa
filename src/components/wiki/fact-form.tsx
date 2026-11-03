@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
+import { toast } from 'sonner'
 import { ChapterPicker } from '@/components/app/chapter-picker'
 import { FactStatusSelect } from '@/components/app/fact-status-select'
 import { SubmitButton } from '@/components/app/submit-button'
@@ -30,6 +31,8 @@ export type EditableFact = {
   sourceChapterId: string | null
   evidence: string
   revealAtPosition?: number | null
+  validFromPosition?: number | null
+  validToPosition?: number | null
 }
 
 type FactFormDialogProps = {
@@ -94,10 +97,35 @@ function FactFormFields({
   const [chapterId, setChapterId] = useState<string | null>(fact?.sourceChapterId ?? null)
   const [evidence, setEvidence] = useState(fact?.evidence ?? '')
   const [reveal, setReveal] = useState(fact?.revealAtPosition ? String(fact.revealAtPosition) : '')
+  const [validFrom, setValidFrom] = useState(
+    fact?.validFromPosition !== null && fact?.validFromPosition !== undefined
+      ? String(fact.validFromPosition)
+      : '',
+  )
+  const [validTo, setValidTo] = useState(
+    fact?.validToPosition !== null && fact?.validToPosition !== undefined
+      ? String(fact.validToPosition)
+      : '',
+  )
   const [pending, setPending] = useState(false)
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const validFromPosition = validFrom.trim() === '' ? null : Number(validFrom)
+    const validToPosition = validTo.trim() === '' ? null : Number(validTo)
+    const positions = [validFromPosition, validToPosition]
+    if (positions.some((p) => p !== null && (!Number.isInteger(p) || p < 1))) {
+      toast.error('유효 회차는 1 이상으로 적어 주세요.')
+      return
+    }
+    if (
+      validFromPosition !== null &&
+      validToPosition !== null &&
+      validToPosition < validFromPosition
+    ) {
+      toast.error('끝 회차는 시작 회차보다 앞설 수 없습니다.')
+      return
+    }
     setPending(true)
     const revealAtPosition = reveal.trim() === '' ? null : Number(reveal)
     const saved =
@@ -112,6 +140,8 @@ function FactFormFields({
               sourceChapterId: chapterId,
               evidence,
               revealAtPosition,
+              validFromPosition,
+              validToPosition,
             }),
             { success: '사실을 추가했습니다.' },
           )
@@ -124,6 +154,8 @@ function FactFormFields({
                 sourceChapterId: chapterId,
                 evidence,
                 revealAtPosition,
+                validFromPosition,
+                validToPosition,
               }),
               { success: '사실을 고쳤습니다.' },
             )
@@ -136,7 +168,7 @@ function FactFormFields({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fact-content">사실 내용</Label>
         <Textarea
@@ -171,6 +203,33 @@ function FactFormFields({
           onChange={(e) => setReveal(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">이 회차 전에는 AI 초안에 넣지 않습니다.</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fact-valid-from">유효 시작 회차</Label>
+            <Input
+              id="fact-valid-from"
+              type="number"
+              min={1}
+              step={1}
+              value={validFrom}
+              onChange={(e) => setValidFrom(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fact-valid-to">유효 끝 회차</Label>
+            <Input
+              id="fact-valid-to"
+              type="number"
+              min={1}
+              step={1}
+              value={validTo}
+              onChange={(e) => setValidTo(e.target.value)}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">비워 두면 처음부터 끝까지 유효합니다.</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fact-evidence">근거 문장</Label>
