@@ -21,6 +21,16 @@ describe('stripPackRefs', () => {
     expect(stripPackRefs('설정 F12와 다릅니다')).toBe('설정과 다릅니다')
   })
 
+  it('keeps a copula ending that starts with the same syllable as a particle', () => {
+    expect(stripPackRefs('위키 F1이다.')).toBe('위키이다.')
+    expect(stripPackRefs('위키 F1이고 원고는')).toBe('위키이고 원고는')
+  })
+
+  it('drops parenthesised ref lists down to the word before them', () => {
+    expect(stripPackRefs('위키(F1)와 다릅니다')).toBe('위키와 다릅니다')
+    expect(stripPackRefs('설정(F1, F2)과 어긋납니다')).toBe('설정과 어긋납니다')
+  })
+
   it('leaves a bare ref with no wiki word before it alone', () => {
     expect(stripPackRefs('F1 레이스를 봤다')).toBe('F1 레이스를 봤다')
   })

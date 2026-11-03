@@ -176,6 +176,13 @@ function evidenceText(located: LocatedIssue): string {
   const ai = stripPackRefs(located.issue.wikiExcerpt)
   if (located.fact) return located.fact.content
   if (located.entry) {
+    const fact = located.entry.facts.find(
+      (candidate) =>
+        ai &&
+        candidate.content &&
+        (candidate.content.includes(ai) || ai.includes(candidate.content)),
+    )
+    if (fact) return fact.content
     if (ai && entryText(located.entry).includes(ai)) return ai
     return located.entry.summary || ai
   }

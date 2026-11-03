@@ -25,7 +25,7 @@ export default async function WorksPage() {
         title="내 작품"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <SampleWorkButton variant="outline" />
+            {active.length > 0 && <SampleWorkButton variant="outline" />}
             <Link href="/works/new" className={buttonVariants({ variant: 'default' })}>
               새 작품
             </Link>

@@ -1,6 +1,6 @@
 import type { EntryKind, Importance } from '@/db/types'
 
-export type SampleWork = {
+export type SampleWorkData = {
   title: string
   genre: string
   logline: string
@@ -26,7 +26,7 @@ export type SampleWork = {
 }
 
 /** The one-click demo work. Its manuscript and facts mirror eval/fixtures/continuity-planted. */
-export const SAMPLE_WORK: SampleWork = {
+export const SAMPLE_WORK: SampleWorkData = {
   title: '잿빛 종루 (샘플)',
   genre: '판타지',
   logline: '어머니의 편지를 쫓아 항구 도시에 온 소녀 세린의 이야기.',

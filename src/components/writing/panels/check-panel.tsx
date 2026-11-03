@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import type { IssueRow } from '@/db/types'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
+import { markAutoChecked, wasAutoChecked } from '@/lib/client/sample-session'
 import { useAiRun } from '@/lib/client/use-ai-run'
 import { ISSUE_KIND_LABEL, SEVERITY_LABEL } from '@/lib/labels'
 import { resolveIssueAction } from '@/server/actions/issues'
@@ -77,7 +78,8 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     return () => api.setHighlights('check', [])
   }, [api])
 
-  async function runCheck(opts?: { openApproval?: boolean }) {
+  /** Resolves true only when the check finished; cancel or failure leaves it false. */
+  async function runCheck(opts?: { openApproval?: boolean }): Promise<boolean> {
     // A route handler, not a Server Action: the check can run for minutes, and Server Actions
     // run one at a time, so autosave and navigation would wait behind it.
     const result = await ai.run(async (signal) => {
@@ -91,10 +93,11 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
         { success: '점검을 마쳤습니다.' },
       )
     })
-    if (!result) return
+    if (!result) return false
     setIssues(result.issues)
     if ((opts?.openApproval ?? true) && result.proposals.length > 0) setApprovalOpen(true)
     api.refresh()
+    return true
   }
 
   const autoRan = useRef(false)
@@ -104,11 +107,19 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
   })
   useEffect(() => {
     if (!autoRun || !editable) return
-    if (autoRan.current) return
+    // A finished check survives remounts (and StrictMode), so the AI is never called twice.
+    if (autoRan.current || wasAutoChecked(data.chapter.id)) return
     autoRan.current = true
-    void runCheckRef.current({ openApproval: false })
+    const chapterId = data.chapter.id
+    void runCheckRef.current({ openApproval: false }).then((finished) => {
+      if (finished) markAutoChecked(chapterId)
+    })
     window.history.replaceState(null, '', window.location.pathname)
-  }, [autoRun, editable])
+    // StrictMode unmounts the first mount, which aborts the request; let the second one start it.
+    return () => {
+      autoRan.current = false
+    }
+  }, [autoRun, editable, data.chapter.id])
 
   function focusIssue(issue: IssueRow) {
     const range = rangeOf(text, issue.quote, issue.quoteStart)

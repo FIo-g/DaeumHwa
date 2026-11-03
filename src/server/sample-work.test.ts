@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Db } from '@/db/client'
+import { SAMPLE_WORK, type SampleWorkData } from '@/lib/sample-work'
 import { createTestDb } from '@/test/db'
 import { createTestUser } from '@/test/factories'
 import { getChapter, listChapters } from './chapters'
@@ -7,7 +8,7 @@ import { listChanges } from './changes'
 import { listFacts } from './facts'
 import { createSampleWork } from './sample-work'
 import { listThreads } from './threads'
-import { getWork } from './works'
+import { getWork, listMyWorks } from './works'
 import { listEntries } from './wiki'
 
 let db: Db
@@ -67,6 +68,24 @@ describe('createSampleWork', () => {
 
     const chapters = await listChapters(db, actor, second.workId)
     expect(chapters.map((c) => c.position)).toEqual([1, 2, 3])
+  })
+
+  it('leaves no work behind when a step fails', async () => {
+    const owner = await createTestUser(db)
+    const actor = { userId: owner.id }
+    const clashing: SampleWorkData = {
+      ...SAMPLE_WORK,
+      entries: [
+        { key: 'first', name: '중복 카드', kind: 'character', aliases: [], summary: '' },
+        { key: 'second', name: '중복 카드', kind: 'character', aliases: [], summary: '' },
+      ],
+    }
+
+    await expect(createSampleWork(db, actor, clashing)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+
+    expect(await listMyWorks(db, actor)).toEqual([])
   })
 
   it('lets only the creator see the work', async () => {

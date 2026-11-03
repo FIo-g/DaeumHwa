@@ -5,6 +5,7 @@ import { josa } from 'es-hangul'
 // explanation. The wiki's own text never has them, so they are dropped before storing.
 
 const BRACKET_TOKEN_RE = /\[(?:[FET]\d+|확정|가정|미정)\]\s*/g
+const PAREN_REF_RE = /\s*\((?:[FET]\d+(?:\s*,\s*[FET]\d+)*)\)/g
 
 type JosaOption =
   | '이/가'
@@ -55,12 +56,19 @@ const PARTICLE_RULES: ParticleRule[] = [
 const PAIRED_FORMS = PARTICLE_RULES.map((rule) => rule.form).sort((a, b) => b.length - a.length)
 const OPTION_OF_FORM = new Map(PARTICLE_RULES.map((rule) => [rule.form, rule.option]))
 
-const WORD_REF_RE = new RegExp(`(위키|설정|사실|카드) [FET]\\d+(${PAIRED_FORMS.join('|')})?`, 'g')
+// A particle counts only when it ends the word before whitespace, punctuation or the end, so the
+// 이 in "위키 F1이다" stays as the copula instead of turning into the subject particle.
+const PARTICLE_END = String.raw`(?=[\s.,!?;:)\]}'"…]|$)`
+const WORD_REF_RE = new RegExp(
+  `(위키|설정|사실|카드) [FET]\\d+((?:${PAIRED_FORMS.join('|')})${PARTICLE_END})?`,
+  'g',
+)
 
 /** Drops pack refs and status tags from model text and repairs the particle left behind a ref. */
 export function stripPackRefs(text: string): string {
   return text
     .replace(BRACKET_TOKEN_RE, '')
+    .replace(PAREN_REF_RE, '')
     .replace(WORD_REF_RE, (_match, word: string, particle: string | undefined) => {
       const option = particle === undefined ? undefined : OPTION_OF_FORM.get(particle)
       return option === undefined ? word : word + josa.pick(word, option)

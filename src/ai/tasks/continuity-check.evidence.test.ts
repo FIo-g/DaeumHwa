@@ -47,6 +47,43 @@ const pack: ContextPack = {
 
 const input = { chapterText, chapterPosition: 1, chapterTitle: '1화', pack }
 
+// A card whose only ref is the entry: the evidence may still come from one of its facts.
+const towerPack: ContextPack = {
+  core: [],
+  position: 1,
+  entries: [
+    {
+      ref: 'E1',
+      id: 'entry-tower',
+      kind: 'place',
+      name: '잿빛 종루',
+      aliases: [],
+      summary: '항구 북쪽 언덕 위의 석조 탑.',
+      fields: {},
+      mentionCount: 1,
+      facts: [
+        {
+          ref: 'F3',
+          id: 'fact-tower',
+          content: '잿빛 종루는 9층 높이의 석조 건물이다.',
+          status: 'confirmed',
+          sourcePosition: null,
+          validFromPosition: null,
+          validToPosition: null,
+          evidence: '',
+        },
+      ],
+    },
+  ],
+  threads: [],
+  relations: [],
+  previousSummaries: [],
+  namingRules: [],
+  stats: { totalEntries: 1, selectedEntries: 1, approxChars: 0 },
+}
+
+const towerInput = { chapterText, chapterPosition: 1, chapterTitle: '1화', pack: towerPack }
+
 function issue(overrides: Partial<ContinuityIssue>): ContinuityIssue {
   return {
     quote: chapterText,
@@ -64,6 +101,11 @@ function issue(overrides: Partial<ContinuityIssue>): ContinuityIssue {
 function resolve(overrides: Partial<ContinuityIssue>) {
   const output: ContinuityOutput = { issues: [issue(overrides)] }
   return resolveContinuityIssues(output, input)
+}
+
+function resolveTower(overrides: Partial<ContinuityIssue>) {
+  const output: ContinuityOutput = { issues: [issue(overrides)] }
+  return resolveContinuityIssues(output, towerInput)
 }
 
 describe('resolveContinuityIssues evidence text', () => {
@@ -90,5 +132,25 @@ describe('resolveContinuityIssues evidence text', () => {
   it('drops leaked refs from the explanation', () => {
     const [resolved] = resolve({ explanation: '위키 F1에 따르면 다릅니다' })
     expect(resolved.explanation).toBe('위키에 따르면 다릅니다')
+  })
+})
+
+describe('resolveContinuityIssues entry-only evidence', () => {
+  it('uses the full fact content when the excerpt copies the fact with ref tags', () => {
+    const [resolved] = resolveTower({
+      factRef: null,
+      entryRef: 'E1',
+      wikiExcerpt: '[F3][확정] 잿빛 종루는 9층 높이의 석조 건물이다.',
+    })
+    expect(resolved.wikiExcerpt).toBe('잿빛 종루는 9층 높이의 석조 건물이다.')
+  })
+
+  it('uses the full fact content when the excerpt is part of the fact', () => {
+    const [resolved] = resolveTower({
+      factRef: null,
+      entryRef: 'E1',
+      wikiExcerpt: '9층 높이의 석조 건물',
+    })
+    expect(resolved.wikiExcerpt).toBe('잿빛 종루는 9층 높이의 석조 건물이다.')
   })
 })
