@@ -6,6 +6,7 @@ import { FakeAiClient } from '@/test/fake-ai'
 import { createTestDb } from '@/test/db'
 import { createTestUser, createTestWork } from '@/test/factories'
 import type { DraftPlanCard } from '@/lib/draft-plan'
+import { PlanDraftSchema } from '@/server/actions/ai-features-schemas'
 import { planDraft, startDraft } from '@/server/ai-features'
 
 async function readAll(stream: AsyncIterable<string>): Promise<string> {
@@ -28,9 +29,6 @@ describe('plan revision notes in the draft run (stage 3 task 7)', () => {
   })
 
   it('refuses a sixth earlier note in the plan action schema', async () => {
-    const mod = (await import('@/server/actions/ai-features')) as unknown as {
-      PlanDraftSchema: { safeParse(v: unknown): { success: boolean } }
-    }
     const card = {
       scenes: [
         {
@@ -58,9 +56,9 @@ describe('plan revision notes in the draft run (stage 3 task 7)', () => {
         earlierNotes: ['1', '2', '3', '4', '5', '6'],
       },
     }
-    expect(mod.PlanDraftSchema.safeParse(base).success).toBe(false)
+    expect(PlanDraftSchema.safeParse(base).success).toBe(false)
     expect(
-      mod.PlanDraftSchema.safeParse({
+      PlanDraftSchema.safeParse({
         ...base,
         revision: { ...base.revision, earlierNotes: ['1', '2'] },
       }).success,
