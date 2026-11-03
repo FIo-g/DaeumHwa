@@ -149,6 +149,9 @@ export function InterviewSession({
         turnId: turn.id,
         proposals: proposals.map(toProposalView),
       })
+      // ask()'s refresh can land after this answer and bring back the unanswered snapshot. Refresh
+      // once more so the last server state already contains the answer and its proposals.
+      router.refresh()
     } finally {
       setBusy(false)
     }

@@ -113,19 +113,40 @@ function FactFormFields({
     event.preventDefault()
     const validFromPosition = validFrom.trim() === '' ? null : Number(validFrom)
     const validToPosition = validTo.trim() === '' ? null : Number(validTo)
-    const positions = [validFromPosition, validToPosition]
-    if (positions.some((p) => p !== null && (!Number.isInteger(p) || p < 1))) {
+    const storedFromPosition = fact?.validFromPosition ?? null
+    const storedToPosition = fact?.validToPosition ?? null
+    const fromChanged = mode === 'edit' && validFromPosition !== storedFromPosition
+    const toChanged = mode === 'edit' && validToPosition !== storedToPosition
+    const changedPositions =
+      mode === 'create'
+        ? [validFromPosition, validToPosition]
+        : [...(fromChanged ? [validFromPosition] : []), ...(toChanged ? [validToPosition] : [])]
+    if (changedPositions.some((p) => p !== null && (!Number.isInteger(p) || p < 1))) {
       toast.error('유효 회차는 1 이상으로 적어 주세요.')
       return
     }
+    const nextFromPosition =
+      mode === 'create' ? validFromPosition : fromChanged ? validFromPosition : storedFromPosition
+    const nextToPosition =
+      mode === 'create' ? validToPosition : toChanged ? validToPosition : storedToPosition
     if (
-      validFromPosition !== null &&
-      validToPosition !== null &&
-      validToPosition < validFromPosition
+      (mode === 'create' || fromChanged || toChanged) &&
+      nextFromPosition !== null &&
+      nextToPosition !== null &&
+      nextToPosition < nextFromPosition
     ) {
       toast.error('끝 회차는 시작 회차보다 앞설 수 없습니다.')
       return
     }
+    // On edit, send a range key only when the author changed it. An old superseded fact may store
+    // an end of 0, which the author cannot fix from a content-only edit.
+    const range =
+      mode === 'create'
+        ? { validFromPosition, validToPosition }
+        : {
+            ...(fromChanged ? { validFromPosition } : {}),
+            ...(toChanged ? { validToPosition } : {}),
+          }
     setPending(true)
     const revealAtPosition = reveal.trim() === '' ? null : Number(reveal)
     const saved =
@@ -140,8 +161,7 @@ function FactFormFields({
               sourceChapterId: chapterId,
               evidence,
               revealAtPosition,
-              validFromPosition,
-              validToPosition,
+              ...range,
             }),
             { success: '사실을 추가했습니다.' },
           )
@@ -154,8 +174,7 @@ function FactFormFields({
                 sourceChapterId: chapterId,
                 evidence,
                 revealAtPosition,
-                validFromPosition,
-                validToPosition,
+                ...range,
               }),
               { success: '사실을 고쳤습니다.' },
             )

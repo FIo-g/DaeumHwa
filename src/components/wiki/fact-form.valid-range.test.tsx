@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runAction } from '@/lib/client/run-action'
-import { createFactAction } from '@/server/actions/wiki'
+import { createFactAction, updateFactAction } from '@/server/actions/wiki'
 import { FactFormDialog } from './fact-form'
 
 const refresh = vi.fn()
@@ -27,6 +27,7 @@ vi.mock('sonner', () => ({
 
 const run = vi.mocked(runAction)
 const create = vi.mocked(createFactAction)
+const update = vi.mocked(updateFactAction)
 const toastError = vi.mocked(toast.error)
 
 beforeEach(() => {
@@ -61,6 +62,67 @@ describe('FactFormDialog valid range', () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ validFromPosition: 3, validToPosition: null }),
     )
+  })
+
+  it('edits a superseded fact without sending or checking its stored end position', async () => {
+    render(
+      <FactFormDialog
+        workId="w1"
+        mode="edit"
+        chapters={[]}
+        fact={{
+          id: 'f1',
+          content: '비밀 통로가 있다.',
+          status: 'confirmed',
+          sourceChapterId: null,
+          evidence: '',
+          validFromPosition: 1,
+          validToPosition: 0,
+        }}
+        triggerLabel="내용 수정"
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '내용 수정' }))
+    fireEvent.change(screen.getByLabelText('사실 내용'), {
+      target: { value: '비밀 통로가 두 개 있다.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    const payload = update.mock.calls[0][0] as Record<string, unknown>
+    expect(payload).toMatchObject({ factId: 'f1', content: '비밀 통로가 두 개 있다.' })
+    expect(payload).not.toHaveProperty('validFromPosition')
+    expect(payload).not.toHaveProperty('validToPosition')
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('sends only the changed start position when editing', async () => {
+    render(
+      <FactFormDialog
+        workId="w1"
+        mode="edit"
+        chapters={[]}
+        fact={{
+          id: 'f1',
+          content: '비밀 통로가 있다.',
+          status: 'confirmed',
+          sourceChapterId: null,
+          evidence: '',
+          validFromPosition: 2,
+          validToPosition: null,
+        }}
+        triggerLabel="내용 수정"
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '내용 수정' }))
+    fireEvent.change(screen.getByLabelText('유효 시작 회차'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    const payload = update.mock.calls[0][0] as Record<string, unknown>
+    expect(payload).toMatchObject({ factId: 'f1', validFromPosition: 3 })
+    expect(payload).not.toHaveProperty('validToPosition')
+    expect(toastError).not.toHaveBeenCalled()
   })
 
   it('prefills the start position when editing', () => {

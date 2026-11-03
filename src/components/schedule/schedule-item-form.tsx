@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useId, useState } from 'react'
 import { ChapterPicker } from '@/components/app/chapter-picker'
 import { SubmitButton } from '@/components/app/submit-button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,8 @@ type ScheduleItemFormProps = {
 /** Adds a schedule item or edits an existing one: deadline, publish, hiatus, or other event. Editor only. */
 export function ScheduleItemForm({ workId, today, chapters, item, onDone }: ScheduleItemFormProps) {
   const router = useRouter()
+  const formId = useId()
+  const fieldId = (name: string) => `${formId}-${name}`
   const [kind, setKind] = useState<ScheduleKind>(item?.kind ?? 'deadline')
   const [title, setTitle] = useState(item?.title ?? '')
   const [date, setDate] = useState(item?.date ?? today)
@@ -90,14 +92,14 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
   return (
     <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="schedule-kind">종류</Label>
+        <Label htmlFor={fieldId('kind')}>종류</Label>
         <Select
           value={kind}
           onValueChange={(next) => {
             if (next) setKind(next as ScheduleKind)
           }}
         >
-          <SelectTrigger id="schedule-kind" className="w-full">
+          <SelectTrigger id={fieldId('kind')} className="w-full">
             <SelectValue>
               {(value: string | null) => SCHEDULE_KIND_LABEL[value as ScheduleKind] ?? ''}
             </SelectValue>
@@ -112,9 +114,9 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
         </Select>
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="schedule-title">제목</Label>
+        <Label htmlFor={fieldId('title')}>제목</Label>
         <Input
-          id="schedule-title"
+          id={fieldId('title')}
           value={title}
           maxLength={100}
           placeholder={SCHEDULE_KIND_LABEL[kind]}
@@ -122,9 +124,9 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="schedule-date">{kind === 'hiatus' ? '시작일' : '날짜'}</Label>
+        <Label htmlFor={fieldId('date')}>{kind === 'hiatus' ? '시작일' : '날짜'}</Label>
         <Input
-          id="schedule-date"
+          id={fieldId('date')}
           type="date"
           required
           value={date}
@@ -133,9 +135,9 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
       </div>
       {kind === 'hiatus' && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="schedule-end-date">끝나는 날</Label>
+          <Label htmlFor={fieldId('end-date')}>끝나는 날</Label>
           <Input
-            id="schedule-end-date"
+            id={fieldId('end-date')}
             type="date"
             value={endDate}
             min={date}
@@ -144,8 +146,9 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
         </div>
       )}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="schedule-chapter">회차</Label>
+        <Label htmlFor={fieldId('chapter')}>회차</Label>
         <ChapterPicker
+          id={fieldId('chapter')}
           chapters={chapters}
           value={chapterId}
           onChange={setChapterId}
@@ -154,9 +157,9 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
         />
       </div>
       <div className="flex flex-col gap-1.5 sm:col-span-2">
-        <Label htmlFor="schedule-note">메모</Label>
+        <Label htmlFor={fieldId('note')}>메모</Label>
         <Textarea
-          id="schedule-note"
+          id={fieldId('note')}
           value={note}
           maxLength={1000}
           rows={2}
