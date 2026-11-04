@@ -323,3 +323,30 @@ Independent of Tasks 1–2: different files. It may run in its own worktree at t
 git add -A
 git commit -m "fix(copy): Korean close labels and 404 page, e2e guard against English UI text"
 ```
+
+## Review fixes (Sonnet review of c9e15b3..29bc909)
+
+No blockers. Fix these in one commit, `fix(check): context view on archived chapters, honest intro, stronger tests and copy guard`:
+
+- **R1** `check-panel.tsx`: render `CheckContext` only when `data.chapter.archivedAt` is null. The service returns `NOT_FOUND` for archived chapters, and the writing screen opens them read-only. Test in `check-panel.test.tsx`: an archived chapter has no `AI가 참고한 설정 보기` button.
+- **R2** `e2e/korean-copy.spec.ts`: drop the `if (await contextButton.count())` guard and its stale comment.
+  - Assert the button is visible and click it.
+  - Wait for the intro text (`/^회차 점검은 저장된 원고에 나온 카드/`) before the scan. The scan must not see `불러오는 중…`.
+- **R3** `check-panel` test `it('reloads the open check context when a check finishes')`:
+  - With the section open, a successful manual `회차 점검` makes `getCheckContextAction` run a second time.
+  - A new auto-check `result` from a rerendered `useAutoCheck` mock makes it run a third time.
+  - A failed or cancelled check does not add a call.
+- **R4** honest intro and card summary:
+  - The intro becomes `회차 점검은 저장된 원고에 나온 카드와 항상 넣기로 정한 카드, ${position}화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보냅니다.`
+  - Add `summary: string` to `CheckContextEntry`, from the pack entry. Show it under the card name as small muted text when it is not empty.
+  - Update the service test (assert the summary) and the component test (summary shown; new intro text).
+- **R5** `e2e/korean-copy.spec.ts`, stronger guard:
+  - The minimum word length becomes 2, so `EP` is caught.
+  - Add `ai` to the allowlist, because the UI's own term is `AI 초안`.
+  - Remove `pdf` and `json` unless a scanned screen shows them. If one does, keep it with the reason.
+  - Also scan:
+    - the `alt` attribute
+    - each side-panel tab on the chapter page, clicked one by one, because hidden tabs are not in `innerText`
+    - the sign-up page before signing up
+    - `/login` in a fresh browser context at the end
+- **R6** `src/server/check-context.test.ts`: assert `trimmedEntryNames` in exact order, without sorting.
