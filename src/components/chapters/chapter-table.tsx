@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import type { ChapterStatus } from '@/db/types'
 import { lengthShortfall, shortfallMessage } from '@/lib/chapter-length'
+import { startAutoCheck } from '@/lib/client/auto-check'
 import { runAction } from '@/lib/client/run-action'
 import { formatKoreanDateTime, isPlausibleIsoDate } from '@/lib/dates'
 import { CHAPTER_STATUS_LABEL, chapterLabel } from '@/lib/labels'
@@ -88,6 +89,34 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit }: Chapter
     }
   }
 
+  /** Changes one chapter's status. A draft that became done starts the auto check. */
+  async function changeStatus(chapter: ChapterTableRow, next: ChapterStatus): Promise<boolean> {
+    const ok = await perform(
+      `status-${chapter.id}`,
+      setChapterStatusAction({ chapterId: chapter.id, status: next }),
+    )
+    if (ok && chapter.status === 'draft' && next === 'done') {
+      startAutoCheck({
+        workId,
+        chapterId: chapter.id,
+        position: chapter.position,
+        onDone: () => router.refresh(),
+        navigate: (href) => router.push(href),
+      })
+    }
+    return ok
+  }
+
+  /** Toggles the status, asking first when a short draft would be completed. */
+  async function toggleStatus(chapter: ChapterTableRow): Promise<void> {
+    const next: ChapterStatus = chapter.status === 'draft' ? 'done' : 'draft'
+    if (next === 'done' && lengthShortfall(chapter.charCount, targetChars)) {
+      setPendingComplete(chapter)
+      return
+    }
+    await changeStatus(chapter, next)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -151,22 +180,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit }: Chapter
                         size="sm"
                         aria-label={`${chapter.position}화 상태 바꾸기`}
                         disabled={busy}
-                        onClick={() => {
-                          if (
-                            chapter.status === 'draft' &&
-                            lengthShortfall(chapter.charCount, targetChars)
-                          ) {
-                            setPendingComplete(chapter)
-                            return
-                          }
-                          void perform(
-                            `status-${chapter.id}`,
-                            setChapterStatusAction({
-                              chapterId: chapter.id,
-                              status: chapter.status === 'draft' ? 'done' : 'draft',
-                            }),
-                          )
-                        }}
+                        onClick={() => void toggleStatus(chapter)}
                       >
                         {CHAPTER_STATUS_LABEL[chapter.status]}
                       </Button>
@@ -280,10 +294,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit }: Chapter
         message={pendingComplete ? shortfallMessage(pendingComplete.charCount, targetChars) : ''}
         onConfirm={() => {
           if (!pendingComplete) return
-          void perform(
-            `status-${pendingComplete.id}`,
-            setChapterStatusAction({ chapterId: pendingComplete.id, status: 'done' }),
-          )
+          void changeStatus(pendingComplete, 'done')
         }}
         onOpenChange={(open) => {
           if (!open) setPendingComplete(null)
