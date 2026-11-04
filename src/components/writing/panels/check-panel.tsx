@@ -18,6 +18,7 @@ import { resolveIssueAction } from '@/server/actions/issues'
 import type { ChapterCheckResult } from '@/server/chapter-check'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
 import { ApprovalDialog } from './approval-dialog'
+import { CheckContext } from './check-context'
 import { EDITOR_ONLY_NOTE, canEditChapter, offerUndo, rangeOf } from './shared'
 import { WikiFixDialog } from './wiki-fix-dialog'
 
@@ -51,12 +52,16 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
   }
   const ai = useAiRun()
   const auto = useAutoCheck(data.chapter.id)
+  const [checkedKey, setCheckedKey] = useState(0)
   // Show a finished auto check before router.refresh brings its issues back in data.issues.
   // The first previous value is the one at mount, so a late panel keeps fresh server data.
   const [previousAutoResult, setPreviousAutoResult] = useState(auto.result)
   if (auto.result !== previousAutoResult) {
     setPreviousAutoResult(auto.result)
-    if (auto.result) setIssues(auto.result.issues)
+    if (auto.result) {
+      setIssues(auto.result.issues)
+      setCheckedKey((key) => key + 1)
+    }
   }
   const [busyId, setBusyId] = useState<string | null>(null)
   const [approvalOpen, setApprovalOpen] = useState(false)
@@ -104,6 +109,7 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     })
     if (!result) return false
     setIssues(result.issues)
+    setCheckedKey((key) => key + 1)
     if ((opts?.openApproval ?? true) && result.proposals.length > 0) setApprovalOpen(true)
     api.refresh()
     return true
@@ -185,6 +191,13 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
           <span className="text-sm text-muted-foreground">열린 지적 {issues.length}건</span>
         )}
       </div>
+
+      <CheckContext
+        workId={data.workId}
+        chapterId={data.chapter.id}
+        position={data.chapter.position}
+        refreshKey={checkedKey}
+      />
 
       {issues.length === 0 && (
         <EmptyState

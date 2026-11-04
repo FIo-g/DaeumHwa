@@ -11,6 +11,7 @@ import {
   THREAD_EVENT_LABEL,
   THREAD_STATUS_LABEL,
   chapterLabel,
+  factValidityText,
   stripEpisodePrefix,
 } from '@/lib/labels'
 
@@ -64,5 +65,12 @@ describe('labels', () => {
     expect(chapterLabel(12, '1화 회상')).toBe('12화 1화 회상')
     expect(chapterLabel(12, '12화 기념 특집')).toBe('12화 기념 특집')
     expect(chapterLabel(3, '2화 이후의 이야기')).toBe('3화 2화 이후의 이야기')
+  })
+
+  it('formats a fact validity range', () => {
+    expect(factValidityText(3, 5)).toBe('3화부터 ~5화')
+    expect(factValidityText(3, null)).toBe('3화부터')
+    expect(factValidityText(null, 5)).toBe('~5화')
+    expect(factValidityText(null, null)).toBeNull()
   })
 })
