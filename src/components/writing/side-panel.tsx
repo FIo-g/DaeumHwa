@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useAutoCheck } from '@/lib/client/auto-check'
 import { isSampleChapter } from '@/lib/client/sample-session'
 import { CheckPanel } from './panels/check-panel'
 import { CommentsPanel } from './panels/comments-panel'
@@ -29,10 +30,17 @@ const TABS: { value: TabKey; label: string }[] = [
  * running draft or a loaded check result survives switching tabs.
  */
 export function WritingSidePanel({ data, api, text, position, autoCheck }: WritingSidePanelProps) {
+  const auto = useAutoCheck(data.chapter.id)
   // The panel only mounts on the client (after the layout effect), so the session read is safe.
   const [tab, setTab] = useState<TabKey>(() =>
     autoCheck || isSampleChapter(data.chapter.id) ? 'check' : 'related',
   )
+  // Render-time previous-value state: switch tabs as soon as an auto check starts, without an effect.
+  const [autoWasRunning, setAutoWasRunning] = useState(false)
+  if (auto.running !== autoWasRunning) {
+    setAutoWasRunning(auto.running)
+    if (auto.running) setTab('check')
+  }
 
   return (
     <div data-chapter-position={position} className="flex min-w-0 flex-col gap-3">

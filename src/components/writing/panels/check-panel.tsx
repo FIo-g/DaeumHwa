@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { IssueRow } from '@/db/types'
+import { cancelAutoCheck, useAutoCheck } from '@/lib/client/auto-check'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
 import { markAutoChecked, wasAutoChecked } from '@/lib/client/sample-session'
@@ -49,6 +50,7 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     setIssues(data.issues)
   }
   const ai = useAiRun()
+  const auto = useAutoCheck(data.chapter.id)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [approvalOpen, setApprovalOpen] = useState(false)
   const [fixing, setFixing] = useState<IssueRow | null>(null)
@@ -160,6 +162,12 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
         {editable &&
           (ai.running ? (
             <AiRunStatus label="점검 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+          ) : auto.running ? (
+            <AiRunStatus
+              label="자동 점검 중"
+              elapsedSec={auto.elapsedSec}
+              onCancel={() => cancelAutoCheck(data.chapter.id)}
+            />
           ) : (
             <Button size="sm" onClick={() => void runCheck()}>
               회차 점검
@@ -174,7 +182,7 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
       {issues.length === 0 && (
         <EmptyState
           title="열린 지적이 없습니다."
-          description="회차 점검을 누르면 설정과 어긋나는 문장을 찾아 줍니다."
+          description="회차 점검을 누르거나 회차를 완료로 바꾸면 설정과 어긋나는 문장을 찾아 줍니다."
         />
       )}
 
