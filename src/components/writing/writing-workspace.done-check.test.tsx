@@ -24,7 +24,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/lib/client/auto-check', () => ({
   startAutoCheck: mocks.startAutoCheck,
-  useAutoCheck: () => ({ running: false, elapsedSec: 0 }),
+  useAutoCheck: () => ({ running: false, elapsedSec: 0, result: null }),
   cancelAutoCheck: vi.fn(),
 }))
 
@@ -105,7 +105,7 @@ afterEach(() => {
 })
 
 describe('WritingWorkspace done auto check', () => {
-  it('saves and starts the auto check after a draft is marked done', async () => {
+  it('saves, marks done, then starts the auto check', async () => {
     render(
       <WritingWorkspace
         data={makeData()}
@@ -122,10 +122,15 @@ describe('WritingWorkspace done auto check', () => {
     )
 
     const statusOrder = mocks.setChapterStatusAction.mock.invocationCallOrder[0]
-    const saveOrder = mocks.saveNow.mock.invocationCallOrder[0]
+    // A blur can trigger its own save; take the last save before the status action.
+    const saveOrder = mocks.saveNow.mock.invocationCallOrder
+      .filter((order) => order < statusOrder)
+      .at(-1)
     const checkOrder = mocks.startAutoCheck.mock.invocationCallOrder[0]
-    expect(statusOrder).toBeLessThan(saveOrder)
-    expect(saveOrder).toBeLessThan(checkOrder)
+    expect(saveOrder).toBeDefined()
+    if (saveOrder === undefined) throw new Error('applyStatus did not save')
+    expect(saveOrder).toBeLessThan(statusOrder)
+    expect(statusOrder).toBeLessThan(checkOrder)
   })
 
   it('starts the auto check after the short-draft confirmation', async () => {

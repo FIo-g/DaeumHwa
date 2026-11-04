@@ -20,7 +20,7 @@ vi.mock('sonner', () => ({
 // which would add its own fetch call, so keep it out of this file.
 vi.mock('@/lib/client/auto-check', () => ({
   startAutoCheck: vi.fn(),
-  useAutoCheck: () => ({ running: false, elapsedSec: 0 }),
+  useAutoCheck: () => ({ running: false, elapsedSec: 0, result: null }),
   cancelAutoCheck: vi.fn(),
 }))
 

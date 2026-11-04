@@ -1,9 +1,17 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { ChapterRow, Role } from '@/db/types'
-import { resetAutoChecksForTests } from '@/lib/client/auto-check'
+import { resetAutoChecksForTests, useAutoCheck } from '@/lib/client/auto-check'
 import type { ActionResult } from '@/lib/result'
 import type { ChapterCheckResult } from '@/server/chapter-check'
 import type { WritingData } from './types'
@@ -116,7 +124,12 @@ describe('WritingWorkspace done auto check after unmount', () => {
     const group = screen.getByRole('group', { name: '회차 상태' })
     fireEvent.click(within(group).getByRole('button', { name: '완료' }))
     await waitFor(() => expect(mocks.postAction).toHaveBeenCalledTimes(1))
+    const signal = mocks.postAction.mock.calls[0][2]?.signal as AbortSignal
     view.unmount()
+
+    expect(signal.aborted).toBe(false)
+    const { result } = renderHook(() => useAutoCheck('c1'))
+    expect(result.current.running).toBe(true)
 
     resolveCheck({
       ok: true,

@@ -75,12 +75,12 @@ afterEach(() => {
 
 describe('WritingSidePanel auto check', () => {
   it('switches to the check tab when an auto check starts', () => {
-    vi.mocked(useAutoCheck).mockReturnValue({ running: false, elapsedSec: 0 })
+    vi.mocked(useAutoCheck).mockReturnValue({ running: false, elapsedSec: 0, result: null })
     const { rerender } = renderPanel()
 
     expect(screen.getByRole('tab', { name: '관련 카드', selected: true })).toBeInTheDocument()
 
-    vi.mocked(useAutoCheck).mockReturnValue({ running: true, elapsedSec: 1 })
+    vi.mocked(useAutoCheck).mockReturnValue({ running: true, elapsedSec: 1, result: null })
     rerender(<WritingSidePanel data={makeData()} api={makeApi()} text="" position={3} />)
 
     expect(screen.getByRole('tab', { name: '점검', selected: true })).toBeInTheDocument()

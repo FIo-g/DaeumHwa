@@ -53,14 +53,30 @@ test('marking a chapter done runs the check and queues candidates', async ({ pag
     timeout: 60_000,
   })
 
-  // The side panel switches to 점검 and shows the contradiction against the wiki fact.
+  // The side panel switches to 점검 and the auto run never opens the candidate dialog.
+  await expect(page.getByRole('tab', { name: '점검', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(page.getByRole('heading', { name: /이 회차에서 찾은 위키 후보/ })).toHaveCount(0)
+  // The success toast lasts 10 seconds, so follow its button right away.
+  await page
+    .locator('[data-sonner-toast]')
+    .getByRole('button', { name: '승인 대기 보기', exact: true })
+    .click()
+
+  // The finished check left a pending proposal from this chapter in the queue.
+  await expect(page).toHaveURL(new RegExp(`/works/${workId}/approvals`))
+  const proposalSource = page
+    .getByRole('main')
+    .getByRole('article')
+    .getByText('회차 점검', { exact: true })
+  await expect(proposalSource).toBeVisible({ timeout: 30_000 })
+
+  // Back on the chapter, the panel shows the contradiction against the wiki fact.
+  await page.goto(chapterPath)
+  await page.getByRole('tab', { name: '점검', exact: true }).click()
   const checkPanel = page.getByRole('region', { name: '회차 점검' })
   await expect(checkPanel.getByText(SENTENCE, { exact: true })).toBeVisible({ timeout: 30_000 })
-  await expect(checkPanel.getByText(FACT, { exact: true })).toBeVisible()
-  // The auto run never opens the wiki candidate dialog; the candidates wait on the approvals page.
-  await expect(page.getByRole('heading', { name: /이 회차에서 찾은 위키 후보/ })).toHaveCount(0)
-
-  await page.getByRole('button', { name: '승인 대기 보기', exact: true }).click()
-  await expect(page).toHaveURL(new RegExp(`/works/${workId}/approvals`))
-  await expect(page.getByText('승인 대기 중인 제안이 없습니다.', { exact: true })).toHaveCount(0)
+  await expect(checkPanel.getByText(FACT, { exact: true })).toBeVisible({ timeout: 30_000 })
 })

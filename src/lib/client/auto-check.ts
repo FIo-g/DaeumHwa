@@ -24,14 +24,17 @@ type AutoCheckRun = {
 type AutoCheckState = {
   running: boolean
   elapsedSec: number
+  result: ChapterCheckResult | null
 }
 
-const IDLE: AutoCheckState = { running: false, elapsedSec: 0 }
+const IDLE: AutoCheckState = { running: false, elapsedSec: 0, result: null }
 
 // Module state, not component state: a check keeps running when the author leaves the screen.
 const runs = new Map<string, AutoCheckRun>()
 const listeners = new Set<() => void>()
 const states = new Map<string, AutoCheckState>()
+// The chapter's last successful result, kept across failures and cancels.
+const results = new Map<string, ChapterCheckResult>()
 let timer: ReturnType<typeof setInterval> | null = null
 
 function notify(): void {
@@ -40,6 +43,16 @@ function notify(): void {
 
 function stateFor(chapterId: string): AutoCheckState {
   return states.get(chapterId) ?? IDLE
+}
+
+/** Puts the chapter back to idle without losing its last successful result. */
+function setRestingState(chapterId: string): void {
+  const previous = results.get(chapterId)
+  if (previous === undefined) {
+    states.delete(chapterId)
+    return
+  }
+  states.set(chapterId, { running: false, elapsedSec: 0, result: previous })
 }
 
 function subscribe(listener: () => void): () => void {
@@ -66,6 +79,7 @@ function startTimer(): void {
       states.set(chapterId, {
         running: true,
         elapsedSec: Math.floor((now - run.startedAt) / 1000),
+        result: results.get(chapterId) ?? null,
       })
     }
     notify()
@@ -79,7 +93,7 @@ export function startAutoCheck(input: AutoCheckInput): boolean {
 
   const run: AutoCheckRun = { controller: new AbortController(), startedAt: Date.now() }
   runs.set(chapterId, run)
-  states.set(chapterId, { running: true, elapsedSec: 0 })
+  states.set(chapterId, { running: true, elapsedSec: 0, result: results.get(chapterId) ?? null })
   notify()
   startTimer()
 
@@ -92,7 +106,12 @@ export function startAutoCheck(input: AutoCheckInput): boolean {
   ).then((result) => {
     if (runs.get(chapterId) === run) {
       runs.delete(chapterId)
-      states.delete(chapterId)
+      if (result.ok) {
+        results.set(chapterId, result.data)
+        states.set(chapterId, { running: false, elapsedSec: 0, result: result.data })
+      } else {
+        setRestingState(chapterId)
+      }
       if (runs.size === 0) stopTimer()
       notify()
     }
@@ -128,14 +147,14 @@ export function cancelAutoCheck(chapterId: string): void {
   if (!run) return
 
   runs.delete(chapterId)
-  states.delete(chapterId)
+  setRestingState(chapterId)
   if (runs.size === 0) stopTimer()
   notify()
   run.controller.abort()
   toast('취소했습니다.')
 }
 
-/** Running state for one chapter. elapsedSec counts whole seconds since the start, updated every second. */
+/** Running state and the last successful result for one chapter. elapsedSec counts whole seconds since the start, updated every second. */
 export function useAutoCheck(chapterId: string): AutoCheckState {
   return useSyncExternalStore(
     subscribe,
@@ -149,6 +168,7 @@ export function resetAutoChecksForTests(): void {
   for (const run of runs.values()) run.controller.abort()
   runs.clear()
   states.clear()
+  results.clear()
   stopTimer()
   notify()
 }

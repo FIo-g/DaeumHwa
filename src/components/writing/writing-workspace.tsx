@@ -177,13 +177,13 @@ export function WritingWorkspace({
   async function applyStatus(next: ChapterStatus) {
     // Read before the action: the confirm dialog path still sees 'draft' here.
     const wasDraft = chapter.status === 'draft'
+    // Both the directive inference and the auto check read the saved manuscript.
+    if (next === 'done') await saveNow()
     const result = await runAction(setChapterStatusAction({ chapterId: chapter.id, status: next }))
     if (result) {
       if (next === 'done') fireDirectiveInfer(workId, chapter.id)
       router.refresh()
       if (wasDraft && next === 'done') {
-        // The check reads the saved manuscript, so the open edit goes first.
-        await saveNow()
         startAutoCheck({
           workId,
           chapterId: chapter.id,

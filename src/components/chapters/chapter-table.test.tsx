@@ -20,7 +20,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/client/auto-check', () => ({
   startAutoCheck: mocks.startAutoCheck,
-  useAutoCheck: () => ({ running: false, elapsedSec: 0 }),
+  useAutoCheck: () => ({ running: false, elapsedSec: 0, result: null }),
   cancelAutoCheck: vi.fn(),
 }))
 

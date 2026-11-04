@@ -130,9 +130,11 @@ describe('startAutoCheck', () => {
   })
 
   it('cancels without an error toast', async () => {
+    let signal: AbortSignal | undefined
     vi.mocked(postAction).mockImplementation(
       (_url, _body, options) =>
         new Promise((resolve) => {
+          signal = options?.signal
           options?.signal?.addEventListener('abort', () =>
             resolve({
               ok: false,
@@ -142,8 +144,17 @@ describe('startAutoCheck', () => {
         }),
     )
 
-    startAutoCheck({ workId: 'w1', chapterId: 'c1', position: 3 })
-    cancelAutoCheck('c1')
+    const { result } = renderHook(() => useAutoCheck('c1'))
+    act(() => {
+      startAutoCheck({ workId: 'w1', chapterId: 'c1', position: 3 })
+    })
+    expect(result.current.running).toBe(true)
+
+    act(() => {
+      cancelAutoCheck('c1')
+    })
+    expect(signal?.aborted).toBe(true)
+    expect(result.current.running).toBe(false)
 
     await vi.waitFor(() =>
       expect(
@@ -153,13 +164,42 @@ describe('startAutoCheck', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 
+  it('keeps the last finished result for the chapter', async () => {
+    const data = {
+      issues: [{ id: 'i1' }],
+      proposals: [],
+      runIds: [],
+      namingIssueCount: 0,
+    } as unknown as ChapterCheckResult
+    vi.mocked(postAction).mockResolvedValue({ ok: true, data })
+    const { result } = renderHook(() => useAutoCheck('c1'))
+
+    act(() => {
+      startAutoCheck({ workId: 'w1', chapterId: 'c1', position: 3 })
+    })
+    await vi.waitFor(() => expect(result.current.result).toBe(data))
+    expect(result.current.running).toBe(false)
+
+    vi.mocked(postAction).mockResolvedValue({
+      ok: false,
+      error: { code: 'AI_LIMIT', message: '오늘 AI 사용량 한도를 넘었습니다.' },
+    })
+    act(() => {
+      startAutoCheck({ workId: 'w1', chapterId: 'c1', position: 3 })
+    })
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalled())
+
+    expect(result.current).toEqual({ running: false, elapsedSec: 0, result: data })
+    expect(result.current.result).toBe(data)
+  })
+
   it('reports running and elapsed seconds through useAutoCheck', async () => {
     vi.useFakeTimers()
     let resolveRun: (result: ActionResult<ChapterCheckResult>) => void = () => {}
     vi.mocked(postAction).mockImplementation(() => new Promise((resolve) => (resolveRun = resolve)))
 
     const { result } = renderHook(() => useAutoCheck('c1'))
-    expect(result.current).toEqual({ running: false, elapsedSec: 0 })
+    expect(result.current).toEqual({ running: false, elapsedSec: 0, result: null })
 
     act(() => {
       startAutoCheck({ workId: 'w1', chapterId: 'c1', position: 3 })
@@ -167,7 +207,7 @@ describe('startAutoCheck', () => {
     act(() => {
       vi.advanceTimersByTime(2000)
     })
-    expect(result.current).toEqual({ running: true, elapsedSec: 2 })
+    expect(result.current).toEqual({ running: true, elapsedSec: 2, result: null })
 
     await act(async () => {
       resolveRun({ ok: true, data: emptyResult() })

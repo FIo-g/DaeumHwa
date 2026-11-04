@@ -51,6 +51,13 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
   }
   const ai = useAiRun()
   const auto = useAutoCheck(data.chapter.id)
+  // Show a finished auto check before router.refresh brings its issues back in data.issues.
+  // The first previous value is the one at mount, so a late panel keeps fresh server data.
+  const [previousAutoResult, setPreviousAutoResult] = useState(auto.result)
+  if (auto.result !== previousAutoResult) {
+    setPreviousAutoResult(auto.result)
+    if (auto.result) setIssues(auto.result.issues)
+  }
   const [busyId, setBusyId] = useState<string | null>(null)
   const [approvalOpen, setApprovalOpen] = useState(false)
   const [fixing, setFixing] = useState<IssueRow | null>(null)
