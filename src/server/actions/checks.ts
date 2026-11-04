@@ -11,8 +11,13 @@ import {
   runChapterCheck,
   runProofread,
 } from '@/server/chapter-check'
+import { type CheckContextView, describeCheckContext } from '@/server/check-context'
 
 const RunChapterCheckSchema = z.object({
+  chapterId: z.uuid(),
+})
+
+const GetCheckContextSchema = z.object({
   chapterId: z.uuid(),
 })
 
@@ -30,6 +35,15 @@ export async function runChapterCheckAction(
     const result = await runChapterCheck(db, actor, { chapterId })
     revalidateWork(workId)
     return result
+  })
+}
+
+export async function getCheckContextAction(
+  input: unknown,
+): Promise<ActionResult<CheckContextView>> {
+  return withAction(async (db, actor) => {
+    const { chapterId } = GetCheckContextSchema.parse(input)
+    return describeCheckContext(db, actor, { chapterId })
   })
 }
 

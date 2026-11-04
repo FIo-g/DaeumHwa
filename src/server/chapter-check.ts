@@ -1,6 +1,11 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { getAiClient } from '@/ai'
-import { buildContextPack, CONTINUITY_BUDGET_CHARS, resolveRefs } from '@/ai/context'
+import {
+  buildContextPack,
+  type ContextPack,
+  CONTINUITY_BUDGET_CHARS,
+  resolveRefs,
+} from '@/ai/context'
 import {
   type ExtractionContext,
   type ExtractionDropped,
@@ -242,6 +247,20 @@ async function loadEditableChapter(
  */
 const EVIDENCE_ANCHOR: NonNullable<ExtractionContext['evidenceAnchor']> = 'count'
 
+/** The context pack the chapter check sends to the continuity check. One source for the check and its view. */
+export async function buildCheckPack(
+  db: Db,
+  workId: string,
+  chapter: { body: string; position: number },
+): Promise<ContextPack> {
+  return buildContextPack(db, workId, {
+    text: chapter.body,
+    position: chapter.position,
+    keepNamed: true,
+    budgetChars: CONTINUITY_BUDGET_CHARS,
+  })
+}
+
 /**
  * Runs the chapter check on the saved chapter text: deterministic naming rules, the continuity
  * check and chapter extraction (in parallel). Replaces the chapter's open issues and the pending
@@ -266,12 +285,7 @@ export async function runChapterCheck(
     signal: signal ? AbortSignal.any([signal, sibling.signal]) : sibling.signal,
   }
 
-  const pack = await buildContextPack(db, workId, {
-    text,
-    position: chapter.position,
-    keepNamed: true,
-    budgetChars: CONTINUITY_BUDGET_CHARS,
-  })
+  const pack = await buildCheckPack(db, workId, chapter)
   const known = await loadKnownEntries(db, workId, { excludePostChapterOf: chapter.id })
   const rules = await listNamingRules(db, actor, workId)
   const relationRows = await db
