@@ -363,4 +363,15 @@ describe('CheckPanel', () => {
 
     expect(screen.getByRole('button', { name: 'AI가 참고한 설정 보기' })).toBeInTheDocument()
   })
+
+  it('hides the check context toggle for archived chapters', () => {
+    const data = makeData({ issues: [] })
+    const archived = {
+      ...data,
+      chapter: { ...data.chapter, archivedAt: new Date('2026-11-04T00:00:00Z') },
+    }
+    render(<CheckPanel data={archived} api={makeApi()} text="본문" />)
+
+    expect(screen.queryByRole('button', { name: 'AI가 참고한 설정 보기' })).toBeNull()
+  })
 })

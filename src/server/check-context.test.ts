@@ -48,7 +48,7 @@ describe('describeCheckContext', () => {
       position: 3,
       body: '서윤은 오른손으로 검을 쥐었다.',
     })
-    const seoyun = await createTestEntry(db, workId, { name: '서윤' })
+    const seoyun = await createTestEntry(db, workId, { name: '서윤', summary: '서윤 요약' })
     await createTestEntry(db, workId, { name: '한세린' })
     await createTestFact(db, workId, {
       entryId: seoyun.id,
@@ -59,6 +59,7 @@ describe('describeCheckContext', () => {
     const view = await describeCheckContext(db, actor(owner.id), { chapterId: chapter.id })
     expect(view.entries).toHaveLength(1)
     expect(view.entries[0]).toMatchObject({ id: seoyun.id, name: '서윤', kind: 'character' })
+    expect(view.entries[0].summary).toBe('서윤 요약')
     expect(view.entries[0].facts).toHaveLength(1)
     expect(view.entries[0].facts[0]).toMatchObject({
       content: '서윤은 왼손잡이다.',
@@ -125,7 +126,7 @@ describe('describeCheckContext', () => {
     }
 
     const view = await describeCheckContext(db, actor(owner.id), { chapterId: chapter.id })
-    expect([...view.trimmedEntryNames].sort()).toEqual([...alwaysNames].sort())
+    expect(view.trimmedEntryNames).toEqual(['한세린', '박도현'])
     expect(view.entries.map((entry) => entry.name).sort()).toEqual(['민아', '서윤', '지후'])
   })
 

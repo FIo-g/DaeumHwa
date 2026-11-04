@@ -29,6 +29,7 @@ function makeView(overrides: Partial<CheckContextView> = {}): CheckContextView {
         id: 'e1',
         name: '서윤',
         kind: 'character',
+        summary: '왼손잡이 검객',
         facts: [
           {
             id: 'f1',
@@ -80,7 +81,7 @@ describe('CheckContext', () => {
 
     expect(
       await screen.findByText(
-        '회차 점검은 저장된 원고에 나온 카드와 3화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보냅니다.',
+        '회차 점검은 저장된 원고에 나온 카드와 항상 넣기로 정한 카드, 3화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보냅니다.',
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('설정 카드 1개 (전체 5개 중)')).toBeInTheDocument()
@@ -88,6 +89,7 @@ describe('CheckContext', () => {
       'href',
       '/works/w1/wiki/entries/e1',
     )
+    expect(screen.getByText('왼손잡이 검객')).toBeInTheDocument()
     expect(screen.getByText(ENTRY_KIND_LABEL.character)).toBeInTheDocument()
     expect(screen.getByText('서윤은 왼손잡이다.')).toBeInTheDocument()
     expect(screen.getByText(FACT_STATUS_LABEL.confirmed)).toBeInTheDocument()
@@ -100,6 +102,18 @@ describe('CheckContext', () => {
     expect(screen.getByText('앞 회차 요약')).toBeInTheDocument()
     expect(screen.getByText(chapterLabel(2, '잿빛 종루 아래'))).toBeInTheDocument()
     expect(screen.getByText('관계 1개, 이름 규칙 0개도 함께 보냅니다.')).toBeInTheDocument()
+  })
+
+  it('hides the card summary when it is empty', async () => {
+    const view = makeView()
+    view.entries[0].summary = ''
+    action.mockResolvedValue({ ok: true, data: view })
+    render(<CheckContext workId="w1" chapterId="c3" position={3} refreshKey={0} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI가 참고한 설정 보기' }))
+
+    expect(await screen.findByText('서윤')).toBeInTheDocument()
+    expect(screen.queryByText('왼손잡이 검객')).toBeNull()
   })
 
   it('shows the empty card message', async () => {

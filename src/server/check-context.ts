@@ -21,6 +21,7 @@ export type CheckContextEntry = {
   id: string
   name: string
   kind: EntryKind
+  summary: string
   facts: CheckContextFact[]
 }
 
@@ -84,6 +85,7 @@ export async function describeCheckContext(
       id: entry.id,
       name: entry.name,
       kind: entry.kind,
+      summary: entry.summary,
       facts: entry.facts.map((fact) => ({
         id: fact.id,
         content: fact.content,

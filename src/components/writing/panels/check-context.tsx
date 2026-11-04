@@ -83,7 +83,7 @@ export function CheckContext(props: {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                {`회차 점검은 저장된 원고에 나온 카드와 ${position}화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보냅니다.`}
+                {`회차 점검은 저장된 원고에 나온 카드와 항상 넣기로 정한 카드, ${position}화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보냅니다.`}
               </p>
               <div className="grid gap-2">
                 <h3 className="text-sm font-semibold">
@@ -106,6 +106,9 @@ export function CheckContext(props: {
                           </Link>
                           <Badge variant="outline">{ENTRY_KIND_LABEL[entry.kind]}</Badge>
                         </div>
+                        {entry.summary !== '' && (
+                          <p className="text-xs text-muted-foreground">{entry.summary}</p>
+                        )}
                         <ul className="grid gap-1">
                           {entry.facts.map((fact) => {
                             const validity = factValidityText(

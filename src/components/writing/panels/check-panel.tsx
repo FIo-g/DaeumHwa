@@ -192,12 +192,14 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
         )}
       </div>
 
-      <CheckContext
-        workId={data.workId}
-        chapterId={data.chapter.id}
-        position={data.chapter.position}
-        refreshKey={checkedKey}
-      />
+      {data.chapter.archivedAt === null && (
+        <CheckContext
+          workId={data.workId}
+          chapterId={data.chapter.id}
+          position={data.chapter.position}
+          refreshKey={checkedKey}
+        />
+      )}
 
       {issues.length === 0 && (
         <EmptyState
