@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/app/empty-state'
 import { FactStatusBadge } from '@/components/app/fact-status-badge'
 import { SourceLabel } from '@/components/app/source-label'
 import { runAction } from '@/lib/client/run-action'
+import { factValidityText } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { archiveFactAction } from '@/server/actions/wiki'
 import type { FactView } from '@/server/facts'
@@ -57,15 +58,6 @@ export function FactList({ workId, entryId, facts, chapters, canEdit }: FactList
   )
 }
 
-function validityText(fact: FactView): string | null {
-  const from = fact.validFromPosition
-  const to = fact.validToPosition
-  if (from !== null && to !== null) return `${from}화부터 ~${to}화`
-  if (from !== null) return `${from}화부터`
-  if (to !== null) return `~${to}화`
-  return null
-}
-
 function FactItem({
   workId,
   fact,
@@ -80,7 +72,7 @@ function FactItem({
   const router = useRouter()
   const superseded = fact.supersededBy !== null
   const active = !superseded && !fact.archivedAt
-  const validity = validityText(fact)
+  const validity = factValidityText(fact.validFromPosition, fact.validToPosition)
 
   return (
     <li

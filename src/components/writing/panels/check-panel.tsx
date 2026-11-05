@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { IssueRow } from '@/db/types'
+import { cancelAutoCheck, useAutoCheck } from '@/lib/client/auto-check'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
 import { markAutoChecked, wasAutoChecked } from '@/lib/client/sample-session'
@@ -17,6 +18,7 @@ import { resolveIssueAction } from '@/server/actions/issues'
 import type { ChapterCheckResult } from '@/server/chapter-check'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
 import { ApprovalDialog } from './approval-dialog'
+import { CheckContext } from './check-context'
 import { EDITOR_ONLY_NOTE, canEditChapter, offerUndo, rangeOf } from './shared'
 import { WikiFixDialog } from './wiki-fix-dialog'
 
@@ -49,6 +51,18 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     setIssues(data.issues)
   }
   const ai = useAiRun()
+  const auto = useAutoCheck(data.chapter.id)
+  const [checkedKey, setCheckedKey] = useState(0)
+  // Show a finished auto check before router.refresh brings its issues back in data.issues.
+  // The first previous value is the one at mount, so a late panel keeps fresh server data.
+  const [previousAutoResult, setPreviousAutoResult] = useState(auto.result)
+  if (auto.result !== previousAutoResult) {
+    setPreviousAutoResult(auto.result)
+    if (auto.result) {
+      setIssues(auto.result.issues)
+      setCheckedKey((key) => key + 1)
+    }
+  }
   const [busyId, setBusyId] = useState<string | null>(null)
   const [approvalOpen, setApprovalOpen] = useState(false)
   const [fixing, setFixing] = useState<IssueRow | null>(null)
@@ -95,6 +109,7 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     })
     if (!result) return false
     setIssues(result.issues)
+    setCheckedKey((key) => key + 1)
     if ((opts?.openApproval ?? true) && result.proposals.length > 0) setApprovalOpen(true)
     api.refresh()
     return true
@@ -160,6 +175,12 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
         {editable &&
           (ai.running ? (
             <AiRunStatus label="점검 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+          ) : auto.running ? (
+            <AiRunStatus
+              label="자동 점검 중"
+              elapsedSec={auto.elapsedSec}
+              onCancel={() => cancelAutoCheck(data.chapter.id)}
+            />
           ) : (
             <Button size="sm" onClick={() => void runCheck()}>
               회차 점검
@@ -171,10 +192,19 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
         )}
       </div>
 
+      {data.chapter.archivedAt === null && (
+        <CheckContext
+          workId={data.workId}
+          chapterId={data.chapter.id}
+          position={data.chapter.position}
+          refreshKey={checkedKey}
+        />
+      )}
+
       {issues.length === 0 && (
         <EmptyState
           title="열린 지적이 없습니다."
-          description="회차 점검을 누르면 설정과 어긋나는 문장을 찾아 줍니다."
+          description="회차 점검을 누르거나 회차를 완료로 바꾸면 설정과 어긋나는 문장을 찾아 줍니다."
         />
       )}
 

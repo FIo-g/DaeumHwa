@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import type { ChapterStatus } from '@/db/types'
 import { lengthShortfall, shortfallMessage } from '@/lib/chapter-length'
+import { startAutoCheck } from '@/lib/client/auto-check'
 import { isSampleChapter } from '@/lib/client/sample-session'
 import { type AutosaveInput, type AutosaveResult, useAutosave } from '@/lib/client/use-autosave'
 import { runAction } from '@/lib/client/run-action'
@@ -174,10 +175,23 @@ export function WritingWorkspace({
   const [completeMessage, setCompleteMessage] = useState<string | null>(null)
 
   async function applyStatus(next: ChapterStatus) {
+    // Read before the action: the confirm dialog path still sees 'draft' here.
+    const wasDraft = chapter.status === 'draft'
+    // Both the directive inference and the auto check read the saved manuscript.
+    if (next === 'done') await saveNow()
     const result = await runAction(setChapterStatusAction({ chapterId: chapter.id, status: next }))
     if (result) {
       if (next === 'done') fireDirectiveInfer(workId, chapter.id)
       router.refresh()
+      if (wasDraft && next === 'done') {
+        startAutoCheck({
+          workId,
+          chapterId: chapter.id,
+          position: chapter.position,
+          onDone: () => router.refresh(),
+          navigate: (href) => router.push(href),
+        })
+      }
     }
   }
 

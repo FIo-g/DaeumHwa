@@ -16,6 +16,14 @@ vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 
+// This test is only about the infer route. A done chapter also starts the auto check now,
+// which would add its own fetch call, so keep it out of this file.
+vi.mock('@/lib/client/auto-check', () => ({
+  startAutoCheck: vi.fn(),
+  useAutoCheck: () => ({ running: false, elapsedSec: 0, result: null }),
+  cancelAutoCheck: vi.fn(),
+}))
+
 vi.mock('@/server/actions/chapters', () => ({
   setChapterStatusAction: vi.fn(),
   restoreChapterAction: vi.fn(),

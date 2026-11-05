@@ -204,3 +204,11 @@ export function chapterLabel(position: number, title?: string | null): string {
   const t = stripEpisodePrefix(title ?? '', position)
   return t ? `${position}화 ${t}` : `${position}화`
 }
+
+/** Valid range of a fact: "3화부터 ~5화", "3화부터", "~5화", or null when open on both ends. */
+export function factValidityText(from: number | null, to: number | null): string | null {
+  if (from !== null && to !== null) return `${from}화부터 ~${to}화`
+  if (from !== null) return `${from}화부터`
+  if (to !== null) return `~${to}화`
+  return null
+}

@@ -5,6 +5,8 @@ import { ChapterTable, type ChapterTableRow } from './chapter-table'
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
+  push: vi.fn(),
+  startAutoCheck: vi.fn(() => true),
   setChapterStatusAction: vi.fn(),
   setChapterPublishedOnAction: vi.fn(),
   moveChapterAction: vi.fn(),
@@ -13,7 +15,13 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: mocks.refresh, push: vi.fn() }),
+  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
+}))
+
+vi.mock('@/lib/client/auto-check', () => ({
+  startAutoCheck: mocks.startAutoCheck,
+  useAutoCheck: () => ({ running: false, elapsedSec: 0, result: null }),
+  cancelAutoCheck: vi.fn(),
 }))
 
 vi.mock('@/server/actions/chapters', () => ({
@@ -59,6 +67,7 @@ const rows: ChapterTableRow[] = [
 
 beforeEach(() => {
   mocks.refresh.mockReset()
+  mocks.startAutoCheck.mockReset().mockReturnValue(true)
   mocks.setChapterStatusAction.mockReset().mockResolvedValue({ ok: true, data: {} })
   mocks.setChapterPublishedOnAction.mockReset().mockResolvedValue({ ok: true, data: {} })
   mocks.moveChapterAction.mockReset().mockResolvedValue({ ok: true, data: undefined })
@@ -96,6 +105,49 @@ describe('ChapterTable', () => {
       }),
     )
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalled())
+  })
+
+  it('starts the auto check after a draft row is marked done', async () => {
+    render(<ChapterTable workId="w1" chapters={rows} targetChars={5500} canEdit />)
+    fireEvent.click(screen.getByRole('button', { name: '2화 상태 바꾸기' }))
+    await waitFor(() =>
+      expect(mocks.startAutoCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ workId: 'w1', chapterId: rows[1].id, position: 2 }),
+      ),
+    )
+  })
+
+  it('starts the auto check after confirming a short draft', async () => {
+    const shortDraft: ChapterTableRow = {
+      id: '44444444-4444-4444-8444-444444444444',
+      position: 4,
+      title: '짧은 장면',
+      status: 'draft',
+      charCount: 4265,
+      publishedOn: null,
+      updatedAt: '2026-10-16T06:00:00.000Z',
+      archivedAt: null,
+    }
+    render(<ChapterTable workId="w1" chapters={[shortDraft]} targetChars={5500} canEdit />)
+    fireEvent.click(screen.getByRole('button', { name: '4화 상태 바꾸기' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(mocks.startAutoCheck).not.toHaveBeenCalled()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '완료하기' }))
+    await waitFor(() => expect(mocks.startAutoCheck).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not start a check when a done row goes back to draft', async () => {
+    const doneRow = { ...rows[1], status: 'done' as const }
+    render(<ChapterTable workId="w1" chapters={[doneRow]} targetChars={5500} canEdit />)
+    fireEvent.click(screen.getByRole('button', { name: '2화 상태 바꾸기' }))
+    await waitFor(() =>
+      expect(mocks.setChapterStatusAction).toHaveBeenCalledWith({
+        chapterId: doneRow.id,
+        status: 'draft',
+      }),
+    )
+    expect(mocks.startAutoCheck).not.toHaveBeenCalled()
   })
 
   it('disables moving the first chapter up and the last visible chapter down', () => {
