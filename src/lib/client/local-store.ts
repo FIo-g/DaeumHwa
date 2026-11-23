@@ -58,7 +58,7 @@ export function clearDraft(key: string): Promise<void> {
   })
 }
 
-/** Removes every draft that belongs to one user. Used on sign-out. */
+/** Removes every draft that belongs to one user. */
 export function clearUserDrafts(userId: string): Promise<void> {
   const prefix = `${userId}:`
   return withDb(undefined, async (db) => {
