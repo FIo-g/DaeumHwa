@@ -17,6 +17,7 @@ import type { Actor, IssueRow, ProposalRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { CHAPTER_EXTRACT_SYSTEM } from '@/ai/tasks/chapter-extract'
 import { MAX_PROOFREAD_AI_CHARS, runChapterCheck, runProofread } from '@/server/chapter-check'
+import { resolveIssue } from '@/server/issues'
 import { approveProposal } from '@/server/proposals'
 import { createTestDb } from '@/test/db'
 import {
@@ -200,7 +201,7 @@ describe('runChapterCheck', () => {
     })
   })
 
-  it('re-running replaces open issues but keeps a dismissed one', async () => {
+  it('does not reopen a dismissed finding when the check returns it again', async () => {
     const chapter = await createTestChapter(db, workId, {
       position: 1,
       body: '서윤은 오른손으로 검을 쥐었다.',
@@ -215,7 +216,7 @@ describe('runChapterCheck', () => {
       new FakeAiClient(),
     )
     const firstIssue = first.issues[0]
-    await db.update(issues).set({ status: 'dismissed' }).where(eq(issues.id, firstIssue.id))
+    await resolveIssue(db, actor(owner.id), { issueId: firstIssue.id, status: 'dismissed' })
 
     const second = await runChapterCheck(
       db,
@@ -225,11 +226,8 @@ describe('runChapterCheck', () => {
     )
 
     const all = await db.select().from(issues).where(eq(issues.chapterId, chapter.id))
-    const dismissed = all.filter((i) => i.status === 'dismissed')
-    const open = all.filter((i) => i.status === 'open')
-    expect(dismissed.map((i) => i.id)).toEqual([firstIssue.id])
-    expect(open).toHaveLength(second.issues.length)
-    expect(open.map((i) => i.id)).not.toContain(firstIssue.id)
+    expect(second.issues).toEqual([])
+    expect(all).toMatchObject([{ id: firstIssue.id, status: 'dismissed' }])
   })
 
   it('replaces pending post_chapter proposals on re-run instead of stacking them', async () => {
