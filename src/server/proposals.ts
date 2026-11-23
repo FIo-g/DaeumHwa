@@ -238,12 +238,13 @@ async function chapterPositions(
   return new Map(rows.map((r) => [r.id, r.position]))
 }
 
-async function requireEntryInWork(db: Db, workId: string, entryId: string): Promise<EntryRow> {
-  const [row] = await db
+async function lockEntryInWork(tx: Db, workId: string, entryId: string): Promise<EntryRow> {
+  const [row] = await tx
     .select()
     .from(wikiEntries)
     .where(and(eq(wikiEntries.id, entryId), eq(wikiEntries.workId, workId)))
     .limit(1)
+    .for('update')
   if (!row) throw new AppError('NOT_FOUND', NOT_FOUND_MESSAGE)
   return row
 }
@@ -281,6 +282,24 @@ const DUPLICATE_FACT_NOTE = '이미 같은 사실이 있어 새로 추가하지 
 const DUPLICATE_RELATION_NOTE = '이미 같은 관계가 있어 새로 만들지 않았습니다.'
 const DUPLICATE_THREAD_NOTE = '이미 같은 떡밥이 있어 새로 만들지 않았습니다.'
 
+function fillEmptyEntryValues(
+  current: EntryRow,
+  proposed: Pick<EntryInput, 'summary' | 'fields'>,
+): Pick<EntryInput, 'summary' | 'fields'> {
+  const patch: Pick<EntryInput, 'summary' | 'fields'> = {}
+  if (!current.summary.trim() && proposed.summary?.trim()) patch.summary = proposed.summary
+  const fields = { ...current.fields }
+  for (const [rawKey, value] of Object.entries(proposed.fields ?? {})) {
+    const key = rawKey.trim()
+    const currentValue = Object.hasOwn(fields, key) ? fields[key] : ''
+    if (key && !currentValue.trim() && value.trim()) {
+      fields[key] = value
+      patch.fields = fields
+    }
+  }
+  return patch
+}
+
 /** Applies one validated payload through the wiki services. Runs inside the approval transaction. */
 async function applyProposal(
   tx: Db,
@@ -313,38 +332,26 @@ async function applyProposal(
         return { targetId: created.id, notes: [] }
       }
       // Same name already on the wiki: add new aliases and fill only the empty summary and fields.
-      const patch: Partial<EntryInput> = {}
+      const patch: Partial<EntryInput> = fillEmptyEntryValues(existing, p)
       const addedAliases = [...p.aliases, p.name]
         .map((a) => a.trim())
         .filter((a) => a && a !== existing.name && !existing.aliases.includes(a))
       if (addedAliases.length > 0) {
         patch.aliases = [...existing.aliases, ...new Set(addedAliases)]
       }
-      if (!existing.summary.trim() && p.summary.trim()) patch.summary = p.summary
-      const fields: Record<string, string> = { ...existing.fields }
-      let fieldsChanged = false
-      for (const [key, value] of Object.entries(p.fields)) {
-        if (!fields[key]?.trim() && value.trim()) {
-          fields[key] = value
-          fieldsChanged = true
-        }
-      }
-      if (fieldsChanged) patch.fields = fields
       if (Object.keys(patch).length > 0) await updateEntry(tx, actor, existing.id, patch, o)
       return { targetId: existing.id, notes: [] }
     }
 
     case 'entry_update': {
       const p = payload as ProposalPayloadMap['entry_update']
-      const current = await requireEntryInWork(tx, workId, p.entryId)
+      const current = await lockEntryInWork(tx, workId, p.entryId)
       // Aliases are only added, never dropped: a removed alias would break name matching.
-      const patch: Partial<EntryInput> = {}
-      if (p.patch.summary !== undefined) patch.summary = p.patch.summary
+      const patch: Partial<EntryInput> = fillEmptyEntryValues(current, p.patch)
       if (p.patch.aliases !== undefined) {
         const added = p.patch.aliases.filter((a) => !current.aliases.includes(a))
         if (added.length > 0) patch.aliases = [...current.aliases, ...added]
       }
-      if (p.patch.fields !== undefined) patch.fields = { ...current.fields, ...p.patch.fields }
       if (Object.keys(patch).length > 0) await updateEntry(tx, actor, current.id, patch, o)
       return { targetId: current.id, notes: [] }
     }
