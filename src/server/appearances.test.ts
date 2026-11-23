@@ -1,5 +1,6 @@
+import type { PGlite } from '@electric-sql/pglite'
 import { eq } from 'drizzle-orm'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '@/db/client'
 import { wikiEntries } from '@/db/schema'
 import { createTestDb } from '@/test/db'
@@ -65,6 +66,31 @@ describe('appearances', () => {
     const after = await getEntryAppearances(db, entry.id)
     expect(after).toEqual([expect.objectContaining({ position: 2, mentionCount: 1 })])
     expect(after.map((a) => a.chapterId)).not.toContain(ch1.id)
+  })
+
+  it('prefilters chapter bodies and keeps exact name and alias counts', async () => {
+    const owner = await createTestUser(db)
+    const work = await createTestWork(db, owner.id)
+    const entry = await createTestEntry(db, work.id, { name: '이서윤', aliases: [' 서윤 '] })
+    const named = await createTestChapter(db, work.id, { position: 1, body: '이서윤은 웃었다.' })
+    const aliased = await createTestChapter(db, work.id, {
+      position: 2,
+      body: '서윤은 웃었다. 서윤이 걸었다.',
+    })
+    await createTestChapter(db, work.id, { position: 3, body: '김이서윤이 왔다.' })
+    await createTestChapter(db, work.id, { position: 4, body: '민준이 왔다.' })
+    const query = vi.spyOn((db as Db & { $client: PGlite }).$client, 'query')
+
+    await recomputeAppearancesForEntry(db, entry.id)
+
+    const appearances = await getEntryAppearances(db, entry.id)
+    expect(appearances.map(({ chapterId, mentionCount }) => [chapterId, mentionCount])).toEqual([
+      [named.id, 1],
+      [aliased.id, 2],
+    ])
+    const read = query.mock.calls.findIndex(([statement]) => statement.includes('from "chapters"'))
+    const { rows } = await query.mock.results[read].value
+    expect(rows).toHaveLength(3)
   })
 
   it('returns the first appearance position per entry', async () => {

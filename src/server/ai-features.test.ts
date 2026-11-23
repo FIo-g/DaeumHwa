@@ -1,3 +1,4 @@
+import type { PGlite } from '@electric-sql/pglite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { FakeAiClient } from '@/test/fake-ai'
@@ -149,6 +150,30 @@ describe('style card suggestion', () => {
 
     const stored = await db.select().from(proposals).where(eq(proposals.id, row.id))
     expect(stored).toHaveLength(1)
+  })
+
+  it('reads dialogue in pages and stops after 40 newest samples', async () => {
+    const entry = await createTestEntry(db, workId, { name: '서윤' })
+    const lines = Array.from(
+      { length: 45 },
+      (_, index) => `서윤이 말했다. "${index + 1}번째 이야기야."`,
+    )
+    for (const [index, line] of lines.entries()) {
+      await createTestChapter(db, workId, { position: index + 1, body: line })
+    }
+    const client = new FakeAiClient()
+    const query = vi.spyOn((db as Db & { $client: PGlite }).$client, 'query')
+
+    await suggestStyleCard(db, actor, { workId, entryId: entry.id }, client)
+
+    const samples = lines.reverse().slice(0, 40)
+    expect(client.recorded[0].prompt).toBe(
+      ['<character>서윤</character>', '<samples>', ...samples, '</samples>'].join('\n'),
+    )
+    const chapterReads = query.mock.calls.flatMap(([statement], index) =>
+      statement.includes('from "chapters"') ? [query.mock.results[index].value] : [],
+    )
+    expect((await Promise.all(chapterReads)).map(({ rows }) => rows.length)).toEqual([20, 20])
   })
 
   it('fails with BAD_STATE when fewer than three dialogue lines exist', async () => {
