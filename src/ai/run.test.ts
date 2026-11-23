@@ -72,12 +72,14 @@ function billedFailureClient(usage: { inputTokens: number; outputTokens: number 
   }
 }
 
-const ENV_KEYS = ['AI_DAILY_TOKEN_LIMIT'] as const
+const ENV_KEYS = ['AI_DAILY_TOKEN_LIMIT', 'AI_GLOBAL_DAILY_TOKEN_LIMIT'] as const
 const saved: Record<string, string | undefined> = {}
 
 beforeEach(() => {
-  for (const key of ENV_KEYS) saved[key] = process.env[key]
-  delete process.env.AI_DAILY_TOKEN_LIMIT
+  for (const key of ENV_KEYS) {
+    saved[key] = process.env[key]
+    delete process.env[key]
+  }
 })
 
 afterEach(() => {
@@ -381,6 +383,30 @@ describe('assertWithinLimit', () => {
     ).rejects.toMatchObject({ code: 'AI_LIMIT' })
     const after = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
     expect(after).toHaveLength(before.length)
+  })
+
+  it('throws AI_LIMIT when two users together exceed the global limit for the Seoul day', async () => {
+    const { db, userId } = await setup()
+    const other = await createTestUser(db)
+    const now = new Date('2026-10-16T16:00:00Z')
+    process.env.AI_DAILY_TOKEN_LIMIT = '100'
+    process.env.AI_GLOBAL_DAILY_TOKEN_LIMIT = '100'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(now)
+    try {
+      await insertRun(db, other.id, {
+        inputTokens: 70,
+        outputTokens: 0,
+        createdAt: new Date('2026-10-16T14:59:00Z'),
+      })
+      await insertRun(db, userId, { inputTokens: 40, outputTokens: 20, createdAt: now })
+      await expect(assertWithinLimit(db, userId)).resolves.toBeUndefined()
+
+      await insertRun(db, other.id, { inputTokens: 40, outputTokens: 20, createdAt: now })
+      await expect(assertWithinLimit(db, userId)).rejects.toMatchObject({ code: 'AI_LIMIT' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('accepts thousands separators and underscores in AI_DAILY_TOKEN_LIMIT', async () => {
