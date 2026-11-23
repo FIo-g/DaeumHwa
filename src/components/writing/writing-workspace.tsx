@@ -317,7 +317,7 @@ export function WritingWorkspace({
           />
         </div>
         {wide && (
-          <aside className="sticky top-6 max-h-[calc(100vh-3rem)] w-[340px] shrink-0 overflow-y-auto">
+          <aside className="sticky top-6 max-h-[calc(100vh-3rem)] w-[380px] shrink-0 overflow-y-auto">
             <WritingSidePanel {...panelProps} />
           </aside>
         )}

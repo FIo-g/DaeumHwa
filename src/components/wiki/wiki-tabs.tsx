@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 export type WikiTab =
   'characters' | 'world' | 'threads' | 'graph' | 'naming' | 'summaries' | 'styles' | 'requests'
@@ -18,7 +18,7 @@ const TABS: { key: WikiTab; label: string; path: (workId: string) => string }[] 
 /** Tab bar of the settings board. Tabs are links so each state has its own URL. */
 export function WikiTabs({ workId, active }: { workId: string; active: WikiTab }) {
   return (
-    <nav aria-label="설정 보드 탭" className="flex flex-wrap gap-1 border-b pb-2">
+    <nav aria-label="설정 보드 탭" className="flex flex-wrap gap-x-5 gap-y-2 border-b border-rule">
       {TABS.map((tab) => {
         const current = tab.key === active
         return (
@@ -26,7 +26,12 @@ export function WikiTabs({ workId, active }: { workId: string; active: WikiTab }
             key={tab.key}
             href={tab.path(workId)}
             aria-current={current ? 'page' : undefined}
-            className={buttonVariants({ variant: current ? 'secondary' : 'ghost', size: 'sm' })}
+            className={cn(
+              'relative pb-2 text-sm',
+              current
+                ? 'font-semibold text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
           >
             {tab.label}
           </Link>

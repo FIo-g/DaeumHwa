@@ -19,7 +19,7 @@ export function FilterLinks({ label, options }: FilterLinksProps) {
           href={option.href}
           aria-current={option.active ? 'true' : undefined}
           className={buttonVariants({
-            variant: option.active ? 'secondary' : 'outline',
+            variant: option.active ? 'default' : 'outline',
             size: 'sm',
           })}
         >

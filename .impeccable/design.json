@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-23T12:32:44+00:00",
+  "title": "Design System: 다음화",
+  "extensions": {
+    "colorMeta": {
+      "desk": {
+        "role": "neutral",
+        "displayName": "Desk",
+        "canonical": "#eef0ed",
+        "tonalRamp": [
+          "#525252",
+          "#7e807e",
+          "#abacab",
+          "#d3d5d2",
+          "#f1f3f0",
+          "#f4f6f3",
+          "#f6f8f5",
+          "#f9faf8"
+        ]
+      },
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Sheet",
+        "canonical": "#fafbf9",
+        "tonalRamp": [
+          "#565656",
+          "#848584",
+          "#b4b4b3",
+          "#dedfdd",
+          "#fafbf9",
+          "#fafbf9",
+          "#fafbf9",
+          "#fafbf9"
+        ]
+      },
+      "graphite": {
+        "role": "primary",
+        "displayName": "Graphite",
+        "canonical": "#2b2d2c",
+        "tonalRamp": [
+          "#171818",
+          "#1d1e1e",
+          "#232424",
+          "#282929",
+          "#5f605f",
+          "#929492",
+          "#bcbdbc",
+          "#e1e2e0"
+        ]
+      },
+      "graphite-muted": {
+        "role": "neutral",
+        "displayName": "Graphite Muted",
+        "canonical": "#565b58",
+        "tonalRamp": [
+          "#242626",
+          "#323534",
+          "#414442",
+          "#4d524f",
+          "#7f8380",
+          "#a8aba8",
+          "#c9cbc9",
+          "#e6e8e6"
+        ]
+      },
+      "pencil-grey": {
+        "role": "neutral",
+        "displayName": "Pencil Grey",
+        "canonical": "#8f9591",
+        "tonalRamp": [
+          "#353737",
+          "#4f5250",
+          "#696d6a",
+          "#808582",
+          "#aaaeab",
+          "#c4c8c5",
+          "#dadcda",
+          "#edefed"
+        ]
+      },
+      "margin-rule": {
+        "role": "neutral",
+        "displayName": "Margin Rule",
+        "canonical": "#c9cdc8",
+        "tonalRamp": [
+          "#474847",
+          "#6c6e6c",
+          "#919491",
+          "#b3b6b2",
+          "#d5d8d4",
+          "#e2e4e0",
+          "#ebedea",
+          "#f4f5f3"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#d3d7d2",
+        "tonalRamp": [
+          "#4a4b4a",
+          "#717371",
+          "#989b98",
+          "#bbbfbb",
+          "#dde0dc",
+          "#e6e9e6",
+          "#eef0ed",
+          "#f5f7f4"
+        ]
+      },
+      "wash": {
+        "role": "neutral",
+        "displayName": "Wash",
+        "canonical": "#e2e5e1",
+        "tonalRamp": [
+          "#4e4f4f",
+          "#787a78",
+          "#a3a5a2",
+          "#c9cbc8",
+          "#e8eae7",
+          "#eef0ed",
+          "#f3f4f2",
+          "#f7f8f6"
+        ]
+      },
+      "wash-muted": {
+        "role": "neutral",
+        "displayName": "Wash Muted",
+        "canonical": "#e4e7e3",
+        "tonalRamp": [
+          "#4f504f",
+          "#7a7b7a",
+          "#a4a6a4",
+          "#cacdca",
+          "#eaece8",
+          "#eff1ee",
+          "#f3f5f2",
+          "#f7f9f6"
+        ]
+      },
+      "proof-red": {
+        "role": "secondary",
+        "displayName": "Proof Red",
+        "canonical": "#c8321f",
+        "tonalRamp": [
+          "#461a14",
+          "#6c2018",
+          "#90281a",
+          "#b22e1d",
+          "#d46456",
+          "#e1968c",
+          "#ebbfb8",
+          "#f4e3df"
+        ]
+      },
+      "blue-pencil": {
+        "role": "tertiary",
+        "displayName": "Blue Pencil",
+        "canonical": "#2f5d9e",
+        "tonalRamp": [
+          "#19263b",
+          "#1f3657",
+          "#254673",
+          "#2b548d",
+          "#6284b5",
+          "#94accc",
+          "#bdccde",
+          "#e2e8ee"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Intro page headline only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Intro page section heads."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "App page titles."
+      },
+      "manuscript": {
+        "displayName": "Manuscript",
+        "purpose": "Editor text and its highlight layer; landing excerpts at 20-24px."
+      },
+      "canon-quote": {
+        "displayName": "Canon Quote",
+        "purpose": "Quoted manuscript and wiki lines in findings."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Intro paragraphs."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "UI text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Badges, finding kind, field captions."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sheet",
+        "value": "0 1px 2px rgb(43 45 44 / 0.06), 0 18px 40px -24px rgb(43 45 44 / 0.35)",
+        "purpose": "A whole sheet on the desk: landing sheet and auth card only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-pencil",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Easing for every authored mark draw."
+      },
+      {
+        "name": "proof-stroke",
+        "value": "0.45s, delay var(--proof-delay, 0.15s)",
+        "purpose": "Proof circle draws itself once (first intro mark only)."
+      },
+      {
+        "name": "proof-reach",
+        "value": "0.25s after 0.6s, scaleX from 0",
+        "purpose": "Leader reaches into the margin after the circle."
+      },
+      {
+        "name": "proof-underline",
+        "value": "0.45s, background-size 0% to 100% at 2px",
+        "purpose": "In-app finding underline drawn once when the finding lands."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Graphite type-like button for the main action.",
+      "html": "<button class=\"ds-btn-primary\">시작하기</button>",
+      "css": ".ds-btn-primary{background:var(--primary,#2b2d2c);color:var(--primary-foreground,#fafbf9);height:32px;padding:0 10px;border:1px solid transparent;border-radius:4px;font-size:14px;font-weight:500;transition:background .15s}.ds-btn-primary:hover{background:rgb(43 45 44/.8)}.ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 3px rgb(47 93 158/.5)}.ds-btn-primary:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action on desk with a hairline border.",
+      "html": "<button class=\"ds-btn-outline\">위키 고치기</button>",
+      "css": ".ds-btn-outline{background:#eef0ed;color:#2b2d2c;height:32px;padding:0 10px;border:1px solid #d3d7d2;border-radius:4px;font-size:14px;font-weight:500;transition:background .15s}.ds-btn-outline:hover{background:#e4e7e3}.ds-btn-outline:focus-visible{outline:none;border-color:#2f5d9e;box-shadow:0 0 0 3px rgb(47 93 158/.5)}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Pencil-grey stroke field with a blue-pencil caret and focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"작품 제목\">",
+      "css": ".ds-input{background:transparent;color:#2b2d2c;height:32px;padding:4px 10px;border:1px solid #8f9591;border-radius:4px;font-size:14px;caret-color:#2f5d9e;transition:border-color .15s}.ds-input::placeholder{color:#565b58}.ds-input:focus-visible{outline:none;border-color:#2f5d9e;box-shadow:0 0 0 3px rgb(47 93 158/.5)}"
+    },
+    {
+      "name": "Work Sidebar",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Grouped work navigation on the desk; active item sits on sheet.",
+      "html": "<nav class=\"ds-nav\"><p class=\"ds-nav-group\">원고</p><a class=\"ds-nav-item\" href=\"#\">집필</a><a class=\"ds-nav-item ds-active\" href=\"#\">회차</a><p class=\"ds-nav-group\">설정</p><a class=\"ds-nav-item\" href=\"#\">승인 대기 <span class=\"ds-count\">1</span></a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:2px;width:208px;background:#eef0ed;padding:12px}.ds-nav-group{margin:12px 0 4px;padding:0 12px;font-size:12px;color:#565b58}.ds-nav-item{display:flex;justify-content:space-between;padding:6px 12px;border-radius:2.4px;font-size:14px;color:#565b58;text-decoration:none;transition:background .15s,color .15s}.ds-nav-item:hover{background:#fafbf9;color:#2b2d2c}.ds-nav-item:focus-visible{outline:2px solid #2f5d9e}.ds-active{background:#fafbf9;color:#2b2d2c;font-weight:500;box-shadow:inset 0 0 0 1px #c9cdc8}.ds-count{min-width:20px;padding:2px 6px;border-radius:2.4px;background:#2b2d2c;color:#fafbf9;font-size:12px;text-align:center}"
+    },
+    {
+      "name": "Fact Status Badges",
+      "kind": "chip",
+      "refersTo": "fact-badge-confirmed",
+      "description": "Status by line shape: solid, dashed, dotted.",
+      "html": "<span class=\"ds-fact ds-confirmed\">확정</span> <span class=\"ds-fact ds-assumed\">[가정]</span> <span class=\"ds-fact ds-undecided\">미정</span>",
+      "css": ".ds-fact{display:inline-flex;align-items:center;height:20px;padding:2px 8px;border:1px solid;border-radius:2.4px;background:#fafbf9;font-size:12px;font-weight:500}.ds-confirmed{border-color:#2f5d9e;color:#2f5d9e}.ds-assumed{border-style:dashed;border-color:rgb(47 93 158/.7);color:#2f5d9e}.ds-undecided{border-style:dotted;border-color:#8f9591;color:#565b58}"
+    },
+    {
+      "name": "Finding Card",
+      "kind": "card",
+      "refersTo": "finding-card",
+      "description": "A check finding: manuscript sentence beside the wiki original.",
+      "html": "<div class=\"ds-finding\"><p class=\"ds-meta\"><span class=\"ds-kind\">설정 충돌</span> 심각도 보통</p><div class=\"ds-cols\"><div><p class=\"ds-cap\">원고</p><p class=\"ds-ms\"><span class=\"ds-under\">윤서는 왼손에 단검을 쥐고 문 앞에 섰다.</span></p></div><div class=\"ds-canon-col\"><p class=\"ds-cap\">위키 원문</p><p class=\"ds-canon\">도윤서는 단검을 오른손에 쥔다.</p></div></div></div>",
+      "css": ".ds-finding{display:grid;gap:12px;padding:16px;border:1px solid #c9cdc8;border-radius:2.4px;background:#fafbf9;color:#2b2d2c;max-width:560px}.ds-meta{margin:0;font-size:12px;color:#565b58}.ds-kind{color:#c8321f;font-weight:500;margin-right:12px}.ds-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ds-canon-col{border-left:1px solid #c9cdc8;padding-left:12px}.ds-cap{margin:0 0 4px;font-size:12px;color:#565b58}.ds-ms,.ds-canon{margin:0;font-family:'Noto Serif KR', AppleMyungjo, serif;font-size:15px;line-height:28px}.ds-under{text-decoration:underline 2px #c8321f;text-underline-offset:5px}.ds-canon{color:#2f5d9e}"
+    },
+    {
+      "name": "Proof Circle",
+      "kind": "custom",
+      "refersTo": "proof-red",
+      "description": "Intro-page signature: hand-drawn red ellipse that draws itself once.",
+      "html": "<p class=\"ds-proof\">종루지기가 <span class=\"ds-circ\">열한 층<svg viewBox=\"0 0 100 40\" preserveAspectRatio=\"none\"><path d=\"M56 3C83 2 99 9 98 20C97 32 75 38 48 38C20 38 2 31 3 20C4 9 25 3 51 4C63 4 71 6 76 10\" pathLength=\"1\"/></svg></span> 꼭대기에서 손을 흔들었다.</p>",
+      "css": ".ds-proof{font-family:'Noto Serif KR', AppleMyungjo, serif;font-size:24px;line-height:2.1;color:#2b2d2c;background:#fafbf9;padding:16px}.ds-circ{position:relative;display:inline-block;line-height:1.35}.ds-circ svg{position:absolute;top:-.22em;left:-.42em;width:calc(100% + .84em);height:calc(100% + .44em);overflow:visible;pointer-events:none}.ds-circ path{fill:none;stroke:#c8321f;stroke-width:1.75;stroke-linecap:round;vector-effect:non-scaling-stroke;stroke-dasharray:1;animation:ds-draw .45s cubic-bezier(.16,1,.3,1) .15s both}@keyframes ds-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}@media (prefers-reduced-motion:reduce){.ds-circ path{animation:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Returned Galley Proof (교정지)",
+    "overview": "Every screen is an editor's proof handed back to the author: cool proof paper on a slightly darker desk, graphite type, one hairline margin rule, and two pencils. A proof-red pencil marks what is wrong in the manuscript; a blue pencil quotes the canon, the settled fact from the wiki. The intro page plays this out at full size, with a circled word and a red leader running into the margin. Inside the app the same world shows as precision and restraint: sheet-coloured working areas, serif for anything that is manuscript or canon, a quiet system sans for controls.\n\nDensity is that of a working document, not a dashboard. Surfaces are flat paper separated by 1px rules; the only lift in the system is the sheet itself sitting on the desk. Light scene only: there is no theme switch, and the inherited shadcn dark block in `globals.css` is not part of this system.\n\nThe world refuses the category default for this product: a SaaS hero beside a framed app screenshot, then a row of feature cards.",
+    "keyCharacteristics": [
+      "Cool proof paper (sheet on desk), graphite text, a single 1px margin rule.",
+      "Two pencils with fixed jobs: proof red for errors, blue pencil for the canon.",
+      "Myeongjo serif for headlines, manuscript and canon quotes; system Hangul sans for UI.",
+      "Marks are drawn strokes (circle, underline, leader), drawn once.",
+      "Corners of 2 to 4px; flat surfaces; one soft sheet lift."
+    ],
+    "rules": [
+      {
+        "name": "The Two Pencils Rule",
+        "body": "Proof red only marks what is wrong; blue pencil only carries the canon and focus. Never swap them, never use either as a solid fill (translucent text highlights only: 5% red hover, 12% blue comment highlight, 22% blue selection), and never introduce a third accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Shape Carries Status Rule",
+        "body": "Fact status reads without colour: confirmed is a solid blue line, assumed is dashed blue, undecided is dotted grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The Whose Text Rule",
+        "body": "Serif means manuscript, canon or a heading; sans means interface. A control is never set in serif, and a quoted sentence is never set in sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The Keep-Words Rule",
+        "body": "Korean headings and prose use `break-keep` so words do not split mid-syllable-block.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Sheet Rule",
+        "body": "Only a full sheet of paper lifts. Cards inside the sheet are bordered with the margin rule, never shadowed.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep proof red for marks and errors and blue pencil for the canon and focus, nothing else.",
+      "Do draw marks as strokes: circle and leader on the intro page, a 2px underline in the app, wavy red for spelling, dotted blue for naming.",
+      "Do set manuscript and canon text in Noto Serif KR and controls in the system sans.",
+      "Do separate surfaces with the 1px margin rule (`#c9cdc8`) and keep corners at 2 to 4px.",
+      "Do quote both texts in full when showing a finding: the manuscript sentence and the wiki original.",
+      "Do write every UI string in short, plain Korean; compose shadcn (Base UI) parts with the `render` prop.",
+      "Do honour reduced motion by showing marks already drawn."
+    ],
+    "donts": [
+      "Don't mark findings with tinted left borders, coloured backgrounds or pill badges.",
+      "Don't shadow cards, panels or buttons; only a whole sheet lifts.",
+      "Don't add a third accent colour or use either pencil as a large fill.",
+      "Don't build a SaaS hero with a framed app screenshot followed by a row of feature cards.",
+      "Don't add a dark theme or theme switch; the system is light only.",
+      "Don't author motion beyond the pencil-stroke draw (plain hover and colour transitions aside), and never loop it."
+    ]
+  }
+}

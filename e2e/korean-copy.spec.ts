@@ -66,6 +66,10 @@ test('main screens show no English words', async ({ page, browser }) => {
     await scan(label)
   }
 
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('3화에 정한 설정 그대로')
+  await scan('intro')
+
   await page.goto('/signup')
   await expect(page.getByRole('button', { name: '가입하기', exact: true })).toBeVisible()
   await scan('signup')

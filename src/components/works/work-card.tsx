@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Role } from '@/db/types'
 import { formatKoreanDateTime } from '@/lib/dates'
@@ -48,7 +47,11 @@ export function WorkCard({
             <span className="text-xs text-muted-foreground">
               최근 수정 {formatKoreanDateTime(lastEditedAt)}
             </span>
-            {alertCount > 0 && <Badge variant="destructive">경고 {alertCount}</Badge>}
+            {alertCount > 0 && (
+              <span className="text-xs font-medium text-mark underline decoration-mark/40 underline-offset-4">
+                경고 {alertCount}
+              </span>
+            )}
           </div>
         </div>
       </Card>

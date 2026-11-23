@@ -33,9 +33,9 @@ export function TopBar({ user }: { user: SessionUser }) {
   }
 
   return (
-    <header className="border-b bg-background">
-      <div className="flex h-14 items-center justify-between gap-4 px-4">
-        <Link href="/works" className="text-base font-semibold tracking-tight">
+    <header className="border-b border-rule bg-sheet">
+      <div className="flex h-14 items-center justify-between gap-4 px-4 md:px-6">
+        <Link href="/works" className="font-serif text-lg font-bold tracking-tight">
           다음화
         </Link>
         <div className="flex items-center gap-3">

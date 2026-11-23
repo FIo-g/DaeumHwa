@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import type { IssueRow } from '@/db/types'
 import { cancelAutoCheck, useAutoCheck } from '@/lib/client/auto-check'
 import { postAction } from '@/lib/client/post-json'
@@ -213,32 +212,37 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
           const entry = data.entries.find((e) => e.id === issue.entryId)
           const busy = busyId === issue.id
           return (
-            <li key={issue.id} className="grid gap-3 rounded-lg border p-3">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge variant="outline">{ISSUE_KIND_LABEL[issue.kind]}</Badge>
-                <Badge variant="secondary">심각도 {SEVERITY_LABEL[issue.severity]}</Badge>
-              </div>
+            <li
+              key={issue.id}
+              className="@container grid gap-3 rounded-sm border border-rule bg-sheet p-4"
+            >
+              <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+                <span className="font-medium text-mark">{ISSUE_KIND_LABEL[issue.kind]}</span>
+                <span className="text-muted-foreground">
+                  심각도 {SEVERITY_LABEL[issue.severity]}
+                </span>
+              </p>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 @md:grid-cols-2">
                 <div className="grid content-start gap-1">
-                  <p className="text-xs font-medium text-muted-foreground">원고</p>
+                  <p className="text-xs text-muted-foreground">원고</p>
                   <button
                     type="button"
                     onClick={() => focusIssue(issue)}
-                    className="rounded-md bg-muted/60 p-2 text-left text-sm leading-6 hover:bg-muted"
+                    className="rounded-sm px-1 py-0.5 text-left font-serif text-[15px] leading-7 underline decoration-mark decoration-2 underline-offset-[5px] hover:bg-mark/5"
                   >
                     {issue.quote}
                   </button>
                 </div>
-                <div className="grid content-start gap-1">
-                  <p className="text-xs font-medium text-muted-foreground">위키</p>
-                  <p className="rounded-md border p-2 text-sm leading-6">
+                <div className="grid content-start gap-1 border-t border-rule pt-3 @md:border-t-0 @md:border-l @md:pt-0 @md:pl-3">
+                  <p className="text-xs text-muted-foreground">위키 원문</p>
+                  <p className="font-serif text-[15px] leading-7 text-canon">
                     {issue.wikiExcerpt || '근거 없음'}
                   </p>
                   {entry && (
                     <Link
                       href={`/works/${data.workId}/wiki/entries/${entry.id}`}
-                      className="text-xs underline underline-offset-4"
+                      className="w-fit text-xs text-canon underline decoration-canon/40 hover:decoration-canon"
                     >
                       {entry.name} 카드 열기
                     </Link>
@@ -248,7 +252,9 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
 
               {issue.explanation && <p className="text-sm">{issue.explanation}</p>}
               {issue.suggestion && (
-                <p className="text-sm text-muted-foreground">제안: {issue.suggestion}</p>
+                <p className="text-sm text-muted-foreground">
+                  제안: <span className="font-serif text-[15px] text-mark">{issue.suggestion}</span>
+                </p>
               )}
 
               {editable && (

@@ -46,14 +46,15 @@ export function WritingSidePanel({ data, api, text, position, autoCheck }: Writi
     <div data-chapter-position={position} className="flex min-w-0 flex-col gap-3">
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-3">
         <TabsList
+          variant="line"
           aria-label="작업 패널 탭"
-          className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0 group-data-horizontal/tabs:h-auto"
+          className="h-auto w-full flex-wrap justify-start gap-x-3 gap-y-2 rounded-none border-b border-rule p-0 pb-2 group-data-horizontal/tabs:h-auto"
         >
           {TABS.map((item) => (
             <TabsTrigger
               key={item.value}
               value={item.value}
-              className="flex-none rounded-full border px-3 py-1 data-active:bg-muted"
+              className="flex-none rounded-none px-0 py-1 text-muted-foreground group-data-horizontal/tabs:after:bottom-[-9px] data-active:font-semibold"
             >
               {item.label}
             </TabsTrigger>

@@ -8,7 +8,13 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-korean);
-  --font-heading: var(--font-sans);
+  --font-serif: var(--font-serif-ko), 'AppleMyungjo', 'Nanum Myeongjo', serif;
+  --font-heading: var(--font-serif);
+  --color-sheet: var(--sheet);
+  --color-mark: var(--mark);
+  --color-canon: var(--canon);
+  --color-rule: var(--rule);
+  --shadow-sheet: 0 1px 2px rgb(43 45 44 / 0.06), 0 18px 40px -24px rgb(43 45 44 / 0.35);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -52,40 +58,45 @@ body {
 }
 
 :root {
-  /* System Hangul stack. No font package is loaded (spec §2). */
+  /* System Hangul stack for UI text. The Myeongjo (Noto Serif KR) is loaded in layout.tsx. */
   --font-korean: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* The proof sheet: cool paper, graphite, a proof-red mark and a blue-pencil canon. */
+  --background: #eef0ed;
+  --sheet: #fafbf9;
+  --foreground: #2b2d2c;
+  --card: #fafbf9;
+  --card-foreground: #2b2d2c;
+  --popover: #fafbf9;
+  --popover-foreground: #2b2d2c;
+  --primary: #2b2d2c;
+  --primary-foreground: #fafbf9;
+  --secondary: #e2e5e1;
+  --secondary-foreground: #2b2d2c;
+  --muted: #e4e7e3;
+  --muted-foreground: #565b58;
+  --accent: #e2e5e1;
+  --accent-foreground: #2b2d2c;
+  --destructive: #c8321f;
+  --mark: #c8321f;
+  --canon: #2f5d9e;
+  --rule: #c9cdc8;
+  --border: #d3d7d2;
+  --input: #8f9591;
+  --ring: #2f5d9e;
+  --chart-1: #2f5d9e;
+  --chart-2: #c8321f;
+  --chart-3: #565b58;
+  --chart-4: #8f9591;
+  --chart-5: #2b2d2c;
+  --radius: 0.25rem;
+  --sidebar: #eef0ed;
+  --sidebar-foreground: #2b2d2c;
+  --sidebar-primary: #2b2d2c;
+  --sidebar-primary-foreground: #fafbf9;
+  --sidebar-accent: #e2e5e1;
+  --sidebar-accent-foreground: #2b2d2c;
+  --sidebar-border: #d3d7d2;
+  --sidebar-ring: #2f5d9e;
 }
 
 .dark {
@@ -131,5 +142,77 @@ body {
   }
   html {
     @apply font-sans;
+    accent-color: var(--canon);
+    scrollbar-color: var(--input) transparent;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--canon) 22%, transparent);
+    color: inherit;
+  }
+  textarea,
+  input {
+    caret-color: var(--canon);
+  }
+  a {
+    text-underline-offset: 0.28em;
+    text-decoration-thickness: 1px;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* The one authored motion: a pencil mark drawing itself. Reduced motion shows it already drawn. */
+@keyframes proof-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.proof-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: proof-draw 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--proof-delay, 0.15s);
+}
+
+@keyframes proof-reach {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.proof-reach {
+  animation: proof-reach 0.25s cubic-bezier(0.16, 1, 0.3, 1) 0.6s both;
+}
+
+/* In the editor the finding's underline is drawn the same way, once, when the finding lands. */
+@keyframes proof-underline {
+  from {
+    background-size: 0% 2px;
+  }
+}
+
+.proof-underline {
+  background-image: linear-gradient(var(--mark), var(--mark));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  animation: proof-underline 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proof-stroke,
+  .proof-reach,
+  .proof-underline {
+    animation: none;
   }
 }

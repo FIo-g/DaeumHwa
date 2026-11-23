@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { buttonVariants } from '@/components/ui/button'
 import type { PeriodicAlerts } from '@/server/alerts'
 import type { WorkHome } from '@/server/dashboard'
 import { formatKoreanDate, formatKoreanDateTime } from '@/lib/dates'
@@ -16,7 +15,10 @@ export type HomePanelsProps = {
   recentChanges: { id: string; summary: string; createdAt: Date }[]
 }
 
-/** The five panels of the work home: approvals, open threads, periodic checks, schedule, changes. */
+/**
+ * The work home as a proof sheet: what needs the author (approvals, threads, checks) in the text
+ * column, and the schedule and recent changes in the margin after a rule.
+ */
 export function HomePanels({
   workId,
   pendingCount,
@@ -27,85 +29,91 @@ export function HomePanels({
 }: HomePanelsProps) {
   const base = `/works/${workId}`
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <Panel id="home-approvals" title="승인 대기">
-        <p>
-          <span className="text-2xl font-semibold">{pendingCount}건</span>
-          <span className="text-muted-foreground"> 대기 중</span>
-        </p>
-        <LinkButton href={`${base}/approvals`} label="승인 대기 보기" />
-      </Panel>
+    <div className="grid gap-x-12 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="flex flex-col">
+        <Panel id="home-approvals" title="승인 대기">
+          <p className="text-sm">
+            승인을 기다리는 제안{' '}
+            <span className="font-semibold tabular-nums">{pendingCount}건</span>
+          </p>
+          <LinkButton href={`${base}/approvals`} label="승인 대기 보기" />
+        </Panel>
 
-      <Panel id="home-threads" title="열린 떡밥">
-        {openThreads.length === 0 ? (
-          <p className="text-sm text-muted-foreground">열린 떡밥이 없습니다.</p>
-        ) : (
-          <ul className="flex flex-col gap-2 text-sm">
-            {openThreads.slice(0, 5).map((thread) => (
-              <li key={thread.id} className="flex flex-col gap-0.5">
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{thread.title}</span>
-                  <Badge variant="outline">{THREAD_STATUS_LABEL[thread.status]}</Badge>
-                  {thread.overdue && <span className="text-destructive">회수 목표 지남</span>}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {thread.plantedPosition !== null && `${thread.plantedPosition}화 심음`}
-                  {thread.targetPosition !== null && ` · 회수 목표 ${thread.targetPosition}화`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <LinkButton href={`${base}/wiki/threads`} label="떡밥 장부 보기" />
-      </Panel>
+        <Panel id="home-threads" title="열린 떡밥">
+          {openThreads.length === 0 ? (
+            <p className="text-sm text-muted-foreground">열린 떡밥이 없습니다.</p>
+          ) : (
+            <ul className="flex flex-col gap-2 text-sm">
+              {openThreads.slice(0, 5).map((thread) => (
+                <li key={thread.id} className="flex flex-col gap-0.5">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-serif font-medium">{thread.title}</span>
+                    <Badge variant="outline">{THREAD_STATUS_LABEL[thread.status]}</Badge>
+                    {thread.overdue && <span className="text-mark">회수 목표 지남</span>}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {thread.plantedPosition !== null && `${thread.plantedPosition}화 심음`}
+                    {thread.targetPosition !== null && ` · 회수 목표 ${thread.targetPosition}화`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <LinkButton href={`${base}/wiki/threads`} label="떡밥 장부 보기" />
+        </Panel>
 
-      <Panel id="home-alerts" title="주기 점검">
-        <AlertList alerts={alerts} />
-      </Panel>
+        <Panel id="home-alerts" title="주기 점검">
+          <AlertList alerts={alerts} />
+        </Panel>
+      </div>
 
-      <Panel id="home-schedule" title="일정">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">비축</dt>
-          <dd>{schedule.bufferCount}화</dd>
-          <dt className="text-muted-foreground">다음 연재일</dt>
-          <dd>
-            {schedule.nextPublishDate
-              ? formatKoreanDate(schedule.nextPublishDate)
-              : '정해지지 않음'}
-          </dd>
-          <dt className="text-muted-foreground">소진 예상일</dt>
-          <dd>{schedule.bufferRunsOutOn ? formatKoreanDate(schedule.bufferRunsOutOn) : '없음'}</dd>
-          <dt className="text-muted-foreground">다음 마감</dt>
-          <dd>
-            {schedule.nextDeadline
-              ? `${schedule.nextDeadline.title} · ${formatKoreanDate(schedule.nextDeadline.date)} (${
-                  schedule.nextDeadline.daysLeft === 0
-                    ? '오늘'
-                    : `D-${schedule.nextDeadline.daysLeft}`
-                })`
-              : '없음'}
-          </dd>
-        </dl>
-        <LinkButton href={`${base}/schedule`} label="일정 보기" />
-      </Panel>
+      <div className="flex flex-col lg:border-l lg:border-rule lg:pl-8">
+        <Panel id="home-schedule" title="일정">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt className="text-muted-foreground">비축</dt>
+            <dd>{schedule.bufferCount}화</dd>
+            <dt className="text-muted-foreground">다음 연재일</dt>
+            <dd>
+              {schedule.nextPublishDate
+                ? formatKoreanDate(schedule.nextPublishDate)
+                : '정해지지 않음'}
+            </dd>
+            <dt className="text-muted-foreground">소진 예상일</dt>
+            <dd>
+              {schedule.bufferRunsOutOn ? formatKoreanDate(schedule.bufferRunsOutOn) : '없음'}
+            </dd>
+            <dt className="text-muted-foreground">다음 마감</dt>
+            <dd>
+              {schedule.nextDeadline
+                ? `${schedule.nextDeadline.title} · ${formatKoreanDate(schedule.nextDeadline.date)} (${
+                    schedule.nextDeadline.daysLeft === 0
+                      ? '오늘'
+                      : `D-${schedule.nextDeadline.daysLeft}`
+                  })`
+                : '없음'}
+            </dd>
+          </dl>
+          <LinkButton href={`${base}/schedule`} label="일정 보기" />
+        </Panel>
 
-      <Panel id="home-changes" title="최근 변경">
-        {recentChanges.length === 0 ? (
-          <p className="text-sm text-muted-foreground">아직 변경 이력이 없습니다.</p>
-        ) : (
-          <ul className="flex flex-col gap-2 text-sm">
-            {recentChanges.map((change) => (
-              <li key={change.id} className="flex flex-col gap-0.5">
-                <span>{change.summary}</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatKoreanDateTime(change.createdAt)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <LinkButton href={`${base}/history`} label="이력 보기" />
-      </Panel>
+        <Panel id="home-changes" title="최근 변경">
+          {recentChanges.length === 0 ? (
+            <p className="text-sm text-muted-foreground">아직 변경 이력이 없습니다.</p>
+          ) : (
+            <ul className="flex flex-col gap-2 text-sm">
+              {recentChanges.map((change) => (
+                <li key={change.id} className="flex flex-col gap-0.5">
+                  <span>{change.summary}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatKoreanDateTime(change.createdAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <LinkButton href={`${base}/history`} label="이력 보기" />
+        </Panel>
+      </div>
     </div>
   )
 }
@@ -138,8 +146,11 @@ function AlertList({ alerts }: { alerts: PeriodicAlerts }) {
 
 function Panel({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-3 rounded-xl border p-4">
-      <h2 id={id} className="text-base font-semibold">
+    <section
+      aria-labelledby={id}
+      className="flex flex-col gap-3 border-t border-rule py-6 first:border-t-0 first:pt-0"
+    >
+      <h2 id={id} className="font-serif text-lg font-semibold">
         {title}
       </h2>
       {children}
@@ -150,7 +161,7 @@ function Panel({ id, title, children }: { id: string; title: string; children: R
 function LinkButton({ href, label }: { href: string; label: string }) {
   return (
     <div>
-      <Link href={href} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+      <Link href={href} className="text-sm underline decoration-rule hover:decoration-current">
         {label}
       </Link>
     </div>

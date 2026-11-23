@@ -96,9 +96,9 @@ export function ManuscriptEditor({
         onChange={(e) => onTitleChange(e.target.value)}
         onCompositionStart={() => onComposingChange(true)}
         onCompositionEnd={() => onComposingChange(false)}
-        className="h-auto border-0 bg-transparent px-5 text-xl font-semibold shadow-none focus-visible:ring-0 md:text-xl"
+        className="h-auto border-0 bg-transparent px-6 font-serif text-2xl font-semibold shadow-none focus-visible:ring-0 md:text-2xl"
       />
-      <div className="relative rounded-xl border bg-background">
+      <div className="relative rounded-sm border border-rule bg-sheet shadow-sheet">
         <HighlightLayer text={layer.text} highlights={layer.highlights} />
         <textarea
           ref={textareaRef}

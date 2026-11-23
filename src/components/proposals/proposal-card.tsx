@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { AiBadge } from '@/components/app/ai-badge'
 import { FactStatusSelect } from '@/components/app/fact-status-select'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { FactStatus } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
@@ -76,29 +75,29 @@ export function ProposalCard({
 
   return (
     <article
-      className={compact ? 'grid gap-2 rounded-lg border p-3' : 'grid gap-3 rounded-xl border p-4'}
+      className={
+        compact
+          ? 'grid gap-2 rounded-sm border border-rule bg-sheet p-3'
+          : 'grid gap-3 rounded-sm border border-rule bg-sheet p-4'
+      }
     >
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <AiBadge />
-        <Badge variant="outline">{PROPOSAL_TYPE_LABEL[proposal.type]}</Badge>
-        <span>{PROPOSAL_SOURCE_LABEL[proposal.source]}</span>
-        {chapter && chapterText && (
-          <Link
-            href={`/works/${workId}/chapters/${chapter.id}`}
-            className="underline underline-offset-4"
-          >
-            {chapterText}
-          </Link>
-        )}
-      </div>
-
       <div className="grid gap-1">
-        <p className="font-medium">{summary.headline}</p>
+        <p className="font-serif text-[15px] font-semibold">{summary.headline}</p>
         {summary.detail && <p className="text-sm text-muted-foreground">{summary.detail}</p>}
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <AiBadge />
+          <span>{PROPOSAL_TYPE_LABEL[proposal.type]}</span>
+          <span>{PROPOSAL_SOURCE_LABEL[proposal.source]}</span>
+          {chapter && chapterText && (
+            <Link href={`/works/${workId}/chapters/${chapter.id}`} className="underline">
+              {chapterText}
+            </Link>
+          )}
+        </p>
       </div>
 
       {!compact && evidence && (
-        <blockquote className="border-l-2 pl-3 text-sm text-muted-foreground">
+        <blockquote className="border-l border-rule pl-3 font-serif text-sm leading-relaxed text-foreground/80">
           &ldquo;{evidence}&rdquo;
         </blockquote>
       )}

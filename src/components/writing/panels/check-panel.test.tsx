@@ -253,7 +253,7 @@ describe('CheckPanel', () => {
     render(<CheckPanel data={makeData()} api={makeApi()} text={`안녕.\n${QUOTE}`} />)
 
     expect(screen.getByText('원고')).toBeTruthy()
-    expect(screen.getByText('위키')).toBeTruthy()
+    expect(screen.getByText('위키 원문')).toBeTruthy()
     expect(screen.getByText(QUOTE)).toBeTruthy()
     expect(screen.getByText(WIKI)).toBeTruthy()
   })

@@ -24,12 +24,15 @@ export default async function WorksPage() {
       <PageHeader
         title="내 작품"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {active.length > 0 && <SampleWorkButton variant="outline" />}
-            <Link href="/works/new" className={buttonVariants({ variant: 'default' })}>
-              새 작품
-            </Link>
-          </div>
+          // With no works yet, the empty state below carries both actions.
+          active.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <SampleWorkButton variant="outline" />
+              <Link href="/works/new" className={buttonVariants({ variant: 'default' })}>
+                새 작품
+              </Link>
+            </div>
+          )
         }
       />
 
@@ -41,7 +44,7 @@ export default async function WorksPage() {
           description="새 작품을 만들어 설정과 원고를 정리해 보세요."
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <SampleWorkButton variant="outline" />
+              <SampleWorkButton variant="default" />
               <Link href="/works/new" className={buttonVariants({ variant: 'outline' })}>
                 새 작품 만들기
               </Link>

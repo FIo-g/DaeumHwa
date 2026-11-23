@@ -8,16 +8,15 @@ import type { Highlight, HighlightKind } from './types'
  * font, padding, line height and wrapping, or the marks drift away from the letters.
  */
 export const MANUSCRIPT_TEXT_CLASS =
-  'w-full px-5 py-4 text-[17px] leading-8 font-sans whitespace-pre-wrap [overflow-wrap:anywhere] border-0'
+  'w-full px-6 py-5 text-[17px] leading-[2.1] font-serif whitespace-pre-wrap [overflow-wrap:anywhere] border-0'
 
 const MARK_CLASS: Record<HighlightKind, string> = {
-  issue: 'bg-amber-200/80 dark:bg-amber-700/60',
-  spelling:
-    'underline decoration-red-500 decoration-2 underline-offset-4 bg-red-100/60 dark:bg-red-900/40',
-  comment: 'bg-sky-200/80 dark:bg-sky-700/50',
-  reader: 'bg-violet-200/80 dark:bg-violet-700/50',
-  naming: 'bg-emerald-200/80 dark:bg-emerald-700/50',
-  search: 'bg-yellow-200/90 dark:bg-yellow-600/50',
+  issue: 'proof-underline',
+  spelling: 'underline decoration-mark decoration-wavy decoration-1 underline-offset-[6px]',
+  comment: 'bg-canon/12',
+  reader: 'bg-input/25',
+  naming: 'underline decoration-canon decoration-dotted decoration-2 underline-offset-[6px]',
+  search: 'bg-[#f1e39b]',
 }
 
 type HighlightLayerProps = {
@@ -56,9 +55,10 @@ function SegmentView({ segment }: { segment: LayerSegment }) {
       data-kind={segment.kind}
       data-active={segment.active ? 'true' : undefined}
       className={cn(
-        'rounded-sm text-transparent',
+        'bg-transparent text-transparent',
         MARK_CLASS[segment.kind],
-        segment.active && 'ring-2 ring-ring',
+        segment.active && segment.kind === 'issue' && '[background-size:100%_3px]',
+        segment.active && segment.kind !== 'issue' && 'ring-2 ring-canon/60',
       )}
     >
       {segment.text}
