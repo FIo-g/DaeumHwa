@@ -206,6 +206,26 @@ describe('supersedeFact', () => {
     expect(newChanges.map((c) => c.action)).toEqual(['create'])
   })
 
+  it('rejects a second concurrent replacement with CONFLICT', async () => {
+    const { work, actor } = await setup()
+    const old = await createTestFact(db, work.id, { content: '옛 사실' })
+    const results = await Promise.allSettled(
+      ['첫 번째 새 사실', '두 번째 새 사실'].map((content) =>
+        supersedeFact(db, actor, {
+          factId: old.id,
+          fromPosition: 5,
+          content,
+          status: 'confirmed',
+        }),
+      ),
+    )
+
+    const rejected = results.find((result) => result.status === 'rejected')
+    expect(rejected?.reason).toBeInstanceOf(AppError)
+    expect(rejected?.reason).toMatchObject({ code: 'CONFLICT' })
+    expect(await db.select().from(facts).where(eq(facts.workId, work.id))).toHaveLength(2)
+  })
+
   it('rejects fromPosition that is not after the old validFromPosition', async () => {
     const { work, actor } = await setup()
     const old = await createTestFact(db, work.id, {

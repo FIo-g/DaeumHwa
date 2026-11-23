@@ -18,6 +18,7 @@ import { requireRowWork, requireWorkRole } from '@/server/access'
 import { recomputeAppearances } from '@/server/appearances'
 import { recordChange } from '@/server/changes'
 import { updateDraftEditRatio } from '@/server/usage-events'
+import { lockWork } from '@/server/work-lock'
 
 // Chapters, their saved versions (history), and the summary field. Every write that changes
 // chapter text goes through saveChapter, which handles optimistic concurrency and history.
@@ -209,6 +210,7 @@ export async function createChapter(
   const body = input.body ?? ''
 
   return db.transaction(async (tx) => {
+    await lockWork(tx, input.workId)
     const latest = await maxPosition(tx, input.workId)
     const position = input.position ?? latest + 1
     if (position <= latest) {
@@ -272,6 +274,7 @@ export async function createChaptersBulk(
   if (input.chapters.length === 0) return []
 
   return db.transaction(async (tx) => {
+    await lockWork(tx, input.workId)
     const start = (await maxPosition(tx, input.workId)) + 1
     const created: ChapterRow[] = []
     for (const [index, item] of input.chapters.entries()) {
@@ -614,6 +617,7 @@ export async function openNextChapter(
 ): Promise<{ chapterId: string; created: boolean }> {
   await requireWorkRole(db, workId, actor.userId, 'editor')
   return db.transaction(async (tx) => {
+    await lockWork(tx, workId)
     const [draft] = await tx
       .select({ id: chapters.id })
       .from(chapters)

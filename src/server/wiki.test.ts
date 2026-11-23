@@ -68,13 +68,17 @@ describe('createEntry', () => {
     })
   })
 
-  it('rejects a second active entry of the same kind and name with CONFLICT', async () => {
+  it('rejects one of two concurrent creates of the same kind and name with CONFLICT', async () => {
     const { work, actor } = await setup()
-    await createEntry(db, actor, { workId: work.id, kind: 'character', name: '이서윤' })
-    await expectAppError(
+    const results = await Promise.allSettled([
       createEntry(db, actor, { workId: work.id, kind: 'character', name: '이서윤' }),
-      'CONFLICT',
-    )
+      createEntry(db, actor, { workId: work.id, kind: 'character', name: '이서윤' }),
+    ])
+
+    const rejected = results.find((result) => result.status === 'rejected')
+    expect(rejected?.reason).toBeInstanceOf(AppError)
+    expect(rejected?.reason).toMatchObject({ code: 'CONFLICT' })
+    expect(await listEntries(db, actor, work.id)).toHaveLength(1)
   })
 
   it('rejects an empty name with VALIDATION', async () => {
