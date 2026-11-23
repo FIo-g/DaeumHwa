@@ -58,7 +58,7 @@ const CANCEL_MESSAGE = '이미 끝났거나 취소된 작업입니다.'
 const LIMIT_PAUSE_MESSAGE = '오늘 AI 사용량 한도에 도달해 일시정지했습니다. 내일 이어서 진행하세요.'
 const GENERIC_ERROR_MESSAGE = '가져오기 중 오류가 발생했습니다. 다시 시작해 주세요.'
 const MISSING_CHAPTER_MESSAGE = '회차를 찾을 수 없습니다. 작업을 취소하고 다시 올려 주세요.'
-/** Shown when the author's other AI runs fill the per-user cap. The job keeps running. */
+/** Shown while another call holds the chapter or the author's AI runs fill the cap. */
 export const BUSY_MESSAGE = '다른 AI 작업이 끝나면 이어서 진행합니다.'
 /** A chapter claim older than this belongs to a call that died, and may be taken over. */
 const CLAIM_TTL_MS = 10 * 60 * 1000
@@ -230,7 +230,7 @@ export async function startImportJob(db: Db, actor: Actor, jobId: string): Promi
  * The per-user AI run cap keeps the job running and returns BUSY_MESSAGE, so the caller retries.
  *
  * Before its AI call, a call claims the chapter in state.inFlight. A call that finds a fresh claim
- * returns the current status without calling the AI. The cursor moves only while the claim is
+ * returns BUSY_MESSAGE if the job is still running. The cursor moves only while the claim is
  * still this call's, so one chapter is billed once even when two calls overlap.
  */
 export async function advanceImportJob(
@@ -275,7 +275,10 @@ export async function advanceImportJob(
   // Claim the chapter before the AI call. A call that starts while this one is in flight sees the
   // claim and does not bill the same chapter again.
   const claimAt = await claimChapter(db, jobId, job.cursor, new Date())
-  if (!claimAt) return toResult(await loadJob(db, jobId))
+  if (!claimAt) {
+    const current = toResult(await loadJob(db, jobId))
+    return current.status === 'running' ? { ...current, message: BUSY_MESSAGE } : current
+  }
 
   let output: Extraction
   try {

@@ -9,7 +9,10 @@ vi.mock('@/inngest/client', () => ({
   },
 }))
 vi.mock('@/db/client', () => ({ getDb: () => ({}) }))
-vi.mock('@/server/imports', () => ({ advanceImportJob: mocks.advance }))
+vi.mock('@/server/imports', () => ({
+  advanceImportJob: mocks.advance,
+  BUSY_MESSAGE: '다른 AI 작업이 끝나면 이어서 진행합니다.',
+}))
 
 import { MAX_STEPS_PER_RUN, importRun } from '@/inngest/functions'
 
