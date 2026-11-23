@@ -314,17 +314,17 @@ export async function createChaptersBulk(
 }
 
 /**
- * Saves title and/or body. `expectedVersion` must match the stored version, otherwise CONFLICT
- * (with `currentVersion` in details). Bumps the version, recounts characters, rewrites the
- * history (see writeVersionRow) and recomputes appearances. `keepHistory` always adds a history
- * row. Editor role.
+ * Saves title and/or body. A stale resend with matching text succeeds with the stored version.
+ * A stale save with different text returns CONFLICT with `currentVersion` in details. A write
+ * bumps the version, recounts characters, updates history (see writeVersionRow) and recomputes
+ * appearances. `keepHistory` always adds a history row for a write. Editor role.
  */
 export async function saveChapter(
   db: Db,
   actor: Actor,
   input: SaveChapterInput,
 ): Promise<ChapterRow> {
-  const saved = await db.transaction(async (tx) => {
+  const { saved, changed } = await db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, input.chapterId, 'editor')
     await requireWorkRole(tx, chapter.workId, actor.userId, 'editor')
     assertNotArchived(chapter)
@@ -351,10 +351,13 @@ export async function saveChapter(
       .returning()
     if (!updated) {
       const [current] = await tx
-        .select({ version: chapters.version })
+        .select()
         .from(chapters)
         .where(eq(chapters.id, chapter.id))
         .limit(1)
+      if (current && current.title === title && current.body === body) {
+        return { saved: current, changed: false }
+      }
       throw new AppError('CONFLICT', '다른 곳에서 먼저 수정된 원고가 있습니다.', {
         currentVersion: current?.version,
       })
@@ -372,8 +375,9 @@ export async function saveChapter(
       noMerge: input.keepHistory === true,
     })
     await recomputeAppearances(tx, chapter.id)
-    return updated
+    return { saved: updated, changed: true }
   })
+  if (!changed) return saved
   // Usage counting runs after the save and never fails it.
   try {
     await updateDraftEditRatio(db, saved.workId, saved.id, saved.body)

@@ -86,7 +86,7 @@ describe('useAutosave', () => {
     expect(await getDraft(draftKey(USER, 'chapter-1'))).toBeUndefined()
   })
 
-  it('keeps the local draft and shows error when the server rejects the save', async () => {
+  it('keeps the local draft and retries once after the server rejects the save', async () => {
     const save = vi.fn(async () => ({
       ok: false as const,
       error: { code: 'BAD_STATE' as const, message: '저장하지 못했습니다.' },
@@ -99,6 +99,19 @@ describe('useAutosave', () => {
     await settle()
     expect(result.current.status).toBe('error')
     expect((await getDraft(draftKey(USER, 'chapter-1')))?.body).toBe('최신 본문')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9999)
+    })
+    expect(save).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(save).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000)
+    })
+    expect(save).toHaveBeenCalledTimes(2)
   })
 
   it('shows offline and keeps the latest body locally when the request fails', async () => {
@@ -115,6 +128,57 @@ describe('useAutosave', () => {
     expect((await getDraft(draftKey(USER, 'chapter-1')))?.body).toBe('네트워크 끊김')
   })
 
+  it('saves unsaved edits immediately when the browser comes back online', async () => {
+    const save = vi.fn(async () => okSave(2)).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const { result } = setup(save)
+    act(() => result.current.setBody('다시 보낼 본문'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+    })
+    expect(result.current.status).toBe('offline')
+
+    await act(async () => {
+      window.dispatchEvent(new Event('online'))
+    })
+    expect(result.current.status).toBe('saved')
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(save).toHaveBeenLastCalledWith({ title: '1화', body: '다시 보낼 본문', expectedVersion: 1 })
+  })
+
+  it('resends the timed-out text before saving edits made while it was in flight', async () => {
+    let resolveFirst: (value: ReturnType<typeof okSave>) => void = () => {}
+    const save = vi
+      .fn(async () => okSave(3))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockResolvedValueOnce(okSave(2))
+    const { result } = setup(save)
+    act(() => result.current.setBody('첫 본문'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+    })
+    act(() => result.current.setBody('최신 본문'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000)
+    })
+    expect(result.current.status).toBe('offline')
+    expect(save).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000)
+    })
+    expect(save).toHaveBeenCalledTimes(3)
+    expect(save).toHaveBeenNthCalledWith(2, { title: '1화', body: '첫 본문', expectedVersion: 1 })
+    expect(save).toHaveBeenNthCalledWith(3, { title: '1화', body: '최신 본문', expectedVersion: 2 })
+    await act(async () => resolveFirst(okSave(2)))
+    expect(result.current.version).toBe(3)
+    expect(result.current.status).toBe('saved')
+  })
+
   it('shows conflict when the server version moved on', async () => {
     const save = vi.fn(async () => ({
       ok: false as const,
@@ -127,6 +191,10 @@ describe('useAutosave', () => {
     })
     await settle()
     expect(result.current.status).toBe('conflict')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000)
+    })
+    expect(save).toHaveBeenCalledTimes(1)
   })
 
   it('does not save while composing and saves after composition ends', async () => {

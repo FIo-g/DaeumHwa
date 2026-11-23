@@ -105,6 +105,8 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
   const localTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inflight = useRef<Promise<void> | null>(null)
   const rerun = useRef(false)
+  const mounted = useRef(false)
+  const unconfirmedSave = useRef<{ input: AutosaveInput; revision: number } | null>(null)
   const saveRef = useRef(options.save)
   // Null when no user is known: then no device draft is read or written.
   const draftKeyRef = useRef<string | null>(null)
@@ -140,17 +142,26 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
     serverTimer.current = null
   }, [])
 
-  /** Sends the current content once. Resolves to true when the server accepted it. */
-  const saveOnce = useCallback(async (): Promise<boolean> => {
-    const revision = revisionRef.current
-    const snapshot = { title: latest.current.title, body: latest.current.body }
+  const saveOnce = useCallback(async (): Promise<'saved' | 'conflict' | 'failed'> => {
+    // Replay unconfirmed text first so newer edits can use the server's acknowledged version.
+    const unconfirmed = unconfirmedSave.current
+    const revision = unconfirmed?.revision ?? revisionRef.current
+    const input = unconfirmed?.input ?? {
+      ...latest.current,
+      expectedVersion: versionRef.current,
+      ...(keepHistoryNextRef.current ? { keepHistory: true } : {}),
+    }
     setStatus('saving')
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    let outcome: 'conflict' | 'failed' = 'failed'
     try {
-      const result = await saveRef.current({
-        ...snapshot,
-        expectedVersion: versionRef.current,
-        ...(keepHistoryNextRef.current ? { keepHistory: true } : {}),
-      })
+      const result = await Promise.race([
+        saveRef.current(input),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(reject, 30_000)
+        }),
+      ])
+      unconfirmedSave.current = null
       if (result.ok) {
         keepHistoryNextRef.current = false
         versionRef.current = result.data.version
@@ -166,29 +177,45 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
           // the server now has, so they are not offered as stale later.
           writeLocal()
           setStatus('dirty')
+          if (unconfirmed) rerun.current = true
         }
-        return true
+        return 'saved'
       }
-      setStatus(result.error.code === 'CONFLICT' ? 'conflict' : 'error')
+      outcome = result.error.code === 'CONFLICT' ? 'conflict' : 'failed'
+      setStatus(outcome === 'conflict' ? 'conflict' : 'error')
     } catch {
+      unconfirmedSave.current = { input, revision }
       setStatus('offline')
+    } finally {
+      clearTimeout(timeout)
     }
-    writeLocal()
-    return false
+    if (mounted.current) writeLocal()
+    return outcome
   }, [cancelLocal, dropLocal, writeLocal])
 
   /** One save at a time. Edits that arrive while a save runs trigger one more save after it. */
-  const runServerSave = useCallback((): Promise<void> => {
+  const runServerSave = useCallback(function runServerSave(retry = false): Promise<void> {
     if (inflight.current) {
       rerun.current = true
       return inflight.current
     }
+    cancelServer()
     const run = (async () => {
       do {
         rerun.current = false
-        if (composingRef.current || !dirtyRef.current) break
-        const saved = await saveOnce()
-        if (!saved) break
+        if (!mounted.current || composingRef.current || !dirtyRef.current) break
+        const outcome = await saveOnce()
+        if (outcome === 'saved') {
+          retry = false
+          continue
+        }
+        if (outcome === 'failed' && !retry && mounted.current && serverTimer.current === null) {
+          serverTimer.current = setTimeout(() => {
+            serverTimer.current = null
+            void runServerSave(true)
+          }, 10_000)
+        }
+        break
       } while (rerun.current)
     })()
     inflight.current = run
@@ -196,7 +223,7 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
       if (inflight.current === run) inflight.current = null
     })
     return run
-  }, [saveOnce])
+  }, [cancelServer, saveOnce])
 
   const scheduleServer = useCallback(() => {
     cancelServer()
@@ -271,6 +298,7 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
       revisionRef.current += 1
       dirtyRef.current = false
       keepHistoryNextRef.current = false
+      unconfirmedSave.current = null
       setTitleState(nextTitle)
       setBodyState(nextBody)
       setVersionState(nextVersion)
@@ -322,21 +350,28 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
 
   // Flush when the tab is hidden or the editor unmounts, so the device keeps the latest text.
   useEffect(() => {
+    mounted.current = true
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         writeLocal()
         void runServerSave()
       }
     }
+    const onOnline = () => {
+      if (dirtyRef.current) void runServerSave()
+    }
     document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('online', onOnline)
     return () => {
+      mounted.current = false
       document.removeEventListener('visibilitychange', onVisibilityChange)
-      if (serverTimer.current) clearTimeout(serverTimer.current)
+      window.removeEventListener('online', onOnline)
+      cancelServer()
       if (localTimer.current) clearTimeout(localTimer.current)
       localTimer.current = null
       if (dirtyRef.current) writeLocal()
     }
-  }, [runServerSave, writeLocal])
+  }, [cancelServer, runServerSave, writeLocal])
 
   return {
     title,

@@ -164,6 +164,17 @@ describe('saveChapter', () => {
     expect(saved.title).toBe('5화 끝')
   })
 
+  it('returns the stored chapter when a save is resent with the old version and the same text', async () => {
+    const { actor, work } = await setup()
+    const chapter = await createChapter(db, actor, { workId: work.id })
+    const input = { chapterId: chapter.id, title: '1화 재회', body: '새 본문', expectedVersion: 1 }
+    const saved = await saveChapter(db, actor, input)
+
+    expect(saved).toMatchObject({ title: '재회', version: 2 })
+    await expect(saveChapter(db, actor, input)).resolves.toEqual(saved)
+    expect(await listVersions(db, actor, chapter.id)).toHaveLength(2)
+  })
+
   it('with a stale expectedVersion throws CONFLICT carrying the current version', async () => {
     const { actor, work } = await setup()
     const chapter = await createChapter(db, actor, { workId: work.id })
