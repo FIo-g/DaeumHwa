@@ -28,6 +28,7 @@ const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2 }
 
 /**
  * Replaces the open issues of one chapter with a new set. Resolved issues are kept as history.
+ * Dismissed issues suppress new findings with the same kind and quote.
  * No access check here: callers check the work role first.
  */
 export async function replaceOpenIssues(
@@ -45,10 +46,24 @@ export async function replaceOpenIssues(
         ),
       )
     if (input.issues.length === 0) return []
+    const dismissed = await tx
+      .select({ kind: issues.kind, quote: issues.quote })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.workId, input.workId),
+          eq(issues.chapterId, input.chapterId),
+          eq(issues.status, 'dismissed'),
+        ),
+      )
+    const freshIssues = input.issues.filter(
+      (issue) => !dismissed.some((row) => row.kind === issue.kind && row.quote === issue.quote),
+    )
+    if (freshIssues.length === 0) return []
     return tx
       .insert(issues)
       .values(
-        input.issues.map((issue) => ({
+        freshIssues.map((issue) => ({
           workId: input.workId,
           chapterId: input.chapterId,
           runId: input.runId,
