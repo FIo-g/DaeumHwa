@@ -324,7 +324,7 @@ export function useAutosave(options: UseAutosaveOptions): UseAutosaveResult {
   useEffect(() => {
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        writeLocal()
+        if (dirtyRef.current) writeLocal()
         void runServerSave()
       }
     }
