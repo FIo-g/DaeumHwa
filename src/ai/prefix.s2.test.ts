@@ -23,18 +23,17 @@ const baseArgs = {
   task: { name: 'proofread' as const, input: {} },
 }
 
-/** SDK stub that records the params of each parse call and answers with a fixed object. */
+/** SDK stub that records the params of each create call and answers with a fixed object. */
 function spySdk(calls: Record<string, unknown>[]) {
   const sdk = {
     messages: {
-      parse: async (params: Record<string, unknown>) => {
+      create: async (params: Record<string, unknown>) => {
         calls.push(params)
         return {
-          parsed_output: { answer: '네' },
           stop_reason: 'end_turn',
           usage: { input_tokens: 1, output_tokens: 1 },
           model: MODEL,
-          content: [],
+          content: [{ type: 'text', text: '{"answer":"네"}' }],
         }
       },
     },

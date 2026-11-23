@@ -5,7 +5,6 @@ import Anthropic, {
   AuthenticationError,
   RateLimitError,
 } from '@anthropic-ai/sdk'
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { AppError } from '@/lib/errors'
@@ -39,11 +38,9 @@ export interface AnthropicClientOptions {
   /** Send server-side fallback for Opus-class models. Off for gateways that do not support it. */
   serverFallback?: boolean
   /**
-   * Gateway fallback for output_config. Structured calls then go through messages.create and the
-   * answer text is parsed here, so a gateway that rejects output_config (a 400) or ignores it (a
-   * prose answer) is seen with its billed usage. Each such model gets one plain-JSON retry, marked
-   * for JSON mode only after that retry succeeds. A stream rejected for output_config (effort) is
-   * retried once without it.
+   * Gateways that reject output_config (a 400) or ignore it (an off-schema answer) get one
+   * plain-JSON retry. Billed usage is carried into the retry, and the model enters JSON mode
+   * after the retry succeeds. A stream rejected for output_config (effort) is retried without it.
    */
   jsonFallback?: boolean
   /** Models known to lack structured output. They use JSON mode from the first call. */
@@ -66,13 +63,6 @@ type ResponseUsage = {
   output_tokens: number
   cache_read_input_tokens?: number | null
   cache_creation_input_tokens?: number | null
-}
-
-type ObjectResponse<T> = {
-  parsed_output: T | null
-  stop_reason: string | null
-  usage: ResponseUsage
-  model: string
 }
 
 type ObjectResult<T> = { object: T; usage: AiUsage; model: string }
@@ -113,7 +103,7 @@ export class AnthropicAiClient implements AiClient {
     const model = args.model ?? this.defaultModel
     if (this.jsonModels.has(model)) return this.generateObjectAsJson(args, model, NO_USAGE)
     try {
-      return await this.generateObjectStructured(args, model)
+      return await this.structuredThroughCreate(args, model)
     } catch (error) {
       if (!this.jsonFallback || !isStructuredOutputRejection(error))
         throw toAiError(error, NO_USAGE, args)
@@ -124,64 +114,37 @@ export class AnthropicAiClient implements AiClient {
     }
   }
 
-  /** Structured output through the SDK parse helpers. Errors are returned raw for the caller to map. */
-  private async generateObjectStructured<T>(
-    args: GenerateObjectArgs<T>,
-    model: string,
-  ): Promise<ObjectResult<T>> {
-    if (this.jsonFallback) return this.structuredThroughCreate(args, model)
-    const system = systemBlocks(args.system)
-    const messages = [{ role: 'user' as const, content: userContent(args) }]
-    if (this.usesServerFallback(model)) {
-      const response = await this.sdk.beta.messages.parse(
-        {
-          model,
-          max_tokens: args.maxTokens,
-          system,
-          messages,
-          output_config: { format: betaZodOutputFormat(args.schema), effort: args.effort },
-          betas: [FALLBACK_BETA],
-          fallbacks: 'default',
-        },
-        requestOptions(args),
-      )
-      return objectResult(response as ObjectResponse<T>)
-    }
-    const response = await this.sdk.messages.parse(
-      {
-        model,
-        max_tokens: args.maxTokens,
-        system,
-        messages,
-        output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
-      },
-      requestOptions(args),
-    )
-    return objectResult(response as ObjectResponse<T>)
-  }
-
-  /**
-   * Structured output for gateways that may ignore output_config. The answer text is parsed here,
-   * so a prose or off-schema answer arrives with its billed usage and goes to the JSON retry.
-   */
+  /** Parse the answer locally so validation errors retain the billed usage. */
   private async structuredThroughCreate<T>(
     args: GenerateObjectArgs<T>,
     model: string,
   ): Promise<ObjectResult<T>> {
-    const response = await this.sdk.messages.create(
-      {
-        model,
-        max_tokens: args.maxTokens,
-        system: systemBlocks(args.system),
-        messages: [{ role: 'user' as const, content: userContent(args) }],
-        output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
-      },
-      requestOptions(args),
-    )
+    const params = {
+      model,
+      max_tokens: args.maxTokens,
+      system: systemBlocks(args.system),
+      messages: [{ role: 'user' as const, content: userContent(args) }],
+      output_config: { format: zodOutputFormat(args.schema), effort: args.effort },
+    }
+    const options = requestOptions(args)
+    const response =
+      !this.jsonFallback && this.usesServerFallback(model)
+        ? await this.sdk.beta.messages.create(
+            {
+              ...params,
+              betas: [FALLBACK_BETA, 'structured-outputs-2025-12-15'],
+              fallbacks: 'default',
+            },
+            options,
+          )
+        : await this.sdk.messages.create(params, options)
     const usage = usageOf(response.usage)
     assertStopReason(response.stop_reason, usage)
     const checked = safeParseAnswer(args.schema, textOf(response.content))
-    if (!checked.success) throw new UnstructuredAnswer(usage)
+    if (!checked.success) {
+      if (this.jsonFallback) throw new UnstructuredAnswer(usage)
+      throw aiErrorWithUsage(FORMAT_MESSAGE, usage)
+    }
     return { object: checked.data, usage, model: response.model }
   }
 
@@ -430,19 +393,6 @@ function parseJsonObject(text: string): unknown {
     }
   }
   return undefined
-}
-
-function objectResult<T>(response: ObjectResponse<T>): ObjectResult<T> {
-  const usage = usageOf(response.usage)
-  assertStopReason(response.stop_reason, usage)
-  if (response.parsed_output === null) {
-    throw aiErrorWithUsage(FORMAT_MESSAGE, usage)
-  }
-  return {
-    object: response.parsed_output,
-    usage,
-    model: response.model,
-  }
 }
 
 function assertStopReason(stopReason: string | null, usage: AiUsage): void {

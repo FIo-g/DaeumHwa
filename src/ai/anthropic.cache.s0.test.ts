@@ -7,16 +7,15 @@ const OutputSchema = z.object({ answer: z.string() })
 
 type Usage = Record<string, number>
 
-/** Stub SDK: messages.parse returns `usage`; the stream's final message carries the same usage. */
+/** Stub SDK: messages.create returns `usage`; the stream's final message carries the same usage. */
 function stubSdk(usage: Usage) {
   const sdk = {
     messages: {
-      parse: async () => ({
-        parsed_output: { answer: '네' },
+      create: async () => ({
         stop_reason: 'end_turn',
         usage,
         model: 'claude-haiku-5-5',
-        content: [],
+        content: [{ type: 'text', text: '{"answer":"네"}' }],
       }),
       stream: () => {
         let handler: ((delta: string) => void) | undefined
