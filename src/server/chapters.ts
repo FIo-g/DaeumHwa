@@ -327,6 +327,15 @@ export async function saveChapter(
   actor: Actor,
   input: SaveChapterInput,
 ): Promise<ChapterRow> {
+  const { chapter } = await saveChapterWithTitleChange(db, actor, input)
+  return chapter
+}
+
+export async function saveChapterWithTitleChange(
+  db: Db,
+  actor: Actor,
+  input: SaveChapterInput,
+): Promise<{ chapter: ChapterRow; titleChanged: boolean }> {
   const { saved, changed } = await db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, input.chapterId, 'editor')
     assertNotArchived(chapter)
@@ -358,7 +367,7 @@ export async function saveChapter(
         .where(eq(chapters.id, chapter.id))
         .limit(1)
       if (current && current.title === title && current.body === body) {
-        return { saved: current, changed: false }
+        return { saved: { chapter: current, titleChanged: false }, changed: false }
       }
       throw new AppError('CONFLICT', '다른 곳에서 먼저 수정된 원고가 있습니다.', {
         currentVersion: current?.version,
@@ -377,12 +386,16 @@ export async function saveChapter(
       noMerge: input.keepHistory === true,
     })
     await recomputeAppearances(tx, chapter.id)
-    return { saved: updated, changed: true }
+    return {
+      saved: { chapter: updated, titleChanged: updated.title !== chapter.title },
+      changed: true,
+    }
   })
   if (!changed) return saved
   // Usage counting runs after the save and never fails it.
   try {
-    await updateDraftEditRatio(db, saved.workId, saved.id, saved.body)
+    const { workId, id, body } = saved.chapter
+    await updateDraftEditRatio(db, workId, id, body)
   } catch (error) {
     console.warn('usage event draft_edit_ratio failed', error)
   }

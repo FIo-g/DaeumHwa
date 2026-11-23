@@ -1,10 +1,11 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import type { ChapterRow, ChapterVersionRow } from '@/db/types'
 import type { ActionResult } from '@/lib/result'
 import { revalidateWork, withAction } from '@/server/action-helpers'
-import { getVersion, restoreVersion, saveChapter } from '@/server/chapters'
+import { getVersion, restoreVersion, saveChapterWithTitleChange } from '@/server/chapters'
 import { saveResumePoint } from '@/server/user-state'
 
 const SaveChapterSchema = z.object({
@@ -46,8 +47,9 @@ export type SaveChapterResult = {
 export async function saveChapterAction(input: unknown): Promise<ActionResult<SaveChapterResult>> {
   return withAction(async (db, actor) => {
     const data = SaveChapterSchema.parse(input)
-    const chapter = await saveChapter(db, actor, data)
-    revalidateWork(chapter.workId)
+    const { chapter, titleChanged } = await saveChapterWithTitleChange(db, actor, data)
+    // The writing page heading and chapter picker show the saved title.
+    if (titleChanged) revalidatePath(`/works/${chapter.workId}/chapters/${chapter.id}`)
     return {
       version: chapter.version,
       updatedAt: chapter.updatedAt.toISOString(),
