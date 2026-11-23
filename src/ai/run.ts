@@ -420,10 +420,10 @@ function pumpText(
   return { textStream: channel.iterable(), settled }
 }
 
-/** Sum of input and output tokens of the user's runs since Seoul midnight containing `now`. */
+/** Sum of input and output tokens since Seoul midnight, across all users if `userId` is null. */
 export async function getTodayUsage(
   db: Db,
-  userId: string,
+  userId: string | null,
   now: Date = new Date(),
 ): Promise<number> {
   const [row] = await db
@@ -433,16 +433,26 @@ export async function getTodayUsage(
       >`coalesce(sum(${aiRuns.inputTokens} + ${aiRuns.outputTokens}), 0)`,
     })
     .from(aiRuns)
-    .where(and(eq(aiRuns.userId, userId), gte(aiRuns.createdAt, seoulDayStart(now))))
+    .where(
+      and(
+        userId === null ? undefined : eq(aiRuns.userId, userId),
+        gte(aiRuns.createdAt, seoulDayStart(now)),
+      ),
+    )
   return Number(row?.total ?? 0)
 }
 
-/** Throws AI_LIMIT when today's usage has reached AI_DAILY_TOKEN_LIMIT. 0 or less disables the limit. */
+/** Throws AI_LIMIT when today's usage reaches either the per-user or global limit. */
 export async function assertWithinLimit(db: Db, userId: string): Promise<void> {
-  const limit = dailyTokenLimit()
-  if (limit <= 0) return
-  const used = await getTodayUsage(db, userId)
-  if (used >= limit) throw new AppError('AI_LIMIT', LIMIT_MESSAGE)
+  const now = new Date()
+  const limit = dailyTokenLimit('AI_DAILY_TOKEN_LIMIT', DEFAULT_DAILY_TOKEN_LIMIT)
+  if (limit > 0 && (await getTodayUsage(db, userId, now)) >= limit) {
+    throw new AppError('AI_LIMIT', LIMIT_MESSAGE)
+  }
+  const globalLimit = dailyTokenLimit('AI_GLOBAL_DAILY_TOKEN_LIMIT', 0)
+  if (globalLimit > 0 && (await getTodayUsage(db, null, now)) >= globalLimit) {
+    throw new AppError('AI_LIMIT', LIMIT_MESSAGE)
+  }
 }
 
 /**
@@ -490,17 +500,20 @@ export async function listAiRuns(
     .limit(o.limit ?? 20)
 }
 
-function dailyTokenLimit(): number {
-  const raw = process.env.AI_DAILY_TOKEN_LIMIT
-  if (raw === undefined || raw.trim() === '') return DEFAULT_DAILY_TOKEN_LIMIT
+function dailyTokenLimit(
+  key: 'AI_DAILY_TOKEN_LIMIT' | 'AI_GLOBAL_DAILY_TOKEN_LIMIT',
+  defaultLimit: number,
+): number {
+  const raw = process.env[key]
+  if (raw === undefined || raw.trim() === '') return defaultLimit
   // Operators often copy the documented format, e.g. 3,000,000 or 3_000_000.
   const cleaned = raw.replace(/[,_]/g, '').trim()
   const parsed = cleaned === '' ? Number.NaN : Number(cleaned)
   if (Number.isFinite(parsed)) return parsed
   console.warn(
-    `AI_DAILY_TOKEN_LIMIT 값(${raw})을 숫자로 읽을 수 없어 기본값 ${DEFAULT_DAILY_TOKEN_LIMIT}을 사용합니다.`,
+    `${key} 값(${raw})을 숫자로 읽을 수 없어 기본값 ${defaultLimit}을 사용합니다.`,
   )
-  return DEFAULT_DAILY_TOKEN_LIMIT
+  return defaultLimit
 }
 
 async function insertRun(
