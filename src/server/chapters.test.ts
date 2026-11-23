@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '@/db/client'
 import { changeLog, chapters, chapterVersions, entryAppearances } from '@/db/schema'
 import { AppError } from '@/lib/errors'
+import * as access from '@/server/access'
 import { createTestDb } from '@/test/db'
 import {
   addTestMember,
@@ -116,6 +117,20 @@ describe('createChapter', () => {
 })
 
 describe('saveChapter', () => {
+  it('checks the editor role once per save', async ({ onTestFinished }) => {
+    const { actor, work } = await setup()
+    const chapter = await createTestChapter(db, work.id)
+    const roleCheck = vi.spyOn(access, 'requireWorkRole')
+    onTestFinished(() => {
+      roleCheck.mockRestore()
+    })
+
+    await saveChapter(db, actor, { chapterId: chapter.id, body: '새 본문', expectedVersion: 1 })
+
+    expect(roleCheck).toHaveBeenCalledTimes(1)
+    expect(roleCheck).toHaveBeenCalledWith(expect.anything(), work.id, actor.userId, 'editor')
+  })
+
   it('increments version and counts', async () => {
     const { actor, work } = await setup()
     const chapter = await createChapter(db, actor, { workId: work.id })
