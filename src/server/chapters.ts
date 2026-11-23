@@ -324,6 +324,15 @@ export async function saveChapter(
   actor: Actor,
   input: SaveChapterInput,
 ): Promise<ChapterRow> {
+  const { chapter } = await saveChapterWithTitleChange(db, actor, input)
+  return chapter
+}
+
+export async function saveChapterWithTitleChange(
+  db: Db,
+  actor: Actor,
+  input: SaveChapterInput,
+): Promise<{ chapter: ChapterRow; titleChanged: boolean }> {
   const saved = await db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, input.chapterId, 'editor')
     await requireWorkRole(tx, chapter.workId, actor.userId, 'editor')
@@ -372,11 +381,12 @@ export async function saveChapter(
       noMerge: input.keepHistory === true,
     })
     await recomputeAppearances(tx, chapter.id)
-    return updated
+    return { chapter: updated, titleChanged: updated.title !== chapter.title }
   })
   // Usage counting runs after the save and never fails it.
   try {
-    await updateDraftEditRatio(db, saved.workId, saved.id, saved.body)
+    const { workId, id, body } = saved.chapter
+    await updateDraftEditRatio(db, workId, id, body)
   } catch (error) {
     console.warn('usage event draft_edit_ratio failed', error)
   }

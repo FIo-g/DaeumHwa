@@ -214,14 +214,27 @@ describe('manuscript actions', () => {
     expect(point).toMatchObject({ chapterId: chapter.id, cursor: null })
   })
 
-  it('keeps revalidating the work when a chapter is saved', async () => {
+  it('revalidates only the chapter page and only when the saved title changes', async () => {
     const owner = await createTestUser(db)
     const work = await createTestWork(db, owner.id)
-    const chapter = await createTestChapter(db, work.id, { position: 1 })
+    const chapter = await createTestChapter(db, work.id, { position: 1, title: '재회' })
     mocks.userId = owner.id
-    mocks.revalidatePath.mockClear()
-    await saveChapterAction({ chapterId: chapter.id, body: '본문', expectedVersion: 1 })
-    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/works/${work.id}`, 'layout')
+    const bodySave = await saveChapterAction({
+      chapterId: chapter.id,
+      title: '1화 재회',
+      body: '본문',
+      expectedVersion: 1,
+    })
+    expect(bodySave).toMatchObject({ ok: true, data: { version: 2 } })
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+
+    const titleSave = await saveChapterAction({
+      chapterId: chapter.id,
+      title: '새 제목',
+      expectedVersion: 2,
+    })
+    expect(titleSave).toMatchObject({ ok: true, data: { version: 3 } })
+    expect(mocks.revalidatePath.mock.calls).toEqual([[`/works/${work.id}/chapters/${chapter.id}`]])
   })
 
   it('saves a resume point for a path that starts with a slash', async () => {
