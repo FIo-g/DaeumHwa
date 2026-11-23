@@ -3,19 +3,9 @@
 import { z } from 'zod'
 import type { ActionResult } from '@/lib/result'
 import { ProofreadBodySchema } from '@/app/api/works/[workId]/chapters/shared'
-import { requireRowWork } from '@/server/access'
-import { revalidateWork, withAction } from '@/server/action-helpers'
-import {
-  type ChapterCheckResult,
-  type ProofreadSuggestion,
-  runChapterCheck,
-  runProofread,
-} from '@/server/chapter-check'
+import { withAction } from '@/server/action-helpers'
+import { type ProofreadSuggestion, runProofread } from '@/server/chapter-check'
 import { type CheckContextView, describeCheckContext } from '@/server/check-context'
-
-const RunChapterCheckSchema = z.object({
-  chapterId: z.uuid(),
-})
 
 const GetCheckContextSchema = z.object({
   chapterId: z.uuid(),
@@ -25,18 +15,6 @@ const GetCheckContextSchema = z.object({
 const RunProofreadSchema = ProofreadBodySchema.extend({
   chapterId: z.uuid(),
 })
-
-export async function runChapterCheckAction(
-  input: unknown,
-): Promise<ActionResult<ChapterCheckResult>> {
-  return withAction(async (db, actor) => {
-    const { chapterId } = RunChapterCheckSchema.parse(input)
-    const workId = await requireRowWork(db, 'chapters', chapterId)
-    const result = await runChapterCheck(db, actor, { chapterId })
-    revalidateWork(workId)
-    return result
-  })
-}
 
 export async function getCheckContextAction(
   input: unknown,

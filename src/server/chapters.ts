@@ -329,7 +329,6 @@ export async function saveChapter(
 ): Promise<ChapterRow> {
   const { saved, changed } = await db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, input.chapterId, 'editor')
-    await requireWorkRole(tx, chapter.workId, actor.userId, 'editor')
     assertNotArchived(chapter)
 
     const source = input.source ?? 'save'
