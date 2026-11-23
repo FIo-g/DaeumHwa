@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { locateAllQuotes, locateQuote, sentenceAt, splitSentences } from '@/lib/korean/sentences'
 
 describe('splitSentences', () => {
@@ -35,6 +35,34 @@ describe('locateQuote', () => {
 
   it('matches across collapsed whitespace', () => {
     expect(locateQuote('가나다  라마', '나다 라마')).toEqual({ start: 1, end: 7 })
+  })
+
+  it('reuses collapsed text across quotes and refreshes offsets when texts alternate', () => {
+    const first = '그는 문을  열었다.'
+    const second = '그녀는 문을\n\n열었다.'
+    const quote = '문을 열었다.'
+    const charAt = vi.spyOn(String.prototype, 'charAt')
+    try {
+      const lookups = [
+        [first, quote],
+        [first, '그는 문을 열었다.'],
+        [second, quote],
+        [first, quote],
+      ]
+      const results = lookups.map(([text, query]) => {
+        charAt.mockClear()
+        const range = locateQuote(text, query)
+        return { range, scanned: charAt.mock.calls.length > 0 }
+      })
+      expect(results).toEqual([
+        { range: { start: 3, end: 11 }, scanned: true },
+        { range: { start: 0, end: 11 }, scanned: false },
+        { range: { start: 4, end: 12 }, scanned: true },
+        { range: { start: 3, end: 11 }, scanned: true },
+      ])
+    } finally {
+      charAt.mockRestore()
+    }
   })
 
   it('returns null when the quote is absent', () => {
