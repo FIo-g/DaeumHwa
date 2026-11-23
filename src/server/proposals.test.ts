@@ -122,19 +122,20 @@ describe('approveProposal', () => {
     expect(rows[0].fields).toEqual({ role: '주인공' })
   })
 
-  it('updates an entry from entry_update, merging fields and keeping existing aliases', async () => {
+  it('fills empty fields from entry_update and preserves author values', async () => {
     const { actor, work, ch1 } = await makeWork()
     const entry = await createTestEntry(db, work.id, {
       name: '이서윤',
       aliases: ['서윤'],
-      summary: '옛 요약',
+      summary: '작가 요약',
+      fields: { role: '주인공', age: '' },
     })
     const p = await propose(work.id, {
       type: 'entry_update',
       payload: {
         entryId: entry.id,
         entryName: '이서윤',
-        patch: { summary: '새 요약', aliases: ['윤'], fields: { age: '17' } },
+        patch: { summary: '새 요약', aliases: ['윤'], fields: { role: '조연', age: '17' } },
       },
       source: 'post_chapter',
       sourceRef: null,
@@ -145,9 +146,11 @@ describe('approveProposal', () => {
 
     expect(res.targetId).toBe(entry.id)
     const [updated] = await db.select().from(wikiEntries).where(eq(wikiEntries.id, entry.id))
-    expect(updated.summary).toBe('새 요약')
+    expect(updated.fields).toEqual({ role: '주인공', age: '17' })
+    expect(updated.summary).toBe('작가 요약')
     expect(updated.aliases).toEqual(expect.arrayContaining(['서윤', '윤']))
-    expect(updated.fields).toEqual({ age: '17' })
+    const [change] = await db.select().from(changeLog).where(eq(changeLog.proposalId, p.id))
+    expect(change).toMatchObject({ targetId: entry.id, action: 'update', proposerType: 'ai' })
   })
 
   it('stores an assumed fact when approved with factStatus assumed and links the entry by subject', async () => {
