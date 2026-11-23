@@ -109,9 +109,8 @@ export async function runAiTask<I, O>(
   input: I,
   client: AiClient = getAiClient(),
 ): Promise<{ output: O; runId: string }> {
-  await assertCanStartRun(db, meta)
   const taskModel = task.model?.()
-  const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
+  const runId = await startRun(db, meta, task.name, taskModel ?? client.defaultModel)
   let usage: AiUsage | undefined
   const timeoutMs = timeoutOverrideMs ?? meta.timeoutMs ?? task.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS
   const { signal, deadline } = callSignals(meta, timeoutMs)
@@ -173,9 +172,8 @@ export async function runAiTaskSplit<I, O>(
   },
 ): Promise<{ output: O; runId: string }> {
   if (parts.length === 0) throw new AppError('VALIDATION', '실행할 항목이 없습니다.')
-  await assertCanStartRun(db, meta)
   const taskModel = task.model?.()
-  const runId = await insertRun(db, meta, task.name, taskModel ?? client.defaultModel)
+  const runId = await startRun(db, meta, task.name, taskModel ?? client.defaultModel)
   const timeoutMs = resolveSplitTimeoutMs(meta, task)
   const defaultConcurrency = isLocalProvider(client.provider) ? 1 : DEFAULT_CLOUD_SPLIT_CONCURRENCY
   // A NaN or infinite request would start no worker and store an empty merge as a done run.
@@ -329,8 +327,7 @@ export async function startAiStream(
   args: StreamRunArgs,
   client: AiClient = getAiClient(),
 ): Promise<{ runId: string; textStream: AsyncIterable<string>; done: Promise<string> }> {
-  await assertCanStartRun(db, meta)
-  const runId = await insertRun(db, meta, args.task, args.model ?? client.defaultModel)
+  const runId = await startRun(db, meta, args.task, args.model ?? client.defaultModel)
   const timeoutMs = timeoutOverrideMs ?? meta.timeoutMs ?? STREAM_AI_TIMEOUT_MS
   const { signal, deadline } = callSignals(meta, timeoutMs)
   let stream: ReturnType<AiClient['streamText']>
@@ -503,24 +500,28 @@ function dailyTokenLimit(): number {
   return DEFAULT_DAILY_TOKEN_LIMIT
 }
 
-async function insertRun(
+async function startRun(
   db: Db,
   meta: AiRunMeta,
   task: AiTaskName,
   model: string,
 ): Promise<string> {
-  const [row] = await db
-    .insert(aiRuns)
-    .values({
-      workId: meta.workId,
-      userId: meta.userId,
-      task,
-      chapterId: meta.chapterId ?? null,
-      status: 'running',
-      model,
-    })
-    .returning({ id: aiRuns.id })
-  return row.id
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${meta.userId}))`)
+    await assertCanStartRun(tx, meta)
+    const [row] = await tx
+      .insert(aiRuns)
+      .values({
+        workId: meta.workId,
+        userId: meta.userId,
+        task,
+        chapterId: meta.chapterId ?? null,
+        status: 'running',
+        model,
+      })
+      .returning({ id: aiRuns.id })
+    return row.id
+  })
 }
 
 type RunOutcome =

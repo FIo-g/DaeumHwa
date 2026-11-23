@@ -269,6 +269,38 @@ describe('failed runs', () => {
 })
 
 describe('concurrent runs', () => {
+  it('admits exactly 3 of 6 simultaneous starts for one user', async () => {
+    const { db, userId, workId } = await setup()
+    const client = new FakeAiClient({ overrides: { 'draft-expand': () => '확장' } })
+    const finish = Promise.withResolvers<void>()
+    const streamText = client.streamText.bind(client)
+    vi.spyOn(client, 'streamText').mockImplementation((args) => {
+      const stream = streamText(args)
+      // Keep admitted runs active until all six admission decisions have been made.
+      return { ...stream, final: finish.promise.then(() => stream.final) }
+    })
+    const args = {
+      task: 'draft-expand' as const,
+      effort: 'low' as const,
+      maxTokens: 100,
+      system: 's',
+      prompt: 'p',
+      input: { instructions: '' },
+    }
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 6 }, () => startAiStream(db, { userId, workId }, args, client)),
+    )
+    finish.resolve()
+    const admitted = results.filter((result) => result.status === 'fulfilled')
+    await Promise.all(admitted.map(({ value }) => value.done))
+
+    expect(admitted).toHaveLength(3)
+    expect(results.filter((result) => result.status === 'rejected')).toMatchObject(
+      Array.from({ length: 3 }, () => ({ reason: { code: 'CONFLICT' } })),
+    )
+  })
+
   it('rejects a new run while the user already has 3 running runs', async () => {
     const { db, userId, workId } = await setup()
     for (let i = 0; i < 3; i++)
