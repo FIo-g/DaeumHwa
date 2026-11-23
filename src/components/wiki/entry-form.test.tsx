@@ -67,7 +67,7 @@ describe('EntryFormDialog', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled())
   })
 
-  it('prefills an existing entry and saves through updateEntryAction', async () => {
+  it('prefills an entry and preserves unlabeled fields when a labeled field is cleared', async () => {
     render(
       <EntryFormDialog
         workId="w1"
@@ -82,7 +82,7 @@ describe('EntryFormDialog', () => {
           aliases: ['윤'],
           summary: '주인공',
           body: '',
-          fields: { role: '주인공' },
+          fields: { role: '주인공', 출신: '북부' },
           customFields: [{ key: '별명', value: '검은 까마귀' }],
         }}
       />,
@@ -92,12 +92,14 @@ describe('EntryFormDialog', () => {
     expect(screen.getByLabelText('역할')).toHaveValue('주인공')
     expect(screen.getByLabelText('자유 필드 이름 1')).toHaveValue('별명')
 
+    fireEvent.change(screen.getByLabelText('역할'), { target: { value: ' ' } })
     fireEvent.click(screen.getByRole('button', { name: '저장' }))
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         entryId: 'e1',
         name: '서윤',
+        fields: { 출신: '북부' },
         customFields: [{ key: '별명', value: '검은 까마귀' }],
       }),
     )

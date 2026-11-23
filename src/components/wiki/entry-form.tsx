@@ -121,6 +121,12 @@ function EntryFormFields({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const submittedFields = { ...entry?.fields }
+    for (const key of Object.keys(fieldLabels)) {
+      const value = (fields[key] ?? '').trim()
+      if (value === '') delete submittedFields[key]
+      else submittedFields[key] = value
+    }
     const input = {
       kind,
       name: name.trim(),
@@ -130,11 +136,7 @@ function EntryFormFields({
         .filter((a) => a !== ''),
       summary: summary.trim(),
       body,
-      fields: Object.fromEntries(
-        Object.keys(fieldLabels)
-          .map((key) => [key, (fields[key] ?? '').trim()] as const)
-          .filter(([, value]) => value !== ''),
-      ),
+      fields: submittedFields,
       customFields: customFields
         .map((c) => ({ key: c.key.trim(), value: c.value.trim() }))
         .filter((c) => c.key !== ''),
