@@ -212,6 +212,26 @@ describe('saveChapter', () => {
     expect(versions).toHaveLength(3)
   })
 
+  it('keeps multiple version rows when saving every 3 minutes for 30 minutes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const start = new Date('2026-10-16T01:00:00Z')
+    vi.setSystemTime(start)
+    const { actor, work } = await setup()
+    let chapter = await createChapter(db, actor, { workId: work.id, body: '초안' })
+
+    for (let minute = 0; minute <= 30; minute += 3) {
+      vi.setSystemTime(new Date(start.getTime() + minute * 60_000))
+      chapter = await saveChapter(db, actor, {
+        chapterId: chapter.id,
+        body: `${minute}분에 저장한 원고`,
+        expectedVersion: chapter.version,
+      })
+    }
+
+    const versions = await listVersions(db, actor, chapter.id)
+    expect(versions.length).toBeGreaterThanOrEqual(3)
+  })
+
   it('does not coalesce into a row written by another user', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-16T01:00:00Z'))
