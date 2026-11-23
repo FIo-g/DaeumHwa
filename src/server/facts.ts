@@ -19,6 +19,7 @@ import {
   recordChange,
 } from '@/server/changes'
 import { findEntryByName, relinkFactsForEntry } from '@/server/entry-integrity'
+import { lockWork } from '@/server/work-lock'
 
 // Facts keep the name-matching and entry-link helpers in entry-integrity.ts, so changes.ts can
 // use them without importing this file. Re-exported here for existing callers.
@@ -424,27 +425,33 @@ export async function supersedeFact(
 ): Promise<{ oldFact: FactRow; newFact: FactRow }> {
   const workId = await requireRowWork(db, 'facts', input.factId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
-  const old = await loadFact(db, input.factId)
-  if (old.archivedAt) throw new AppError('BAD_STATE', '보관된 사실은 바꿀 수 없습니다.')
-  if (old.supersededByFactId) {
-    const [successor] = await db
-      .select({ archivedAt: facts.archivedAt })
-      .from(facts)
-      .where(eq(facts.id, old.supersededByFactId))
-      .limit(1)
-    if (successor && !successor.archivedAt) {
-      throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실입니다.')
-    }
-  }
-  if (input.fromPosition <= (old.validFromPosition ?? 0)) {
-    throw new AppError('VALIDATION', '바뀌는 회차는 기존 사실이 유효해진 회차 이후여야 합니다.')
-  }
-  const content = requireContent(input.content)
-  if (input.sourceChapterId) {
-    await assertChapterInWork(db, workId, input.sourceChapterId)
-  }
-
   return db.transaction(async (tx) => {
+    await lockWork(tx, workId)
+    const old = await loadFact(tx, input.factId)
+    if (old.archivedAt) throw new AppError('BAD_STATE', '보관된 사실은 바꿀 수 없습니다.')
+    if (old.supersededByFactId) {
+      const [successor] = await tx
+        .select({ archivedAt: facts.archivedAt })
+        .from(facts)
+        .where(eq(facts.id, old.supersededByFactId))
+        .limit(1)
+      if (successor && !successor.archivedAt) {
+        throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실입니다.')
+      }
+      // Older archives can leave a stale successor link on the previous fact.
+      await tx
+        .update(facts)
+        .set({ supersededByFactId: null })
+        .where(and(eq(facts.id, old.id), eq(facts.supersededByFactId, old.supersededByFactId)))
+    }
+    if (input.fromPosition <= (old.validFromPosition ?? 0)) {
+      throw new AppError('VALIDATION', '바뀌는 회차는 기존 사실이 유효해진 회차 이후여야 합니다.')
+    }
+    const content = requireContent(input.content)
+    if (input.sourceChapterId) {
+      await assertChapterInWork(tx, workId, input.sourceChapterId)
+    }
+
     const [created] = await tx
       .insert(facts)
       .values({
@@ -472,8 +479,9 @@ export async function supersedeFact(
         supersededByFactId: created.id,
         updatedAt: new Date(),
       })
-      .where(eq(facts.id, old.id))
+      .where(and(eq(facts.id, old.id), isNull(facts.supersededByFactId)))
       .returning()
+    if (!ended) throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실입니다.')
 
     await logChange(tx, actor, o, {
       workId,

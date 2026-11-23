@@ -8,6 +8,7 @@ import { requireRowWork, requireWorkRole } from '@/server/access'
 import { getEntryAppearances, recomputeAppearancesForEntry } from '@/server/appearances'
 import { assertEntryNameFree, relinkFactsForEntry } from '@/server/entry-integrity'
 import { type ChangeOpts, type FactView, listFacts, logChange } from '@/server/facts'
+import { lockWork } from '@/server/work-lock'
 
 export type { ChangeOpts } from '@/server/facts'
 export { findEntryByName } from '@/server/facts'
@@ -202,9 +203,10 @@ export async function createEntry(
 ): Promise<EntryRow> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
   const values = normalizeEntry(input)
-  await assertEntryNameFree(db, input.workId, values.kind, values.name)
 
   return db.transaction(async (tx) => {
+    await lockWork(tx, input.workId)
+    await assertEntryNameFree(tx, input.workId, values.kind, values.name)
     const [entry] = await tx
       .insert(wikiEntries)
       .values({
@@ -237,23 +239,24 @@ export async function updateEntry(
 ): Promise<EntryRow> {
   const workId = await requireRowWork(db, 'wiki_entries', entryId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
-  const current = await loadEntry(db, entryId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드는 수정할 수 없습니다.')
-
-  const values = normalizeEntry({
-    kind: patch.kind ?? current.kind,
-    name: patch.name ?? current.name,
-    aliases: patch.aliases ?? current.aliases,
-    summary: patch.summary ?? current.summary,
-    body: patch.body ?? current.body,
-    fields: patch.fields ?? current.fields,
-    customFields: patch.customFields ?? current.customFields,
-    contextTier: patch.contextTier ?? current.contextTier,
-  })
-  await assertEntryNameFree(db, workId, values.kind, values.name, entryId)
-  const namesChanged = values.name !== current.name || !sameList(values.aliases, current.aliases)
 
   return db.transaction(async (tx) => {
+    await lockWork(tx, workId)
+    const current = await loadEntry(tx, entryId)
+    if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드는 수정할 수 없습니다.')
+
+    const values = normalizeEntry({
+      kind: patch.kind ?? current.kind,
+      name: patch.name ?? current.name,
+      aliases: patch.aliases ?? current.aliases,
+      summary: patch.summary ?? current.summary,
+      body: patch.body ?? current.body,
+      fields: patch.fields ?? current.fields,
+      customFields: patch.customFields ?? current.customFields,
+      contextTier: patch.contextTier ?? current.contextTier,
+    })
+    await assertEntryNameFree(tx, workId, values.kind, values.name, entryId)
+    const namesChanged = values.name !== current.name || !sameList(values.aliases, current.aliases)
     const [updated] = await tx
       .update(wikiEntries)
       .set({ ...values, updatedAt: new Date() })
@@ -317,11 +320,12 @@ export async function restoreEntry(
 ): Promise<EntryRow> {
   const workId = await requireRowWork(db, 'wiki_entries', entryId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
-  const current = await loadEntry(db, entryId)
-  if (!current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드가 아닙니다.')
-  await assertEntryNameFree(db, workId, current.kind, current.name, entryId)
 
   return db.transaction(async (tx) => {
+    await lockWork(tx, workId)
+    const current = await loadEntry(tx, entryId)
+    if (!current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드가 아닙니다.')
+    await assertEntryNameFree(tx, workId, current.kind, current.name, entryId)
     const [row] = await tx
       .update(wikiEntries)
       .set({ archivedAt: null, updatedAt: new Date() })
