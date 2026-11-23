@@ -1,7 +1,7 @@
 import { alias } from 'drizzle-orm/pg-core'
 import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { chapters, relations, wikiEntries } from '@/db/schema'
+import { changeLog, chapters, proposals, relations, wikiEntries } from '@/db/schema'
 import type { Actor, EntryKind, ProposerType, RelationRow } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { requireRowWork, requireWorkRole } from '@/server/access'
@@ -49,6 +49,14 @@ export type GraphData = {
     startPosition: number | null
     endPosition: number | null
   }[]
+  latestPosition: number
+}
+
+type EvidenceChapter = { position: number; title: string }
+
+export type GraphViewData = {
+  nodes: (GraphData['nodes'][number] & { summary: string })[]
+  edges: (GraphData['edges'][number] & { evidenceChapter: EvidenceChapter | null })[]
   latestPosition: number
 }
 
@@ -269,33 +277,33 @@ export async function archiveRelation(
   })
 }
 
-/**
- * Data for the relationship graph: active cards as nodes (with first appearance chapter),
- * active relations between two active cards as edges, and the latest chapter position.
- * Viewer role. The client filters by chapter using startPosition, endPosition and firstAppearance.
- */
-export async function getGraphData(db: Db, actor: Actor, workId: string): Promise<GraphData> {
+/** Active graph rows for viewers, with chapter metadata for client-side filtering. */
+async function readGraphData(db: Db, actor: Actor, workId: string) {
   await requireWorkRole(db, workId, actor.userId, 'viewer')
-  const entries = await db
-    .select({ id: wikiEntries.id, name: wikiEntries.name, kind: wikiEntries.kind })
-    .from(wikiEntries)
-    .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
-    .orderBy(asc(wikiEntries.name))
+  const [entries, firstAppearances, relationRows, latestPosition] = await Promise.all([
+    db
+      .select({
+        id: wikiEntries.id,
+        name: wikiEntries.name,
+        kind: wikiEntries.kind,
+        summary: wikiEntries.summary,
+      })
+      .from(wikiEntries)
+      .where(and(eq(wikiEntries.workId, workId), isNull(wikiEntries.archivedAt)))
+      .orderBy(asc(wikiEntries.name)),
+    getFirstAppearances(db, workId),
+    db
+      .select()
+      .from(relations)
+      .where(and(eq(relations.workId, workId), isNull(relations.archivedAt)))
+      .orderBy(asc(relations.createdAt)),
+    latestChapterPosition(db, workId),
+  ])
   const activeIds = new Set(entries.map((e) => e.id))
-  const firstAppearances = await getFirstAppearances(db, workId)
-
-  const relationRows = await db
-    .select()
-    .from(relations)
-    .where(and(eq(relations.workId, workId), isNull(relations.archivedAt)))
-    .orderBy(asc(relations.createdAt))
-  const latestPosition = await latestChapterPosition(db, workId)
 
   return {
     nodes: entries.map((e) => ({
-      id: e.id,
-      name: e.name,
-      kind: e.kind,
+      ...e,
       firstAppearance: firstAppearances.get(e.id) ?? null,
     })),
     edges: relationRows
@@ -311,5 +319,100 @@ export async function getGraphData(db: Db, actor: Actor, workId: string): Promis
         endPosition: r.endPosition,
       })),
     latestPosition,
+  }
+}
+
+/** Active cards and relations for the relationship management graph. */
+export async function getGraphData(db: Db, actor: Actor, workId: string): Promise<GraphData> {
+  const graph = await readGraphData(db, actor, workId)
+  return {
+    ...graph,
+    nodes: graph.nodes.map(({ id, name, kind, firstAppearance }) => ({
+      id,
+      name,
+      kind,
+      firstAppearance,
+    })),
+  }
+}
+
+async function getRelationEvidence(
+  db: Db,
+  workId: string,
+  edges: GraphData['edges'],
+): Promise<Map<string, EvidenceChapter>> {
+  const evidence = new Map<string, EvidenceChapter>()
+  if (edges.length === 0) return evidence
+
+  const edgeById = new Map(edges.map((edge) => [edge.id, edge]))
+  const origins = await db
+    .select({
+      relationId: changeLog.targetId,
+      source: sql<string | null>`${changeLog.after} ->> 'sourceEntryId'`,
+      target: sql<string | null>`${changeLog.after} ->> 'targetEntryId'`,
+      kind: sql<string | null>`${changeLog.after} ->> 'kind'`,
+      directed: sql<string | null>`${changeLog.after} ->> 'directed'`,
+      position: chapters.position,
+      title: chapters.title,
+    })
+    .from(changeLog)
+    .innerJoin(
+      proposals,
+      and(
+        eq(proposals.id, changeLog.proposalId),
+        eq(proposals.workId, workId),
+        eq(proposals.type, 'relation_create'),
+        eq(proposals.status, 'approved'),
+        eq(proposals.appliedTargetId, changeLog.targetId),
+      ),
+    )
+    .innerJoin(
+      chapters,
+      and(
+        eq(chapters.id, proposals.chapterId),
+        eq(chapters.workId, workId),
+        isNull(chapters.archivedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(changeLog.workId, workId),
+        eq(changeLog.targetTable, 'relations'),
+        eq(changeLog.action, 'create'),
+        eq(changeLog.proposerType, 'ai'),
+        inArray(changeLog.targetId, [...edgeById.keys()]),
+      ),
+    )
+
+  // A duplicate approval writes no creation log, and a manual edit can change what an edge means.
+  for (const origin of origins) {
+    const edge = edgeById.get(origin.relationId)
+    if (
+      edge &&
+      edge.source === origin.source &&
+      edge.target === origin.target &&
+      edge.kind === origin.kind &&
+      String(edge.directed) === origin.directed
+    ) {
+      evidence.set(edge.id, { position: origin.position, title: origin.title })
+    }
+  }
+  return evidence
+}
+
+/** Read-only graph with wiki summaries and source chapters for recorded relation evidence. */
+export async function getGraphViewData(
+  db: Db,
+  actor: Actor,
+  workId: string,
+): Promise<GraphViewData> {
+  const graph = await readGraphData(db, actor, workId)
+  const evidence = await getRelationEvidence(db, workId, graph.edges)
+  return {
+    ...graph,
+    edges: graph.edges.map((edge) => ({
+      ...edge,
+      evidenceChapter: evidence.get(edge.id) ?? null,
+    })),
   }
 }

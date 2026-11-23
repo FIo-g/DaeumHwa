@@ -10,6 +10,7 @@ import { ENTRY_KIND_COLOR } from './graph-model'
 type GraphControlsProps = {
   latestPosition: number
   position: number
+  positionSuffix?: string
   onPositionChange: (position: number) => void
   showAll: boolean
   onShowAllChange: (showAll: boolean) => void
@@ -23,6 +24,7 @@ type GraphControlsProps = {
 export function GraphControls({
   latestPosition,
   position,
+  positionSuffix = '화까지',
   onPositionChange,
   showAll,
   onShowAllChange,
@@ -40,7 +42,7 @@ export function GraphControls({
           <div className="flex items-center justify-between gap-2">
             <Label htmlFor="graph-position">회차 기준</Label>
             <span className="text-sm text-muted-foreground" aria-live="polite">
-              {showAll ? '전체' : `${shown}화까지`}
+              {showAll ? '전체' : `${shown}${positionSuffix}`}
             </span>
           </div>
           <input
@@ -50,6 +52,7 @@ export function GraphControls({
             max={max}
             step={1}
             value={shown}
+            aria-valuetext={`${shown}화`}
             disabled={showAll}
             onChange={(e) => onPositionChange(Number(e.target.value))}
             className="w-full accent-primary disabled:opacity-50"

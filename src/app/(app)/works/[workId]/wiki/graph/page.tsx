@@ -1,5 +1,7 @@
+import Link from 'next/link'
 import { PageHeader } from '@/components/app/page-header'
 import { RelationGraph } from '@/components/graph/relation-graph'
+import { buttonVariants } from '@/components/ui/button'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getGraphData } from '@/server/relations'
 import { getWork } from '@/server/works'
@@ -16,6 +18,14 @@ export default async function GraphPage({ params }: { params: Promise<{ workId: 
       <PageHeader
         title="관계 그래프"
         description="회차를 옮기며 카드 사이의 관계가 어떻게 바뀌는지 봅니다."
+        actions={
+          <Link
+            href={`/works/${workId}/wiki/graph/view`}
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            3D로 보기
+          </Link>
+        }
       />
       <RelationGraph
         workId={workId}

@@ -83,6 +83,19 @@ export function visibleGraph(
   return { nodeIds, edgeIds }
 }
 
+/** The renderer writes coordinates and replaces link endpoints, so give it fresh objects. */
+export function createForceGraphData(
+  data: { nodes: GraphNode[]; edges: GraphEdge[] },
+  position: number | null,
+  hiddenKinds: EntryKind[],
+): { nodes: GraphNode[]; links: GraphEdge[] } {
+  const { nodeIds, edgeIds } = visibleGraph(data, position, hiddenKinds)
+  return {
+    nodes: data.nodes.filter((node) => nodeIds.has(node.id)).map((node) => ({ ...node })),
+    links: data.edges.filter((edge) => edgeIds.has(edge.id)).map((edge) => ({ ...edge })),
+  }
+}
+
 /** Human-readable range such as "3화부터 8화까지". Null ends mean open. */
 export function formatRelationRange(start: number | null, end: number | null): string {
   if (start === null && end === null) return '전 기간'

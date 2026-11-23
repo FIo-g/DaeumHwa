@@ -1,8 +1,9 @@
 import { and, eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Db } from '@/db/client'
-import { changeLog, relations, wikiEntries } from '@/db/schema'
+import { changeLog, chapters, proposals, relations, wikiEntries } from '@/db/schema'
 import { AppError } from '@/lib/errors'
+import type { NewProposal } from '@/lib/proposal-payloads'
 import { createTestDb } from '@/test/db'
 import {
   addTestMember,
@@ -12,10 +13,13 @@ import {
   createTestWork,
 } from '@/test/factories'
 import { recomputeAppearances } from './appearances'
+import { insertProposals } from './proposal-store'
+import { approveProposal } from './proposals'
 import {
   archiveRelation,
   createRelation,
   getGraphData,
+  getGraphViewData,
   listRelations,
   updateRelation,
 } from './relations'
@@ -254,5 +258,148 @@ describe('getGraphData', () => {
     const graph = await getGraphData(db, actor, work.id)
     expect(graph.nodes.map((n) => n.id)).toEqual([a.id])
     expect(graph.edges).toHaveLength(0)
+  })
+})
+
+describe('getGraphViewData', () => {
+  function relationProposal(chapterId: string | null, kind = '동료'): NewProposal {
+    return {
+      type: 'relation_create',
+      source: chapterId ? 'post_chapter' : 'interview',
+      sourceRef: null,
+      chapterId,
+      payload: {
+        sourceName: '이서윤',
+        targetName: '박도윤',
+        kind,
+        directed: true,
+        description: '',
+        startPosition: 2,
+        evidence: '둘은 같은 반에서 일했다.',
+      },
+    }
+  }
+
+  it('shows canonical summaries and a recorded chapter to a work viewer after approval', async () => {
+    const { work, actor } = await makeWork()
+    const a = await createTestEntry(db, work.id, { name: '이서윤', summary: '탐사대 대장' })
+    const b = await createTestEntry(db, work.id, { name: '박도윤' })
+    const chapter = await createTestChapter(db, work.id, { position: 7, title: '새로운 동료' })
+    const viewer = await createTestUser(db)
+    await addTestMember(db, work.id, viewer.id, 'viewer')
+    const [proposal] = await insertProposals(db, work.id, [relationProposal(chapter.id)])
+
+    const context = { userId: viewer.id }
+    expect((await getGraphViewData(db, context, work.id)).edges).toEqual([])
+    const { targetId } = await approveProposal(db, actor, { proposalId: proposal.id })
+    const graph = await getGraphViewData(db, context, work.id)
+
+    expect(graph.nodes.find((node) => node.id === a.id)?.summary).toBe('탐사대 대장')
+    expect(graph.edges).toEqual([
+      {
+        id: targetId,
+        source: a.id,
+        target: b.id,
+        kind: '동료',
+        description: '',
+        directed: true,
+        startPosition: 2,
+        endPosition: null,
+        evidenceChapter: { position: 7, title: '새로운 동료' },
+      },
+    ])
+    expect((await getGraphData(db, context, work.id)).nodes[0]).not.toHaveProperty('summary')
+    const stranger = await createTestUser(db)
+    await expectAppError(getGraphViewData(db, { userId: stranger.id }, work.id), 'NOT_FOUND')
+  })
+
+  it('leaves evidence empty for a manual relation and a chapterless approval', async () => {
+    const { work, actor } = await makeWork()
+    const a = await createTestEntry(db, work.id, { name: '이서윤' })
+    const b = await createTestEntry(db, work.id, { name: '박도윤' })
+    const chapter = await createTestChapter(db, work.id, { position: 7, title: '새로운 동료' })
+    const manual = await createRelation(db, actor, {
+      workId: work.id,
+      sourceEntryId: a.id,
+      targetEntryId: b.id,
+      kind: '동료',
+      directed: true,
+      startPosition: 2,
+    })
+    const [duplicate, chapterless] = await insertProposals(db, work.id, [
+      relationProposal(chapter.id),
+      relationProposal(null, '가족'),
+    ])
+    const duplicateApproval = await approveProposal(db, actor, { proposalId: duplicate.id })
+    const chapterlessApproval = await approveProposal(db, actor, { proposalId: chapterless.id })
+    expect(duplicateApproval.targetId).toBe(manual.id)
+
+    const graph = await getGraphViewData(db, actor, work.id)
+    expect(graph.edges).toHaveLength(2)
+    expect(graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: manual.id, evidenceChapter: null }),
+        expect.objectContaining({ id: chapterlessApproval.targetId, evidenceChapter: null }),
+      ]),
+    )
+  })
+
+  it('does not attach the creation source to a changed relationship identity', async () => {
+    const { work, actor } = await makeWork()
+    await createTestEntry(db, work.id, { name: '이서윤' })
+    const b = await createTestEntry(db, work.id, { name: '박도윤' })
+    const c = await createTestEntry(db, work.id, { name: '최유리' })
+    const chapter = await createTestChapter(db, work.id, { position: 7, title: '새로운 동료' })
+    const [proposal] = await insertProposals(db, work.id, [relationProposal(chapter.id)])
+    const { targetId } = await approveProposal(db, actor, { proposalId: proposal.id })
+    if (!targetId) throw new Error('The test proposal did not create a relation.')
+
+    const readEvidence = async () =>
+      (await getGraphViewData(db, actor, work.id)).edges[0].evidenceChapter
+    await updateRelation(db, actor, targetId, { endPosition: 8 })
+    expect(await readEvidence()).toEqual({ position: 7, title: '새로운 동료' })
+
+    for (const patch of [{ targetEntryId: c.id }, { kind: '적대' }, { directed: false }]) {
+      await updateRelation(db, actor, targetId, patch)
+      expect(await readEvidence()).toBeNull()
+      await updateRelation(db, actor, targetId, {
+        targetEntryId: b.id,
+        kind: '동료',
+        directed: true,
+      })
+    }
+  })
+
+  it('ignores unapproved proposals and unavailable or out-of-work source chapters', async () => {
+    const { work, actor } = await makeWork()
+    await createTestEntry(db, work.id, { name: '이서윤' })
+    await createTestEntry(db, work.id, { name: '박도윤' })
+    const chapter = await createTestChapter(db, work.id, { position: 7, title: '새로운 동료' })
+    const other = await makeWork()
+    const otherChapter = await createTestChapter(db, other.work.id, { title: '다른 작품 회차' })
+    const [proposal] = await insertProposals(db, work.id, [relationProposal(chapter.id)])
+    await approveProposal(db, actor, { proposalId: proposal.id })
+
+    const readEvidence = async () =>
+      (await getGraphViewData(db, actor, work.id)).edges[0].evidenceChapter
+    await db.update(proposals).set({ status: 'rejected' }).where(eq(proposals.id, proposal.id))
+    expect(await readEvidence()).toBeNull()
+
+    await db.update(proposals).set({ status: 'approved' }).where(eq(proposals.id, proposal.id))
+    await db.update(chapters).set({ archivedAt: new Date() }).where(eq(chapters.id, chapter.id))
+    expect(await readEvidence()).toBeNull()
+
+    await db
+      .update(proposals)
+      .set({ chapterId: otherChapter.id })
+      .where(eq(proposals.id, proposal.id))
+    expect(await readEvidence()).toBeNull()
+
+    await db.update(chapters).set({ archivedAt: null }).where(eq(chapters.id, chapter.id))
+    await db
+      .update(proposals)
+      .set({ chapterId: chapter.id, workId: other.work.id })
+      .where(eq(proposals.id, proposal.id))
+    expect(await readEvidence()).toBeNull()
   })
 })
