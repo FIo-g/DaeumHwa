@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { getAiClient } from '@/ai'
 import { buildContextPack, isUnrevealed, renderContextPack, renderCoreEntries } from '@/ai/context'
 import { READER_PERSONAS, type Persona } from '@/ai/personas'
@@ -119,6 +119,7 @@ const READER_PREVIOUS_SUMMARIES = 3
 const ADVICE_RECENT_SUMMARIES = 5
 const MIN_DIALOGUE_SAMPLES = 3
 const MAX_DIALOGUE_SAMPLES = 40
+const DIALOGUE_CHAPTER_PAGE_SIZE = 20
 const DRAFT_TAIL_CHARS = 1500
 /** The first draft and its continuation share one budget, under the route's 300 s maxDuration. */
 const DRAFT_TOTAL_BUDGET_MS = 290_000
@@ -356,23 +357,37 @@ export async function suggestStyleCard(
 
 /** Lines that contain dialogue and mention one of the names, scanning chapters newest first. */
 async function collectDialogueSamples(db: Db, workId: string, names: string[]): Promise<string[]> {
-  const rows = await db
-    .select({ body: chapters.body })
-    .from(chapters)
-    .where(and(eq(chapters.workId, workId), isNull(chapters.archivedAt)))
-    .orderBy(desc(chapters.position))
   const samples: string[] = []
-  for (const row of rows) {
-    for (const raw of row.body.split('\n')) {
-      const line = raw.trim()
-      if (!line || !DIALOGUE_RE.test(line)) continue
-      if (!names.some((name) => line.includes(name))) continue
-      if (samples.includes(line)) continue
-      samples.push(line)
-      if (samples.length >= MAX_DIALOGUE_SAMPLES) return samples
+  let cursor: { position: number; id: string } | undefined
+  for (;;) {
+    const rows = await db
+      .select({ id: chapters.id, position: chapters.position, body: chapters.body })
+      .from(chapters)
+      .where(
+        and(
+          eq(chapters.workId, workId),
+          isNull(chapters.archivedAt),
+          cursor &&
+            sql`(${chapters.position}, ${chapters.id}) < (${cursor.position}, ${cursor.id})`,
+        ),
+      )
+      .orderBy(desc(chapters.position), desc(chapters.id))
+      .limit(DIALOGUE_CHAPTER_PAGE_SIZE)
+
+    for (const row of rows) {
+      for (const raw of row.body.split('\n')) {
+        const line = raw.trim()
+        if (!line || !DIALOGUE_RE.test(line)) continue
+        if (!names.some((name) => line.includes(name))) continue
+        if (samples.includes(line)) continue
+        samples.push(line)
+        if (samples.length >= MAX_DIALOGUE_SAMPLES) return samples
+      }
     }
+    if (rows.length < DIALOGUE_CHAPTER_PAGE_SIZE) return samples
+    const { id, position } = rows[rows.length - 1]
+    cursor = { id, position }
   }
-  return samples
 }
 
 // ---- Draft (F13) ----

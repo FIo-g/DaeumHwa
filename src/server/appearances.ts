@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { chapters, entryAppearances, wikiEntries } from '@/db/schema'
 import { AppError } from '@/lib/errors'
@@ -54,15 +54,21 @@ export async function recomputeAppearancesForEntry(db: Db, entryId: string): Pro
     .limit(1)
   if (!entry) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
 
-  const rows = await db
-    .select({ id: chapters.id, body: chapters.body })
-    .from(chapters)
-    .where(eq(chapters.workId, entry.workId))
+  const names = namesOf(entry)
+    .map((name) => name.trim())
+    .filter(Boolean)
+  const matchingBody = or(...names.map((name) => sql`strpos(${chapters.body}, ${name}) > 0`))
+  const rows =
+    entry.archivedAt || !matchingBody
+      ? []
+      : await db
+          .select({ id: chapters.id, body: chapters.body })
+          .from(chapters)
+          .where(and(eq(chapters.workId, entry.workId), matchingBody))
 
   await db.transaction(async (tx) => {
     await tx.delete(entryAppearances).where(eq(entryAppearances.entryId, entryId))
-    if (entry.archivedAt) return
-    const target: MentionTarget = { id: entryId, names: namesOf(entry) }
+    const target: MentionTarget = { id: entryId, names }
     const values = rows.flatMap((chapter) => {
       const hit = findMentions(chapter.body, [target])[0]
       return hit ? [{ entryId, chapterId: chapter.id, mentionCount: hit.count }] : []
