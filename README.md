@@ -80,7 +80,7 @@ pnpm dev                     # http://localhost:3000
 | `OPENCODE_OPENAI_BASE_URL`                 | OpenCode Go OpenAI(Responses) 형식 주소 재정의. 기본값은 `https://opencode.ai/inference/go/openai/v1`                                                 |
 | `OPENCODE_API_FORMAT`                      | `anthropic` 또는 `responses` 로 모든 OpenCode 모델의 API 형식을 강제합니다. 비우면 모델 이름으로 정합니다. 다른 값은 무시합니다                       |
 | `AI_PROVIDER`                              | `anthropic`, `opencode` 중 하나를 강제합니다. 그 밖의 값은 무시합니다. 비워 두면 `ANTHROPIC_API_KEY`, 다음으로 `OPENCODE_API_KEY` 유무로 정합니다     |
-| `AI_DAILY_TOKEN_LIMIT`                     | 사용자당 하루 AI 토큰 한도. 기본값은 3,000,000                                                                                                        |
+| `AI_DAILY_TOKEN_LIMIT`                     | 사용자당 하루 AI 토큰 한도. 기본값은 3,000,000. `0` 또는 음수로 설정하면 하루 한도가 없습니다.                                                         |
 | `AI_GLOBAL_DAILY_TOKEN_LIMIT`              | 전체 사용자의 하루 AI 토큰 한도(한국 시간 기준). 비워 두거나 0 이하로 설정하면 제한 없음                                                               |
 | `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` | 원고 가져오기 백그라운드 작업용 (선택). `INNGEST_DEV` 를 쓰지 않으면 서명 키도 필요합니다                                                             |
 | `INNGEST_DEV`                              | `1` 이면 Inngest 로컬 개발 서버를 씁니다 (선택). `1` 이외의 값(`true` 등)은 인식하지 않습니다                                                         |
