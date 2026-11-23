@@ -132,7 +132,7 @@ async function writeVersionRow(
     latest.source === 'save' &&
     latest.createdBy === input.actorId &&
     latest.version > 1 &&
-    input.now.getTime() - latest.updatedAt.getTime() <= COALESCE_WINDOW_MS
+    input.now.getTime() - latest.createdAt.getTime() <= COALESCE_WINDOW_MS
 
   if (canMerge) {
     await db
