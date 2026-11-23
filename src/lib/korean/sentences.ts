@@ -56,6 +56,8 @@ export function sentenceIn(sentences: Sentence[], index: number): Sentence {
   return found
 }
 
+let lastCollapsedText: { text: string; norm: string; map: number[] } | undefined
+
 /**
  * Finds a quote in text. Tries an exact match (nearest to `hint` when given), then a match
  * where runs of whitespace are treated as one space. Returns original-text offsets.
@@ -79,7 +81,10 @@ export function locateQuote(
     return { start, end: start + quote.length }
   }
 
-  const { norm, map } = collapseWhitespace(text)
+  if (lastCollapsedText?.text !== text) {
+    lastCollapsedText = { text, ...collapseWhitespace(text) }
+  }
+  const { norm, map } = lastCollapsedText
   const normQuote = quote.trim().replace(/\s+/g, ' ')
   const normStart = normQuote === '' ? -1 : norm.indexOf(normQuote)
   if (normStart === -1) return null
