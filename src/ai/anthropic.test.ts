@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import Anthropic, { APIConnectionTimeoutError, APIUserAbortError } from '@anthropic-ai/sdk'
 import { z } from 'zod'
-import { AnthropicAiClient, createAnthropicSdk } from '@/ai/anthropic'
+import { AnthropicAiClient, createAnthropicSdk, FORMAT_MESSAGE } from '@/ai/anthropic'
 import { AI_TIMEOUT_MESSAGE } from '@/ai/types'
 import { AppError } from '@/lib/errors'
 
@@ -11,21 +11,20 @@ const OutputSchema = z.object({ answer: z.string(), score: z.number() })
 
 function okResponse(model = 'claude-haiku-5-5', stopReason = 'end_turn') {
   return {
-    parsed_output: { answer: '네', score: 3 },
     stop_reason: stopReason,
     usage: { input_tokens: 11, output_tokens: 22 },
     model,
-    content: [],
+    content: [{ type: 'text', text: '{"answer":"네","score":3}' }],
   }
 }
 
 /**
- * Stub SDK. `parseResult` is returned from messages.parse (or beta.messages.parse) and
+ * Stub SDK. `createResult` is returned from messages.create (or beta.messages.create) and
  * `streamDeltas` / `streamStop` drive messages.stream (or beta.messages.stream).
  */
 function stubSdk(opts?: {
-  parseResult?: unknown
-  parseError?: unknown
+  createResult?: unknown
+  createError?: unknown
   streamDeltas?: string[]
   streamStop?: string
   streamError?: unknown
@@ -59,24 +58,23 @@ function stubSdk(opts?: {
     return stream
   }
 
-  function makeParse(path: string) {
+  function makeCreate(path: string) {
     return async (params: Record<string, unknown>, options?: unknown) => {
       calls.push({ path, params, options })
-      if (opts?.parseError) throw opts.parseError
-      return opts?.parseResult ?? okResponse()
+      if (opts?.createError) throw opts.createError
+      return opts?.createResult ?? okResponse()
     }
   }
 
   const sdk = {
     messages: {
-      parse: makeParse('messages.parse'),
-      create: makeParse('messages.create'),
+      create: makeCreate('messages.create'),
       stream: (params: Record<string, unknown>, options?: unknown) =>
         makeStream('messages.stream', params, options),
     },
     beta: {
       messages: {
-        parse: makeParse('beta.messages.parse'),
+        create: makeCreate('beta.messages.create'),
         stream: (params: Record<string, unknown>, options?: unknown) =>
           makeStream('beta.messages.stream', params, options),
       },
@@ -115,9 +113,9 @@ describe('AnthropicAiClient defaults', () => {
 
   it('sends no fallback params for the haiku default', async () => {
     delete process.env.ANTHROPIC_MODEL
-    const { sdk, calls } = stubSdk({ parseResult: okResponse('claude-haiku-5-5') })
+    const { sdk, calls } = stubSdk({ createResult: okResponse('claude-haiku-5-5') })
     await new AnthropicAiClient(sdk).generateObject(baseArgs)
-    expect(calls[0].path).toBe('messages.parse')
+    expect(calls[0].path).toBe('messages.create')
     expect((calls[0].params as { model: string }).model).toBe('claude-haiku-5-5')
     expect(calls[0].params).not.toHaveProperty('fallbacks')
   })
@@ -134,7 +132,7 @@ describe('AnthropicAiClient.generateObject', () => {
     expect(result.model).toBe('claude-haiku-5-5')
 
     expect(calls).toHaveLength(1)
-    expect(calls[0].path).toBe('messages.parse')
+    expect(calls[0].path).toBe('messages.create')
     const params = calls[0].params as {
       model: string
       max_tokens: number
@@ -153,29 +151,32 @@ describe('AnthropicAiClient.generateObject', () => {
   })
 
   it('uses the explicit model argument over the default model', async () => {
-    const { sdk, calls } = stubSdk({ parseResult: okResponse('claude-haiku-5-5') })
+    const { sdk, calls } = stubSdk({ createResult: okResponse('claude-haiku-5-5') })
     const client = new AnthropicAiClient(sdk, 'claude-opus-5-5')
     await client.generateObject({ ...baseArgs, model: 'claude-haiku-5-5' })
     expect((calls[0].params as { model: string }).model).toBe('claude-haiku-5-5')
   })
 
   it('enables server-side fallback through the beta API for opus models', async () => {
-    const { sdk, calls } = stubSdk({ parseResult: okResponse('claude-opus-5-5') })
+    const { sdk, calls } = stubSdk({ createResult: okResponse('claude-opus-5-5') })
     const client = new AnthropicAiClient(sdk, 'claude-opus-5-5')
     await client.generateObject(baseArgs)
 
     expect(calls).toHaveLength(1)
-    expect(calls[0].path).toBe('beta.messages.parse')
+    expect(calls[0].path).toBe('beta.messages.create')
     const params = calls[0].params as { betas: string[]; fallbacks: unknown }
-    expect(params.betas).toEqual(['server-side-fallback-2026-07-01'])
+    expect(params.betas).toEqual([
+      'server-side-fallback-2026-07-01',
+      'structured-outputs-2025-12-15',
+    ])
     expect(params.fallbacks).toBe('default')
   })
 
   it('does not send fallback params for haiku', async () => {
-    const { sdk, calls } = stubSdk({ parseResult: okResponse('claude-haiku-5-5') })
+    const { sdk, calls } = stubSdk({ createResult: okResponse('claude-haiku-5-5') })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await client.generateObject(baseArgs)
-    expect(calls[0].path).toBe('messages.parse')
+    expect(calls[0].path).toBe('messages.create')
     const params = calls[0].params as { fallbacks?: unknown; betas?: unknown }
     expect(params.fallbacks).toBeUndefined()
     expect(params.betas).toBeUndefined()
@@ -183,7 +184,7 @@ describe('AnthropicAiClient.generateObject', () => {
 
   it('throws AI_ERROR with a Korean message on refusal', async () => {
     const { sdk } = stubSdk({
-      parseResult: { ...okResponse(), parsed_output: null, stop_reason: 'refusal' },
+      createResult: { ...okResponse('claude-haiku-5-5', 'refusal'), content: [] },
     })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     const error = await client.generateObject(baseArgs).catch((e: unknown) => e)
@@ -196,7 +197,7 @@ describe('AnthropicAiClient.generateObject', () => {
 
   it('throws AI_ERROR when the output was cut off by max_tokens', async () => {
     const { sdk } = stubSdk({
-      parseResult: { ...okResponse(), parsed_output: null, stop_reason: 'max_tokens' },
+      createResult: { ...okResponse('claude-haiku-5-5', 'max_tokens'), content: [] },
     })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
@@ -205,23 +206,28 @@ describe('AnthropicAiClient.generateObject', () => {
     })
   })
 
-  it('throws AI_ERROR when parsed_output is missing', async () => {
-    const { sdk } = stubSdk({ parseResult: { ...okResponse(), parsed_output: null } })
+  it('reports unparseable output in Korean and attaches the billed usage', async () => {
+    const sdk = new Anthropic({
+      apiKey: 'stub',
+      fetch: async () =>
+        Response.json({ ...okResponse(), content: [{ type: 'text', text: '{' }] }),
+    })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
       code: 'AI_ERROR',
-      message: 'AI 응답 형식이 올바르지 않습니다.',
+      message: FORMAT_MESSAGE,
+      details: { usage: { inputTokens: 11, outputTokens: 22 } },
     })
   })
 
   it('attaches the billed usage to refusal, max_tokens and missing-output errors', async () => {
     const cases = [
-      { ...okResponse(), parsed_output: null, stop_reason: 'refusal' },
-      { ...okResponse(), parsed_output: null, stop_reason: 'max_tokens' },
-      { ...okResponse(), parsed_output: null, stop_reason: 'end_turn' },
+      { ...okResponse('claude-haiku-5-5', 'refusal'), content: [] },
+      { ...okResponse('claude-haiku-5-5', 'max_tokens'), content: [] },
+      { ...okResponse(), content: [] },
     ]
-    for (const parseResult of cases) {
-      const { sdk } = stubSdk({ parseResult })
+    for (const createResult of cases) {
+      const { sdk } = stubSdk({ createResult })
       const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
       const error = await client.generateObject(baseArgs).catch((e: unknown) => e)
       expect(error).toBeInstanceOf(AppError)
@@ -234,7 +240,7 @@ describe('AnthropicAiClient.generateObject', () => {
 
   it('maps a rate limit error to AI_ERROR with the reason', async () => {
     const { sdk } = stubSdk({
-      parseError: new Anthropic.RateLimitError(429, undefined, 'Too many requests', new Headers()),
+      createError: new Anthropic.RateLimitError(429, undefined, 'Too many requests', new Headers()),
     })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
@@ -245,7 +251,7 @@ describe('AnthropicAiClient.generateObject', () => {
 
   it('maps an authentication error to AI_ERROR', async () => {
     const { sdk } = stubSdk({
-      parseError: new Anthropic.AuthenticationError(401, undefined, 'bad key', new Headers()),
+      createError: new Anthropic.AuthenticationError(401, undefined, 'bad key', new Headers()),
     })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     const error = await client.generateObject(baseArgs).catch((e: unknown) => e)
@@ -452,7 +458,7 @@ describe('AnthropicAiClient cancel and timeout', () => {
   it('maps a structured call whose body stalls past the time limit to the timeout message', async () => {
     const sdk = {
       messages: {
-        parse: (_params: unknown, options: { signal: AbortSignal }) =>
+        create: (_params: unknown, options: { signal: AbortSignal }) =>
           new Promise((_resolve, reject) => {
             options.signal.addEventListener('abort', () => reject(new APIUserAbortError()))
           }),
@@ -472,7 +478,7 @@ describe('AnthropicAiClient cancel and timeout', () => {
   })
 
   it('maps an SDK user abort to CANCELLED', async () => {
-    const { sdk } = stubSdk({ parseError: new APIUserAbortError() })
+    const { sdk } = stubSdk({ createError: new APIUserAbortError() })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
       code: 'CANCELLED',
@@ -481,7 +487,7 @@ describe('AnthropicAiClient cancel and timeout', () => {
   })
 
   it('maps an SDK connection timeout to the Korean timeout message', async () => {
-    const { sdk } = stubSdk({ parseError: new APIConnectionTimeoutError() })
+    const { sdk } = stubSdk({ createError: new APIConnectionTimeoutError() })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
       code: 'AI_ERROR',
