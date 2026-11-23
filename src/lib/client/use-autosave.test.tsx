@@ -264,6 +264,20 @@ describe('useAutosave', () => {
     expect(await getDraft(draftKey(USER, 'chapter-1'))).toBeUndefined()
   })
 
+  it('does not write a device draft when the tab is hidden without edits', async () => {
+    setup(vi.fn(async () => okSave(2)))
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    })
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await settle()
+
+    expect(await getDraft(draftKey(USER, 'chapter-1'))).toBeUndefined()
+  })
+
   it('keeps the edit typed during a save in a device draft with the new version', async () => {
     let resolveSave: (value: unknown) => void = () => {}
     const save = vi.fn(
