@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
-import { account, session, user, verification } from '@/db/auth-schema'
+import { account, rateLimit, session, user, verification } from '@/db/auth-schema'
 import { getDb } from '@/db/client'
 
 // Built lazily: importing this module must not open the database, because
@@ -12,7 +12,7 @@ function createAuth() {
     baseURL: process.env.BETTER_AUTH_URL,
     database: drizzleAdapter(getDb(), {
       provider: 'pg',
-      schema: { user, session, account, verification },
+      schema: { user, session, account, verification, rateLimit },
     }),
     emailAndPassword: {
       enabled: true,
@@ -22,7 +22,10 @@ function createAuth() {
     // Better Auth limits sign-in and sign-up to 3 requests per IP every 10 seconds in production.
     // The e2e server sets AUTH_RATE_LIMIT=off because every test shares one IP. Leave it unset
     // anywhere else.
-    rateLimit: process.env.AUTH_RATE_LIMIT === 'off' ? { enabled: false } : undefined,
+    rateLimit: {
+      storage: 'database',
+      enabled: process.env.AUTH_RATE_LIMIT === 'off' ? false : undefined,
+    },
     plugins: [nextCookies()],
   })
 }
