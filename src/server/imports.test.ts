@@ -33,6 +33,7 @@ vi.mock('@/inngest/client', () => ({
 import {
   advanceImportJob,
   appendImportChapters,
+  BUSY_MESSAGE,
   cancelImportJob,
   createImportJob,
   getImportJob,
@@ -441,7 +442,7 @@ describe('import jobs', () => {
       expect(job.proposalCount).toBe(rows.length)
     })
 
-    it('does not call the AI again while another call holds the chapter', async () => {
+    it('returns the busy message without calling the AI again while the chapter is claimed', async () => {
       const jobId = await uploadedJob()
       await startImportJob(db, actor, jobId)
       const client = new GatedClient(basicRespond)
@@ -449,17 +450,16 @@ describe('import jobs', () => {
       const first = advanceImportJob(db, jobId, { client })
       await waitUntil(() => client.calls === 1)
       const second = await advanceImportJob(db, jobId, { client })
+      client.open()
+      expect(await first).toMatchObject({ status: 'running', processed: 1 })
+
       expect(second).toEqual({
         status: 'running',
         processed: 0,
         total: 3,
         done: false,
-        message: null,
+        message: BUSY_MESSAGE,
       })
-      expect(client.calls).toBe(1)
-
-      client.open()
-      expect(await first).toMatchObject({ status: 'running', processed: 1 })
       expect(client.calls).toBe(1)
       const job = await getImportJob(db, actor, jobId)
       expect(job.state).not.toHaveProperty('inFlight')
