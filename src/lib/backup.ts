@@ -46,15 +46,17 @@ export function buildBackupFiles(p: ExportPayload): BackupFile[] {
     )
   }
 
+  const facts = p.facts.filter((fact) => !fact.archivedAt)
   const factsByEntry = new Map<string, typeof p.facts>()
-  for (const fact of p.facts) {
+  for (const fact of facts) {
     if (!fact.entryId) continue
     factsByEntry.set(fact.entryId, [...(factsByEntry.get(fact.entryId) ?? []), fact])
   }
-  const unlinkedFacts = p.facts.filter((fact) => !fact.entryId)
+  const unlinkedFacts = facts.filter((fact) => !fact.entryId)
 
-  const characters = p.entries.filter((e) => e.kind === 'character')
-  const world = p.entries.filter((e) => e.kind !== 'character')
+  const entries = p.entries.filter((entry) => !entry.archivedAt)
+  const characters = entries.filter((e) => e.kind === 'character')
+  const world = entries.filter((e) => e.kind !== 'character')
 
   add(
     'wiki/인물.md',
@@ -71,11 +73,12 @@ export function buildBackupFiles(p: ExportPayload): BackupFile[] {
   }
   add('wiki/세계관.md', renderSections('세계관', worldSections), 'file')
 
+  const threads = p.threads.filter((thread) => !thread.archivedAt)
   add(
     'wiki/떡밥.md',
     renderSections(
       '떡밥',
-      p.threads.map((thread) => {
+      threads.map((thread) => {
         const lines = [
           `## ${thread.title}`,
           `- 상태: ${THREAD_STATUS_LABEL[thread.status]}`,
@@ -100,11 +103,12 @@ export function buildBackupFiles(p: ExportPayload): BackupFile[] {
     'file',
   )
 
+  const namingRules = p.namingRules.filter((rule) => !rule.archivedAt)
   add(
     'wiki/표기.md',
     renderSections(
       '표기',
-      p.namingRules.map((rule) => {
+      namingRules.map((rule) => {
         const lines = [`## ${rule.canonical}`]
         if (rule.variants.length > 0) lines.push(`- 잘못된 표기: ${rule.variants.join(', ')}`)
         if (rule.note) lines.push('', rule.note)

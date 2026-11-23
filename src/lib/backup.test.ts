@@ -113,6 +113,37 @@ describe('buildBackupFiles', () => {
     expect(JSON.parse(file?.content ?? '')).toEqual(JSON.parse(JSON.stringify(payload)))
   })
 
+  it('omits archived wiki rows from Markdown and preserves them in work.json', () => {
+    const archivedAt = new Date('2026-10-15T00:00:00.000Z')
+    const archivedEntry = { ...payload.entries[0], id: 'e3', name: '옛 주인공', archivedAt }
+    const archivedFact = { ...payload.facts[0], id: 'f2', content: '서윤은 활을 쓴다', archivedAt }
+    const unlinkedFact = { ...archivedFact, id: 'f3', entryId: null, content: '옛 왕국의 전설' }
+    const archivedThread = { ...payload.threads[0], id: 't2', title: '잃어버린 왕관', archivedAt }
+    const archivedRule = { ...payload.namingRules[0], id: 'n2', canonical: '옛 지명', archivedAt }
+    const withArchivedRows = {
+      ...payload,
+      entries: [...payload.entries, archivedEntry],
+      facts: [...payload.facts, archivedFact, unlinkedFact],
+      threads: [...payload.threads, archivedThread],
+      namingRules: [...payload.namingRules, archivedRule],
+    }
+
+    const files = buildBackupFiles(withArchivedRows)
+    const markdown = files
+      .filter((f) => f.path.startsWith('wiki/'))
+      .map((f) => f.content)
+      .join('\n')
+    expect(markdown).toContain(payload.facts[0].content)
+    expect(markdown).not.toContain(archivedEntry.name)
+    expect(markdown).not.toContain(archivedFact.content)
+    expect(markdown).not.toContain(unlinkedFact.content)
+    expect(markdown).not.toContain(archivedThread.title)
+    expect(markdown).not.toContain(archivedRule.canonical)
+
+    const json = files.find((f) => f.path === 'work.json')
+    expect(JSON.parse(json?.content ?? '')).toEqual(JSON.parse(JSON.stringify(withArchivedRows)))
+  })
+
   it('uses NFC paths', () => {
     for (const f of buildBackupFiles(payload)) {
       expect(f.path).toBe(f.path.normalize('NFC'))
