@@ -347,6 +347,7 @@ function ThreadLedger() {
               <span className="pr-3 font-serif text-base">{thread.title}</span>
               <span
                 className="relative col-span-6 h-6"
+                role="img"
                 aria-label={
                   planned
                     ? `${thread.title}: 아직 심지 않음, ${to}화에 회수 목표`
