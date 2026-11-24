@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowRight, ChevronDown } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { useState, type CSSProperties } from 'react'
 import {
   CardRail,
@@ -8,19 +8,20 @@ import {
   ProofUnderline,
   Reveal,
   TiltCard,
+  usePrefersReducedMotion,
   useReplay,
 } from '@/components/motion'
 import { LandingTitle, PaperBoundary, landingOrder, useLandingEntrance } from './entrance'
 import { ReplayButton } from './paper-scenes'
 import { episodes, findings, type Finding } from './sample-data'
 
-function Comparison({ finding, added }: { finding: Finding; added: boolean }) {
+function Comparison({ finding, index }: { finding: Finding; index: number }) {
   const entrance = useLandingEntrance<HTMLLIElement>()
   return (
-    <li className="b-landing-comparison-row" {...entrance}>
+    <li className="b-landing-comparison-row" style={landingOrder(index)} {...entrance}>
       <div className="min-w-0">
         <p className="b-label flex items-center gap-2 font-bold">
-          <span className={added ? 'b-number b-sequence' : 'b-number'}>{finding.number}</span>
+          <span className="b-number">{finding.number}</span>
           {finding.chapter}화 · 원고
         </p>
         <p className="b-manuscript mt-1">
@@ -88,11 +89,11 @@ function CheckProcess() {
 }
 
 export function SampleCheck() {
-  const [chapter, setChapter] = useState(3)
-  const [more, setMore] = useState(false)
+  const [chapter, setChapter] = useState<'all' | 1 | 2 | 3>('all')
   const railEntrance = useLandingEntrance<HTMLDivElement>()
-  const selected = episodes.find((episode) => episode.number === chapter)!
-  const results = findings.filter((item) => item.chapter === chapter || (chapter === 3 && more))
+  const reduced = usePrefersReducedMotion()
+  const selected = episodes.find((episode) => episode.number === chapter)
+  const results = chapter === 'all' ? findings : findings.filter((item) => item.chapter === chapter)
 
   return (
     <ColorBand
@@ -123,17 +124,30 @@ export function SampleCheck() {
               <a
                 className="b-landing-episode-link"
                 href="#b-sample-result"
-                aria-label={`${episode.title} ${episode.excerpt}`}
-                aria-current={chapter === episode.number}
-                onClick={() => setChapter(episode.number)}
+                aria-label={`${episode.number}화 ${episode.title} ${episode.excerpt}`}
+                aria-current={chapter === episode.number ? true : undefined}
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+                  event.preventDefault()
+                  setChapter(episode.number)
+
+                  const card = event.currentTarget.closest('.b-landing-episode')
+                  const rail = card?.parentElement
+                  if (!card || !rail || rail.scrollWidth <= rail.clientWidth + 1) return
+                  const padding = parseFloat(getComputedStyle(rail).scrollPaddingLeft)
+                  const left =
+                    rail.scrollLeft +
+                    card.getBoundingClientRect().left -
+                    rail.getBoundingClientRect().left -
+                    padding
+                  rail.scrollTo({ left, behavior: reduced ? 'instant' : 'smooth' })
+                }}
                 onDragStart={(event) => event.preventDefault()}
               >
                 <span className="b-landing-episode-no" aria-hidden="true">
                   {episode.number}화
                 </span>
-                <span className="b-row__title">
-                  {episode.number === 3 ? episode.title : '점검'}
-                </span>
+                <span className="b-row__title">{episode.title}</span>
                 <span className="b-landing-episode-excerpt">{episode.excerpt}</span>
                 <ArrowRight className="b-icon" aria-hidden="true" />
               </a>
@@ -145,35 +159,33 @@ export function SampleCheck() {
         <div className="b-paper min-w-0 bg-paper">
           <div className="b-landing-panel-head">
             <h3 className="b-subhead">
-              {chapter === 3 ? '3화 · ' : ''}
-              {selected.title}
+              {selected ? `${chapter}화 · ${selected.title}` : '1~3화 전체'}
             </h3>
             <span className="b-label shrink-0" aria-live="polite">
               지적 {results.length}건
             </span>
           </div>
           {results.length ? (
-            <ol className="mt-3">
-              {results.map((finding) => (
-                <Comparison
-                  key={finding.id}
-                  finding={finding}
-                  added={finding.chapter !== chapter}
-                />
+            <ol key={chapter} className="mt-3">
+              {results.map((finding, index) => (
+                <Comparison key={finding.id} finding={finding} index={index} />
               ))}
             </ol>
           ) : (
             <p className="mt-4">열린 지적이 없어요.</p>
           )}
-          {chapter === 3 && (
+          {selected && (
             <button
               type="button"
-              className="b-landing-more"
-              aria-disabled={more}
-              onClick={() => setMore(true)}
+              className="b-landing-all-findings"
+              onClick={(event) => {
+                event.currentTarget.closest<HTMLElement>('#b-sample-result')?.focus({
+                  preventScroll: true,
+                })
+                setChapter('all')
+              }}
             >
-              {more ? '지적을 모두 봤어요' : '지적 더 보기'}
-              {!more && <ChevronDown className="b-icon" aria-hidden="true" />}
+              세 문장 모두 보기
             </button>
           )}
         </div>

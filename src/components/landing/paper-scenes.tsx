@@ -11,7 +11,7 @@ import {
   usePointerTilt,
   useReplay,
 } from '@/components/motion'
-import { useLandingEntrance } from './entrance'
+import { landingOrder, useLandingEntrance } from './entrance'
 import { findings, sampleCaption } from './sample-data'
 
 export function ReplayButton({ children, ...props }: ComponentProps<'button'>) {
@@ -55,18 +55,18 @@ export function HeroProof() {
           </div>
         </div>
         <div className="b-paper b-landing-proof-sheet relative bg-paper">
-          <div className="relative min-w-0">
+          <div className="b-landing-proof-manuscript relative min-w-0">
             <header className="space-y-1 border-b-2 border-ink pb-3">
               <p className="b-label font-bold">원고</p>
               <h2 className="b-subhead">종루의 손짓</h2>
             </header>
-            <div className="b-manuscript relative space-y-3 pt-3">
+            <div className="b-landing-proof-lines b-manuscript relative md:space-y-3 md:pt-3">
               {findings.slice(0, 2).map((finding, index) => {
                 const Mark = index === 0 ? ProofRing : ProofUnderline
                 const after = index === 0 ? finding.after : finding.after.slice(1)
                 const tailStart = after.lastIndexOf(' ', after.lastIndexOf(' ') - 1) + 1
                 return (
-                  <p key={finding.id}>
+                  <p key={finding.id} style={landingOrder(index)}>
                     {finding.before}
                     <Mark replayKey={replayKey} delay={index === 0 ? 420 : 840}>
                       {index === 0 ? finding.wrong : `${finding.wrong}에`}
@@ -89,7 +89,7 @@ export function HeroProof() {
           </div>
           <aside className="b-landing-proof-notes" aria-label="위키 원문과 교정 메모">
             {findings.slice(0, 2).map((finding, index) => (
-              <div key={finding.id}>
+              <div className="b-landing-proof-source" key={finding.id} style={landingOrder(index)}>
                 <div className="b-landing-source-head">
                   <span className="b-number" aria-hidden="true">
                     {finding.number}

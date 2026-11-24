@@ -38,8 +38,12 @@ export function LandingPage() {
           <div className="b-landing-hero-grid">
             <div className="min-w-0 space-y-6">
               <p className="b-lede">
-                다음화는 새 회차를 위키에 적어 둔 설정과 한 문장씩 맞춰 봐요. 어긋난 문장에는 빨간
-                줄을 긋고 근거가 된 위키 원문을 옆에 붙여 드려요. 고칠 쪽은 작가님이 골라요.
+                다음화는 새 회차를 위키에 적어 둔 설정과 한 문장씩 맞춰 봐요.
+                <span className="b-landing-hero-lede-detail">
+                  {' '}
+                  어긋난 문장에는 빨간 줄을 긋고 근거가 된 위키 원문을 옆에 붙여 드려요. 고칠 쪽은
+                  작가님이 골라요.
+                </span>
               </p>
               <StartActions sampleLink />
             </div>

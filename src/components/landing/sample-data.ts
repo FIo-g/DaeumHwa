@@ -27,28 +27,30 @@ export const findings = marks.map((mark, index) => {
 
 export type Finding = (typeof findings)[number]
 
-export const episodes = [
+const episodeCards = [
   {
     number: 3,
-    title: '종루의 손짓',
     excerpt: '이른 아침, 세린은 항구 북쪽 언덕길을 올랐다.',
     color: 'bg-kraft',
     angle: 'b-card--first',
   },
   {
     number: 2,
-    title: '2화 점검',
     excerpt: '해가 기울 무렵, 세린은 삐걱거리는 여관 계단을 올랐다.',
     color: 'bg-paper',
     angle: 'b-card--middle',
   },
   {
     number: 1,
-    title: '1화 점검',
     excerpt: '청해항의 아침은 비린내부터 밀려왔다.',
     color: 'bg-cream',
     angle: 'b-card--last',
   },
-]
+] as const
+
+export const episodes = episodeCards.map((episode) => ({
+  ...episode,
+  title: SAMPLE_WORK.chapters[episode.number - 1].title,
+}))
 
 export const sampleCaption = '샘플 작품 「잿빛 종루」 3화'

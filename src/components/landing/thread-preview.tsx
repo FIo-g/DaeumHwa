@@ -1,9 +1,8 @@
 'use client'
 
-import { ArrowRight } from 'lucide-react'
 import { useState, type CSSProperties } from 'react'
 import { ColorBand, Disclosure, Reveal } from '@/components/motion'
-import { LandingTitle, PaperBoundary } from './entrance'
+import { LandingTitle, PaperBoundary, landingOrder, useLandingEntrance } from './entrance'
 
 const axis = [1, 2, 3, 4, 5, 6]
 const threads = [
@@ -36,6 +35,7 @@ const threads = [
 const chapterPosition = (chapter: number) => `${((chapter - 0.5) / axis.length) * 100}%`
 
 export function ThreadPreview() {
+  const entrance = useLandingEntrance<HTMLDivElement>()
   const [open, setOpen] = useState<string | null>(null)
   const [hover, setHover] = useState<string | null>(null)
   const [focus, setFocus] = useState<string | null>(null)
@@ -51,9 +51,11 @@ export function ThreadPreview() {
       <PaperBoundary />
       <div className="b-landing-section-head">
         <LandingTitle id="b-threads-title">떡밥은 심은 화부터 거둘 화까지</LandingTitle>
-        <p className="b-lede">인물·장소·세계관 규칙은 카드 한 장씩.</p>
+        <p className="b-lede">
+          떡밥은 몇 화에 심어서 몇 화에 거둘지까지 장부에 적어 둬요. 아래가 샘플 작품의 장부예요.
+        </p>
       </div>
-      <div className="b-landing-ledger">
+      <div className="b-landing-ledger" {...entrance}>
         <Reveal decorative className="b-landing-ledger-fold b-decor" aria-hidden="true" />
         <div
           className="b-landing-ledger-scroll b-table-scroll"
@@ -88,7 +90,7 @@ export function ThreadPreview() {
                 </span>
               ))}
             </div>
-            {threads.map((thread) => {
+            {threads.map((thread, index) => {
               const overdue = thread.planted && thread.end < 3
               const same = thread.start === thread.end
               const start = chapterPosition(thread.start)
@@ -96,9 +98,14 @@ export function ThreadPreview() {
               const label = thread.planted
                 ? `${thread.title}: ${thread.start}화에 심음, ${thread.end}화에 회수 목표`
                 : `${thread.title}: ${thread.start}화에 계획 시작, ${thread.end}화에 회수 목표`
+              const summary = thread.planted
+                ? `${thread.start}화에 심음 → ${thread.end}화 회수 목표`
+                : `${thread.start}화부터 계획 → ${thread.end}화 회수 목표`
               return (
                 <div
                   key={thread.title}
+                  style={landingOrder(index)}
+                  data-thread-active={[hover, focus, open].includes(thread.title)}
                   onPointerEnter={(event) => {
                     if (event.pointerType === 'mouse') setHover(thread.title)
                   }}
@@ -113,6 +120,9 @@ export function ThreadPreview() {
                     title={
                       <>
                         <span className="b-landing-ledger-name">{thread.title}</span>
+                        <span className="b-landing-thread-summary b-label" aria-hidden="true">
+                          {summary}
+                        </span>
                         <span
                           className="b-landing-thread-track"
                           role="img"
@@ -155,10 +165,6 @@ export function ThreadPreview() {
             계획
           </li>
         </ul>
-        <a className="b-link b-landing-inline" href="#b-threads">
-          <span>떡밥 장부</span>
-          <ArrowRight className="b-icon" aria-hidden="true" />
-        </a>
       </div>
     </ColorBand>
   )

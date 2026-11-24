@@ -23,21 +23,53 @@ it('renders the intro, sample marks, and accessible thread timeline', () => {
   expect(screen.getAllByRole('button', { name: '가입 없이 체험하기' })).toHaveLength(2)
 })
 
-it('adds the third finding once and changes the findings when another chapter is selected', () => {
+it('starts with all three findings and only shows findings from the selected episode', () => {
   render(<LandingPage />)
   const results = within(document.getElementById('b-sample-result')!)
-  fireEvent.click(results.getByRole('button', { name: '지적 더 보기' }))
-  expect(results.getByText('19살')).toBeInTheDocument()
-  expect(results.getByText('지적 3건')).toBeInTheDocument()
-  expect(results.getByRole('button', { name: '지적을 모두 봤어요' })).toHaveAttribute(
-    'aria-disabled',
-    'true',
-  )
+  const rail = within(screen.getByRole('region', { name: '예시 회차' }))
+  const first = rail.getByRole('link', {
+    name: '1화 청해항 입항 청해항의 아침은 비린내부터 밀려왔다.',
+  })
+  const second = rail.getByRole('link', {
+    name: '2화 잿빛 종루 아래 해가 기울 무렵, 세린은 삐걱거리는 여관 계단을 올랐다.',
+  })
+  const third = rail.getByRole('link', {
+    name: '3화 종루의 손짓 이른 아침, 세린은 항구 북쪽 언덕길을 올랐다.',
+  })
 
-  fireEvent.click(screen.getByRole('link', { name: /^1화 점검/ }))
-  expect(results.getByText('열린 지적이 없어요.')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('link', { name: /^2화 점검/ }))
+  function expectAllFindings() {
+    expect(results.getByRole('heading', { name: '1~3화 전체' })).toBeInTheDocument()
+    expect(results.getByText('지적 3건')).toHaveAttribute('aria-live', 'polite')
+    expect(
+      within(results.getAllByRole('list')[0])
+        .getAllByRole('listitem')
+        .map((row) => row.querySelector('.b-number')?.textContent),
+    ).toEqual(['1', '2', '3'])
+    for (const link of [first, second, third]) expect(link).not.toHaveAttribute('aria-current')
+    expect(results.queryByRole('button', { name: '세 문장 모두 보기' })).not.toBeInTheDocument()
+  }
+
+  expectAllFindings()
+
+  fireEvent.click(third)
+  expect(third).toHaveAttribute('aria-current', 'true')
+  expect(results.getByRole('heading', { name: '3화 · 종루의 손짓' })).toBeInTheDocument()
+  expect(results.getByText('지적 2건')).toBeInTheDocument()
+  expect(results.queryByText('19살')).not.toBeInTheDocument()
+
+  fireEvent.click(second)
+  expect(results.getByRole('heading', { name: '2화 · 잿빛 종루 아래' })).toBeInTheDocument()
   expect(results.getByText('지적 1건')).toBeInTheDocument()
+  expect(results.getByText('19살')).toBeInTheDocument()
+  expect(results.queryByText('열한 층')).not.toBeInTheDocument()
+
+  fireEvent.click(first)
+  expect(results.getByRole('heading', { name: '1화 · 청해항 입항' })).toBeInTheDocument()
+  expect(results.getByText('지적 0건')).toBeInTheDocument()
+  expect(results.getByText('열린 지적이 없어요.')).toBeInTheDocument()
+
+  fireEvent.click(results.getByRole('button', { name: '세 문장 모두 보기' }))
+  expectAllFindings()
 })
 
 it('shows each author choice and restores the original example', () => {

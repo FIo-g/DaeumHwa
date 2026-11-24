@@ -38,6 +38,8 @@ export function CardRail({
   const reduced = usePrefersReducedMotion()
   const [edges, setEdges] = useState({ start: true, end: true })
 
+  const canScroll = !edges.start || !edges.end
+
   function updateEdges() {
     const node = rail.current
     if (!node) return
@@ -123,7 +125,7 @@ export function CardRail({
 
   return (
     <div className={cn('min-w-0', className)}>
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2" hidden={!canScroll}>
         <Button
           variant="outline"
           size="icon"
@@ -155,6 +157,7 @@ export function CardRail({
         onScroll={updateEdges}
         onKeyDown={(event) => {
           if (
+            !canScroll ||
             event.target !== event.currentTarget ||
             !['ArrowLeft', 'ArrowRight'].includes(event.key)
           )

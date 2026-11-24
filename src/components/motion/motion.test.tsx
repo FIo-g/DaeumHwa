@@ -328,7 +328,7 @@ describe('proof and scroll', () => {
     expect(meter.querySelectorAll('[data-filled="true"]')).toHaveLength(2)
   })
 
-  it('moves CardRail from a focused rail via arrow keys and uses an instant reduced-motion scroll', () => {
+  it('hides CardRail controls until the rail overflows and supports instant keyboard scrolling', () => {
     matchMotion(true)
     render(
       <CardRail>
@@ -337,7 +337,13 @@ describe('proof and scroll', () => {
       </CardRail>,
     )
     const rail = screen.getByRole('region', { name: '카드 목록' })
-    Object.defineProperties(rail, { clientWidth: { value: 100 }, scrollWidth: { value: 300 } })
+    expect(screen.queryByRole('button', { name: '이전 카드' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '다음 카드' })).not.toBeInTheDocument()
+    const widths = { client: 100, scroll: 300 }
+    Object.defineProperties(rail, {
+      clientWidth: { get: () => widths.client },
+      scrollWidth: { get: () => widths.scroll },
+    })
     const scrollTo = vi.fn()
     Object.defineProperty(rail, 'scrollTo', { value: scrollTo })
     fireEvent.scroll(rail)
@@ -345,5 +351,10 @@ describe('proof and scroll', () => {
     expect(screen.getByRole('button', { name: '다음 카드' })).toBeEnabled()
     fireEvent.keyDown(rail, { key: 'ArrowRight' })
     expect(scrollTo).toHaveBeenCalledWith({ left: 200, behavior: 'instant' })
+
+    widths.client = 300
+    fireEvent.resize(window)
+    expect(screen.queryByRole('button', { name: '이전 카드' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '다음 카드' })).not.toBeInTheDocument()
   })
 })
