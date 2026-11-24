@@ -52,7 +52,7 @@ describe('WorksPage', () => {
     expect(screen.getAllByRole('button', { name: '샘플 작품으로 체험하기' })).toHaveLength(1)
   })
 
-  it('shows only the header sample button when there is an active work', async () => {
+  it('hides the sample button when there is an active work', async () => {
     mocks.listWorksWithStats.mockResolvedValue([
       {
         work: {
@@ -79,9 +79,8 @@ describe('WorksPage', () => {
 
     render(await WorksPage())
 
-    const sampleButtons = screen.getAllByRole('button', { name: '샘플 작품으로 체험하기' })
-    expect(sampleButtons).toHaveLength(1)
-    expect(sampleButtons[0].closest('header')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: '샘플 작품으로 체험하기' })).toBeNull()
+    expect(screen.getByRole('link', { name: '새 작품' }).closest('header')).not.toBeNull()
     expect(screen.queryByText('아직 작품이 없습니다')).not.toBeInTheDocument()
     expect(screen.getByText('테스트 작품')).toBeInTheDocument()
   })

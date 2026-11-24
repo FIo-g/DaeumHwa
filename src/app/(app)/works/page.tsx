@@ -24,14 +24,12 @@ export default async function WorksPage() {
       <PageHeader
         title="내 작품"
         actions={
-          // With no works yet, the empty state below carries both actions.
+          // With no works yet, the empty state below carries both actions. Once a work exists the
+          // sample has done its job, so the header offers only a new work.
           active.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <SampleWorkButton variant="outline" />
-              <Link href="/works/new" className={buttonVariants({ variant: 'default' })}>
-                새 작품
-              </Link>
-            </div>
+            <Link href="/works/new" className={buttonVariants({ variant: 'default' })}>
+              새 작품
+            </Link>
           )
         }
       />
