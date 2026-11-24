@@ -63,10 +63,7 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
       </div>
 
       {open.length === 0 && (
-        <EmptyState
-          title="열린 떡밥이 없어요."
-          description="떡밥은 설정 보드의 떡밥 장부에서 만듭니다."
-        />
+        <EmptyState title="열린 떡밥이 없어요." description="새 떡밥은 장부에서 추가해 보세요." />
       )}
 
       <ul className="grid gap-2">

@@ -89,7 +89,7 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
     return (
       <EmptyState
         title="아직 카드가 없어요."
-        description="원고에 나오는 인물과 장소 카드가 여기에 뜹니다. 카드는 설정 보드에서 만듭니다."
+        description="설정 보드에서 인물이나 장소 카드를 추가해 보세요."
         action={
           <Link
             className={buttonVariants({ variant: 'outline', size: 'sm' })}

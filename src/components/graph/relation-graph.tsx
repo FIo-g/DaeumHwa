@@ -310,7 +310,7 @@ export function RelationGraph({
       <div className="flex flex-col gap-4">
         {intro}
         <EmptyState
-          title="카드를 먼저 만들면 관계 그래프가 그려집니다."
+          title="카드가 있어야 관계 그래프를 그릴 수 있어요."
           description="인물이나 세계관 탭에서 카드를 만드세요."
         />
       </div>

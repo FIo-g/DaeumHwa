@@ -249,7 +249,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
                   </Button>
                   <ConfirmButton
                     title="코멘트를 지울까요?"
-                    description="답글도 함께 지워집니다."
+                    description="이 댓글에 달린 답글도 지워요."
                     confirmLabel="지우기"
                     variant="ghost"
                     size="sm"

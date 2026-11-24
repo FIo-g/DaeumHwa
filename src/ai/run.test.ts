@@ -678,7 +678,7 @@ describe('cancel and timeout', () => {
  * Client that never answers. It rejects once its signal aborts, the way a fetch or SDK call
  * does. `onCall` runs when the call starts.
  */
-function neverSettlingClient(onCall?: () => void): AiClient {
+function neverSettlingClient(onCall?: (signal: AbortSignal | undefined) => void): AiClient {
   const rejectOnAbort = (signal: AbortSignal | undefined) =>
     new Promise<never>((_resolve, reject) => {
       signal?.addEventListener('abort', () => reject(new Error('This operation was aborted')))
@@ -686,11 +686,11 @@ function neverSettlingClient(onCall?: () => void): AiClient {
   return {
     ...failingClient,
     generateObject(args) {
-      onCall?.()
+      onCall?.(args.signal)
       return rejectOnAbort(args.signal)
     },
     streamText(args) {
-      onCall?.()
+      onCall?.(args.signal)
       return {
         textStream: (async function* () {
           await rejectOnAbort(args.signal)
@@ -738,17 +738,12 @@ describe('overall deadline', () => {
   it('gives the client a signal that aborts at the deadline', async () => {
     const { db, userId, workId } = await setup()
     let seen: AbortSignal | undefined
-    const client: AiClient = {
-      ...failingClient,
-      generateObject(args) {
-        seen = args.signal
-        return new Promise<never>(() => {})
-      },
-    }
-    void runAiTask(db, { userId, workId, timeoutMs: 30 }, task, { q: '안녕' }, client).catch(
-      () => undefined,
-    )
-    await new Promise((resolve) => setTimeout(resolve, 80))
+    const client = neverSettlingClient((signal) => {
+      seen = signal
+    })
+    await expect(
+      runAiTask(db, { userId, workId, timeoutMs: 30 }, task, { q: '안녕' }, client),
+    ).rejects.toMatchObject({ code: 'AI_ERROR', message: AI_TIMEOUT_MESSAGE })
     expect(seen?.aborted).toBe(true)
   })
 
