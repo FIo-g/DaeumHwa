@@ -1,14 +1,13 @@
-import { Skeleton } from '@/components/ui/skeleton'
-
 // Generic loading state for app pages such as /works and /invite. Rendered inside AppLayout.
 export default function AppLoading() {
   return (
-    <div role="status" aria-busy="true" className="b-wrap flex max-w-3xl flex-col gap-4 py-app">
-      <span className="sr-only">불러오는 중이에요.</span>
-      <Skeleton className="h-12 w-48 max-w-full bg-kraft" />
-      {[0, 1, 2].map((i) => (
-        <Skeleton key={i} className="h-24 w-full" />
-      ))}
+    <div role="status" aria-busy="true" className="b-wrap max-w-3xl py-app flex flex-col gap-4">
+      <div aria-hidden="true" className="b-cells b-status-cells" data-loading>
+        {Array.from({ length: 8 }, (_, index) => (
+          <span key={index} />
+        ))}
+      </div>
+      <span className="b-label b-muted">불러오는 중이에요.</span>
     </div>
   )
 }

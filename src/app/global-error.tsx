@@ -12,23 +12,43 @@ export default function GlobalError({ error, retry }: { error: unknown; retry: (
       <head>
         <title>다음화 · 오류</title>
         <style>{`
+          :root { --paper: #fbfaf5; --ink: #1c1b19; --grid: #3f8f6b; }
           body {
-            display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 16px;
-            box-sizing: border-box; background: #e2d3b3; color: #171814; color-scheme: light;
-            font: 400 1rem/1.6 "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+            display: grid; place-items: start center; min-height: 100vh; margin: 0;
+            padding: clamp(2.25rem, 4.85vw, 4.5rem) 1rem;
+            box-sizing: border-box; background: var(--paper); color: var(--ink); color-scheme: light;
+            font: 400 1rem/1.6 "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+            word-break: keep-all;
           }
-          section { background: #fffcf3; border: 2px solid; border-radius: 16px; padding: 32px; }
-          h1 { margin: 0; font-size: clamp(1.75rem, 3.34vw, 3rem); line-height: 1.14; }
+          section { inline-size: min(100%, 40rem); }
+          h1 {
+            margin: 0; font: 900 clamp(1.625rem, 2.6vw, 2.5rem)/1.23
+              "Noto Serif KR", "AppleMyungjo", Batang, serif;
+            text-wrap: balance;
+          }
+          .cells {
+            display: grid; grid-template-columns: repeat(8, minmax(0, 1fr));
+            inline-size: min(100%, 20rem); margin-block-end: 1rem;
+            border: 1px solid var(--grid);
+          }
+          .cells > span { aspect-ratio: 1; }
+          .cells > span + span { border-inline-start: 1px solid var(--grid); }
           button {
-            min-height: 44px; padding: 8px 16px; border: 2px solid #171814; border-radius: 10px;
-            color: #fffcf3; background: #171814; font: inherit; font-weight: 700; cursor: pointer;
+            min-height: 44px; padding: 8px 16px; border: 1px solid var(--grid); border-radius: 0;
+            color: var(--paper); background: var(--ink); font: inherit; font-weight: 500;
+            cursor: pointer;
           }
-          button:hover { background: #44473a; }
-          button:focus-visible { outline: 2px solid #171814; outline-offset: 3px; }
+          button:is(:hover, :focus-visible) { text-decoration: underline; text-underline-offset: .28em; }
+          button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
         `}</style>
       </head>
       <body>
         <section>
+          <div className="cells" aria-hidden="true">
+            {Array.from({ length: 8 }, (_, index) => (
+              <span key={index} />
+            ))}
+          </div>
           <h1>페이지를 불러오지 못했어요</h1>
           <p>잠시 후 다시 시도해 주세요.</p>
           <button type="button" onClick={retry}>

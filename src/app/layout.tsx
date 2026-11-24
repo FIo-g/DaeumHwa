@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
-import { Black_Han_Sans, IBM_Plex_Sans_KR, Nanum_Pen_Script } from 'next/font/google'
+import { IBM_Plex_Sans_KR, Nanum_Gothic_Coding, Noto_Serif_KR } from 'next/font/google'
 import './globals.css'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/sonner'
 
-// Display headings, body and manuscript text, and handwritten proof notes. Hangul glyphs ship as
-// unicode-range slices, so nothing is preloaded.
-const display = Black_Han_Sans({
-  weight: '400',
+// Titles and manuscript text, interface text, and counts such as page and chapter numbers. Hangul
+// glyphs ship as unicode-range slices, so nothing is preloaded.
+const display = Noto_Serif_KR({
+  weight: ['400', '500', '700', '900'],
   subsets: ['latin'],
   variable: '--font-display-ko',
   display: 'swap',
@@ -20,10 +20,10 @@ const body = IBM_Plex_Sans_KR({
   display: 'swap',
   preload: false,
 })
-const hand = Nanum_Pen_Script({
-  weight: '400',
+const mono = Nanum_Gothic_Coding({
+  weight: ['400', '700'],
   subsets: ['latin'],
-  variable: '--font-hand-ko',
+  variable: '--font-mono-ko',
   display: 'swap',
   preload: false,
 })
@@ -42,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         'font-sans',
         display.variable,
         body.variable,
-        hand.variable,
+        mono.variable,
       )}
     >
       <body className="flex min-h-full flex-col">

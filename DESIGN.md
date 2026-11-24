@@ -1,227 +1,106 @@
 ---
 name: 다음화
-description: An editorial workspace for serial fiction authors who check manuscripts against a story wiki
+description: 장기 연재 웹소설 작가를 위한 원고와 설정 위키
 colors:
-  ink: '#171814'
-  paper: '#fffcf3'
-  kraft: '#e2d3b3'
-  sand: '#ece3cd'
-  cream: '#f5efe0'
-  muted-ink: '#44473a'
-  proof-red: '#991b2c'
-  wiki-blue: '#164580'
+  paper: '#fbfaf5'
+  ink: '#1c1b19'
+  grid: '#3f8f6b'
+  proof: '#d6311f'
+  wiki: '#1f3a8a'
 typography:
-  display:
-    fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: 'clamp(2.5rem, 8.333333vw, 7.5rem)'
-    fontWeight: 400
-    lineHeight: 1.02
-    letterSpacing: '-0.045em'
-  title:
-    fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: 'clamp(2.25rem, 5.56vw, 5rem)'
-    fontWeight: 400
-    lineHeight: 1.08
-    letterSpacing: '-0.04em'
-  work-title:
-    fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: 'clamp(2rem, 3.9vw, 3.5rem)'
-    fontWeight: 400
-    lineHeight: 1.08
-    letterSpacing: '-0.04em'
   heading:
-    fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: 'clamp(1.75rem, 3.34vw, 3rem)'
-    fontWeight: 400
-    lineHeight: 1.14
-    letterSpacing: '-0.03em'
-  subhead:
-    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: 'clamp(1.25rem, 2vw, 1.75rem)'
-    fontWeight: 700
-    lineHeight: 1.3
-    letterSpacing: '-0.02em'
-  lede:
-    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: '1.125rem'
-    fontWeight: 400
-    lineHeight: 1.65
-    letterSpacing: '-0.012em'
+    fontFamily: 'Noto Serif KR, AppleMyungjo, Batang, serif'
+    fontWeight: 900
   manuscript:
-    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: '1.125rem'
+    fontFamily: 'Noto Serif KR, AppleMyungjo, Batang, serif'
     fontWeight: 400
-    lineHeight: 1.95
-    letterSpacing: '0'
-  canon-quote:
-    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: '1.0625rem'
-    fontWeight: 400
-    lineHeight: 1.75
-    letterSpacing: '0'
+    lineHeight: 2.4
+  quote:
+    fontFamily: 'Noto Serif KR, AppleMyungjo, Batang, serif'
+    fontWeight: 700
   body:
-    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: '1rem'
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, sans-serif'
     fontWeight: 400
-    lineHeight: 1.6
-    letterSpacing: '-0.01em'
-  label:
-    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
-    fontSize: '0.875rem'
+  control:
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, sans-serif'
+    fontWeight: 500
+  number:
+    fontFamily: 'Nanum Gothic Coding, Apple SD Gothic Neo, monospace'
     fontWeight: 400
-    lineHeight: 1.45
-    letterSpacing: '0'
-  hand:
-    fontFamily: 'Nanum Pen Script, IBM Plex Sans KR, Apple SD Gothic Neo, cursive'
-    fontSize: 'clamp(1.625rem, 2.5vw, 2.125rem)'
-    fontWeight: 400
-    lineHeight: 1.06
-    letterSpacing: '0'
 rounded:
-  field: '8px'
-  button: '10px'
-  card: '16px'
-  sheet: '24px'
+  field: '0'
+  button: '0'
+  card: '0'
+  sheet: '0'
 spacing:
-  xxs: '4px'
-  xs: '8px'
-  sm: '12px'
-  md: '16px'
-  lg: '24px'
-  xl: '32px'
-  2xl: '48px'
-  3xl: '64px'
-  4xl: '96px'
-  edge: 'clamp(16px, 5.56vw, 80px)'
-  band: 'clamp(48px, 7vw, 96px)'
-  app: 'clamp(24px, 3.34vw, 48px)'
-components:
-  button-primary:
-    backgroundColor: '{colors.ink}'
-    textColor: '{colors.paper}'
-    typography: '{typography.label}'
-    rounded: '{rounded.button}'
-    height: '44px'
-    padding: '0 16px'
-  button-start:
-    backgroundColor: '{colors.ink}'
-    textColor: '{colors.paper}'
-    rounded: '{rounded.button}'
-    height: '52px'
-    padding: '0 24px'
-  button-outline:
-    backgroundColor: '{colors.paper}'
-    textColor: '{colors.ink}'
-    rounded: '{rounded.button}'
-    height: '44px'
-    padding: '0 16px'
-  button-outline-hover:
-    backgroundColor: '{colors.sand}'
-  button-ghost-hover:
-    backgroundColor: '{colors.sand}'
-    textColor: '{colors.ink}'
-  input:
-    backgroundColor: '{colors.paper}'
-    textColor: '{colors.ink}'
-    rounded: '{rounded.field}'
-    height: '44px'
-    padding: '8px 12px'
-  finding-card:
-    backgroundColor: '{colors.paper}'
-    textColor: '{colors.ink}'
-    rounded: '{rounded.card}'
-    padding: '16px'
-  fact-badge-confirmed:
-    backgroundColor: '{colors.paper}'
-    textColor: '{colors.ink}'
-    typography: '{typography.label}'
-    rounded: '{rounded.field}'
-    height: '20px'
-    padding: '2px 8px'
-  nav-item:
-    textColor: '{colors.muted-ink}'
-    typography: '{typography.label}'
-    rounded: '{rounded.button}'
-    height: '44px'
-    padding: '0 12px'
-  nav-item-active:
-    backgroundColor: '{colors.ink}'
-    textColor: '{colors.paper}'
+  edge: 'clamp(16px, 4.4vw, 64px)'
+  band: 'clamp(36px, 4.85vw, 72px)'
+  app: 'clamp(16px, 2.45vw, 36px)'
 ---
 
-# Design System for 다음화
+# 다음화 원고지 테마
 
-## Overview
+원고의 어긋난 문장에 교정 부호를 그린다. 근거가 된 위키 원문을 난외에 적고 지시선으로 문장과 잇는다. 작가는 원고와 위키 중 고칠 쪽을 고른다.
 
-Use wide color bands and large ink headings to frame three parts of an editorial task. Start with a manuscript, show a source in the story wiki, and let the author decide which one to change. Use the same motion timings in the public pages and the workspace. Keep the paper under a manuscript, quote, or field upright and opaque.
+## 색
 
-## Colors
+| 이름      | 토큰        | 값        | 쓰임                                        |
+| --------- | ----------- | --------- | ------------------------------------------- |
+| 종이      | `--b-paper` | `#fbfaf5` | 전체 바탕과 먹색 칸 위 글자                 |
+| 먹        | `--b-ink`   | `#1c1b19` | 글자, 포커스, 대표 버튼, 선택 탭, 떡밥 표시 |
+| 괘선      | `--b-grid`  | `#3f8f6b` | 원고지 칸, 구획선과 접는 선                 |
+| 교정 주홍 | `--b-proof` | `#d6311f` | 원고의 교정 부호와 교정 글자                |
+| 위키 남색 | `--b-wiki`  | `#1f3a8a` | 위키 원문 인용과 인용 지시선                |
 
-- Ink covers titles, buttons, outlines, focus rings, and ledger symbols. Use paper text and focus rings on an ink band.
-- Paper covers the navigation, manuscript, fields, quotes, and overlays. Muted ink covers secondary text, placeholders, and field outlines.
-- Use one paper palette. Reserve kraft for one or two major surfaces per screen. Separate other surfaces with sand, cream, paper, and two-pixel ink outlines.
-- Multiply a fine SVG grain over the page at 40% opacity. Let it cover dialogs, sheets, tooltips, and toasts. Keep the texture clear of pointer events. Hide it in print.
-- Proof red and wiki blue are the only chromatic accents. Use red for manuscript proof marks and blue for direct wiki quotations. Pair each mark and quote with an ink label.
-- Use ink or muted ink for validation, destructive actions, links, and fact states. Set confirmed, assumed, and undecided fact badges in solid, dashed, and dotted outlines.
+보조 글자에는 옅은 먹 `--b-muted`를 쓴다. 종이 위의 명암비는 4.5:1 이상으로 맞춘다. 폼 오류, 삭제 동작, 링크와 상태 표시에 먹을 쓴다. 괘선은 선에만 쓴다.
 
-## Typography
+## 글꼴
 
-Use Black Han Sans 400 for the wordmark, display, title, and heading. Use IBM Plex Sans KR 400–700 for the UI, manuscript, and quotations. Use 400 for reading and input. Use 700 for buttons, tabs, and subheads. Limit Nanum Pen Script 400 to one or two short lines.
+- 명조는 Noto Serif KR이다. 화면 제목은 900, 시연 문장과 위키 인용은 700, 원고 본문은 400을 쓴다. Tailwind에서는 `font-heading`을 쓴다.
+- 조작 글자는 IBM Plex Sans KR이다. 메뉴, 버튼과 탭은 500, 설명은 400을 쓴다. Tailwind에서는 `font-sans`를 쓴다.
+- 계수 글자는 Nanum Gothic Coding이다. 칸 수, 쪽 번호, 회차, 날짜와 건수에 `font-mono`를 쓴다.
 
-Display text reaches 120px at 1440px. Full page titles reach 80px and headings reach 48px. Balance heading and card title lines. Use pretty wrapping for body copy. Preserve Korean word boundaries and let long unbroken titles wrap when needed. Limit manuscripts to 48rem and introduction paragraphs to 36rem. Match font face, line height, padding, and wrapping between an editor and its proof overlay.
+## 형태
 
-## Layout
+- 기본 모서리는 0이다. 그림자는 없다. 구획은 1px 괘선, 2px 접는 선과 여백으로 만든다. `Sheet`는 위아래 괘선과 가장자리 표기를 둔다. 가장자리의 장식 표기는 보조 기술에서 숨긴다.
+- `GridTitle`은 칸마다 한 글자를 쓴다. 띄어쓰기에는 빈칸을 두고 마침표와 쉼표는 칸 왼쪽 아래에 둔다. 소개, 화면, 구역의 칸 크기에는 각각 `--b-cell-hero`, `--b-cell-page`, `--b-cell-section`을 쓴다.
+- 목록은 괘선으로 행을 나눈다. 마우스를 올리거나 키보드 포커스가 들어오면 괘선이 굵어지고 왼쪽에 줄 번호가 나타난다.
+- 대표 버튼은 먹으로 채운 칸이다. 보조 버튼과 링크에는 밑줄을 쓴다. 탭은 괘선으로 나누고 선택한 칸에는 먹 바탕과 종이색 글자를 쓴다. 포커스 윤곽은 먹 2px이다.
+- 상태는 괘선 칸 안의 작은 글자나 글자 앞의 채운 점, 빈 겹동그라미, 점선으로 표시한다.
+- 원고에는 주홍 밑줄, 삭제 고리, 삽입 부호와 교정 글자를 쓴다. 위키 원문은 남색 난외주에 적는다. 가는 남색 지시선으로 원고의 오류 지점과 잇는다.
+- 아이콘은 필요한 자리에만 쓰고 선 굵기는 1.5px로 맞춘다. 입력 칸은 아래 괘선을 쓴다. 여러 줄 입력에는 행간에 맞춘 옅은 가로 괘선을 깐다.
+- 대화상자, 시트, 펼침 목록, 말풍선과 토스트에는 종이 바탕과 1px 괘선을 사방에 둔다. 가림막에는 먹을 30% 불투명도로 쓴다.
 
-Limit the inner width to 1280px. Use 16–80px side gutters and 48–96px vertical padding on full-width bands. Use 24–48px on work pages and 16–32px inside cards. Use a twelve-column grid with 24px gaps at 1024px and above. Checks use seven columns for the manuscript and five for evidence. The wiki reverses those proportions. Stack those layouts at narrower widths. Let a 46rem ledger scroll inside its own wrapper.
+## 움직임
 
-Inside the work layout, use a 32–56px title and 14–22px vertical padding in the header band. Keep paper decorations small. At 1440 × 900, target a header height of 170px or less. Allow up to 230px for the settings board header with tabs. Use full-size titles on the landing, login, signup, and My Works pages.
+1. 글자를 칸마다 한 자씩 쓴다. 커서 칸을 다음 칸으로 옮긴다.
+2. 펜으로 교정 밑줄, 삭제 고리, 지시선 또는 떡밥 선을 긋는다.
+3. 괘선을 왼쪽에서 오른쪽으로 그린다.
+4. 버튼, 선택 또는 진행 상태의 칸을 먹으로 채운다.
+5. 행 위에 마우스를 올리거나 포커스가 들어오면 줄 번호를 보이고 괘선을 굵게 한다.
+6. 글을 위에서 아래로 줄 단위로 쓴다.
+7. 대화상자, 시트 또는 탭을 종이 한 장처럼 직선으로 들여놓는다.
+8. 건수나 회차 숫자를 칸 안에서 올린다.
 
-Use a sticky 64px paper bar from 640px and a 56px bar below 640px. Move work navigation into a bottom sheet below 768px. In the existing manuscript workspace, keep the side panel at 320px from 1024px and at 380px from 1280px.
+| 토큰          | 값                                  | 쓰임                   |
+| ------------- | ----------------------------------- | ---------------------- |
+| `--b-quick`   | 170ms                               | 마우스와 포커스 반응   |
+| `--b-cell`    | 52ms                                | 제목 한 칸             |
+| `--b-step`    | 260ms                               | 종이 이동과 한 줄 진입 |
+| `--b-draw`    | 460ms                               | 펜과 괘선              |
+| `--b-trace`   | 920ms                               | 긴 선                  |
+| `--b-stagger` | 70ms                                | 진입 순서              |
+| `--b-out`     | `cubic-bezier(0.22, 0.74, 0.24, 1)` | 기본 이징              |
 
-## Elevation & Depth
+화면 진입은 900ms 안에 마친다. 제목, 괘선, 본문 순서로 한 장면을 구성한다. 주 조작에 전환을 붙인다. 마우스와 키보드 포커스에 같은 반응을 제공한다. 내용이 있는 선, 막대와 숫자는 한 번 재생하고 최종 상태를 유지한다. 반복 재생은 진행 중일 때만 쓴다. 커서 깜빡임은 세 번 뒤 멈춘다.
 
-Reserve the 4px by 5px offset ink shadow for prominent calls to action and stacked cards. Reveal the larger 7px by 8px shadow with an opacity transition. Start the stacked cards at −5°, 2°, and 5°. On hover or focus, lift the face by 8px and set its angle to zero. Overlap by 24px at 1024px and above and by 12px from 640px to 1023px. Below 640px use a 12px gap.
+애니메이션은 `transform`, `opacity`, `clip-path`, `stroke-dashoffset`을 쓴다. 입력 칸과 원고 편집 칸은 고정한다. 펼침에는 `Disclosure`를 쓴다. 스크립트가 늦어도 서버에서 그린 내용을 읽을 수 있게 한다. 모션 감소 설정에는 정지한 최종 상태를 제공한다.
 
-## Shapes
+## 금지
 
-Use 8px field corners, 10px button corners, 16px card corners, and 24px sheet corners. Apply two-pixel ink outlines to buttons and cards, one-pixel list dividers, and two-pixel proof lines. Give standard controls a 44px target. Reserve 36px targets for dense toolbars. Set focus outlines 3px outside the control.
+- 크림색과 베이지색 바탕, 색면 머리 띠, 굵은 검정 테두리, 둥근 모서리, 그림자, 카드 격자, 알약 칩, 큰 번호 카드, 사방 테두리로 구획한 본문 상자.
+- 기울이거나 겹친 카드, 손글씨 메모, 종이 결, 색 그라데이션, 유리 효과, 발광, 이모지, 장식 삽화, Tailwind 기본 색.
+- 아이콘과 제목과 설명을 넣은 3열 카드, 제목과 설명과 버튼 두 개를 가운데 쌓은 구성, 왼쪽에 굵은 선을 댄 인용.
+- 기울기, 튐, 흔들림, 회전, 확대, 흐림, 그림자 변화, 시차, 부유 효과, 흐르는 띠.
 
-## Components
-
-- **Buttons.** Use ink and paper for primary actions. Use a paper fill and ink outline for secondary actions. A prominent call to action splits the label and arrow into two moving surfaces. Give the arrow a kraft fill on a primary action.
-- **Navigation.** Mark the active work link with an ink fill, bold paper text, and an underline. Use an ink count badge for pending approvals. Let the line-tab indicator follow the selected tab.
-- **Fields.** Use paper, a muted-ink border, and an ink caret. Use a stronger ink outline and a written error for invalid input.
-- **Findings.** Place the marked manuscript phrase next to the direct wiki quote. Keep the source link and action labels in ink. Draw proof circles, underlines, and strike-throughs over short phrases. Replay each stroke through its own SVG.
-- **Ledger.** Use an ink circle for the planted chapter, an open ink diamond for the target, and a dotted line for the plan. Add text names for the symbols.
-- **Overlays.** Use paper sheets and an ink backdrop. Start focus on the close button and return it to the opener. Toasts enter from the bottom with a two-pixel ink outline.
-
-## Motion
-
-| Token         | Value  | Application                                              |
-| ------------- | ------ | -------------------------------------------------------- |
-| `--b-quick`   | 160ms  | Presses, icons, color changes, and closing answers       |
-| `--b-step`    | 260ms  | Rows, chips, pointer responses, and short page arrivals  |
-| `--b-draw`    | 420ms  | CTA return, proof strokes, and sheet travel              |
-| `--b-scene`   | 640ms  | Scroll reveals and handwriting                           |
-| `--b-arrival` | 900ms  | First assembly and paired decorations                    |
-| `--b-cycle`   | 2400ms | Decorative demonstrations, up to two cycles per entrance |
-| `--b-stagger` | 70ms   | Sibling entrances, up to six delay positions             |
-
-Use `--b-out` for arrivals, `--b-pop` for a brief overshoot, `--b-in-out` for two-way travel, and `--b-linear` for scroll progress. The default reveal range is `entry 0% cover 30%`. Preserve full opacity for reveal text. A decoration can start at 35% opacity and 32px from its destination. Keep the first headline and action available immediately. Show final states when the user requests reduced motion.
-
-## Do's and Don'ts
-
-### Do
-
-- Show the actual manuscript and its source when explaining an inconsistency.
-- Compose Base UI components through the `render` prop.
-- Put scroll-linked motion and local motion on separate elements. Change only the decoration key when replaying a scene.
-- Use native scrolling and keyboard controls. Check 1440px, 390px, 320px, and reduced motion.
-- Use short Korean interface labels and concise polite sentences.
-
-### Don't
-
-- Avoid left-edge markers for selected navigation. Use a chip or underline.
-- Keep manuscripts and input wrappers clear of transforms, parallax, and blur.
-- Reserve red for manuscript proof marks and blue for direct wiki quotations.
-- Avoid feature-card grids, background particles, glowing gradients, and borrowed reference imagery.
+1440, 1280, 1093, 768, 390, 320px에서 내용 잘림과 가로 넘침을 확인한다. 좁은 화면에서는 넓은 표만 자체 영역 안에서 가로로 스크롤한다.
