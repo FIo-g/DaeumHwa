@@ -52,7 +52,7 @@ export function AuthorChoice() {
 
   return (
     <ColorBand
-      color="apricot"
+      color="cream"
       className="b-landing-decision"
       innerClassName="b-landing-decision-grid"
       aria-labelledby="b-decision-title"

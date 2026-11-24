@@ -87,7 +87,7 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="font-medium">{thread.title}</span>
                 {thread.overdue && (
-                  <span className="rounded-field bg-apricot px-1.5 py-0.5 text-xs text-ink">
+                  <span className="rounded-field bg-cream px-1.5 py-0.5 text-xs text-ink">
                     회수 목표 지남
                   </span>
                 )}

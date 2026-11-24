@@ -125,7 +125,7 @@ function AdviceResultBody({ result }: { result: AdviceResult }) {
   return (
     <div className="flex flex-col gap-4">
       {result.warnings.length > 0 && (
-        <section aria-label="확인할 점" className="b-tools-paper grid gap-1 bg-mustard/35 text-sm">
+        <section aria-label="확인할 점" className="b-tools-paper grid gap-1 bg-kraft/35 text-sm">
           <h3 className="font-medium">확인할 점</h3>
           <ul className="list-disc pl-5">
             {result.warnings.map((warning) => (

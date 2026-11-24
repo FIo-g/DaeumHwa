@@ -17,7 +17,7 @@ export default async function InterviewPage({ params }: { params: Promise<{ work
   const { db, actor, user } = await pageContext(`/works/${workId}/interview`)
   const work = await guardPage(() => getWork(db, actor, workId))
   if (user.isAnonymous)
-    return <PageHeader title="인터뷰" band="leaf" description={TRIAL_SIGNUP_MESSAGE} />
+    return <PageHeader title="인터뷰" band="sand" description={TRIAL_SIGNUP_MESSAGE} />
   const state = await guardPage(() => getInterviewState(db, actor, workId))
   const canEdit = hasRole(work.role, 'editor')
   const lastAnswer =
@@ -32,7 +32,7 @@ export default async function InterviewPage({ params }: { params: Promise<{ work
     <div className="flex flex-col">
       <PageHeader
         title="인터뷰"
-        band="leaf"
+        band="sand"
         actions={
           <span className="b-tools-header-art" data-tool="interview" aria-hidden="true">
             <i />

@@ -20,9 +20,9 @@
   --font-hand: var(--b-font-hand);
   --color-ink: var(--b-ink);
   --color-paper: var(--b-paper);
-  --color-mustard: var(--b-mustard);
-  --color-leaf: var(--b-leaf);
-  --color-apricot: var(--b-apricot);
+  --color-kraft: var(--b-kraft);
+  --color-sand: var(--b-sand);
+  --color-cream: var(--b-cream);
   --color-muted-ink: var(--b-muted);
   --text-display: var(--b-t-display);
   --text-display--line-height: 1.02;
@@ -122,11 +122,11 @@
   --popover-foreground: var(--b-ink);
   --primary: var(--b-ink);
   --primary-foreground: var(--b-paper);
-  --secondary: var(--b-mustard);
+  --secondary: var(--b-kraft);
   --secondary-foreground: var(--b-ink);
   --muted: color-mix(in srgb, var(--b-ink) 8%, var(--b-paper));
   --muted-foreground: var(--b-muted);
-  --accent: var(--b-leaf);
+  --accent: var(--b-sand);
   --accent-foreground: var(--b-ink);
   --destructive: var(--b-ink);
   --mark: var(--b-proof);
@@ -135,9 +135,9 @@
   --border: var(--b-ink);
   --input: var(--b-muted);
   --ring: var(--b-ink);
-  --chart-1: var(--b-mustard);
-  --chart-2: var(--b-leaf);
-  --chart-3: var(--b-apricot);
+  --chart-1: var(--b-kraft);
+  --chart-2: var(--b-sand);
+  --chart-3: var(--b-cream);
   --chart-4: var(--b-muted);
   --chart-5: var(--b-ink);
   --radius: var(--b-r-button);
@@ -145,7 +145,7 @@
   --sidebar-foreground: var(--b-ink);
   --sidebar-primary: var(--b-ink);
   --sidebar-primary-foreground: var(--b-paper);
-  --sidebar-accent: var(--b-leaf);
+  --sidebar-accent: var(--b-sand);
   --sidebar-accent-foreground: var(--b-ink);
   --sidebar-border: var(--b-ink);
   --sidebar-ring: var(--b-ink);
@@ -174,7 +174,7 @@
 
   ::selection {
     color: var(--b-ink);
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
 
   textarea,

@@ -8,12 +8,11 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'border-ink bg-ink text-paper not-disabled:hover:bg-muted-ink',
-        outline: 'border-ink bg-paper text-ink not-disabled:hover:bg-leaf aria-expanded:bg-leaf',
-        secondary:
-          'border-ink bg-mustard text-ink not-disabled:hover:bg-leaf aria-expanded:bg-leaf',
-        ghost: 'text-ink not-disabled:hover:bg-leaf aria-expanded:bg-leaf',
+        outline: 'border-ink bg-paper text-ink not-disabled:hover:bg-sand aria-expanded:bg-sand',
+        secondary: 'border-ink bg-kraft text-ink not-disabled:hover:bg-sand aria-expanded:bg-sand',
+        ghost: 'text-ink not-disabled:hover:bg-sand aria-expanded:bg-sand',
         destructive:
-          'border-ink bg-apricot text-ink not-disabled:hover:bg-ink not-disabled:hover:text-paper',
+          'border-ink bg-cream text-ink not-disabled:hover:bg-ink not-disabled:hover:text-paper',
         link: 'text-ink underline underline-offset-4 hover:decoration-2',
       },
       size: {

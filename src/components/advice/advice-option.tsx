@@ -31,7 +31,7 @@ export function AdviceOption({
           <span className="b-number" aria-hidden="true">
             {index + 1}
           </span>
-          {recommended && <Badge className="bg-leaf text-ink">추천</Badge>}
+          {recommended && <Badge className="bg-sand text-ink">추천</Badge>}
         </div>
         <h3 className="b-subhead">
           <button

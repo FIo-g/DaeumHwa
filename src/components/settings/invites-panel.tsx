@@ -124,7 +124,7 @@ export function InvitesPanel({ workId, invites }: InvitesPanelProps) {
       </div>
 
       {created && (
-        <div className="b-tools-paper grid gap-2 bg-leaf/35">
+        <div className="b-tools-paper grid gap-2 bg-sand/35">
           <p className="text-sm font-medium">
             {ROLE_LABEL[created.role]} 초대 링크 · 만료 {formatKoreanDateTime(created.expiresAt)}
           </p>

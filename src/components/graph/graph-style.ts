@@ -4,7 +4,7 @@ export const GRAPH_COLOR_TOKENS = {
   ink: '--b-ink',
   muted: '--b-muted',
   paper: '--b-paper',
-  selection: '--b-mustard',
+  selection: '--b-kraft',
 } as const
 
 export type GraphPalette = Record<keyof typeof GRAPH_COLOR_TOKENS, string>
@@ -45,7 +45,7 @@ export type KindMark = { shape: KindShape; ink: GraphInk; filled: boolean }
 
 /**
  * Card kinds read without hue: the shape first, then a filled or outlined mark, then graphite,
- * muted or pencil grey. Selection uses mustard.
+ * muted or pencil grey. Selection uses kraft.
  */
 export const ENTRY_KIND_MARK: Record<EntryKind, KindMark> = {
   character: { shape: 'circle', ink: 'ink', filled: true },

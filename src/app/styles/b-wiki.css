@@ -86,11 +86,11 @@
   }
 
   .b-wiki-slip:first-child .b-wiki-slip-face {
-    background: var(--b-apricot);
+    background: var(--b-cream);
   }
 
   .b-wiki-slip:nth-child(2) .b-wiki-slip-face {
-    background: var(--b-mustard);
+    background: var(--b-kraft);
   }
 
   .b-wiki-slip-face svg {
@@ -211,7 +211,7 @@
       :focus-visible,
       :focus-within
     ) {
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
 
   .b-wiki-choice:has(:focus-visible) {
@@ -243,7 +243,7 @@
   }
 
   .b-wiki-index-row:is(:focus-within, [data-expanded='true']) {
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
 
   .b-wiki-index-row:is(:focus-within, [data-expanded='true']) :is(.b-row__title, .b-wiki-tag) {
@@ -313,7 +313,7 @@
     inset: var(--b-s2) -5px -5px 12%;
     border: 2px solid var(--b-ink);
     border-radius: 16px;
-    background: var(--b-leaf);
+    background: var(--b-sand);
     rotate: 2deg;
     pointer-events: none;
   }
@@ -352,11 +352,11 @@
   }
 
   .b-wiki-tag[data-status='planted'] {
-    background: var(--b-apricot);
+    background: var(--b-cream);
   }
 
   .b-wiki-tag[data-status='developing'] {
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
 
   .b-wiki-tag[data-status='resolved'] {
@@ -442,7 +442,7 @@
   }
 
   .b-wiki-records > :is(:hover, :focus-within) {
-    background: color-mix(in srgb, var(--b-leaf) 45%, var(--b-paper));
+    background: color-mix(in srgb, var(--b-sand) 45%, var(--b-paper));
   }
 
   .b-wiki-thread-tools {
@@ -489,7 +489,7 @@
     block-size: 20px;
     border: 2px solid var(--b-ink);
     border-radius: 50%;
-    background: var(--b-leaf);
+    background: var(--b-sand);
     content: '';
   }
 
@@ -601,11 +601,11 @@
   }
 
   .b-wiki-tick[data-related='true'] {
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
 
   .b-wiki-tick[data-current='true'] {
-    background: var(--b-mustard);
+    background: var(--b-kraft);
   }
 
   .b-wiki-tick button {
@@ -644,7 +644,7 @@
     inline-size: 100%;
     block-size: 100%;
     border-inline: 1px solid color-mix(in srgb, var(--b-ink) 40%, transparent);
-    background: var(--b-mustard);
+    background: var(--b-kraft);
     content: '';
   }
 
@@ -848,7 +848,7 @@
   .b-wiki-graph-selection {
     padding: var(--b-s3);
     border-radius: 10px;
-    background: var(--b-leaf);
+    background: var(--b-sand);
     animation: b-wiki-index-arrive var(--b-draw) var(--b-out) both;
   }
 

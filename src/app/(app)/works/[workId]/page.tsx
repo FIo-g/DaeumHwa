@@ -24,7 +24,7 @@ export default async function WorkHomePage({ params }: { params: Promise<{ workI
       <PageHeader
         title={home.work.title}
         description={subtitle || undefined}
-        band="apricot"
+        band="cream"
         actions={
           canEdit ? (
             <>

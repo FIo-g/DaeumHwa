@@ -24,7 +24,7 @@ export function ReadOnlyProposals({ proposals }: ReadOnlyProposalsProps) {
             <li key={proposal.id} className="b-works-proposal">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <AiBadge />
-                <span className="b-works-tag bg-leaf">{PROPOSAL_TYPE_LABEL[proposal.type]}</span>
+                <span className="b-works-tag bg-sand">{PROPOSAL_TYPE_LABEL[proposal.type]}</span>
                 <span>{PROPOSAL_SOURCE_LABEL[proposal.source]}</span>
                 {proposal.chapterPosition !== null && (
                   <span>{chapterLabel(proposal.chapterPosition, proposal.chapterTitle)}</span>

@@ -3,9 +3,9 @@
     --b-ink: #171814;
     --b-paper: #fffcf3;
     /* One theme: paper. Three stocks from kraft to off-white sit on the paper ground. */
-    --b-mustard: #e2d3b3;
-    --b-leaf: #ece3cd;
-    --b-apricot: #f5efe0;
+    --b-kraft: #e2d3b3;
+    --b-sand: #ece3cd;
+    --b-cream: #f5efe0;
     /* Paper grain: fine fibres drawn with SVG turbulence, laid over the whole page. */
     --b-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9 0.55' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.29 0 0 0 0 0.18 0 0 0 0.62 -0.08'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
     --b-muted: #44473a;
@@ -123,7 +123,7 @@
   }
   .b-root ::selection {
     color: var(--b-ink);
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
   .b-root [hidden] {
     display: none !important;
@@ -204,14 +204,14 @@
   .b-paper {
     background: var(--b-paper);
   }
-  .b-band--mustard {
-    --b-band-color: var(--b-mustard);
+  .b-band--kraft {
+    --b-band-color: var(--b-kraft);
   }
-  .b-band--leaf {
-    --b-band-color: var(--b-leaf);
+  .b-band--sand {
+    --b-band-color: var(--b-sand);
   }
-  .b-band--apricot {
-    --b-band-color: var(--b-apricot);
+  .b-band--cream {
+    --b-band-color: var(--b-cream);
   }
   .b-band--app {
     padding-block: var(--b-app-pad);
@@ -371,7 +371,7 @@
     background: var(--b-ink);
   }
   .b-button--primary .b-button__arrow {
-    background: var(--b-mustard);
+    background: var(--b-kraft);
   }
   .b-button--shadow::before,
   .b-button--shadow::after {
@@ -401,7 +401,7 @@
   }
   .b-button--flat:focus-visible .b-button__text,
   .b-button--flat:focus-visible .b-button__arrow {
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
   .b-button:disabled,
   .b-button[aria-disabled='true'] {
@@ -477,7 +477,7 @@
     }
     .b-button--flat:hover .b-button__text,
     .b-button--flat:hover .b-button__arrow {
-      background: var(--b-leaf);
+      background: var(--b-sand);
     }
     .b-card:hover {
       z-index: 1;
@@ -517,7 +517,7 @@
     transition: font-weight var(--b-step) var(--b-out);
   }
   .b-row:is(:focus-visible, [aria-expanded='true'], [aria-current='true']) {
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
   .b-row:is(:focus-visible, [aria-expanded='true'], [aria-current='true']) .b-row__title {
     font-weight: 700;
@@ -542,7 +542,7 @@
   }
   @media (hover: hover) and (pointer: fine) {
     .b-row:hover {
-      background: var(--b-leaf);
+      background: var(--b-sand);
     }
     .b-row:hover .b-row__title {
       font-weight: 700;
@@ -740,7 +740,7 @@
   .b-meter {
     display: block;
     block-size: 6px;
-    background: var(--b-mustard);
+    background: var(--b-kraft);
   }
   .b-meter__fill {
     display: block;
@@ -1251,8 +1251,8 @@
     flex-basis: 52px;
   }
 
-  .b-button--leaf .b-button__arrow {
-    background: var(--b-leaf);
+  .b-button--sand .b-button__arrow {
+    background: var(--b-sand);
   }
 
   .b-button--flat:is(:disabled, [aria-disabled='true']) :is(.b-button__text, .b-button__arrow) {
@@ -1480,7 +1480,7 @@
   }
 
   .b-check-control:not([data-disabled]):hover::before {
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
 
   .b-check-control:is([data-checked], [data-indeterminate])::before,
@@ -1510,7 +1510,7 @@
   }
 
   .b-switch-control:not([data-disabled]):hover::before {
-    background: var(--b-leaf);
+    background: var(--b-sand);
   }
 
   .b-switch-control[data-checked]::before,
@@ -1573,7 +1573,7 @@
 
   @keyframes b-loading {
     50% {
-      background-color: color-mix(in srgb, var(--b-mustard) 35%, var(--b-paper));
+      background-color: color-mix(in srgb, var(--b-kraft) 35%, var(--b-paper));
     }
   }
 }
@@ -1609,7 +1609,7 @@
     inline-size: 2rem;
     block-size: 4px;
     overflow: hidden;
-    background: var(--b-mustard);
+    background: var(--b-kraft);
   }
 
   .b-ai-pulse::after {
@@ -1632,6 +1632,6 @@
   }
 
   .b-auth-band:has([data-auth-page='signup']) {
-    --b-band-color: var(--b-apricot);
+    --b-band-color: var(--b-cream);
   }
 }

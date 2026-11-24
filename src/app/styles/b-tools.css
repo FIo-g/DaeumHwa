@@ -16,12 +16,12 @@
   aspect-ratio: 1.18;
   margin-inline-end: var(--b-s2);
   pointer-events: none;
-  --b-tools-art-fill: var(--b-leaf);
+  --b-tools-art-fill: var(--b-sand);
 }
 
 .b-tools-header-art[data-tool='advice'],
 .b-tools-header-art[data-tool='interview'] {
-  --b-tools-art-fill: var(--b-apricot);
+  --b-tools-art-fill: var(--b-cream);
 }
 
 .b-tools-header-art > * {
@@ -77,7 +77,7 @@
 }
 
 .b-tools-index-row:is(:hover, :focus-within) {
-  background-color: color-mix(in srgb, var(--b-leaf) 58%, var(--b-paper));
+  background-color: color-mix(in srgb, var(--b-sand) 58%, var(--b-paper));
 }
 
 .b-tools-index-row:is(:hover, :focus-within) .b-row__title {
@@ -157,7 +157,7 @@
   grid-area: 1 / 1;
   inline-size: 1.2rem;
   block-size: 1.625rem;
-  background: var(--b-mustard);
+  background: var(--b-kraft);
   border: 1px solid var(--b-ink);
   border-radius: 2px;
   translate: var(--b-tools-x);
@@ -171,7 +171,7 @@
 
 .b-tools-working-papers > i:nth-child(2) {
   --b-tools-x: 0rem;
-  background: var(--b-leaf);
+  background: var(--b-sand);
   animation-delay: var(--b-stagger);
 }
 
@@ -200,7 +200,7 @@
 .b-tools-summary-buffer {
   align-content: start;
   gap: var(--b-s2);
-  background: var(--b-mustard);
+  background: var(--b-kraft);
 }
 
 .b-tools-summary-dates {
@@ -229,7 +229,7 @@
 .b-tools-buffer-note {
   justify-self: start;
   margin-block-start: var(--b-s2);
-  background: var(--b-apricot);
+  background: var(--b-cream);
   padding-inline: var(--b-s2);
 }
 
@@ -270,7 +270,7 @@
   inline-size: 0.65rem;
   block-size: 0.65rem;
   border-radius: 50%;
-  background: var(--b-leaf);
+  background: var(--b-sand);
   border: 1px solid var(--b-ink);
   animation: b-tools-seal var(--b-step) var(--b-pop) backwards;
 }
@@ -294,11 +294,11 @@
 }
 
 .b-tools-advice-stack::before {
-  background: color-mix(in srgb, var(--b-leaf) 42%, var(--b-paper));
+  background: color-mix(in srgb, var(--b-sand) 42%, var(--b-paper));
 }
 
 .b-tools-advice-stack::after {
-  background: color-mix(in srgb, var(--b-apricot) 45%, var(--b-paper));
+  background: color-mix(in srgb, var(--b-cream) 45%, var(--b-paper));
 }
 
 .b-tools-advice-stack:has(
@@ -320,12 +320,12 @@
 
 .b-tools-advice-stack > :nth-child(2) {
   --b-tools-index: 1;
-  --b-card-color: color-mix(in srgb, var(--b-leaf) 30%, var(--b-paper));
+  --b-card-color: color-mix(in srgb, var(--b-sand) 30%, var(--b-paper));
 }
 
 .b-tools-advice-stack > :nth-child(3) {
   --b-tools-index: 2;
-  --b-card-color: color-mix(in srgb, var(--b-apricot) 33%, var(--b-paper));
+  --b-card-color: color-mix(in srgb, var(--b-cream) 33%, var(--b-paper));
 }
 
 .b-tools-advice-stack .b-card__face {
@@ -387,7 +387,7 @@
 }
 
 .b-tools-reader-rail > :nth-child(even) .b-tools-reader-note {
-  background: color-mix(in srgb, var(--b-mustard) 23%, var(--b-paper));
+  background: color-mix(in srgb, var(--b-kraft) 23%, var(--b-paper));
 }
 
 .b-tools-range-wrap {
@@ -423,7 +423,7 @@
   block-size: 1rem;
   border-radius: 50%;
   border: var(--b-rule) solid var(--b-ink);
-  background: var(--b-leaf);
+  background: var(--b-sand);
   content: '';
 }
 
@@ -457,11 +457,11 @@
 }
 
 .b-tools-persona-chip:has(:checked) {
-  background: var(--b-mustard);
+  background: var(--b-kraft);
 }
 
 .b-tools-persona-chip:is(:hover, :focus-within) {
-  background: var(--b-leaf);
+  background: var(--b-sand);
 }
 
 .b-tools-persona-chip input {
@@ -489,7 +489,7 @@
 }
 
 .b-tools-stage[data-state='past'] {
-  background: color-mix(in srgb, var(--b-leaf) 30%, var(--b-paper));
+  background: color-mix(in srgb, var(--b-sand) 30%, var(--b-paper));
 }
 
 .b-tools-stage-head {
@@ -501,7 +501,7 @@
 
 .b-tools-stage[data-state='current'] > .b-tools-stage-head {
   color: var(--b-ink);
-  background: var(--b-apricot);
+  background: var(--b-cream);
   padding-block: var(--b-s4);
 }
 
@@ -520,12 +520,12 @@
   overflow: clip;
   min-block-size: 7.5rem;
   border-block: var(--b-rule) solid var(--b-ink);
-  background: color-mix(in srgb, var(--b-apricot) 35%, var(--b-paper));
+  background: color-mix(in srgb, var(--b-cream) 35%, var(--b-paper));
 }
 
 .b-tools-stage-art[data-stage='3'],
 .b-tools-stage-art[data-stage='4'] {
-  background: color-mix(in srgb, var(--b-leaf) 44%, var(--b-paper));
+  background: color-mix(in srgb, var(--b-sand) 44%, var(--b-paper));
 }
 
 .b-tools-stage-drawing {
@@ -558,7 +558,7 @@
   z-index: 1;
   inset: 48% 12% 6%;
   overflow: clip;
-  background: var(--b-mustard);
+  background: var(--b-kraft);
 }
 
 .b-tools-process-envelope::before {
@@ -587,7 +587,7 @@
   --b-tools-fragment-x: -110%;
   --b-tools-fragment-angle: -12deg;
   --b-tools-fragment-n: 0;
-  background: var(--b-apricot);
+  background: var(--b-cream);
 }
 
 .b-tools-process-fragment:nth-child(4) {
@@ -600,7 +600,7 @@
   --b-tools-fragment-x: 12%;
   --b-tools-fragment-angle: 11deg;
   --b-tools-fragment-n: 2;
-  background: var(--b-mustard);
+  background: var(--b-kraft);
 }
 
 .b-tools-stage-art:not([data-stage='1']) :is(.b-tools-process-sheet, .b-tools-process-envelope) {
@@ -624,7 +624,7 @@
   inset: auto 0 4% auto;
   inline-size: 2.5rem;
   block-size: 2.5rem;
-  background: var(--b-leaf);
+  background: var(--b-sand);
   animation: b-tools-seal var(--b-draw) var(--b-pop) backwards;
 }
 
@@ -658,13 +658,13 @@
   padding-inline: var(--b-s3);
   border: var(--b-rule) solid var(--b-ink);
   border-radius: var(--b-r-button);
-  background: var(--b-mustard);
+  background: var(--b-kraft);
   cursor: pointer;
   transition: background-color var(--b-quick) var(--b-out);
 }
 
 .b-tools-file-field:is(:hover, :focus-within) .b-tools-file-choice {
-  background: var(--b-leaf);
+  background: var(--b-sand);
 }
 
 .b-tools-file-field:has(:disabled) .b-tools-file-choice {
@@ -681,12 +681,12 @@
 }
 
 .b-tools-question {
-  background: var(--b-leaf);
+  background: var(--b-sand);
   animation: b-tools-option-in var(--b-scene) var(--b-out) backwards;
 }
 
 .b-tools-exchange-question {
-  background: var(--b-leaf);
+  background: var(--b-sand);
   margin-inline-end: clamp(0rem, 8vw, 5rem);
 }
 
@@ -719,7 +719,7 @@
   border-radius: var(--b-r-field);
   border: 1px solid var(--b-ink);
   font-weight: 700;
-  background: var(--b-leaf);
+  background: var(--b-sand);
   animation: b-tools-seal var(--b-draw) var(--b-pop) backwards;
 }
 

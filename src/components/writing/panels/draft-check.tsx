@@ -175,7 +175,7 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
         {fix.parts.map((part, index) => {
           if (part.type === 'insert') {
             return (
-              <ins key={index} className="bg-mustard text-ink no-underline">
+              <ins key={index} className="bg-kraft text-ink no-underline">
                 {part.value}
               </ins>
             )

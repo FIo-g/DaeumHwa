@@ -6,7 +6,7 @@ export function AiSetupBanner() {
   return (
     <div
       role="status"
-      className="border-b border-ink bg-mustard px-edge py-3 text-center text-sm text-ink"
+      className="border-b border-ink bg-kraft px-edge py-3 text-center text-sm text-ink"
     >
       AI 키가 설정되지 않았어요. <code className="wrap-anywhere">ANTHROPIC_API_KEY</code> 또는{' '}
       <code className="wrap-anywhere">OPENCODE_API_KEY</code>를 설정해 주세요.

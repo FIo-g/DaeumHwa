@@ -24,7 +24,7 @@ export default async function ReaderSimPage({ params }: { params: Promise<{ work
   const { db, actor, user } = await pageContext(`/works/${workId}/reader-sim`)
   const work = await guardPage(() => getWork(db, actor, workId))
   if (user.isAnonymous) {
-    return <PageHeader title="독자 시뮬레이션" band="mustard" description={TRIAL_SIGNUP_MESSAGE} />
+    return <PageHeader title="독자 시뮬레이션" band="kraft" description={TRIAL_SIGNUP_MESSAGE} />
   }
   const runs = await guardPage(() => listReaderSimRuns(db, actor, workId))
   const chapters = await guardPage(() => listChapters(db, actor, workId, { includeArchived: true }))
@@ -59,7 +59,7 @@ export default async function ReaderSimPage({ params }: { params: Promise<{ work
     <div className="flex flex-col">
       <PageHeader
         title="독자 시뮬레이션"
-        band="mustard"
+        band="kraft"
         actions={
           <span className="b-tools-header-art" data-tool="reader-sim" aria-hidden="true">
             <i />

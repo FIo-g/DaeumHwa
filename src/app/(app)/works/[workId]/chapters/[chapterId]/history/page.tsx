@@ -29,7 +29,7 @@ export default async function ChapterHistoryPage({
     <div className="b-writing-page flex flex-col gap-6">
       <PageHeader
         title="원고 이력"
-        band="apricot"
+        band="cream"
         description={chapterLabel(chapter.position, chapter.title)}
         actions={
           <Link

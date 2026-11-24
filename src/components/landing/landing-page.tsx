@@ -31,7 +31,7 @@ export function LandingPage() {
     <div id="b-top" className="b-root b-landing-root">
       <PublicNav landing />
       <main>
-        <ColorBand color="mustard" className="b-landing-hero" aria-labelledby="b-intro-title">
+        <ColorBand color="kraft" className="b-landing-hero" aria-labelledby="b-intro-title">
           <LandingTitle id="b-intro-title" hero>
             머릿속 설정집은 접어 두세요.
           </LandingTitle>
@@ -50,7 +50,7 @@ export function LandingPage() {
         <AuthorChoice />
         <ThreadPreview />
         <ColorBand
-          color="mustard"
+          color="kraft"
           className="b-landing-closing"
           innerClassName="b-landing-closing-grid"
           aria-labelledby="b-closing-title"

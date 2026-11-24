@@ -135,7 +135,7 @@ function ChangeEntry({
         <time dateTime={new Date(row.createdAt).toISOString()}>
           {formatKoreanDateTime(row.createdAt)}
         </time>
-        <span className="b-works-tag bg-leaf">{CHANGE_TARGET_LABEL[row.targetTable]}</span>
+        <span className="b-works-tag bg-sand">{CHANGE_TARGET_LABEL[row.targetTable]}</span>
         {row.proposerType === 'ai' && <AiBadge />}
         {row.proposerType === 'ai' && <span>승인</span>}
         <span>{row.actorName ?? '알 수 없음'}</span>

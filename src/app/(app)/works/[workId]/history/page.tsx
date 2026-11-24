@@ -78,7 +78,7 @@ export default async function HistoryPage({
     <div className="b-works-history-page">
       <PageHeader
         title="변경 이력"
-        band="mustard"
+        band="kraft"
         actions={isOwner ? <ExportButton workId={workId} title={work.title} /> : undefined}
       />
 

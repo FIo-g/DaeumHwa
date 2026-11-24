@@ -51,7 +51,7 @@ export default async function WorkSettingsPage({
     <div className="flex flex-col">
       <PageHeader
         title="작품 설정"
-        band="mustard"
+        band="kraft"
         description={work.title}
         actions={
           <span className="b-tools-header-art" data-tool="settings" aria-hidden="true">

@@ -10,9 +10,9 @@ const badgeVariants = cva(
       variant: {
         default: 'bg-primary text-primary-foreground [a]:hover:bg-primary/80',
         secondary: 'bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80',
-        destructive: 'border-ink bg-apricot text-ink [a]:hover:bg-ink [a]:hover:text-paper',
-        outline: 'border-ink bg-paper text-ink [a]:hover:bg-leaf',
-        ghost: 'hover:bg-leaf hover:text-ink',
+        destructive: 'border-ink bg-cream text-ink [a]:hover:bg-ink [a]:hover:text-paper',
+        outline: 'border-ink bg-paper text-ink [a]:hover:bg-sand',
+        ghost: 'hover:bg-sand hover:text-ink',
         link: 'text-primary underline-offset-4 hover:underline',
       },
     },

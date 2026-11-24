@@ -125,7 +125,7 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
         >
           <div
             role="row"
-            className="grid grid-cols-7 border-b border-ink bg-apricot text-center text-sm font-bold"
+            className="grid grid-cols-7 border-b border-ink bg-cream text-center text-sm font-bold"
           >
             {WEEKDAY_LABELS.map((label) => (
               <div role="columnheader" key={label} className="py-1.5">
@@ -158,12 +158,12 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
                     )}
                   >
                     <span className="font-bold tabular-nums">{Number(date.slice(8))}</span>
-                    {isHiatus && <span className="b-tools-calendar-chip bg-apricot">휴재</span>}
+                    {isHiatus && <span className="b-tools-calendar-chip bg-cream">휴재</span>}
                     {daySlots.map((slot, index) => (
                       <span
                         key={index}
                         className={cn(
-                          'b-tools-calendar-chip bg-mustard',
+                          'b-tools-calendar-chip bg-kraft',
                           !slot.chapterTitle && 'border-dashed',
                         )}
                       >
@@ -176,7 +176,7 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
                         title={SCHEDULE_KIND_LABEL[item.kind]}
                         className={cn(
                           'b-tools-calendar-chip',
-                          item.kind === 'publish' && 'bg-mustard',
+                          item.kind === 'publish' && 'bg-kraft',
                           item.kind === 'deadline' && 'border-ink',
                           item.done && 'line-through',
                         )}

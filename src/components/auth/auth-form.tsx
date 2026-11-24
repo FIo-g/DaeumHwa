@@ -105,7 +105,7 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
           return destination === mode ? (
             <span
               key={destination}
-              className="b-chip min-h-11 justify-center bg-mustard font-bold"
+              className="b-chip min-h-11 justify-center bg-kraft font-bold"
               aria-current="page"
             >
               {label}
@@ -120,7 +120,7 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
               aria-label={
                 destination === 'signup' ? '계정이 없나요? 가입하기' : '이미 계정이 있나요? 로그인'
               }
-              className="b-chip b-link min-h-11 justify-center font-bold hover:bg-leaf focus-visible:bg-leaf"
+              className="b-chip b-link min-h-11 justify-center font-bold hover:bg-sand focus-visible:bg-sand"
             >
               <span>{label}</span>
             </Link>

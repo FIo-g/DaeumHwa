@@ -13,7 +13,7 @@ export default function AppError({ error, retry }: { error: unknown; retry: () =
   }, [error])
 
   return (
-    <div className="b-band b-band--apricot flex flex-1 justify-center px-edge [&>*]:w-full [&>*]:max-w-lg">
+    <div className="b-band b-band--cream flex flex-1 justify-center px-edge [&>*]:w-full [&>*]:max-w-lg">
       <EmptyState
         title="페이지를 불러오지 못했어요"
         description="잠시 후 다시 시도해 주세요."

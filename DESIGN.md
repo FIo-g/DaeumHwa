@@ -4,9 +4,9 @@ description: An editorial workspace for serial fiction authors who check manuscr
 colors:
   ink: '#171814'
   paper: '#fffcf3'
-  mustard: '#f3cd52'
-  leaf: '#b9dd83'
-  apricot: '#f1bb88'
+  kraft: '#e2d3b3'
+  sand: '#ece3cd'
+  cream: '#f5efe0'
   muted-ink: '#44473a'
   proof-red: '#991b2c'
   wiki-blue: '#164580'
@@ -110,9 +110,9 @@ components:
     height: '44px'
     padding: '0 16px'
   button-outline-hover:
-    backgroundColor: '{colors.leaf}'
+    backgroundColor: '{colors.sand}'
   button-ghost-hover:
-    backgroundColor: '{colors.leaf}'
+    backgroundColor: '{colors.sand}'
     textColor: '{colors.ink}'
   input:
     backgroundColor: '{colors.paper}'
@@ -139,7 +139,7 @@ components:
     height: '44px'
     padding: '0 12px'
   nav-item-active:
-    backgroundColor: '{colors.mustard}'
+    backgroundColor: '{colors.kraft}'
     textColor: '{colors.ink}'
 ---
 
@@ -153,7 +153,7 @@ Use wide color bands and large ink headings to frame three parts of an editorial
 
 - Ink covers titles, buttons, outlines, focus rings, and ledger symbols. Use paper text and focus rings on an ink band.
 - Paper covers the navigation, manuscript, fields, quotes, and overlays. Muted ink covers secondary text, placeholders, and field outlines.
-- Mustard marks entry and the current chapter. Leaf marks checks, evidence, and selected rows. Apricot marks author decisions and chapter plans.
+- Kraft marks entry and the current chapter. Sand marks checks, evidence, and selected rows. Cream marks author decisions and chapter plans.
 - Proof red marks inconsistent phrases in the manuscript. Pair the mark with an ink finding number and the manuscript label. Wiki blue belongs to direct quotations and their rules. Pair the quote with a source label and a card link in ink.
 - Use ink or muted ink for validation, destructive actions, links, and fact states. Set confirmed, assumed, and undecided fact badges in solid, dashed, and dotted outlines.
 
@@ -179,8 +179,8 @@ Use 8px field corners, 10px button corners, 16px card corners, and 24px sheet co
 
 ## Components
 
-- **Buttons.** Use ink and paper for primary actions. Use a paper fill and ink outline for secondary actions. A prominent call to action splits the label and arrow into two moving surfaces. Give the arrow a mustard fill on a primary action.
-- **Navigation.** Mark the active work link with a mustard chip, bold text, and an underline. Use an ink count badge for pending approvals. Let the line-tab indicator follow the selected tab.
+- **Buttons.** Use ink and paper for primary actions. Use a paper fill and ink outline for secondary actions. A prominent call to action splits the label and arrow into two moving surfaces. Give the arrow a kraft fill on a primary action.
+- **Navigation.** Mark the active work link with a kraft chip, bold text, and an underline. Use an ink count badge for pending approvals. Let the line-tab indicator follow the selected tab.
 - **Fields.** Use paper, a muted-ink border, and an ink caret. Use a stronger ink outline and a written error for invalid input.
 - **Findings.** Place the marked manuscript phrase next to the direct wiki quote. Keep the source link and action labels in ink. Draw proof circles, underlines, and strike-throughs over short phrases. Replay each stroke through its own SVG.
 - **Ledger.** Use an ink circle for the planted chapter, an open ink diamond for the target, and a dotted line for the plan. Add text names for the symbols.

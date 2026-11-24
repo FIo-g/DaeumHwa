@@ -9,7 +9,7 @@ export default async function NewWorkPage() {
   if (user.isAnonymous) redirect('/signup?next=/works/new')
   return (
     <div className="b-works-new b-wrap">
-      <PageHeader title="새 작품" description="제목만 정해도 시작할 수 있어요." band="mustard" />
+      <PageHeader title="새 작품" description="제목만 정해도 시작할 수 있어요." band="kraft" />
       <NewWorkForm />
     </div>
   )

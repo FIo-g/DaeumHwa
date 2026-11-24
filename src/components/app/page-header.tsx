@@ -5,7 +5,7 @@ type PageHeaderProps = {
   title: string
   description?: string
   actions?: ReactNode
-  band?: 'mustard' | 'leaf' | 'apricot' | 'paper'
+  band?: 'kraft' | 'sand' | 'cream' | 'paper'
 }
 
 export function PageHeader({ title, description, actions, band = 'paper' }: PageHeaderProps) {

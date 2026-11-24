@@ -15,11 +15,11 @@ const REACTION_LABEL: Record<ReaderSimMoment['reaction'], string> = {
 }
 
 const REACTION_STYLE: Record<ReaderSimMoment['reaction'], string> = {
-  confused: 'bg-mustard',
+  confused: 'bg-kraft',
   bored: 'bg-muted',
-  excited: 'bg-leaf',
+  excited: 'bg-sand',
   dropoff: 'bg-paper border-dashed',
-  moved: 'bg-apricot',
+  moved: 'bg-cream',
 }
 
 const RISK_LABEL: Record<ReaderSimPersonaResult['dropOffRisk'], string> = {

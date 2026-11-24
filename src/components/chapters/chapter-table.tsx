@@ -139,7 +139,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
       ) : (
         <div className="b-writing-chapter-table b-paper overflow-clip">
           <Table>
-            <TableHeader className="bg-leaf">
+            <TableHeader className="bg-sand">
               <TableRow>
                 <TableHead>회차</TableHead>
                 <TableHead>상태</TableHead>

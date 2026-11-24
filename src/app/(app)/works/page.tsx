@@ -26,7 +26,7 @@ export default async function WorksPage() {
     <div className="b-wrap b-works-shelf">
       <PageHeader
         title="내 작품"
-        band="mustard"
+        band="kraft"
         actions={
           !user.isAnonymous && active.length > 0 && <PopLink href="/works/new">새 작품</PopLink>
         }

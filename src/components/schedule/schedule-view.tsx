@@ -147,7 +147,7 @@ export function ScheduleView({
       )}
 
       {result && result.warnings.length > 0 && (
-        <section aria-label="경고" className="b-tools-paper grid gap-1 bg-mustard/35 text-sm">
+        <section aria-label="경고" className="b-tools-paper grid gap-1 bg-kraft/35 text-sm">
           {result.warnings.map((warning) => (
             <p key={warning}>{warning}</p>
           ))}

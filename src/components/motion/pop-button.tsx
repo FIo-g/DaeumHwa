@@ -3,7 +3,7 @@ import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 type PopOptions = {
-  variant?: 'primary' | 'paper' | 'leaf' | 'flat'
+  variant?: 'primary' | 'paper' | 'sand' | 'flat'
   size?: 'default' | 'large'
   pending?: boolean
   pendingLabel?: ReactNode
@@ -14,7 +14,7 @@ function popClass(variant: PopOptions['variant'] = 'primary', className?: string
   return cn(
     'b-button',
     variant === 'primary' && 'b-button--primary',
-    variant === 'leaf' && 'b-button--leaf',
+    variant === 'sand' && 'b-button--sand',
     variant === 'flat' ? 'b-button--flat' : 'b-button--shadow',
     className,
   )

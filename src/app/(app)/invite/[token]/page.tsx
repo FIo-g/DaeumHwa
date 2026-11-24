@@ -10,7 +10,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   const invite = await guardPage(() => getInviteByToken(db, token))
 
   return (
-    <ColorBand color="leaf" className="b-landing-invite" aria-labelledby="b-landing-invite-title">
+    <ColorBand color="sand" className="b-landing-invite" aria-labelledby="b-landing-invite-title">
       <div className="b-paper mx-auto max-w-2xl space-y-4 bg-paper">
         <Reveal>
           <h1 id="b-landing-invite-title" className="b-heading">

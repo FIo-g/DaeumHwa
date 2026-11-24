@@ -107,7 +107,7 @@ export function ProposalCard({
       <div className="grid gap-2">
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted-ink">
           <AiBadge />
-          <span className="b-works-tag bg-leaf">{PROPOSAL_TYPE_LABEL[proposal.type]}</span>
+          <span className="b-works-tag bg-sand">{PROPOSAL_TYPE_LABEL[proposal.type]}</span>
           <span>{PROPOSAL_SOURCE_LABEL[proposal.source]}</span>
           {chapter && chapterText && (
             <Link href={`/works/${workId}/chapters/${chapter.id}`} className="underline">

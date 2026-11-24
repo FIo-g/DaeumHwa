@@ -86,8 +86,8 @@ function NavList({
           href={href}
           aria-current={active ? 'page' : undefined}
           className={cn(
-            'b-control b-link flex min-h-11 items-center justify-between gap-2 rounded-button px-3 text-sm hover:bg-leaf hover:text-ink active:translate-y-px',
-            active ? 'bg-mustard font-bold text-ink underline decoration-2' : 'text-muted-ink',
+            'b-control b-link flex min-h-11 items-center justify-between gap-2 rounded-button px-3 text-sm hover:bg-sand hover:text-ink active:translate-y-px',
+            active ? 'bg-kraft font-bold text-ink underline decoration-2' : 'text-muted-ink',
           )}
         >
           <span>{item.label}</span>

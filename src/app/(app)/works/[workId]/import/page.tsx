@@ -16,14 +16,14 @@ export default async function ImportPage({ params }: { params: Promise<{ workId:
   const { db, actor, user } = await pageContext(`/works/${workId}/import`)
   const work = await guardPage(() => getWork(db, actor, workId))
   if (user.isAnonymous)
-    return <PageHeader title="원고 가져오기" band="apricot" description={TRIAL_SIGNUP_MESSAGE} />
+    return <PageHeader title="원고 가져오기" band="cream" description={TRIAL_SIGNUP_MESSAGE} />
   const jobs = await guardPage(() => listImportJobs(db, actor, workId))
 
   return (
     <div className="flex flex-col">
       <PageHeader
         title="원고 가져오기"
-        band="apricot"
+        band="cream"
         actions={
           <span className="b-tools-header-art" data-tool="import" aria-hidden="true">
             <i />

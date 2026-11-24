@@ -39,19 +39,19 @@ export function HeroProof() {
       <div className="b-landing-proof-stage b-pointer" {...tilt}>
         <div className="b-landing-proof-backing b-pointer__face b-decor" aria-hidden="true">
           <div className="b-scene-run">
-            <div className="b-landing-proof-leaf b-piece" style={paperPiece(0, -52, 20)}>
-              <span className="b-landing-proof-leaf-face b-cycle-paper bg-leaf" />
+            <div className="b-landing-proof-slip b-piece" style={paperPiece(0, -52, 20)}>
+              <span className="b-landing-proof-slip-face b-cycle-paper bg-sand" />
             </div>
             <div
-              className="b-landing-proof-leaf b-landing-proof-leaf-right b-piece"
+              className="b-landing-proof-slip b-landing-proof-slip-right b-piece"
               style={paperPiece(1, 45, 24)}
             >
-              <span className="b-landing-proof-leaf-face b-cycle-paper bg-apricot" />
+              <span className="b-landing-proof-slip-face b-cycle-paper bg-cream" />
             </div>
             <span className="b-landing-proof-tab b-piece" style={paperPiece(2, 24, -32)} />
             <span className="b-landing-proof-corner b-piece" style={paperPiece(3, 28, 34)} />
-            <span className="b-landing-proof-join b-meet bg-leaf [--b-from-x:-36px]" />
-            <span className="b-landing-proof-join b-meet bg-apricot [--b-from-x:36px]" />
+            <span className="b-landing-proof-join b-meet bg-sand [--b-from-x:-36px]" />
+            <span className="b-landing-proof-join b-meet bg-cream [--b-from-x:36px]" />
           </div>
         </div>
         <div className="b-paper b-landing-proof-sheet relative bg-paper">

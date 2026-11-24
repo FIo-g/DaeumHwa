@@ -13,9 +13,9 @@ const MARK_CLASS: Record<HighlightKind, string> = {
   issue: '',
   naming: '',
   spelling: 'underline decoration-ink decoration-wavy decoration-1 underline-offset-[6px]',
-  comment: 'bg-apricot/60',
-  reader: 'bg-leaf/60',
-  search: 'bg-mustard/70',
+  comment: 'bg-cream/60',
+  reader: 'bg-sand/60',
+  search: 'bg-kraft/70',
 }
 
 export function isProofHighlight(highlight: Highlight) {

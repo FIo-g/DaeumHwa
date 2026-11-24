@@ -116,11 +116,11 @@ describe('entrances and surfaces', () => {
 
   it('renders a semantic ColorBand with app spacing and a bounded inner wrapper', () => {
     render(
-      <ColorBand color="leaf" density="app" aria-label="근거" innerClassName="gap-4">
+      <ColorBand color="sand" density="app" aria-label="근거" innerClassName="gap-4">
         근거 카드
       </ColorBand>,
     )
-    expect(screen.getByRole('region', { name: '근거' })).toHaveClass('b-band--leaf', 'b-band--app')
+    expect(screen.getByRole('region', { name: '근거' })).toHaveClass('b-band--sand', 'b-band--app')
     expect(screen.getByText('근거 카드')).toHaveClass('b-wrap', 'gap-4')
   })
 
@@ -179,13 +179,13 @@ describe('actions', () => {
 
   it('renders separate PopLink faces and removes the inactive destination', () => {
     const { rerender } = render(
-      <PopLink href="/works" variant="leaf">
+      <PopLink href="/works" variant="sand">
         내 작품
       </PopLink>,
     )
     const link = screen.getByRole('link', { name: '내 작품' })
     expect(link).toHaveAttribute('href', '/works')
-    expect(link).toHaveClass('b-button--leaf')
+    expect(link).toHaveClass('b-button--sand')
     expect(link.querySelector('.b-button__arrow')).toHaveAttribute('aria-hidden', 'true')
     rerender(
       <PopLink href="/works" disabled>

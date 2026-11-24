@@ -113,7 +113,7 @@ function IndexSlips() {
 export function SettingsBoardHeader({ workId, active }: { workId: string; active: WikiTab }) {
   return (
     <ColorBand
-      color="leaf"
+      color="sand"
       density="app"
       className="b-wiki-band b-scene-run"
       innerClassName="b-wiki-hero"

@@ -64,7 +64,7 @@ export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
       onDrop={handleDrop}
       className={cn(
         'b-tools-file-drop grid gap-4 rounded-card border-2 border-dashed border-ink p-4 text-center sm:p-6',
-        dragging && 'bg-leaf/45',
+        dragging && 'bg-sand/45',
       )}
     >
       <FileUpIcon className="b-tools-file-icon mx-auto size-10" aria-hidden="true" />

@@ -93,7 +93,7 @@ function DiffBody({ parts }: { parts: DiffPart[] }) {
   return (
     <>
       <p className="text-xs text-muted-foreground">
-        <span className="rounded-field bg-mustard px-1.5 py-0.5 text-ink">
+        <span className="rounded-field bg-kraft px-1.5 py-0.5 text-ink">
           이 버전에만 있는 글 {stats.inserted}자
         </span>
         {' · '}
@@ -106,7 +106,7 @@ function DiffBody({ parts }: { parts: DiffPart[] }) {
         {parts.map((part, index) => {
           if (part.type === 'insert') {
             return (
-              <ins key={index} className="bg-mustard text-ink no-underline">
+              <ins key={index} className="bg-kraft text-ink no-underline">
                 {part.value}
               </ins>
             )

@@ -36,7 +36,7 @@ export function VersionList({ versions, currentVersion, selectedId, onSelect }: 
     return <p className="text-sm text-muted-foreground">저장된 버전이 없어요.</p>
   }
   return (
-    <ul className="b-paper grid gap-2 bg-leaf/45 p-3" aria-label="버전 목록">
+    <ul className="b-paper grid gap-2 bg-sand/45 p-3" aria-label="버전 목록">
       {versions.map((v, index) => {
         const selected = v.id === selectedId
         return (
@@ -50,8 +50,8 @@ export function VersionList({ versions, currentVersion, selectedId, onSelect }: 
               aria-pressed={selected}
               onClick={() => onSelect(v.id)}
               className={cn(
-                'flex w-full flex-col gap-0.5 rounded-field border-2 border-ink bg-paper px-3 py-2 text-left text-sm transition-colors hover:bg-leaf focus-visible:bg-leaf',
-                selected && 'bg-leaf',
+                'flex w-full flex-col gap-0.5 rounded-field border-2 border-ink bg-paper px-3 py-2 text-left text-sm transition-colors hover:bg-sand focus-visible:bg-sand',
+                selected && 'bg-sand',
               )}
             >
               <span className="flex flex-wrap items-center gap-2 font-bold">

@@ -167,7 +167,7 @@ function ThreadPreview({
         <h3 className="b-row__title wrap-anywhere">{thread.title}</h3>
         <div className="flex flex-wrap gap-2">
           <span className="b-works-tag">{THREAD_STATUS_LABEL[thread.status]}</span>
-          {thread.overdue && <span className="b-works-tag bg-apricot">회수 목표 지남</span>}
+          {thread.overdue && <span className="b-works-tag bg-cream">회수 목표 지남</span>}
         </div>
       </header>
       {plotted.length > 0 && (

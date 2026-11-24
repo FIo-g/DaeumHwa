@@ -46,7 +46,7 @@ export function SampleBanner({
   const target = chapters.find((c) => c.position === targetPosition)
   return (
     <div className="b-paper flex min-w-0 flex-wrap items-center gap-4 p-4 text-sm">
-      <p className="b-hand shrink-0 rounded-field border border-ink bg-apricot px-3 py-1">
+      <p className="b-hand shrink-0 rounded-field border border-ink bg-cream px-3 py-1">
         샘플 작품
       </p>
       <div className="min-w-0 flex-1 basis-56">

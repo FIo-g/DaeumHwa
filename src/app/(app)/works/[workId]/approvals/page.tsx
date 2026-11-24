@@ -84,7 +84,7 @@ export default async function ApprovalsPage({
     <div className="b-works-approval-page">
       <PageHeader
         title="승인 대기"
-        band="leaf"
+        band="sand"
         description="AI가 찾은 설정 후보와 가져온 원고에서 나온 제안이에요. 승인한 것만 위키에 들어가요."
       />
 

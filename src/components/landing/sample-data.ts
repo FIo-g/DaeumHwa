@@ -32,7 +32,7 @@ export const episodes = [
     number: 3,
     title: '종루의 손짓',
     excerpt: '이른 아침, 세린은 항구 북쪽 언덕길을 올랐다.',
-    color: 'bg-mustard',
+    color: 'bg-kraft',
     angle: 'b-card--first',
   },
   {
@@ -46,7 +46,7 @@ export const episodes = [
     number: 1,
     title: '1화 점검',
     excerpt: '청해항의 아침은 비린내부터 밀려왔다.',
-    color: 'bg-apricot',
+    color: 'bg-cream',
     angle: 'b-card--last',
   },
 ]

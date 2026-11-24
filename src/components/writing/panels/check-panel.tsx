@@ -309,7 +309,7 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
             </p>
           )}
           {!checking && (
-            <span className="rounded-full border border-ink bg-leaf px-2.5 py-1 text-xs font-bold">
+            <span className="rounded-full border border-ink bg-sand px-2.5 py-1 text-xs font-bold">
               열린 지적 {issues.length}건
             </span>
           )}
@@ -453,7 +453,7 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
                       <p className="text-sm wrap-anywhere text-pretty">{issue.explanation}</p>
                     )}
                     {issue.suggestion && (
-                      <p className="rounded-field bg-apricot/50 px-2.5 py-2 text-sm wrap-anywhere text-pretty">
+                      <p className="rounded-field bg-cream/50 px-2.5 py-2 text-sm wrap-anywhere text-pretty">
                         <strong>제안</strong> {issue.suggestion}
                       </p>
                     )}

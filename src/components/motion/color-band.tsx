@@ -2,7 +2,7 @@ import type { ComponentPropsWithoutRef } from 'react'
 import { cn } from '@/lib/utils'
 
 type ColorBandProps = ComponentPropsWithoutRef<'section'> & {
-  color?: 'mustard' | 'leaf' | 'apricot' | 'paper' | 'ink'
+  color?: 'kraft' | 'sand' | 'cream' | 'paper' | 'ink'
   density?: 'scene' | 'app'
   innerClassName?: string
 }

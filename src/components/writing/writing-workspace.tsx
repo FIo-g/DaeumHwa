@@ -436,7 +436,7 @@ export function WritingWorkspace({
             initialFocus={closeButton}
             finalFocus={() => !jumpAfterClose.current && !revisionAfterClose.current}
           >
-            <SheetHeader className="flex-row items-center justify-between gap-2 bg-leaf">
+            <SheetHeader className="flex-row items-center justify-between gap-2 bg-sand">
               <SheetTitle>작업 패널</SheetTitle>
               <SheetClose
                 ref={closeButton}
@@ -458,7 +458,7 @@ export function WritingWorkspace({
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {chapter.archivedAt && (
-        <div className="b-paper flex flex-wrap items-center justify-between gap-3 bg-apricot p-4 text-sm">
+        <div className="b-paper flex flex-wrap items-center justify-between gap-3 bg-cream p-4 text-sm">
           <p>보관된 회차예요. 수정하기 전에 다시 열어 주세요.</p>
           {canManage && (
             <Button size="sm" variant="outline" onClick={() => void reopenChapter()}>

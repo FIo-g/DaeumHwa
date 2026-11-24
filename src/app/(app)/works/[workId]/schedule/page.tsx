@@ -24,7 +24,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ workI
     <div className="flex flex-col">
       <PageHeader
         title="연재 일정"
-        band="apricot"
+        band="cream"
         actions={
           <span className="b-tools-header-art" data-tool="schedule" aria-hidden="true">
             <i />

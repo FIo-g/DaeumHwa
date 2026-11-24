@@ -21,7 +21,7 @@ const threads = [
     end: 2,
     planted: true,
     detail: '밤이 되어도 불이 켜지지 않는 종루. 이유는 아직 모른다.',
-    color: 'bg-leaf',
+    color: 'bg-sand',
   },
   {
     title: '탑 벽의 표식',
@@ -29,7 +29,7 @@ const threads = [
     end: 6,
     planted: false,
     detail: '탑 입구 벽에 누군가 긁어 놓은 표식.',
-    color: 'bg-mustard',
+    color: 'bg-kraft',
   },
 ]
 
@@ -77,7 +77,7 @@ export function ThreadPreview() {
                 회차
               </span>
               {axis.map((chapter) => (
-                <span key={chapter} className={chapter === 3 ? 'bg-mustard' : undefined}>
+                <span key={chapter} className={chapter === 3 ? 'bg-kraft' : undefined}>
                   <span
                     className="b-number"
                     data-highlight={active?.start === chapter || active?.end === chapter}

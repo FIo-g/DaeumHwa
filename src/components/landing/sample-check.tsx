@@ -96,7 +96,7 @@ export function SampleCheck() {
 
   return (
     <ColorBand
-      color="leaf"
+      color="sand"
       id="b-sample"
       className="b-landing-sample"
       aria-labelledby="b-sample-title"

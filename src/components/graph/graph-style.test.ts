@@ -17,7 +17,7 @@ describe('ENTRY_KIND_MARK', () => {
       ink: '--b-ink',
       muted: '--b-muted',
       paper: '--b-paper',
-      selection: '--b-mustard',
+      selection: '--b-kraft',
     })
   })
 })

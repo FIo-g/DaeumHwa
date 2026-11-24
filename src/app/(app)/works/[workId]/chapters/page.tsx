@@ -31,7 +31,7 @@ export default async function ChaptersPage({ params }: { params: Promise<{ workI
     <div className="b-writing-page flex flex-col gap-6">
       <PageHeader
         title="회차 관리"
-        band="mustard"
+        band="kraft"
         description={`회차 ${visibleCount}개`}
         actions={canEdit ? <NewChapterButton workId={workId} /> : undefined}
       />

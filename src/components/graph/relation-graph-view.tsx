@@ -224,7 +224,7 @@ export function RelationGraphView({
                 <li key={node.id}>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left hover:bg-leaf focus-visible:bg-leaf aria-pressed:bg-apricot"
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left hover:bg-sand focus-visible:bg-sand aria-pressed:bg-cream"
                     aria-pressed={selectedNode?.id === node.id}
                     onClick={() => selectNode(node.id)}
                   >
@@ -255,7 +255,7 @@ export function RelationGraphView({
                   <li key={edge.id}>
                     <button
                       type="button"
-                      className="w-full rounded-sm px-2 py-1 text-left hover:bg-leaf focus-visible:bg-leaf aria-pressed:bg-apricot"
+                      className="w-full rounded-sm px-2 py-1 text-left hover:bg-sand focus-visible:bg-sand aria-pressed:bg-cream"
                       aria-pressed={selectedEdge?.id === edge.id}
                       onClick={() => selectEdge(edge.id)}
                     >

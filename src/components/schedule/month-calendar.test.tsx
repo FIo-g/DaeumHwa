@@ -75,7 +75,7 @@ describe('MonthCalendar', () => {
     )
     expect(within(cellOf(container, '2026-10-05')).getByText('3화 재회')).toBeInTheDocument()
     const empty = within(cellOf(container, '2026-10-06')).getByText('빈 연재일')
-    expect(empty.className).toContain('bg-mustard')
+    expect(empty.className).toContain('bg-kraft')
   })
 
   it('marks every hiatus day with 휴재 and leaves other days alone', () => {

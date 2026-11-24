@@ -68,7 +68,7 @@
   height: 18px;
   border: 2px solid var(--b-ink);
   border-radius: 0 0 0 3px;
-  background: var(--b-mustard);
+  background: var(--b-kraft);
   clip-path: polygon(0 0, 100% 100%, 0 100%);
   content: '';
 }
@@ -96,7 +96,7 @@
 }
 
 .b-writing-save-status {
-  background: var(--b-leaf);
+  background: var(--b-sand);
 }
 
 .b-writing-done-stamp {
@@ -108,7 +108,7 @@
   padding: clamp(0.375rem, 1.2vw, 1.25rem);
   border: 2px solid var(--b-ink);
   border-radius: var(--b-r-card);
-  background: var(--b-leaf);
+  background: var(--b-sand);
 }
 
 .b-writing-paper {
@@ -131,7 +131,7 @@
 .b-writing-title-input {
   padding-inline: 0.625rem;
   border: 1px solid var(--b-muted);
-  background: color-mix(in srgb, var(--b-paper), var(--b-mustard) 15%);
+  background: color-mix(in srgb, var(--b-paper), var(--b-kraft) 15%);
 }
 
 .b-writing-manuscript {
@@ -165,7 +165,7 @@
 }
 
 .b-writing-mark[data-active='true'] {
-  background: color-mix(in srgb, var(--b-mustard) 52%, transparent);
+  background: color-mix(in srgb, var(--b-kraft) 52%, transparent);
 }
 
 .b-writing-proof {
@@ -289,7 +289,7 @@
   place-items: center;
   align-self: stretch;
   color: var(--b-ink);
-  background: var(--b-leaf);
+  background: var(--b-sand);
   cursor: pointer;
 }
 
@@ -343,7 +343,7 @@
 }
 
 .b-writing-panel-card:is(:hover, :focus-within) {
-  background: color-mix(in srgb, var(--b-leaf) 22%, var(--b-paper));
+  background: color-mix(in srgb, var(--b-sand) 22%, var(--b-paper));
 }
 
 .b-writing-panel-card:is(:hover, :focus-within):not(:has(textarea)) {
@@ -394,7 +394,7 @@
   height: 0.95rem;
   border: 1px solid var(--b-ink);
   border-radius: 2px;
-  background: var(--b-mustard);
+  background: var(--b-kraft);
   rotate: -13deg;
 }
 
@@ -407,7 +407,7 @@
   --b-from-x: 18px;
   --b-delay: var(--b-stagger);
   margin-inline-start: -0.25rem;
-  background: var(--b-leaf);
+  background: var(--b-sand);
   rotate: 15deg;
 }
 
@@ -506,13 +506,13 @@
 }
 
 .b-writing-quote {
-  background: color-mix(in srgb, var(--b-mustard) 23%, var(--b-paper));
+  background: color-mix(in srgb, var(--b-kraft) 23%, var(--b-paper));
   cursor: pointer;
   overflow-wrap: anywhere;
 }
 
 .b-writing-quote:is(:hover, :focus-visible) {
-  background: var(--b-mustard);
+  background: var(--b-kraft);
 }
 
 .b-writing-source {
@@ -562,7 +562,7 @@
 .b-writing-resolved > span:last-child {
   --b-i: 1;
   --b-origin: right;
-  background: var(--b-mustard);
+  background: var(--b-kraft);
 }
 
 .b-writing-mobile-dock {

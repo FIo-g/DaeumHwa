@@ -117,7 +117,7 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
               className="b-writing-panel-card b-paper"
               style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
             >
-              <div className={cn('grid gap-1 rounded-card p-3', active && 'bg-leaf/30')}>
+              <div className={cn('grid gap-1 rounded-card p-3', active && 'bg-sand/30')}>
                 <div className="flex items-center justify-between gap-2">
                   <button
                     type="button"
