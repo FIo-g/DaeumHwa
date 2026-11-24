@@ -1,4 +1,3 @@
-import '@/app/styles/b-tools.css'
 import { FolderInputIcon } from 'lucide-react'
 import { PageHeader } from '@/components/app/page-header'
 import { ImportWizard } from '@/components/import/import-wizard'

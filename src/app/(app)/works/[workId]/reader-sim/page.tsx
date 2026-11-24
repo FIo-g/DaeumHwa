@@ -1,4 +1,3 @@
-import '@/app/styles/b-tools.css'
 import { MessageSquareTextIcon } from 'lucide-react'
 import { ReaderSimControls } from '@/components/reader-sim/reader-sim-controls'
 import { hasRole } from '@/server/access'

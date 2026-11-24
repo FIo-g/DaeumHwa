@@ -1,4 +1,3 @@
-import '@/app/styles/b-works.css'
 import type { CSSProperties } from 'react'
 import { PageHeader } from '@/components/app/page-header'
 import { TrialButton } from '@/components/auth/trial-button'

@@ -1,4 +1,3 @@
-import '@/app/styles/b-tools.css'
 import { SignpostIcon } from 'lucide-react'
 import type { AdviceResult } from '@/ai/tasks/direction-advice'
 import { AdviceView, type AdviceRunView } from '@/components/advice/advice-view'

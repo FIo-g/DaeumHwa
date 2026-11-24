@@ -1,4 +1,3 @@
-import '@/app/styles/b-tools.css'
 import { MessagesSquareIcon } from 'lucide-react'
 import { PageHeader } from '@/components/app/page-header'
 import { InterviewSession } from '@/components/interview/interview-session'

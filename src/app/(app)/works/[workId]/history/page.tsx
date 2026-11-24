@@ -1,4 +1,3 @@
-import '@/app/styles/b-works.css'
 import { ChangeList } from '@/components/history/change-list'
 import {
   CHANGE_TARGET_LABEL,

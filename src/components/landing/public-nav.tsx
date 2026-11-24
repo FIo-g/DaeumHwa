@@ -1,4 +1,3 @@
-import '@/app/styles/b-landing.css'
 import Link from 'next/link'
 import { MenuSheet, PopLink } from '@/components/motion'
 

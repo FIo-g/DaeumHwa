@@ -1,4 +1,3 @@
-import '@/app/styles/b-works.css'
 import { redirect } from 'next/navigation'
 import { PageHeader } from '@/components/app/page-header'
 import { NewWorkForm } from '@/components/works/new-work-form'

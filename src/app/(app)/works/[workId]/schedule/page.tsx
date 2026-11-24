@@ -1,4 +1,3 @@
-import '@/app/styles/b-tools.css'
 import { CalendarDaysIcon } from 'lucide-react'
 import { PageHeader } from '@/components/app/page-header'
 import { ScheduleView } from '@/components/schedule/schedule-view'

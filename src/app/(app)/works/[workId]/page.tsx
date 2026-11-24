@@ -1,4 +1,3 @@
-import '@/app/styles/b-works.css'
 import Link from 'next/link'
 import { PageHeader } from '@/components/app/page-header'
 import { NextChapterButton } from '@/components/chapters/next-chapter-button'

@@ -1,4 +1,3 @@
-import '@/app/styles/b-tools.css'
 import { SlidersHorizontalIcon } from 'lucide-react'
 import { getTodayUsage } from '@/ai/run'
 import { ExportButton } from '@/components/history/export-button'

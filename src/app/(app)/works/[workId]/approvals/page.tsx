@@ -1,4 +1,3 @@
-import '@/app/styles/b-works.css'
 import { FilterLinks, type FilterOption } from '@/components/history/filter-links'
 import { PageHeader } from '@/components/app/page-header'
 import type { ProposalChapterOption } from '@/components/proposals/proposal-card'

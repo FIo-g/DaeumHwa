@@ -1,6 +1,5 @@
 'use client'
 
-import '@/app/styles/b-works.css'
 import { CheckIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'

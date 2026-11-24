@@ -1,4 +1,3 @@
-import '@/app/styles/b-landing.css'
 import { ColorBand, Reveal } from '@/components/motion'
 import { AcceptInvite } from '@/components/invite/accept-invite'
 import { guardPage, pageContext } from '@/server/page-helpers'
