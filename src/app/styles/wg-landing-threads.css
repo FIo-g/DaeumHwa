@@ -1,0 +1,559 @@
+@layer components {
+  .wg-landing-threads-section {
+    padding-block: var(--b-band-pad);
+  }
+
+  .wg-landing-threads-layout {
+    display: grid;
+    gap: var(--b-s6);
+    align-items: start;
+  }
+
+  #b-threads-title {
+    max-inline-size: calc(11 * var(--b-cell-section) + var(--b-line));
+  }
+
+  .wg-landing-threads-ledger {
+    --wg-thread-seed-size: var(--wg-landing-threads-seed-size);
+    --wg-thread-target-size: var(--wg-landing-threads-target-size);
+    --wg-landing-threads-label-width: clamp(9.5rem, 29%, 13rem);
+    min-inline-size: 0;
+  }
+
+  .wg-landing-threads-scroll {
+    overflow-x: auto;
+  }
+
+  .wg-landing-threads-scroll:focus-visible {
+    outline-offset: calc(-1 * var(--b-rule));
+  }
+
+  .wg-landing-threads-plot {
+    position: relative;
+    /* Keep each chapter number legible when a longer ledger needs local scrolling. */
+    min-inline-size: calc(var(--wg-landing-threads-count) * 1.75rem);
+  }
+
+  .wg-landing-threads-axis,
+  .wg-landing-threads-disclosure .wg-disclosure-trigger {
+    display: grid;
+    grid-template-columns: var(--wg-landing-threads-label-width) minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .wg-landing-threads-axis-label {
+    display: flex;
+    align-items: center;
+    padding-inline-start: 1.9rem;
+    border-block-end: var(--b-line) solid var(--b-grid);
+    font-size: var(--b-t-label);
+  }
+
+  .wg-landing-threads-axis-cells,
+  .wg-landing-threads-rails {
+    display: grid;
+    grid-template-columns: repeat(var(--wg-landing-threads-count), minmax(0, 1fr));
+  }
+
+  .wg-landing-threads-rails {
+    position: absolute;
+    z-index: 1;
+    inset: 0 0 0 var(--wg-landing-threads-label-width);
+    pointer-events: none;
+  }
+
+  .wg-landing-threads-rails::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    border-inline-start: var(--b-line) solid var(--b-grid);
+    content: '';
+  }
+
+  .wg-landing-threads-rails > span {
+    border-inline-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-threads-axis-cells {
+    border-block: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-threads-axis-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    min-block-size: 2.625rem;
+    font: 400 0.875rem/1.1 var(--b-font-mono);
+    white-space: nowrap;
+  }
+
+  .wg-landing-threads-axis-cell[data-current='true'] {
+    border-block-end: var(--b-rule) solid var(--b-grid);
+  }
+
+  .wg-landing-threads-axis-cell > span {
+    font: 500 0.75rem/1.15 var(--b-font-body);
+  }
+
+  .wg-landing-threads-axis-cell[data-highlight='true'] {
+    background: var(--b-ink);
+    color: var(--b-paper);
+  }
+
+  .wg-landing-threads-row {
+    position: relative;
+  }
+
+  .wg-landing-threads-row::after,
+  :is(.wg-landing-threads-choice-option, .wg-landing-threads-fact-row)::before {
+    position: absolute;
+    inset: auto 0 0;
+    border-block-end: var(--b-line) solid var(--b-grid);
+    pointer-events: none;
+    content: '';
+  }
+
+  .wg-landing-threads-disclosure .wg-disclosure-trigger {
+    align-items: stretch;
+    min-block-size: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .wg-landing-threads-disclosure .wg-disclosure-title {
+    display: contents;
+  }
+
+  .wg-landing-threads-disclosure .wg-motion-icon {
+    grid-area: 1 / 1;
+    align-self: center;
+    justify-self: end;
+    margin-inline-end: var(--b-s2);
+  }
+
+  .wg-landing-threads-disclosure .wg-disclosure-rule {
+    inset: auto 0 0;
+    z-index: 1;
+  }
+
+  .wg-landing-threads-disclosure .wg-disclosure-trigger:focus-visible {
+    z-index: 2;
+    outline-offset: -2px;
+  }
+
+  .wg-landing-threads-name {
+    grid-area: 1 / 1;
+    display: grid;
+    grid-template-columns: 1.9rem minmax(0, 1fr);
+    align-items: center;
+    min-block-size: 3.5rem;
+    padding-inline-end: 1.85rem;
+    font: 700 1rem/1.4 var(--b-font-title);
+    word-break: keep-all;
+  }
+
+  .wg-landing-threads-line-number {
+    padding-inline-start: var(--b-s2);
+    color: var(--b-muted);
+    font: 400 0.75rem/1 var(--b-font-mono);
+    opacity: 0;
+  }
+
+  .wg-landing-threads-row[data-thread-active='true'] .wg-landing-threads-line-number {
+    opacity: 1;
+  }
+
+  .wg-landing-threads-summary {
+    display: none;
+  }
+
+  .wg-landing-threads-overdue {
+    grid-area: 2 / 1;
+    padding: 0 var(--b-s2) var(--b-s2) 1.9rem;
+    font: 400 var(--b-t-label) / 1.45 var(--b-font-body);
+  }
+
+  .wg-landing-threads-track {
+    --wg-landing-threads-target-edge: calc(
+      var(--wg-landing-threads-end) - var(--wg-landing-threads-target-size) / 2
+    );
+    position: relative;
+    grid-area: 1 / 2 / 3 / 3;
+    display: block;
+    min-block-size: 3rem;
+  }
+
+  .wg-landing-threads-track
+    > :is(.wg-landing-threads-track-line, .wg-landing-threads-seed, .wg-landing-threads-target) {
+    position: absolute;
+    inset-block-start: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .wg-landing-threads-track-line,
+  .wg-landing-threads-plan-key {
+    border-block-start: var(--b-line) solid var(--b-ink);
+  }
+
+  .wg-landing-threads-track > .wg-landing-threads-track-line {
+    inset-inline: var(--wg-landing-threads-start) calc(100% - var(--wg-landing-threads-end));
+    transform: translateY(-50%) scaleY(1);
+    transform-origin: center;
+  }
+
+  .wg-landing-threads-track[data-planned='true'] .wg-landing-threads-track-line,
+  .wg-landing-threads-plan-key {
+    border-block-start-style: dashed;
+  }
+
+  .wg-landing-threads-track[data-planned='true'] .wg-landing-threads-track-line {
+    inset-inline-end: calc(100% - var(--wg-landing-threads-target-edge));
+  }
+
+  /* Finish the dashed rule at the marker edge even when the last dash is partial. */
+  .wg-landing-threads-track[data-planned='true'] .wg-landing-threads-track-line::after {
+    position: absolute;
+    inset-block-start: calc(-1 * var(--b-line));
+    inset-inline-end: 0;
+    inline-size: var(--b-rule);
+    border-block-start: var(--b-line) solid var(--b-ink);
+    content: '';
+  }
+
+  .wg-landing-threads-row[data-thread-active='true'] .wg-landing-threads-track-line {
+    transform: translateY(-50%) scaleY(2);
+  }
+
+  .wg-landing-threads-seed,
+  .wg-landing-threads-target {
+    display: inline-block;
+    border-radius: 50%;
+  }
+
+  .wg-landing-threads-seed {
+    inset-inline-start: var(--wg-landing-threads-start);
+    inline-size: var(--wg-landing-threads-seed-size);
+    block-size: var(--wg-landing-threads-seed-size);
+    background: var(--b-ink);
+  }
+
+  .wg-landing-threads-target {
+    position: relative;
+    inset-inline-start: var(--wg-landing-threads-target-edge);
+    inline-size: var(--wg-landing-threads-target-size);
+    block-size: var(--wg-landing-threads-target-size);
+    border: var(--b-line) solid var(--b-ink);
+    background: var(--b-paper);
+  }
+
+  .wg-landing-threads-track > .wg-landing-threads-target {
+    transform: translateY(-50%);
+  }
+
+  .wg-landing-threads-target::after {
+    position: absolute;
+    inset: var(--b-rule);
+    border: var(--b-line) solid var(--b-ink);
+    border-radius: inherit;
+    content: '';
+  }
+
+  .wg-landing-threads-detail {
+    max-inline-size: var(--wg-landing-threads-label-width);
+    padding: var(--b-s2) var(--b-s2) var(--b-s3) 1.9rem;
+    font-size: 0.9375rem;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  .wg-landing-threads-legend,
+  .wg-landing-threads-legend > li {
+    display: flex;
+    align-items: center;
+    gap: var(--b-s2);
+  }
+
+  .wg-landing-threads-legend {
+    justify-content: end;
+    flex-wrap: wrap;
+    gap: var(--b-s2) var(--b-s4);
+    margin-block-start: var(--b-s3);
+  }
+
+  .wg-landing-threads-plan-key {
+    inline-size: 1rem;
+  }
+
+  .wg-landing-threads-choice-entrance {
+    container-type: inline-size;
+  }
+
+  .wg-landing-threads-choice-sheet {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 0 var(--b-s6);
+  }
+
+  .wg-landing-threads-choice-sheet > .wg-sheet-edge {
+    grid-column: 1 / -1;
+  }
+
+  .wg-landing-threads-choice-option,
+  .wg-landing-threads-fact-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr);
+    align-items: center;
+    gap: var(--b-s2);
+    min-block-size: 3.5rem;
+    padding-block: var(--b-s1);
+  }
+
+  .wg-landing-threads-choice-option:has(button:is(:hover, :focus-visible))::before {
+    border-block-end-width: var(--b-rule);
+  }
+
+  .wg-landing-threads-choice-button {
+    justify-self: start;
+    font-weight: 500;
+  }
+
+  .wg-landing-threads-choice-button[aria-pressed='true'] .wg-pop-text-fill {
+    color: var(--b-paper);
+    background: var(--b-ink);
+  }
+
+  .wg-landing-threads-choice-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--b-s2);
+    min-block-size: 2.75rem;
+  }
+
+  .wg-landing-threads-reset[aria-disabled='true'] {
+    cursor: default;
+  }
+
+  .wg-landing-threads-choice-proof .b-manuscript {
+    font-weight: 700;
+    line-height: 1.9;
+    word-break: keep-all;
+  }
+
+  .wg-landing-threads-correction {
+    color: var(--b-proof);
+  }
+
+  .wg-landing-threads-facts {
+    min-inline-size: 0;
+    padding-inline-start: var(--b-s6);
+    border-inline-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-threads-fact-row {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    font-size: 0.9375rem;
+  }
+
+  .wg-landing-threads-fact-row::before {
+    inset: 0 0 auto;
+  }
+
+  .wg-landing-threads-fact-state {
+    justify-self: start;
+    border-block-end-width: var(--b-rule);
+    border-color: var(--b-grid);
+    padding-inline: var(--b-s1);
+    font: 500 var(--b-t-label) / 1.75 var(--b-font-body);
+  }
+
+  .wg-landing-threads-approval .wg-disclosure-content {
+    padding-block: var(--b-s2);
+    font-size: 0.9375rem;
+  }
+
+  @container (width < 18rem) {
+    .wg-landing-threads-choice-option {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+      padding-block-end: var(--b-s2);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .wg-landing-threads-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+      gap: var(--b-s7);
+    }
+  }
+
+  @media (max-width: 767px) {
+    .wg-landing-threads-ledger {
+      --wg-landing-threads-label-width: min(38%, 9.5rem);
+    }
+
+    .wg-landing-threads-choice-sheet {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .wg-landing-threads-axis-label {
+      padding-inline-start: var(--b-s2);
+    }
+
+    .wg-landing-threads-axis-cell {
+      font-size: clamp(0.6875rem, 3.1vw, 0.875rem);
+    }
+
+    .wg-landing-threads-axis-cell > span {
+      font-size: 0.85em;
+    }
+
+    .wg-landing-threads-disclosure .wg-motion-icon {
+      margin-inline-end: var(--b-s1);
+    }
+
+    .wg-landing-threads-name {
+      display: block;
+      min-block-size: 2.75rem;
+      padding: var(--b-s2) var(--b-s5) var(--b-s1) var(--b-s2);
+      overflow-wrap: anywhere;
+    }
+
+    .wg-landing-threads-line-number {
+      position: absolute;
+      inset-block-start: var(--b-s1);
+      inset-inline-start: calc(var(--wg-landing-threads-label-width) - var(--b-s4));
+      padding-inline-start: 0;
+    }
+
+    .wg-landing-threads-summary {
+      grid-area: 2 / 1;
+      display: block;
+      padding: 0 var(--b-s2) var(--b-s2);
+      overflow-wrap: anywhere;
+    }
+
+    .wg-landing-threads-overdue {
+      grid-area: 3 / 1;
+      padding-inline-start: var(--b-s2);
+    }
+
+    .wg-landing-threads-track {
+      grid-area: 1 / 2 / 4 / 3;
+      min-block-size: 2.5rem;
+    }
+
+    .wg-landing-threads-detail {
+      padding-inline-start: var(--b-s2);
+    }
+
+    .wg-landing-threads-facts {
+      margin-block-start: var(--b-s4);
+      padding-block-start: var(--b-s4);
+      padding-inline-start: 0;
+      border-block-start: var(--b-line) solid var(--b-grid);
+      border-inline-start: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-landing-threads-line-number {
+      transition: opacity var(--b-quick) var(--b-out);
+    }
+
+    .wg-landing-threads-track-line {
+      transition: transform var(--b-quick) var(--b-out);
+    }
+
+    .wg-landing-threads-ledger :is(.wg-landing-threads-axis, .wg-landing-threads-rails),
+    .wg-landing-threads-ledger .wg-landing-threads-row::after {
+      animation: wg-landing-threads-draw var(--b-quick) var(--b-out) var(--b-stagger) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-landing-threads-ledger .wg-landing-threads-track {
+      --wg-landing-threads-seed-time: calc(
+        var(--b-stagger) + var(--b-quick) + var(--wg-landing-threads-order) * var(--b-stagger)
+      );
+      --wg-landing-threads-line-time: calc(var(--wg-landing-threads-seed-time) + var(--b-cell));
+      --wg-landing-threads-target-time: calc(var(--wg-landing-threads-line-time) + var(--b-step));
+    }
+
+    .wg-landing-threads-ledger .wg-landing-threads-track[data-same='true'] {
+      --wg-landing-threads-target-time: var(--wg-landing-threads-line-time);
+    }
+
+    .wg-landing-threads-ledger .wg-landing-threads-track[data-planned='true'] {
+      --wg-landing-threads-line-time: var(--wg-landing-threads-seed-time);
+    }
+
+    .wg-landing-threads-ledger .wg-landing-threads-track > .wg-landing-threads-seed {
+      animation: wg-landing-threads-mark var(--b-cell) var(--b-out)
+        var(--wg-landing-threads-seed-time) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-landing-threads-ledger .wg-landing-threads-track-line {
+      animation: wg-landing-threads-draw var(--b-step) var(--b-out)
+        var(--wg-landing-threads-line-time) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-landing-threads-ledger .wg-landing-threads-track > .wg-landing-threads-target {
+      animation: wg-landing-threads-mark var(--b-cell) var(--b-out)
+        var(--wg-landing-threads-target-time) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-landing-threads-choice-entrance
+      :is(.wg-landing-threads-choice-option, .wg-landing-threads-fact-row)::before {
+      animation: wg-landing-threads-draw var(--b-quick) var(--b-out) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-landing-threads-choice-entrance
+      :is(.wg-landing-threads-choice-option, .wg-landing-threads-fact-row)
+      > * {
+      animation: wg-landing-threads-write var(--b-step) var(--b-out)
+        calc(var(--b-quick) + var(--wg-landing-threads-order) * var(--b-stagger)) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-landing-threads-rewrite[data-rewrite='true'] {
+      animation: wg-landing-threads-write var(--b-step) var(--b-out) both;
+    }
+
+    .wg-landing-threads-rewrite-wiki[data-rewrite='true'] {
+      animation-delay: var(--b-step);
+    }
+  }
+
+  @keyframes wg-landing-threads-draw {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-landing-threads-mark {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes wg-landing-threads-write {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+    to {
+      clip-path: inset(-0.25em);
+    }
+  }
+}

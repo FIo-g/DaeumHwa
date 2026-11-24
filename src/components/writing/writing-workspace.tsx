@@ -1,11 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Dialog } from '@base-ui/react/dialog'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CompleteConfirmDialog } from '@/components/chapters/complete-confirm-dialog'
+import { MenuIcon, usePrefersReducedMotion } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetClose, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import type { ChapterStatus } from '@/db/types'
 import { lengthShortfall, shortfallMessage } from '@/lib/chapter-length'
 import { startAutoCheck } from '@/lib/client/auto-check'
@@ -22,7 +24,14 @@ import { ManuscriptEditor } from './manuscript-editor'
 import { RecoveryDialog } from './recovery-dialog'
 import { replaceQuoteText, replaceRangeText } from './text-ops'
 import { WritingSidePanel } from './side-panel'
-import type { Highlight, SelectionRange, WorkspaceApi, WritingData } from './types'
+import type {
+  CheckState,
+  Highlight,
+  ProofRevision,
+  SelectionRange,
+  WorkspaceApi,
+  WritingData,
+} from './types'
 
 export type ServerCopy = { title: string; body: string; version: number; updatedAt: string }
 
@@ -54,6 +63,23 @@ export function WritingWorkspace({
   const canEdit = (role === 'owner' || role === 'editor') && !chapter.archivedAt
   const canManage = role === 'owner' || role === 'editor'
   const wide = useWideLayout()
+  const reduced = usePrefersReducedMotion()
+  const [check, setCheck] = useState<CheckState>({
+    checking: false,
+    resultKey: 0,
+    issueCount: data.issues.length,
+  })
+  const [cardLink, setCardLink] = useState<string | null>(null)
+  const [editorHover, setEditorHover] = useState<string | null>(null)
+  const [editorFocus, setEditorFocus] = useState<string | null>(null)
+  const [readingId, setReadingId] = useState<string | null>(null)
+  const [requestedId, setRequestedId] = useState<string | null>(null)
+  const [revision, setRevision] = useState<ProofRevision | null>(null)
+  const closeButton = useRef<HTMLButtonElement>(null)
+  const revisionAfterClose = useRef<ProofRevision | null>(null)
+  const jumpAfterClose = useRef<{ start: number; end: number; id: string } | null>(null)
+  const clearRequest = useCallback(() => setRequestedId(null), [])
+  const linkedId = editorHover ?? cardLink ?? editorFocus
 
   // The version the server reported on the last conflict, read by the overwrite action.
   const conflictVersion = useRef<number | null>(null)
@@ -98,6 +124,67 @@ export function WritingWorkspace({
   const [sources, setSources] = useState<Record<string, Highlight[]>>({})
   const highlights = useMemo(() => Object.values(sources).flat(), [sources])
 
+  useEffect(() => {
+    if (!revision) return
+    const frame = requestAnimationFrame(() => {
+      const note = textareaRef.current?.parentElement?.querySelector('.wg-writing-revision')
+      const rect = note?.getBoundingClientRect()
+      if (rect && (rect.top < 180 || rect.bottom > window.innerHeight - 96)) {
+        window.scrollTo({
+          top: Math.max(0, window.scrollY + rect.top - window.innerHeight / 2),
+          behavior: 'instant',
+        })
+      }
+    })
+    const timer = window.setTimeout(() => setRevision(null), 1160)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [revision])
+
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    let frame = 0
+    function readPosition() {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const bounds = el?.getBoundingClientRect()
+        const marks = el?.parentElement?.querySelectorAll<HTMLElement>(
+          '[data-proof-id]:not([data-proof-id="revision"])',
+        )
+        if (!bounds || !marks?.length || bounds.bottom < 0 || bounds.top > window.innerHeight) {
+          setReadingId(null)
+          return
+        }
+        const visibleTop = Math.max(0, bounds.top)
+        const viewportHeight = Math.min(bounds.bottom, window.innerHeight) - visibleTop
+        const line = visibleTop + Math.min(200, viewportHeight * 0.4)
+        let nearest: string | null = null
+        let distance = Infinity
+        for (const mark of marks) {
+          for (const rect of mark.getClientRects()) {
+            if (rect.bottom < visibleTop || rect.top > window.innerHeight) continue
+            const gap = Math.abs(rect.top + rect.height / 2 - line)
+            if (gap >= distance) continue
+            nearest = mark.dataset.proofId ?? null
+            distance = gap
+          }
+        }
+        setReadingId(nearest)
+      })
+    }
+    readPosition()
+    window.addEventListener('scroll', readPosition, { passive: true })
+    window.addEventListener('resize', readPosition)
+    return () => {
+      window.removeEventListener('scroll', readPosition)
+      window.removeEventListener('resize', readPosition)
+      cancelAnimationFrame(frame)
+    }
+  }, [highlights, body])
+
   // Resume point: where the author is, saved on open and when the editor loses focus.
   const path = `/works/${workId}/chapters/${chapter.id}`
   useEffect(() => {
@@ -110,6 +197,32 @@ export function WritingWorkspace({
       setBody(next)
     },
     [setBody],
+  )
+
+  const focusRange = useCallback(
+    (start: number, end: number, id?: string) => {
+      const el = textareaRef.current
+      if (!el) return
+      el.focus({ preventScroll: true })
+      el.setSelectionRange(start, end)
+      const mark =
+        id &&
+        Array.from(el.parentElement?.querySelectorAll<HTMLElement>('[data-proof-id]') ?? []).find(
+          (element) => element.dataset.proofId === id,
+        )
+      if (mark) {
+        const first = mark.getClientRects()[0]
+        if (first) {
+          window.scrollTo({
+            top: Math.max(0, window.scrollY + first.top - window.innerHeight / 3),
+            behavior: reduced ? 'instant' : 'smooth',
+          })
+          return
+        }
+      }
+      scrollToOffset(el, start, reduced)
+    },
+    [reduced],
   )
 
   const api = useMemo<WorkspaceApi>(
@@ -131,13 +244,7 @@ export function WritingWorkspace({
       setHighlights(source, next) {
         setSources((prev) => ({ ...prev, [source]: next }))
       },
-      focusRange(start, end) {
-        const el = textareaRef.current
-        if (!el) return
-        el.focus()
-        el.setSelectionRange(start, end)
-        scrollToOffset(el, start)
-      },
+      focusRange,
       getSelection(): SelectionRange | null {
         const el = textareaRef.current
         if (!el || el.selectionStart === el.selectionEnd) return null
@@ -150,7 +257,7 @@ export function WritingWorkspace({
       saveNow,
       refresh: () => router.refresh(),
     }),
-    [applyBody, saveNow, router],
+    [applyBody, focusRange, saveNow, router],
   )
 
   function handleBodyChange(next: string) {
@@ -181,16 +288,17 @@ export function WritingWorkspace({
     if (next === 'done') await saveNow()
     const result = await runAction(setChapterStatusAction({ chapterId: chapter.id, status: next }))
     if (result) {
-      if (next === 'done') fireDirectiveInfer(workId, chapter.id)
+      if (next === 'done' && !data.trial) fireDirectiveInfer(workId, chapter.id)
       router.refresh()
-      if (wasDraft && next === 'done') {
-        startAutoCheck({
+      if (wasDraft && next === 'done' && !data.trial) {
+        const started = startAutoCheck({
           workId,
           chapterId: chapter.id,
           position: chapter.position,
           onDone: () => router.refresh(),
           navigate: (href) => router.push(href),
         })
+        if (started && wide === false) setPanelOverride(true)
       }
     }
   }
@@ -208,7 +316,7 @@ export function WritingWorkspace({
 
   async function reopenChapter() {
     const result = await runAction(restoreChapterAction({ chapterId: chapter.id }), {
-      success: '회차를 다시 열었습니다.',
+      success: '회차를 다시 열었어요.',
     })
     if (result) router.refresh()
   }
@@ -252,32 +360,107 @@ export function WritingWorkspace({
     router.refresh()
   }
 
-  // On a narrow screen the panel is inside a sheet. The sample auto check must run, and its panel
-  // only mounts while the sheet is open, so the sheet starts open for that case. An explicit
-  // close or open by the author wins over the default.
   const sampleChapter = useIsSampleChapter(chapter.id)
   const [panelOverride, setPanelOverride] = useState<boolean | null>(null)
-  const panelOpen = panelOverride ?? (autoCheck || sampleChapter)
+  const panelOpen = wide === false && (panelOverride ?? (autoCheck || sampleChapter))
 
-  const panelProps = { data, api, text: body, position: chapter.position, autoCheck }
+  const panelProps = {
+    data,
+    api,
+    text: body,
+    position: chapter.position,
+    autoCheck,
+    findings: {
+      linkedId,
+      readingId,
+      requestedId,
+      onLink: setCardLink,
+      onRequestHandled: clearRequest,
+      onCheckState: setCheck,
+      onRevision(next: ProofRevision) {
+        if (reduced) return
+        if (wide === false && panelOpen) {
+          revisionAfterClose.current = next
+          setPanelOverride(false)
+        } else {
+          setRevision(next)
+        }
+      },
+      onJump(start: number, end: number, id: string) {
+        if (wide === false) {
+          jumpAfterClose.current = { start, end, id }
+          setPanelOverride(false)
+        } else {
+          focusRange(start, end, id)
+        }
+      },
+    },
+  }
+
+  function showIssue(id: string) {
+    setRequestedId(id)
+    if (wide === false) setPanelOverride(true)
+  }
 
   const mobilePanel = wide ? null : (
-    <Sheet open={panelOpen} onOpenChange={setPanelOverride}>
-      <SheetTrigger render={<Button variant="outline" size="sm" />}>패널 열기</SheetTrigger>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>작업 패널</SheetTitle>
-        </SheetHeader>
-        <WritingSidePanel {...panelProps} />
-      </SheetContent>
+    <Sheet
+      open={panelOpen}
+      onOpenChange={setPanelOverride}
+      onOpenChangeComplete={(open) => {
+        if (open) return
+        if (revisionAfterClose.current) {
+          setRevision(revisionAfterClose.current)
+          revisionAfterClose.current = null
+        }
+        const jump = jumpAfterClose.current
+        if (!jump) return
+        jumpAfterClose.current = null
+        focusRange(jump.start, jump.end, jump.id)
+      }}
+    >
+      <div className="wg-writing-mobile-dock">
+        <span className="text-sm font-bold">
+          {check.checking ? '점검 중…' : `열린 지적 ${check.issueCount}건`}
+        </span>
+        <SheetTrigger render={<Button variant="ghost" size="sm" />}>
+          <MenuIcon open={panelOpen} />
+          패널 열기
+        </SheetTrigger>
+      </div>
+      {wide === false && (
+        <Dialog.Portal keepMounted>
+          <Dialog.Backdrop data-slot="sheet-overlay" className="wg-ui-overlay fixed inset-0 z-50" />
+          <Dialog.Popup
+            data-slot="sheet-content"
+            data-side="bottom"
+            className="wg-writing-sheet wg-ui-popup wg-ui-sheet fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto"
+            initialFocus={closeButton}
+            finalFocus={() => !jumpAfterClose.current && !revisionAfterClose.current}
+          >
+            <SheetHeader className="wg-writing-sheet-head flex-row items-center justify-between gap-2">
+              <SheetTitle>작업 패널</SheetTitle>
+              <SheetClose
+                ref={closeButton}
+                aria-label="닫기"
+                render={<Button variant="outline" size="icon-sm" />}
+              >
+                <MenuIcon open={panelOpen} />
+              </SheetClose>
+            </SheetHeader>
+            <div className="px-3 pt-3 pb-4">
+              <WritingSidePanel {...panelProps} />
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      )}
     </Sheet>
   )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-3">
       {chapter.archivedAt && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 p-4 text-sm">
-          <p>보관된 회차입니다. 고치려면 다시 열어 주세요.</p>
+        <div className="wg-writing-notice">
+          <p>보관된 회차예요. 수정하기 전에 다시 열어 주세요.</p>
           {canManage && (
             <Button size="sm" variant="outline" onClick={() => void reopenChapter()}>
               회차 다시 열기
@@ -296,12 +479,12 @@ export function WritingWorkspace({
         onSaveNow={() => void saveNow()}
         onStatusChange={(next) => void changeStatus(next)}
         onNavigate={(href) => void navigate(href)}
-        panelTrigger={mobilePanel}
       />
 
-      <div className="flex items-start gap-8">
-        <div className="min-w-0 flex-1">
+      <div className="wg-writing-stage">
+        <div className="min-w-0">
           <ManuscriptEditor
+            page={chapter.position}
             title={title}
             body={body}
             onTitleChange={setTitle}
@@ -314,13 +497,24 @@ export function WritingWorkspace({
             targetChars={data.targetChars}
             textareaRef={textareaRef}
             onBlur={handleBlur}
+            check={check}
+            linkedId={linkedId}
+            readingId={readingId}
+            revision={reduced ? null : revision}
+            onIssueHover={setEditorHover}
+            onIssueFocus={setEditorFocus}
+            onShowIssue={showIssue}
           />
+          {mobilePanel}
         </div>
-        {wide && (
-          <aside className="sticky top-6 max-h-[calc(100vh-3rem)] w-[380px] shrink-0 overflow-y-auto">
-            <WritingSidePanel {...panelProps} />
-          </aside>
-        )}
+        {/* The column is reserved by CSS from the first paint, so the manuscript keeps its width
+            when the panel mounts after hydration. */}
+        <aside className="wg-writing-aside">
+          <p className="wg-writing-panel-page" aria-hidden="true">
+            {String(chapter.position).padStart(2, '0')}
+          </p>
+          {wide && <WritingSidePanel {...panelProps} />}
+        </aside>
       </div>
 
       {canEdit && (
@@ -365,18 +559,28 @@ function useIsSampleChapter(chapterId: string): boolean {
   )
 }
 
-/** Wide screens show the panel beside the editor; narrower ones put it in a sheet. */
-function useWideLayout(): boolean {
-  const [wide, setWide] = useState(false)
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-    const query = window.matchMedia('(min-width: 1024px)')
-    const sync = () => setWide(query.matches)
-    sync()
-    query.addEventListener('change', sync)
-    return () => query.removeEventListener('change', sync)
-  }, [])
-  return wide
+// Keep the panel mount in sync with the writing layout in wg-writing.css.
+const WIDE_QUERY = '(min-width: 1093px)'
+
+function wideQuery(): MediaQueryList | null {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null
+  return window.matchMedia(WIDE_QUERY)
+}
+
+function subscribeWide(onChange: () => void): () => void {
+  const query = wideQuery()
+  if (!query) return () => {}
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+
+/** Null until the width is known: on the server and during hydration. */
+function useWideLayout(): boolean | null {
+  return useSyncExternalStore(
+    subscribeWide,
+    () => wideQuery()?.matches ?? false,
+    () => null,
+  )
 }
 
 function readCurrentVersion(details: unknown): number | null {
@@ -395,9 +599,9 @@ function fireDirectiveInfer(workId: string, chapterId: string) {
 }
 
 /** Brings the offset into view. The textarea grows with its content, so the page is what scrolls. */
-function scrollToOffset(el: HTMLTextAreaElement, offset: number) {
+function scrollToOffset(el: HTMLTextAreaElement, offset: number, reduced: boolean) {
   const rect = el.getBoundingClientRect()
   const ratio = el.value.length > 0 ? offset / el.value.length : 0
   const target = window.scrollY + rect.top + rect.height * ratio - window.innerHeight / 3
-  window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+  window.scrollTo({ top: Math.max(0, target), behavior: reduced ? 'instant' : 'smooth' })
 }

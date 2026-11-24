@@ -6,12 +6,16 @@ type EmptyStateProps = {
   action?: ReactNode
 }
 
-/** Shown in place of a list when there is nothing to show yet. */
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
-      <p className="font-medium">{title}</p>
-      {description && <p className="text-sm text-muted-foreground">{description}</p>}
+    <div className="wg-shell-empty">
+      <div className="wg-shell-empty-cells" aria-hidden="true">
+        {Array.from({ length: 8 }, (_, index) => (
+          <span key={index} />
+        ))}
+      </div>
+      <p className="b-subhead">{title}</p>
+      {description && <p className="wg-shell-description">{description}</p>}
       {action}
     </div>
   )

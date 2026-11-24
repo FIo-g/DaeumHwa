@@ -89,9 +89,9 @@ export type BulkApproveResult = {
   failed: { proposalId: string; message: string }[]
 }
 
-const NOT_FOUND_MESSAGE = '항목을 찾을 수 없습니다.'
-const ALREADY_DECIDED_MESSAGE = '이미 처리된 제안입니다.'
-const APPROVE_FAILED_MESSAGE = '승인하지 못했습니다.'
+const NOT_FOUND_MESSAGE = '항목을 찾을 수 없어요.'
+const ALREADY_DECIDED_MESSAGE = '이미 처리된 제안이에요.'
+const APPROVE_FAILED_MESSAGE = '승인하지 못했어요.'
 
 // ---- Grouping for the approval screen ----
 
@@ -210,7 +210,7 @@ export async function countImportBatches(
 function missingCard(name: string): AppError {
   return new AppError(
     'BAD_STATE',
-    `관계에 필요한 카드(${name})가 위키에 없습니다. 카드 제안을 먼저 승인하세요.`,
+    `관계에 필요한 카드(${name})가 위키에 없어요. 카드 제안을 먼저 승인하세요.`,
   )
 }
 
@@ -220,7 +220,7 @@ async function chapterPosition(db: Db, workId: string, chapterId: string): Promi
     .from(chapters)
     .where(and(eq(chapters.id, chapterId), eq(chapters.workId, workId)))
     .limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
   return row.position
 }
 

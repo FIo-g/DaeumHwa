@@ -1,7 +1,6 @@
-import Link from 'next/link'
-import { PageHeader } from '@/components/app/page-header'
+import { PopLink } from '@/components/motion'
 import { RelationGraphView } from '@/components/graph/relation-graph-view'
-import { buttonVariants } from '@/components/ui/button'
+import { SettingsBoardHeader } from '@/components/wiki/wiki-tabs'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getGraphViewData } from '@/server/relations'
 
@@ -12,16 +11,20 @@ export default async function GraphViewPage({ params }: { params: Promise<{ work
   const graph = await guardPage(() => getGraphViewData(db, actor, workId))
 
   return (
-    <div className="flex flex-col">
-      <PageHeader
-        title="인물 관계 그래프"
-        actions={
-          <Link href={graphPath} className={buttonVariants({ variant: 'outline' })}>
-            기존 관계 그래프로 돌아가기
-          </Link>
-        }
-      />
-      <RelationGraphView workId={workId} {...graph} />
+    <div className="flex min-w-0 flex-col gap-4">
+      {/* The 3D view is part of the 관계 그래프 tab, so that tab stays marked. */}
+      <SettingsBoardHeader workId={workId} active="graph" />
+      <section aria-labelledby="graph-3d-heading" className="flex flex-col gap-4">
+        <div className="wg-graph-toolbar">
+          <h2 id="graph-3d-heading" className="b-subhead">
+            3D 관계 그래프
+          </h2>
+          <PopLink href={graphPath} variant="paper">
+            3D 닫기
+          </PopLink>
+        </div>
+        <RelationGraphView workId={workId} {...graph} />
+      </section>
     </div>
   )
 }

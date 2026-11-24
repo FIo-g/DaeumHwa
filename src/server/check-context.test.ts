@@ -210,6 +210,6 @@ describe('describeCheckContext', () => {
     )
     expect(err).toBeInstanceOf(AppError)
     expect((err as AppError).code).toBe('NOT_FOUND')
-    expect((err as AppError).message).toBe('회차를 찾을 수 없습니다.')
+    expect((err as AppError).message).toBe('회차를 찾을 수 없어요.')
   })
 })

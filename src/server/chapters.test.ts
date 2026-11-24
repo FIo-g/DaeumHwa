@@ -197,7 +197,7 @@ describe('saveChapter', () => {
     const err = await expectAppError(
       saveChapter(db, actor, { chapterId: chapter.id, body: 'b', expectedVersion: 1 }),
       'CONFLICT',
-      '다른 곳에서 먼저 수정된 원고가 있습니다.',
+      '다른 곳에서 먼저 수정된 원고가 있어요.',
     )
     expect(err.details).toEqual({ currentVersion: 2 })
     const [row] = await db.select().from(chapters).where(eq(chapters.id, chapter.id))
@@ -506,7 +506,7 @@ describe('setChapterStatus and setChapterPublishedOn', () => {
     await expectAppError(
       setChapterPublishedOn(db, actor, chapter.id, '0002-10-17'),
       'VALIDATION',
-      '연재일 형식이 올바르지 않습니다.',
+      '연재일 형식이 올바르지 않아요.',
     )
     await expectAppError(setChapterPublishedOn(db, actor, chapter.id, '2026-02-31'), 'VALIDATION')
     await expectAppError(setChapterPublishedOn(db, actor, chapter.id, '2101-01-01'), 'VALIDATION')

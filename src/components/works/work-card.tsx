@@ -1,5 +1,6 @@
+import { ArrowRightIcon } from 'lucide-react'
 import Link from 'next/link'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CountCell } from '@/components/motion'
 import type { Role } from '@/db/types'
 import { formatKoreanDateTime } from '@/lib/dates'
 import { ROLE_LABEL } from '@/lib/labels'
@@ -16,7 +17,6 @@ export type WorkCardProps = {
   lastEditedAt: Date
 }
 
-/** One work on the works list: title, counts, warnings and the last edit time. */
 export function WorkCard({
   id,
   title,
@@ -28,33 +28,57 @@ export function WorkCard({
   alertCount,
   lastEditedAt,
 }: WorkCardProps) {
+  const description = `work-card-${id}`
+  const trailingParenthesis = title.match(/^(.*\s)(\S+\s+\([^()]+\))$/u)
   return (
-    <Link href={`/works/${id}`} className="block h-full rounded-xl">
-      <Card size="sm" className="h-full transition-colors hover:bg-muted/50">
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>
-            {genre || '장르 없음'} · {ROLE_LABEL[role]}
-          </CardDescription>
-        </CardHeader>
-        <div className="flex flex-col gap-2 px-4 pb-4 text-sm">
-          <ul className="flex flex-wrap gap-x-4 gap-y-1">
-            <li>{chapterCount}화</li>
-            <li>승인 대기 {pendingCount}</li>
-            <li>열린 떡밥 {openThreadCount}</li>
-          </ul>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">
-              최근 수정 {formatKoreanDateTime(lastEditedAt)}
-            </span>
-            {alertCount > 0 && (
-              <span className="text-xs font-medium text-mark underline decoration-mark/40 underline-offset-4">
-                경고 {alertCount}
-              </span>
-            )}
-          </div>
+    <Link
+      href={`/works/${id}`}
+      className="b-row wg-works-row"
+      aria-label={title}
+      aria-describedby={`${description}-meta ${description}-counts ${description}-foot`}
+      title={title}
+    >
+      <div className="wg-works-name">
+        <span
+          className="b-row__title wg-works-title"
+          data-unspaced={!/\s/u.test(title) || undefined}
+        >
+          {trailingParenthesis ? (
+            <>
+              {trailingParenthesis[1]}
+              <span className="wg-works-title-phrase">{trailingParenthesis[2]}</span>
+            </>
+          ) : (
+            title
+          )}
+        </span>
+        <div className="wg-works-meta" id={`${description}-meta`}>
+          <span>{genre || '장르 없음'}</span>
+          <span>{ROLE_LABEL[role]}</span>
         </div>
-      </Card>
+      </div>
+      <ul className="wg-works-counts" id={`${description}-counts`}>
+        <li>
+          <span>회차</span>
+          <span className="wg-works-chapter-count font-mono">{chapterCount}화</span>
+        </li>
+        <li>
+          <span>승인 대기</span>
+          <CountCell value={pendingCount} />
+        </li>
+        <li>
+          <span>열린 떡밥</span>
+          <CountCell value={openThreadCount} />
+        </li>
+      </ul>
+      <div className="wg-works-date" id={`${description}-foot`}>
+        <span>
+          최근 수정{' '}
+          <time dateTime={lastEditedAt.toISOString()}>{formatKoreanDateTime(lastEditedAt)}</time>
+        </span>
+        {alertCount > 0 && <span className="wg-works-warning">경고 {alertCount}</span>}
+      </div>
+      <ArrowRightIcon size={20} strokeWidth={1.5} className="wg-works-arrow" aria-hidden="true" />
     </Link>
   )
 }

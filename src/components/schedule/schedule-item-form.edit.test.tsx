@@ -65,7 +65,7 @@ describe('ScheduleItemForm edit', () => {
     )
     await waitFor(() => expect(onDone).toHaveBeenCalled())
     expect(create).not.toHaveBeenCalled()
-    expect(toast.success).toHaveBeenCalledWith('일정을 고쳤습니다.')
+    expect(toast.success).toHaveBeenCalledWith('일정을 고쳤어요.')
   })
 
   it('adds a new item without an item prop', async () => {

@@ -45,7 +45,7 @@ export async function recordUsageEvent(
       .where(eq(chapters.id, input.chapterId))
       .limit(1)
     if (!chapter || chapter.workId !== input.workId) {
-      throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+      throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
     }
   }
   const extra = ExtraSchema.parse(input.extra ?? {})

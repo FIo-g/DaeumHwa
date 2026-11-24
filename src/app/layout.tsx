@@ -1,14 +1,29 @@
 import type { Metadata } from 'next'
-import { Noto_Serif_KR } from 'next/font/google'
+import { IBM_Plex_Sans_KR, Nanum_Gothic_Coding, Noto_Serif_KR } from 'next/font/google'
 import './globals.css'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/sonner'
 
-// The proof-sheet Myeongjo: headings, manuscript text and quoted wiki originals. UI text stays on the
-// system Hangul sans. Hangul glyphs ship as unicode-range slices, so nothing is preloaded.
-const serif = Noto_Serif_KR({
+// Titles and manuscript text, interface text, and counts such as page and chapter numbers. Hangul
+// glyphs ship as unicode-range slices, so nothing is preloaded.
+const display = Noto_Serif_KR({
+  weight: ['400', '500', '700', '900'],
   subsets: ['latin'],
-  variable: '--font-serif-ko',
+  variable: '--font-display-ko',
+  display: 'swap',
+  preload: false,
+})
+const body = IBM_Plex_Sans_KR({
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin'],
+  variable: '--font-body-ko',
+  display: 'swap',
+  preload: false,
+})
+const mono = Nanum_Gothic_Coding({
+  weight: ['400', '700'],
+  subsets: ['latin'],
+  variable: '--font-mono-ko',
   display: 'swap',
   preload: false,
 })
@@ -20,7 +35,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="ko" className={cn('h-full antialiased', 'font-sans', serif.variable)}>
+    <html
+      lang="ko"
+      className={cn(
+        'h-full antialiased',
+        'font-sans',
+        display.variable,
+        body.variable,
+        mono.variable,
+      )}
+    >
       <body className="flex min-h-full flex-col">
         {children}
         <Toaster />

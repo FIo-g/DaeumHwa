@@ -76,7 +76,7 @@ describe('StyleCards', () => {
     )
     await waitFor(() => expect(run).toHaveBeenCalled())
     expect(run).toHaveBeenCalledWith(expect.anything(), {
-      success: '문체 카드 제안을 승인 대기에 올렸습니다.',
+      success: '문체 카드 제안을 승인 대기에 올렸어요.',
     })
   })
 
@@ -86,7 +86,7 @@ describe('StyleCards', () => {
     run.mockReturnValueOnce(new Promise(() => {}) as never)
     const row = screen.getByText('도현').closest('li') as HTMLElement
     fireEvent.click(within(row).getByRole('button', { name: 'AI로 문체 카드 제안' }))
-    expect(within(row).getByText('문체 제안 만드는 중… 0초')).toBeInTheDocument()
+    expect(row).toHaveTextContent('문체 제안 만드는 중… 0초')
     expect(within(row).getByRole('button', { name: '취소' })).toBeInTheDocument()
   })
 

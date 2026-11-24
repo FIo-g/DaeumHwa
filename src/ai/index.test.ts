@@ -84,7 +84,7 @@ describe('getAiClient', () => {
     }
     expect(caught).toBeInstanceOf(AppError)
     expect((caught as AppError).code).toBe('AI_ERROR')
-    expect((caught as AppError).message).toBe('AI 키가 설정되지 않아 AI 기능을 쓸 수 없습니다.')
+    expect((caught as AppError).message).toBe('AI 키가 설정되지 않아 AI 기능을 쓸 수 없어요.')
   })
 
   it('does not cache the client when no provider resolves', () => {

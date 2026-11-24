@@ -60,7 +60,7 @@ describe('startAutoCheck', () => {
     })
 
     expect(started).toBe(true)
-    expect(toast).toHaveBeenCalledWith('3화를 완료로 바꿨습니다. 회차 점검을 시작합니다.')
+    expect(toast).toHaveBeenCalledWith('3화를 완료로 바꿨어요. 회차 점검을 시작해요.')
     expect(postAction).toHaveBeenCalledWith(
       '/api/works/w1/chapters/c1/check',
       {},
@@ -70,7 +70,7 @@ describe('startAutoCheck', () => {
     await vi.waitFor(() => expect(toast.success).toHaveBeenCalled())
 
     const [message, options] = vi.mocked(toast.success).mock.calls[0]
-    expect(message).toBe('3화 점검을 마쳤습니다.')
+    expect(message).toBe('3화 점검을 마쳤어요.')
     expect(options).toMatchObject({
       description: '지적 2건, 승인 대기 후보 3건',
       duration: 10_000,
@@ -111,7 +111,7 @@ describe('startAutoCheck', () => {
       ok: false,
       error: {
         code: 'AI_LIMIT',
-        message: '오늘 AI 사용량 한도를 넘었습니다. 내일 다시 시도해 주세요.',
+        message: '오늘 AI 사용량 한도를 넘었어요. 내일 다시 시도해 주세요.',
       },
     })
     const onDone = vi.fn()
@@ -119,8 +119,8 @@ describe('startAutoCheck', () => {
     startAutoCheck({ workId: 'w1', chapterId: 'c1', position: 3, onDone })
 
     await vi.waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('3화 자동 점검을 하지 못했습니다.', {
-        description: '오늘 AI 사용량 한도를 넘었습니다. 내일 다시 시도해 주세요.',
+      expect(toast.error).toHaveBeenCalledWith('3화 자동 점검을 하지 못했어요.', {
+        description: '오늘 AI 사용량 한도를 넘었어요. 내일 다시 시도해 주세요.',
       }),
     )
     expect(onDone).not.toHaveBeenCalled()
@@ -138,7 +138,7 @@ describe('startAutoCheck', () => {
           options?.signal?.addEventListener('abort', () =>
             resolve({
               ok: false,
-              error: { code: 'CANCELLED', message: '취소했습니다.' },
+              error: { code: 'CANCELLED', message: '취소했어요.' },
             }),
           )
         }),
@@ -158,7 +158,7 @@ describe('startAutoCheck', () => {
 
     await vi.waitFor(() =>
       expect(
-        vi.mocked(toast).mock.calls.filter(([message]) => message === '취소했습니다.'),
+        vi.mocked(toast).mock.calls.filter(([message]) => message === '취소했어요.'),
       ).toHaveLength(1),
     )
     expect(toast.error).not.toHaveBeenCalled()
@@ -182,7 +182,7 @@ describe('startAutoCheck', () => {
 
     vi.mocked(postAction).mockResolvedValue({
       ok: false,
-      error: { code: 'AI_LIMIT', message: '오늘 AI 사용량 한도를 넘었습니다.' },
+      error: { code: 'AI_LIMIT', message: '오늘 AI 사용량 한도를 넘었어요.' },
     })
     act(() => {
       startAutoCheck({ workId: 'w1', chapterId: 'c1', position: 3 })

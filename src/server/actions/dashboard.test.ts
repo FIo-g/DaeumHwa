@@ -17,7 +17,7 @@ vi.mock('@/db/client', () => ({ getDb: () => mocks.db }))
 vi.mock('@/server/session', () => ({
   requireUser: async () => {
     if (!mocks.userId)
-      throw new (await import('@/lib/errors')).AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+      throw new (await import('@/lib/errors')).AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return { id: mocks.userId, name: '작가', email: 'a@test.local' }
   },
 }))
@@ -38,7 +38,7 @@ describe('dashboard actions', () => {
     const result = await getAlertsAction({ workId: crypto.randomUUID() })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'UNAUTHENTICATED', message: '로그인이 필요합니다.' },
+      error: { code: 'UNAUTHENTICATED', message: '로그인이 필요해요.' },
     })
   })
 
@@ -82,7 +82,7 @@ describe('dashboard actions', () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { code: 'NOT_FOUND', message: '작품을 찾을 수 없습니다.' },
+      error: { code: 'NOT_FOUND', message: '작품을 찾을 수 없어요.' },
     })
   })
 })

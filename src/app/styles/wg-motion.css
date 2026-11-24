@@ -1,0 +1,1002 @@
+@property --wg-count-number {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@layer components {
+  .wg-visually-hidden {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .wg-title {
+    --wg-cell-size: var(--b-cell-section, clamp(1.625rem, 2.6vw, 2.5rem));
+    --wg-cell-track: round(
+      down,
+      min(var(--wg-cell-size), calc(100cqi / var(--wg-columns, 1))),
+      1px
+    );
+    --wg-cell-time: min(var(--b-cell, 52ms), calc(var(--b-arrival) / var(--wg-letter-count, 1)));
+    inline-size: 100%;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    color: var(--b-ink, #1c1b19);
+    font-family: var(--b-font-title, 'Noto Serif KR', 'AppleMyungjo', serif);
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .wg-title[data-size='hero'] {
+    --wg-cell-size: var(--b-cell-hero, clamp(2.5rem, 6.4vw, 5.75rem));
+  }
+
+  .wg-title[data-size='page'] {
+    --wg-cell-size: var(--b-cell-page, clamp(1.875rem, 3.3vw, 3rem));
+  }
+
+  .wg-title-cells {
+    position: relative;
+    display: block;
+    container-type: inline-size;
+  }
+
+  .wg-title-probe {
+    position: absolute;
+    inline-size: round(down, var(--wg-cell-size), 1px);
+    block-size: 0;
+    visibility: hidden;
+  }
+
+  .wg-title-grid {
+    display: grid;
+    width: max-content;
+    max-inline-size: 100%;
+    grid-template-columns: repeat(var(--wg-columns, 1), var(--wg-cell-track));
+    row-gap: clamp(4px, var(--wg-cell-track) * 0.13, 12px);
+  }
+
+  .wg-title-grid[data-flow] {
+    inline-size: min(100%, calc(var(--wg-letter-count) * var(--wg-cell-track)));
+    grid-template-columns: repeat(auto-fill, var(--wg-cell-track));
+  }
+
+  .wg-title-cell {
+    --wg-title-line: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+    position: relative;
+    display: grid;
+    place-items: center;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    box-sizing: border-box;
+    inline-size: var(--wg-cell-track);
+    block-size: var(--wg-cell-track);
+    font-size: calc(var(--wg-cell-track) * 0.72);
+    border-block: var(--wg-title-line);
+    border-inline-end: var(--wg-title-line);
+  }
+
+  .wg-title-cell[data-first] {
+    border-inline-start: var(--wg-title-line);
+  }
+
+  .wg-title-grid[data-flow] .wg-title-cell {
+    border-inline: var(--wg-title-line) 0;
+  }
+
+  .wg-title-grid[data-flow] .wg-title-cell::after {
+    content: '';
+    position: absolute;
+    inset-block: calc(-1 * var(--b-line));
+    inset-inline-start: 100%;
+    border-inline-start: var(--wg-title-line);
+    pointer-events: none;
+  }
+
+  .wg-title-glyph {
+    justify-self: center;
+    inline-size: max-content;
+    white-space: nowrap;
+    scale: var(--wg-glyph-fit, 1);
+  }
+
+  .wg-title-glyph::before {
+    content: attr(data-letter);
+  }
+
+  .wg-title-cell[data-punctuation] .wg-title-glyph {
+    position: absolute;
+    inset: auto auto 9% 14%;
+    font-size: 0.65em;
+  }
+
+  .wg-cell-meter {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(var(--wg-cell-meter-count), minmax(0, 1fr));
+    min-inline-size: 0;
+    --wg-cell-meter-height: 0.75rem;
+    --wg-cell-meter-step: min(var(--b-cell), calc(var(--b-arrival) / var(--wg-cell-meter-count)));
+  }
+
+  .wg-cell-meter-cell {
+    position: relative;
+    min-inline-size: 0;
+    block-size: var(--wg-cell-meter-height);
+  }
+
+  .wg-cell-meter-cell::after {
+    position: absolute;
+    inset: 0;
+    border-block: var(--b-line) solid var(--b-grid);
+    border-inline-end: var(--b-line) solid var(--b-grid);
+    pointer-events: none;
+    content: '';
+  }
+
+  .wg-cell-meter-cell:first-child::after {
+    border-inline-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-cell-meter-cell::before {
+    position: absolute;
+    inset-block: var(--b-line);
+    inset-inline-start: 0;
+    inline-size: var(--wg-cell-meter-fill);
+    background: var(--b-ink);
+    transform-origin: left center;
+    content: '';
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-cell-meter-cell::before {
+      animation: wg-cell-meter-fill var(--wg-cell-meter-step) var(--b-out)
+        calc(
+          var(--wg-cell-meter-delay, 0ms) + var(--wg-cell-meter-index) * var(--wg-cell-meter-step)
+        )
+        both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+  }
+
+  @keyframes wg-cell-meter-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  .wg-sheet {
+    min-inline-size: 0;
+    border-block: var(--b-rule, 2px) solid var(--b-grid, #3f8f6b);
+    border-block-end-width: var(--b-line, 1px);
+    padding-block: 0.75rem;
+  }
+
+  .wg-sheet[data-ruled='true'] > :where(p, blockquote, pre) {
+    line-height: var(--b-manuscript-line);
+  }
+
+  .wg-sheet-edge {
+    margin-block-end: var(--b-s2);
+  }
+
+  .wg-margin-note {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+  }
+
+  :is(.wg-margin-note-label, .wg-margin-note-source) {
+    margin: 0;
+    color: var(--b-muted);
+    font: 400 var(--b-t-label)/1.5 var(--b-font-body, 'IBM Plex Sans KR', sans-serif);
+  }
+
+  .wg-margin-note-label {
+    margin-block-end: 0.25rem;
+    font-weight: 500;
+  }
+
+  .wg-margin-note-source {
+    margin-block-start: 0.375rem;
+  }
+
+  .wg-margin-note-quote {
+    margin: 0;
+    color: var(--b-wiki, #1f3a8a);
+    font: 700 var(--b-t-quote, 1rem) / 1.65 var(--b-font-title, 'Noto Serif KR', serif);
+  }
+
+  .wg-proof-pair {
+    --wg-pen-time: var(--b-draw, 460ms);
+    --wg-leader-time: var(--b-step, 260ms);
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
+    min-inline-size: 0;
+    border-block-end: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+    overflow-wrap: anywhere;
+  }
+
+  .wg-proof-pair-manuscript {
+    min-inline-size: 0;
+    padding-block: 0.625rem 0.875rem;
+    padding-inline-end: 0.875rem;
+  }
+
+  .wg-proof-pair-note {
+    min-inline-size: 0;
+    border-inline-start: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+    padding-block: 0.625rem 0.875rem;
+    padding-inline-start: 0.875rem;
+  }
+
+  .wg-proof-pair-leader {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .wg-proof-pair-leader path {
+    fill: none;
+    stroke: var(--b-wiki, #1f3a8a);
+    stroke-width: var(--b-line, 1px);
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-linecap: round;
+  }
+
+  .wg-proof-fallback {
+    display: none;
+  }
+
+  @media (scripting: none), (prefers-reduced-motion: reduce) {
+    @supports (anchor-scope: --wg-proof-source) {
+      .wg-proof-pair {
+        anchor-scope: --wg-proof-source, --wg-proof-draft, --wg-proof-quote;
+      }
+
+      .wg-proof-pair-manuscript {
+        anchor-name: --wg-proof-draft;
+      }
+
+      .wg-proof-pair-manuscript [data-wg-proof] {
+        anchor-name: --wg-proof-source;
+      }
+
+      .wg-proof-pair :is(.wg-margin-note-quote, .wg-proof-pair-note:not(:has(.wg-margin-note))) {
+        anchor-name: --wg-proof-quote;
+      }
+
+      .wg-proof-pair[data-connected='false']:has(.wg-proof-pair-manuscript [data-wg-proof])
+        .wg-proof-fallback {
+        display: contents;
+        --wg-fallback-rule: var(--b-line) solid var(--b-wiki);
+        --wg-fallback-source-y: anchor(--wg-proof-source bottom);
+      }
+
+      .wg-proof-fallback::before,
+      .wg-proof-fallback::after,
+      .wg-proof-fallback > span {
+        position: absolute;
+        z-index: -1;
+        pointer-events: none;
+        content: '';
+      }
+
+      .wg-proof-fallback::before {
+        inset-inline-start: anchor(--wg-proof-source right);
+        inset-inline-end: anchor(--wg-proof-draft right);
+        inset-block-start: var(--wg-fallback-source-y);
+        border-block-start: var(--wg-fallback-rule);
+      }
+
+      .wg-proof-fallback > span {
+        inset-inline-end: anchor(--wg-proof-draft right);
+        inset-block: min(var(--wg-fallback-source-y), anchor(--wg-proof-quote center))
+          min(var(--wg-fallback-source-y), anchor(--wg-proof-quote center));
+        border-inline-end: var(--wg-fallback-rule);
+      }
+
+      .wg-proof-fallback::after {
+        inset-inline: min(anchor(--wg-proof-draft right), anchor(--wg-proof-quote left))
+          min(anchor(--wg-proof-draft right), anchor(--wg-proof-quote left));
+        inset-block-start: anchor(--wg-proof-quote center);
+        border-block-start: var(--wg-fallback-rule);
+      }
+    }
+  }
+
+  @media (max-width: 767px) {
+    .wg-proof-pair {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .wg-proof-pair-manuscript,
+    .wg-proof-pair-note {
+      padding-inline: 0.875rem 0;
+    }
+
+    .wg-proof-pair-note {
+      border-inline-start: 0;
+    }
+  }
+
+  .wg-count {
+    position: relative;
+    display: inline-block;
+    font-family: var(--b-font-mono, 'Nanum Gothic Coding', monospace);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wg-count-face {
+    display: inline-block;
+    position: relative;
+  }
+
+  .wg-count-face::after {
+    content: attr(data-final);
+    visibility: hidden;
+  }
+
+  .wg-count-value {
+    position: absolute;
+    inset-inline-start: 0;
+  }
+
+  .wg-count-value::before {
+    content: attr(data-value);
+  }
+
+  .wg-count-unit {
+    position: absolute;
+    inset-inline-end: 0;
+  }
+
+  .wg-pop {
+    --wg-pop-foreground: var(--b-paper, #fbfaf5);
+    --wg-pop-background: var(--b-ink, #1c1b19);
+    --wg-pop-divider: var(--b-paper, #fbfaf5);
+    display: inline-flex;
+    align-items: stretch;
+    min-block-size: var(--b-action-height);
+    max-inline-size: 100%;
+    padding: 0;
+    border: 0;
+    color: var(--wg-pop-foreground);
+    background: var(--wg-pop-background);
+    font-family: var(--b-font-body, 'IBM Plex Sans KR', sans-serif);
+    font-weight: 500;
+    line-height: 1.3;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .b-root a.wg-pop {
+    color: var(--wg-pop-foreground);
+    text-underline-offset: 0.28em;
+  }
+
+  .wg-pop[data-variant='paper'] {
+    --wg-pop-foreground: var(--b-ink, #1c1b19);
+    --wg-pop-background: var(--b-paper, #fbfaf5);
+    --wg-pop-divider: var(--b-grid, #3f8f6b);
+    border: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+  }
+
+  .wg-pop[data-variant='flat'] {
+    --wg-pop-foreground: var(--b-ink, #1c1b19);
+    --wg-pop-background: transparent;
+    --wg-pop-divider: transparent;
+    text-decoration: underline;
+    text-decoration-thickness: var(--b-line);
+    text-underline-offset: 0.28em;
+  }
+
+  .wg-pop[data-size='large'] {
+    min-block-size: calc(var(--b-action-height) + var(--b-s2));
+  }
+
+  .wg-pop-text,
+  .wg-pop-arrow {
+    position: relative;
+    display: grid;
+    place-items: center;
+  }
+
+  .wg-pop-text {
+    flex: 1;
+    min-inline-size: 0;
+    padding: 0.375rem 0.875rem;
+    overflow-wrap: anywhere;
+  }
+
+  .wg-pop-arrow {
+    flex: none;
+    inline-size: 2.75rem;
+    border-inline-start: var(--b-line, 1px) solid var(--wg-pop-divider);
+  }
+
+  .wg-pop[data-size='large'] .wg-pop-text {
+    padding-inline: 1rem;
+  }
+
+  .wg-pop[data-size='large'] .wg-pop-arrow {
+    inline-size: 3.25rem;
+  }
+
+  .wg-pop[data-variant='flat'] .wg-pop-text {
+    padding-inline: 0;
+  }
+
+  .wg-pop[data-variant='flat'] .wg-pop-arrow {
+    inline-size: 2em;
+  }
+
+  .wg-pop:where(:disabled, [aria-disabled='true']) {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .wg-pop:not([data-variant='flat']) .wg-pop-text-fill,
+  .wg-pop:not([data-variant='flat']) .wg-pop-arrow-fill {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--wg-pop-background);
+    background: var(--wg-pop-foreground);
+    clip-path: inset(0 100% 0 0);
+    pointer-events: none;
+    transition: clip-path var(--b-quick, 170ms) var(--b-out, ease-out);
+  }
+
+  .wg-pop-text-fill {
+    padding: inherit;
+  }
+
+  .wg-pop-text-fill::before {
+    content: attr(data-caption);
+  }
+
+  :is(.wg-pop[data-variant='flat'], .wg-pop:disabled, .wg-pop[aria-disabled='true'])
+    .wg-pop-text-fill,
+  .wg-pop[data-variant='flat'] .wg-pop-arrow-fill {
+    display: none;
+  }
+
+  .wg-pop:not(:disabled, [aria-disabled='true'], [data-variant='flat']):is(:hover, :focus-visible)
+    .wg-pop-text-fill,
+  .wg-pop:not(:disabled, [aria-disabled='true'], [data-variant='flat']):is(:hover, :focus-visible)
+    .wg-pop-arrow-fill {
+    clip-path: inset(0);
+  }
+
+  .wg-pop:not(:disabled, [aria-disabled='true'], [data-variant='flat']):is(:hover, :focus-visible)
+    .wg-pop-arrow-fill {
+    transition-delay: var(--b-stagger, 70ms);
+  }
+
+  .wg-pop:not(:disabled, [aria-disabled='true'], [data-variant='flat']):is(:hover, :focus-visible)
+    :is(.wg-pop-text:not(:has(.wg-pop-text-fill)), .wg-pop-arrow[data-default-arrow='false']) {
+    color: var(--wg-pop-background);
+    background: var(--wg-pop-foreground);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-pop[data-variant='flat']:not(:disabled, [aria-disabled='true']):is(:hover, :focus-visible)
+      .wg-pop-text::after {
+      content: '';
+      position: absolute;
+      inset: auto 0 0.38em;
+      border-block-end: var(--b-line) solid currentColor;
+      pointer-events: none;
+      animation: b-link-draw var(--b-quick) var(--b-out) both;
+    }
+  }
+
+  :is(.wg-pop, .wg-menu-button, .wg-rail-control):not(:disabled, [aria-disabled='true']):active {
+    transform: translateY(1px);
+  }
+
+  :is(
+    .wg-pop,
+    .wg-menu-button,
+    .wg-rail-control,
+    .wg-card-rail,
+    .wg-disclosure-trigger
+  ):focus-visible {
+    outline: var(--b-rule, 2px) solid var(--b-ink, #1c1b19);
+    outline-offset: 3px;
+  }
+
+  .wg-motion-icon {
+    display: block;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    flex: none;
+  }
+
+  .wg-disclosure-trigger {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    inline-size: 100%;
+    min-block-size: var(--b-action-height);
+    border-block-start: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+    padding-block: 0.5rem;
+    color: var(--b-ink, #1c1b19);
+    font-family: var(--b-font-body, 'IBM Plex Sans KR', sans-serif);
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .wg-disclosure-title {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .wg-disclosure-rule {
+    position: absolute;
+    inset: -1px 0 auto;
+    border-block-start: var(--b-rule, 2px) solid var(--b-grid, #3f8f6b);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--b-quick, 170ms) var(--b-out, ease-out);
+    pointer-events: none;
+  }
+
+  .wg-disclosure-trigger:is(:hover, :focus-visible) .wg-disclosure-rule {
+    transform: scaleX(1);
+  }
+
+  .wg-disclosure-region {
+    transition:
+      opacity var(--b-quick, 170ms) var(--b-out, ease-out),
+      display var(--b-quick, 170ms) allow-discrete;
+  }
+
+  .wg-disclosure-region[data-open='false'] {
+    display: none;
+    opacity: 0;
+  }
+
+  .wg-disclosure-content {
+    padding-block-end: 0.5rem;
+  }
+
+  .wg-menu-backdrop {
+    position: fixed;
+    z-index: 50;
+    inset: 0;
+    background: color-mix(in srgb, var(--b-ink, #1c1b19) 30%, transparent);
+  }
+
+  .wg-menu-sheet {
+    position: fixed;
+    z-index: 50;
+    inset-block: 0;
+    inset-inline-end: 0;
+    inline-size: min(calc(100% - 1rem), 24rem);
+    overflow-y: auto;
+    border: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+    padding: 1.25rem 1.25rem max(1.25rem, env(safe-area-inset-bottom));
+    background: var(--b-paper, #fbfaf5);
+    color: var(--b-ink, #1c1b19);
+    transition: transform var(--b-step, 260ms) var(--b-out, ease-out);
+  }
+
+  .wg-menu-sheet:is([data-starting-style], [data-ending-style]) {
+    transform: translateX(100%);
+  }
+
+  .wg-menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-block-end: 1rem;
+  }
+
+  .wg-menu-title {
+    min-inline-size: 0;
+    font: 900 1.25rem/1.3 var(--b-font-title, 'Noto Serif KR', serif);
+    overflow-wrap: anywhere;
+  }
+
+  .wg-menu-items {
+    gap: 0.5rem;
+  }
+
+  :is(.wg-menu-button, .wg-rail-control) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-inline-size: 44px;
+    min-block-size: var(--b-action-height);
+    padding-inline: 0.5rem;
+    border: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+    color: var(--b-ink, #1c1b19);
+    background: var(--b-paper, #fbfaf5);
+    font: 500 0.875rem/1.3 var(--b-font-body, 'IBM Plex Sans KR', sans-serif);
+    cursor: pointer;
+  }
+
+  :is(.wg-menu-button, .wg-rail-control):not(:disabled):is(:hover, :focus-visible) {
+    color: var(--b-paper, #fbfaf5);
+    background: var(--b-ink, #1c1b19);
+  }
+
+  .wg-reading-progress {
+    position: sticky;
+    z-index: 1;
+    inset-block-start: 0;
+    display: block;
+    block-size: var(--b-line, 1px);
+    background: var(--b-grid, #3f8f6b);
+    pointer-events: none;
+  }
+
+  .wg-reading-progress-fill {
+    display: block;
+    block-size: 100%;
+    background: var(--b-ink, #1c1b19);
+    transform: scaleX(var(--wg-reading-progress, 0));
+    transform-origin: left;
+  }
+
+  .wg-dot-meter {
+    display: inline-flex;
+    align-items: center;
+    border: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+  }
+
+  .wg-meter-cell {
+    display: block;
+    inline-size: 0.875rem;
+    block-size: 0.55rem;
+  }
+
+  .wg-meter-cell + .wg-meter-cell {
+    border-inline-start: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+  }
+
+  .wg-meter-cell[data-filled='true'] {
+    background: var(--b-ink, #1c1b19);
+  }
+
+  .wg-card-rail-frame {
+    min-inline-size: 0;
+  }
+
+  .wg-rail-controls:not([hidden]) {
+    display: flex;
+    justify-content: end;
+  }
+
+  .wg-rail-control + .wg-rail-control {
+    border-inline-start: 0;
+  }
+
+  .wg-rail-control:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .wg-card-rail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: min(82%, 18rem);
+    gap: 0.75rem;
+    min-inline-size: 0;
+    overflow-x: auto;
+    padding: 0.75rem 0.125rem;
+    scroll-padding-inline: 0.125rem;
+    scroll-snap-type: x mandatory;
+  }
+
+  .wg-card-rail > * {
+    scroll-snap-align: start;
+  }
+
+  .wg-card-rail[data-dragging='true'] {
+    cursor: grabbing;
+    scroll-snap-type: none;
+    user-select: none;
+  }
+
+  .wg-proof-mark {
+    position: relative;
+    overflow-wrap: anywhere;
+  }
+
+  .wg-proof-mark[data-standalone='true'] {
+    display: inline-block;
+  }
+
+  .wg-proof-mark[data-measured='false'][data-wg-proof='underline'] .wg-proof-text {
+    text-decoration: underline var(--b-proof, #d6311f) var(--b-pen-stroke);
+    text-underline-offset: 0.14em;
+  }
+
+  .wg-proof-mark[data-measured='false'][data-wg-proof='strike'] .wg-proof-text {
+    text-decoration: line-through var(--b-proof, #d6311f) var(--b-pen-stroke);
+  }
+
+  .wg-proof-origin {
+    position: absolute;
+    inset: 0 auto auto 0;
+    inline-size: 1px;
+    block-size: 1px;
+    pointer-events: none;
+  }
+
+  .wg-proof-pen {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .wg-proof-mark[data-measured='false'][data-standalone='false'] .wg-proof-pen {
+    inset: -15% -10%;
+    inline-size: 120%;
+    block-size: 130%;
+  }
+
+  .wg-proof-pen path {
+    fill: none;
+    stroke: var(--b-proof, #d6311f);
+    stroke-width: var(--b-pen-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .wg-proof-mark[data-measured='false'] .wg-proof-pen path {
+    vector-effect: non-scaling-stroke;
+  }
+
+  .wg-proof-pen path {
+    stroke-dasharray: 100;
+  }
+
+  .wg-proof-mark[data-measured='false'][data-standalone='true']:not([data-wg-proof='ring'])
+    .wg-proof-pen {
+    inset-block: auto 4%;
+    block-size: 4px;
+  }
+
+  .wg-proof-mark[data-measured='false'][data-standalone='true'][data-wg-proof='strike']
+    .wg-proof-pen {
+    inset-block-end: 46%;
+  }
+
+  .wg-scan-line {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(20, minmax(0, 1fr));
+    border-block: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+    border-inline-start: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+    block-size: 0.875rem;
+    pointer-events: none;
+  }
+
+  .wg-scan-cell {
+    border-inline-end: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
+  }
+
+  .wg-scan-line::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    inline-size: 5%;
+    background: var(--b-ink, #1c1b19);
+  }
+
+  .wg-stagger {
+    display: grid;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-title[data-animate='true'] .wg-title-glyph:not([data-letter='']) {
+      animation: wg-letter-write var(--wg-cell-time) steps(2, jump-none)
+        calc(var(--wg-letter) * var(--wg-cell-time)) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-title[data-animate='true']
+      .wg-title-cell:has(.wg-title-glyph:not([data-letter='']))::before {
+      content: '';
+      position: absolute;
+      inset: 14% auto 14% 13%;
+      border-inline-start: var(--b-rule, 2px) solid var(--b-ink, #1c1b19);
+      opacity: 0;
+      animation: wg-cell-cursor var(--wg-cell-time) steps(2, jump-none)
+        calc(var(--wg-letter) * var(--wg-cell-time)) forwards;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-reveal {
+      animation: wg-line-write var(--b-step, 260ms) var(--b-out, ease-out) var(--wg-delay, 0ms) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-stagger > * {
+      animation: wg-line-write var(--b-step, 260ms) var(--b-out, ease-out)
+        calc(var(--wg-index, 0) * var(--b-stagger, 70ms)) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-disclosure-region[data-open='true'] .wg-disclosure-content {
+      animation: wg-note-write var(--b-step, 260ms) steps(8, jump-none) var(--b-stagger, 70ms) both;
+    }
+
+    .wg-count-value[data-count-up]::before {
+      counter-reset: wg-count var(--wg-count-number);
+      content: counter(wg-count);
+      animation: wg-count-up calc(2 * var(--b-step)) linear both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-margin-note:not(.wg-proof-pair *) .wg-margin-note-quote {
+      animation: wg-note-write var(--b-step, 260ms) steps(8, jump-none) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-proof-pair-leader {
+      animation: wg-leader-draw var(--wg-leader-time) var(--b-out, ease-out) var(--wg-pen-time) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-proof-pair :is(.wg-margin-note-quote, .wg-proof-pair-note:not(:has(.wg-margin-note))) {
+      animation: wg-note-write var(--b-quick, 170ms) steps(8, jump-none) var(--wg-note-delay, 0ms)
+        both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-proof-pair:has(.wg-proof-pair-manuscript [data-wg-proof]) {
+      --wg-note-delay: calc(var(--wg-pen-time) + var(--wg-leader-time));
+    }
+
+    .wg-proof-mark {
+      animation: wg-pen-draw var(--wg-pen-time, var(--b-draw)) var(--b-out)
+        var(--wg-proof-delay, 0ms) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    @media (scripting: enabled) {
+      /* Measured SVG fragments join the mark's existing timeline when they are ready. */
+      .wg-proof-mark[data-measured='false'] .wg-proof-text {
+        text-decoration: none;
+      }
+    }
+
+    .wg-scan-line::before {
+      animation: wg-scan-cursor var(--b-trace, 920ms) steps(20, end) infinite;
+    }
+
+    @supports (animation-timeline: scroll(nearest block)) {
+      .wg-reading-progress-fill[data-measured='false'] {
+        animation: wg-read-scroll linear both;
+        animation-timeline: scroll(nearest block);
+      }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wg-pop-text::after,
+    .wg-pop-text-fill,
+    :is(
+      .wg-proof-pair-leader path,
+      .wg-pop-arrow-fill,
+      .wg-disclosure-rule,
+      .wg-disclosure-region,
+      .wg-menu-sheet
+    ) {
+      transition: none;
+    }
+
+    .wg-menu-sheet:is([data-starting-style], [data-ending-style]),
+    :is(.wg-pop, .wg-menu-button, .wg-rail-control):active {
+      transform: none;
+    }
+  }
+
+  @keyframes wg-count-up {
+    from {
+      --wg-count-number: 0;
+    }
+    to {
+      --wg-count-number: var(--wg-count-final);
+    }
+  }
+
+  @keyframes wg-letter-write {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes wg-cell-cursor {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes wg-line-write {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-note-write {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-leader-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes wg-pen-draw {
+    from {
+      stroke-dashoffset: 100;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes wg-scan-cursor {
+    to {
+      transform: translateX(2000%);
+    }
+  }
+
+  @keyframes wg-read-scroll {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+}

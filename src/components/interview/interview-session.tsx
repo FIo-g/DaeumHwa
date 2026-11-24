@@ -1,16 +1,16 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
+import { CellStrip } from '@/components/import/import-stages'
 import { AnswerProposals } from '@/components/interview/answer-proposals'
 import { QuestionCard } from '@/components/interview/question-card'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Button } from '@/components/ui/button'
+import { Disclosure, PopLink, Sheet } from '@/components/motion'
 import type { InterviewTurnRow, ProposalRow } from '@/db/types'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
@@ -28,6 +28,7 @@ type InterviewSessionProps = {
   sessionId: string | null
   turns: InterviewTurnRow[]
   current: InterviewTurnRow | null
+  resumeProposals?: ProposalView[]
 }
 
 type Answered = { turnId: string; proposals: ProposalView[] }
@@ -42,6 +43,7 @@ export function InterviewSession({
   sessionId: initialSessionId,
   turns: initialTurns,
   current: initialCurrent,
+  resumeProposals,
 }: InterviewSessionProps) {
   const [sessionId, setSessionId] = useState(initialSessionId)
   const [turns, setTurns] = useState(initialTurns)
@@ -177,7 +179,7 @@ export function InterviewSession({
     setBusy(true)
     try {
       const session = await runAction(completeInterviewAction({ sessionId }), {
-        success: '인터뷰를 끝냈습니다.',
+        success: '인터뷰를 끝냈어요.',
       })
       if (session) {
         setFinished(true)
@@ -191,17 +193,19 @@ export function InterviewSession({
 
   if (!sessionId && !finished) {
     return (
-      <EmptyState
-        title="진행 중인 인터뷰가 없습니다."
-        description="질문에 답하면 설정 카드 후보가 만들어집니다. 설정이 충분하면 다음 화와 스토리 방향을 함께 정합니다."
-        action={
-          canEdit ? (
-            <Button onClick={start} disabled={busy}>
-              인터뷰 시작
-            </Button>
-          ) : undefined
-        }
-      />
+      <div className="wg-import-content wg-import-empty">
+        <EmptyState
+          title="진행 중인 인터뷰가 없어요."
+          description="AI가 작품에 대해 물어요. 답에서 설정 카드와 떡밥 후보를 찾아요."
+          action={
+            canEdit ? (
+              <Button onClick={start} disabled={busy}>
+                인터뷰 시작
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
     )
   }
 
@@ -209,35 +213,78 @@ export function InterviewSession({
     (turn) => turn.id !== current?.id && (turn.answer !== null || turn.skipped),
   )
 
+  const latestAnswer = history.findLast((turn) => turn.answer !== null)
+  const resumed =
+    !current && !asking.running && latestAnswer && resumeProposals
+      ? {
+          turnId: latestAnswer.id,
+          proposals: resumeProposals.filter((proposal) => proposal.sourceRef === latestAnswer.id),
+        }
+      : null
+  const activeAnswer = answered ?? resumed
+  const answerTurn = history.find((turn) => turn.id === activeAnswer?.turnId) ?? latestAnswer
+  const questionIndex = turns.findIndex((turn) => turn.id === current?.id)
+  const questionNumber = (questionIndex === -1 ? turns.length : questionIndex) + 1
+  const filledQuestions = current ? questionNumber : turns.length
+
   return (
-    <div className="grid gap-6">
+    <div className="wg-import-content grid gap-6">
       {finished ? (
-        <section className="grid gap-4 rounded-xl border p-5">
-          <p className="font-medium">인터뷰를 끝냈습니다.</p>
-          <p className="text-sm text-muted-foreground">
-            처리하지 않은 후보는 승인 대기에 남아 있습니다.
+        <Sheet className="grid gap-4">
+          <p className="wg-import-write font-medium">인터뷰를 끝냈어요.</p>
+          <p className="wg-import-write text-sm text-muted-ink">
+            처리하지 않은 후보는 승인 대기에 남아요.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Link className={buttonVariants()} href={`/works/${workId}/approvals`}>
+            <PopLink href={`/works/${workId}/approvals`} arrow={false}>
               승인 대기 보기
-            </Link>
-            <Link className={buttonVariants({ variant: 'outline' })} href={`/works/${workId}/wiki`}>
+            </PopLink>
+            <PopLink variant="flat" href={`/works/${workId}/wiki`} arrow={false}>
               설정 보드 보기
-            </Link>
+            </PopLink>
             {canEdit && (
               <Button variant="ghost" onClick={start} disabled={busy}>
                 새 인터뷰 시작
               </Button>
             )}
           </div>
-        </section>
+        </Sheet>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">{`지금까지 ${turns.length}개 질문`}</p>
+          <div className="wg-import-interview-progress grid gap-2">
+            <p className="wg-import-write font-mono text-sm">{`지금까지 ${turns.length}개 질문`}</p>
+            <CellStrip
+              filled={filledQuestions}
+              count={current ? filledQuestions : filledQuestions + 1}
+            />
+          </div>
+
+          {answerTurn && (
+            <section
+              key={answerTurn.id}
+              aria-label="최근 답변"
+              className="wg-import-recent grid min-w-0 gap-3"
+            >
+              <InterviewExchange
+                turn={answerTurn}
+                past={Boolean(current || asking.running)}
+                settling={answerTurn.id === answered?.turnId}
+              />
+              {!current && activeAnswer && (
+                <AnswerProposals
+                  key={activeAnswer.turnId}
+                  workId={workId}
+                  proposals={activeAnswer.proposals}
+                  originalCount={answerTurn.proposalCount}
+                />
+              )}
+            </section>
+          )}
 
           {current && (
             <QuestionCard
               key={current.id}
+              number={questionNumber}
               topic={current.topic}
               question={current.question}
               rationale={current.rationale}
@@ -254,14 +301,10 @@ export function InterviewSession({
             />
           )}
 
-          {!current && answered && (
-            <AnswerProposals key={answered.turnId} workId={workId} proposals={answered.proposals} />
-          )}
-
           {!current && askError && (
-            <section className="grid gap-3 rounded-xl border p-5">
-              <p className="font-medium">질문을 만들지 못했습니다.</p>
-              <p className="text-sm text-muted-foreground">{askError.message}</p>
+            <section className="wg-import-error grid gap-3">
+              <p className="font-medium">질문을 만들지 못했어요.</p>
+              <p className="text-sm wrap-anywhere">{askError.message}</p>
               {canEdit && !NO_RETRY_CODES.includes(askError.code) && (
                 <div>
                   <Button onClick={nextQuestion} disabled={busy}>
@@ -273,7 +316,7 @@ export function InterviewSession({
           )}
 
           {!current && !canEdit && (
-            <p className="text-sm text-muted-foreground">진행 중인 질문이 없습니다.</p>
+            <p className="text-sm text-muted-ink">진행 중인 질문이 없어요.</p>
           )}
 
           {canEdit && (
@@ -293,7 +336,7 @@ export function InterviewSession({
                 ))}
               <ConfirmButton
                 title="인터뷰를 끝낼까요?"
-                description="지금까지 답한 내용은 남습니다. 처리하지 않은 후보는 승인 대기에 남습니다."
+                description="지금까지 답한 내용은 남아요. 처리하지 않은 후보는 승인 대기에 있어요."
                 confirmLabel="끝내기"
                 onConfirm={finish}
                 disabled={busy}
@@ -306,26 +349,39 @@ export function InterviewSession({
       )}
 
       {history.length > 0 && (
-        <Collapsible>
-          <CollapsibleTrigger className={buttonVariants({ variant: 'ghost' })}>
-            {`지난 질문 ${history.length}개 보기`}
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <ol className="mt-3 grid gap-3">
-              {history.map((turn) => (
-                <li key={turn.id} className="grid gap-1 rounded-lg border p-3 text-sm">
-                  <p className="font-medium">{turn.question}</p>
-                  {turn.skipped ? (
-                    <p className="text-muted-foreground">(건너뜀)</p>
-                  ) : (
-                    <p className="whitespace-pre-wrap">{turn.answer}</p>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </CollapsibleContent>
-        </Collapsible>
+        <Disclosure title={`지난 질문 ${history.length}개 보기`}>
+          <ol className="wg-import-rows">
+            {history.map((turn) => (
+              <li key={turn.id} className="wg-import-row">
+                <InterviewExchange turn={turn} past />
+              </li>
+            ))}
+          </ol>
+        </Disclosure>
       )}
+    </div>
+  )
+}
+
+function InterviewExchange({
+  turn,
+  past = false,
+  settling = false,
+}: {
+  turn: InterviewTurnRow
+  past?: boolean
+  settling?: boolean
+}) {
+  return (
+    <div
+      className="wg-import-exchange grid min-w-0 gap-2"
+      data-past={past || undefined}
+      data-settling={settling || undefined}
+    >
+      <p className="b-ruled font-bold wrap-anywhere">{turn.question}</p>
+      <p className="b-ruled whitespace-pre-wrap wrap-anywhere">
+        {turn.skipped ? '건너뛴 질문이에요.' : turn.answer}
+      </p>
     </div>
   )
 }

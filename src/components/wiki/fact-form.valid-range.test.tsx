@@ -51,7 +51,7 @@ describe('FactFormDialog valid range', () => {
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '사실 추가' }))
-    expect(screen.getByText('비워 두면 처음부터 끝까지 유효합니다.')).toBeInTheDocument()
+    expect(screen.getByText('빈칸은 처음부터 끝까지 적용돼요.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('사실 내용'), {
       target: { value: '비밀 통로가 있다.' },
     })
@@ -183,7 +183,7 @@ describe('FactFormDialog valid range', () => {
     fireEvent.click(screen.getByRole('button', { name: '저장' }))
 
     await waitFor(() =>
-      expect(toastError).toHaveBeenCalledWith('끝 회차는 시작 회차보다 앞설 수 없습니다.'),
+      expect(toastError).toHaveBeenCalledWith('끝 회차는 시작 회차보다 앞설 수 없어요.'),
     )
     expect(create).not.toHaveBeenCalled()
   })

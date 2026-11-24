@@ -27,7 +27,7 @@ const FALLBACK_MODELS = new Set([
   'claude-sonnet-5-5',
 ])
 
-export const REFUSAL_MESSAGE = 'AI가 이 요청을 처리하지 않았습니다.'
+export const REFUSAL_MESSAGE = 'AI가 이 요청을 처리하지 않았어요.'
 export const MAX_TOKENS_MESSAGE = 'AI 응답이 너무 길어 중간에 끊겼습니다.'
 export const FORMAT_MESSAGE = 'AI 응답 형식이 올바르지 않습니다.'
 const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
@@ -486,7 +486,7 @@ function toAiError(
   }
   return new AppError(
     'AI_ERROR',
-    `AI 호출에 실패했습니다: ${reason.slice(0, 120)}`,
+    `AI 호출에 실패했어요: ${reason.slice(0, 120)}`,
     billedAny ? { usage: billed } : undefined,
   )
 }

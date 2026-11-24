@@ -1,13 +1,12 @@
-import { PageHeader } from '@/components/app/page-header'
 import { ThreadBoard } from '@/components/threads/thread-board'
 import type { ThreadItem } from '@/components/threads/thread-types'
+import { SettingsBoardHeader } from '@/components/wiki/wiki-tabs'
 import { listChapters } from '@/server/chapters'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getThread, listThreads } from '@/server/threads'
 import { getWork } from '@/server/works'
 import { listEntries } from '@/server/wiki'
 
-// 떡밥 장부 (F4): one column per thread status, with each thread's timeline loaded for its dialog.
 export default async function ThreadsPage({ params }: { params: Promise<{ workId: string }> }) {
   const { workId } = await params
   const { db, actor } = await pageContext(`/works/${workId}/wiki/threads`)
@@ -46,15 +45,20 @@ export default async function ThreadsPage({ params }: { params: Promise<{ workId
   }))
 
   return (
-    <div className="flex flex-col">
-      <PageHeader title="떡밥 장부" description="심은 떡밥과 회수 기록을 상태별로 봅니다." />
-      <ThreadBoard
-        workId={workId}
-        role={work.role}
-        threads={threads}
-        chapters={chapters.map((c) => ({ id: c.id, position: c.position, title: c.title }))}
-        entries={entries.map((e) => ({ id: e.id, name: e.name, kind: e.kind }))}
-      />
+    <div className="flex min-w-0 flex-col gap-6">
+      <SettingsBoardHeader workId={workId} active="threads" />
+      <section
+        aria-labelledby="threads-heading"
+        className="wg-threads-workspace flex min-w-0 flex-col gap-5"
+      >
+        <ThreadBoard
+          workId={workId}
+          role={work.role}
+          threads={threads}
+          chapters={chapters.map((c) => ({ id: c.id, position: c.position, title: c.title }))}
+          entries={entries.map((e) => ({ id: e.id, name: e.name, kind: e.kind }))}
+        />
+      </section>
     </div>
   )
 }

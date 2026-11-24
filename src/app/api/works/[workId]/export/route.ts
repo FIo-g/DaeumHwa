@@ -19,7 +19,7 @@ function errorResponse(status: number, message: string): Response {
 export async function GET(_request: Request, ctx: { params: Promise<{ workId: string }> }) {
   const { workId } = await ctx.params
   const user = await getSessionUser()
-  if (!user) return errorResponse(401, '로그인이 필요합니다.')
+  if (!user) return errorResponse(401, '로그인이 필요해요.')
 
   try {
     const payload = await buildExportPayload(getDb(), { userId: user.id }, workId)
@@ -27,6 +27,6 @@ export async function GET(_request: Request, ctx: { params: Promise<{ workId: st
   } catch (e) {
     if (isAppError(e)) return errorResponse(STATUS_BY_CODE[e.code] ?? 400, e.message)
     console.error('export failed', e)
-    return errorResponse(500, '백업 파일을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    return errorResponse(500, '백업 파일을 만들지 못했어요. 잠시 후 다시 시도해 주세요.')
   }
 }

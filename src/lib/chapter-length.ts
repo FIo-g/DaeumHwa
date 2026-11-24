@@ -9,5 +9,5 @@ export function lengthShortfall(
 
 export function shortfallMessage(charCount: number, targetChars: number): string {
   const percent = Math.round((charCount / targetChars) * 100)
-  return `목표 ${targetChars.toLocaleString('ko-KR')}자 중 ${charCount.toLocaleString('ko-KR')}자(${percent}%)입니다. 그래도 완료할까요?`
+  return `목표 ${targetChars.toLocaleString('ko-KR')}자 중 ${charCount.toLocaleString('ko-KR')}자(${percent}%)예요. 그래도 완료할까요?`
 }

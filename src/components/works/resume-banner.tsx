@@ -1,29 +1,28 @@
-import { ArrowRightIcon } from 'lucide-react'
-import Link from 'next/link'
+import { PopLink } from '@/components/motion'
 import type { ResumePoint } from '@/server/user-state'
 import { chapterLabel } from '@/lib/labels'
 
-/** Top banner on the works list: jumps back to the chapter the user left off in. */
-export function ResumeBanner({ resume }: { resume: ResumePoint }) {
-  const href =
-    resume.chapterId !== null
-      ? `/works/${resume.workId}/chapters/${resume.chapterId}`
-      : `/works/${resume.workId}`
+export function ResumeBanner({ resume, trial }: { resume: ResumePoint; trial?: boolean }) {
+  const base = `/works/${resume.workId}`
+  const href = resume.chapterId !== null ? `${base}/chapters/${resume.chapterId}` : base
   const chapter =
     resume.chapterPosition !== null
-      ? ` · ${chapterLabel(resume.chapterPosition, resume.chapterTitle)}`
-      : ''
+      ? chapterLabel(resume.chapterPosition, resume.chapterTitle)
+      : null
 
   return (
-    <Link
-      href={href}
-      className="mb-6 flex items-center justify-between gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-sm transition-colors hover:bg-muted"
-    >
-      <span className="min-w-0 truncate">
-        이어서 쓰기: {resume.workTitle}
-        {chapter}
-      </span>
-      <ArrowRightIcon aria-hidden="true" className="size-4 shrink-0" />
-    </Link>
+    <div className="wg-works-resume">
+      <div className="min-w-0 flex-1">
+        <p className="b-subhead wrap-anywhere">{resume.workTitle}</p>
+        {chapter && <p className="b-label mt-1 wrap-anywhere">{chapter}</p>}
+      </div>
+      <PopLink
+        href={href}
+        variant="flat"
+        aria-label={`${trial ? '이어서 보기' : '이어서 쓰기'}: ${resume.workTitle}${chapter ? ` · ${chapter}` : ''}`}
+      >
+        {trial ? '이어서 보기' : '이어서 쓰기'}
+      </PopLink>
+    </div>
   )
 }

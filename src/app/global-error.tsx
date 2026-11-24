@@ -2,8 +2,6 @@
 
 import { useEffect } from 'react'
 
-// Replaces the root layout when it or (app)/layout.tsx fails. Global CSS is not loaded here,
-// so the styles are inline and use system colors to follow the OS color scheme.
 export default function GlobalError({ error, retry }: { error: unknown; retry: () => void }) {
   useEffect(() => {
     console.error(error)
@@ -12,44 +10,42 @@ export default function GlobalError({ error, retry }: { error: unknown; retry: (
   return (
     <html lang="ko">
       <head>
-        <title>다음화 - 오류</title>
+        <title>다음화 · 오류</title>
+        <style>{`
+          :root { --paper: #fbfaf5; --ink: #1c1b19; --grid: #3f8f6b; }
+          body {
+            display: grid; place-items: center; min-height: 100vh; margin: 0;
+            padding: clamp(2.25rem, 4.85vw, 4.5rem) 1rem;
+            box-sizing: border-box; background: var(--paper); color: var(--ink); color-scheme: light;
+            font: 400 1rem/1.6 "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+            word-break: keep-all;
+          }
+          section {
+            inline-size: min(100%, 40rem); padding-block-start: 1rem;
+            border-block-start: 2px solid var(--grid);
+          }
+          h1 {
+            margin: 0; font: 900 clamp(1.625rem, 2.6vw, 2.5rem)/1.23
+              "Noto Serif KR", "AppleMyungjo", Batang, serif;
+            text-wrap: balance;
+          }
+          button {
+            min-height: 44px; padding: 8px 16px; border: 1px solid var(--grid); border-radius: 0;
+            color: var(--paper); background: var(--ink); font: inherit; font-weight: 500;
+            cursor: pointer;
+          }
+          button:is(:hover, :focus-visible) { text-decoration: underline; text-underline-offset: .28em; }
+          button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+        `}</style>
       </head>
-      <body
-        style={{
-          margin: 0,
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 12,
-          padding: 16,
-          colorScheme: 'light dark',
-          background: 'Canvas',
-          color: 'CanvasText',
-          fontFamily:
-            '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif',
-          textAlign: 'center',
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>문제가 발생했습니다</h1>
-        <p style={{ margin: 0, opacity: 0.7 }}>잠시 후 다시 시도해 주세요.</p>
-        <button
-          type="button"
-          onClick={() => retry()}
-          style={{
-            marginTop: 8,
-            padding: '8px 16px',
-            borderRadius: 6,
-            border: '1px solid currentColor',
-            background: 'transparent',
-            color: 'inherit',
-            font: 'inherit',
-            cursor: 'pointer',
-          }}
-        >
-          다시 시도
-        </button>
+      <body>
+        <section>
+          <h1>페이지를 불러오지 못했어요</h1>
+          <p>잠시 후 다시 시도해 주세요.</p>
+          <button type="button" onClick={retry}>
+            다시 시도
+          </button>
+        </section>
       </body>
     </html>
   )

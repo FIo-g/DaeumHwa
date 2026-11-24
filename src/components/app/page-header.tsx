@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
+import { GridTitle } from '@/components/motion'
+import { cn } from '@/lib/utils'
 
 type PageHeaderProps = {
   title: string
@@ -6,17 +8,40 @@ type PageHeaderProps = {
   actions?: ReactNode
 }
 
-/** Title row at the top of a page, with optional description and action buttons. */
+export function PageEdge({
+  className,
+  showPageMark = true,
+}: {
+  className?: string
+  showPageMark?: boolean
+}) {
+  return (
+    <div className={cn('b-edge wg-shell-edge', className)} aria-hidden="true">
+      <span>20×10</span>
+      {showPageMark && <span className="wg-shell-page-mark" />}
+    </div>
+  )
+}
+
+export function PageHeaderFrame({ className, children, ...props }: ComponentProps<'header'>) {
+  return (
+    <header {...props} className={cn('b-page-header wg-shell-page-header', className)}>
+      {children}
+    </header>
+  )
+}
+
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <header className="flex flex-col gap-3 pb-6 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-serif text-[1.75rem] leading-tight font-semibold tracking-tight text-balance break-keep">
+    <PageHeaderFrame>
+      <PageEdge />
+      <div className="wg-shell-heading">
+        <GridTitle as="h1" size="page" className="wg-shell-title">
           {title}
-        </h1>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        </GridTitle>
+        {description && <p className="wg-shell-description">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
-    </header>
+      {actions && <div className="wg-shell-actions">{actions}</div>}
+    </PageHeaderFrame>
   )
 }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { aiRuns } from '@/db/schema'
+import { aiRuns, chapters, works } from '@/db/schema'
 import type { Actor, AiRunRow, AiTaskName } from '@/db/types'
 import { getAiClient } from '@/ai'
 import {
@@ -15,17 +15,28 @@ import {
 import { TextChannel } from '@/ai/anthropic'
 import { seoulDayStart } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
+import { isTrialCheckChapter, TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { requireWorkRole } from '@/server/access'
+import { isTrialUser } from '@/server/trial-access'
 
 export { AI_CANCELLED_MESSAGE, AI_TIMEOUT_MESSAGE }
 
+const TRIAL_RUN_LIMIT = 8
+const TRIAL_CHECK_TASKS = new Set<AiTaskName>([
+  'continuity-check',
+  'chapter-extract',
+  'chapter-extract-facts',
+  'chapter-extract-threads',
+  'chapter-extract-relations',
+])
+
 const DEFAULT_DAILY_TOKEN_LIMIT = 3_000_000
-const LIMIT_MESSAGE = '오늘 AI 사용량 한도를 넘었습니다. 내일 다시 시도해 주세요.'
+const LIMIT_MESSAGE = '오늘 AI 사용량 한도를 넘었어요. 내일 다시 시도해 주세요.'
 /** At most this many AI runs may be `running` per user at once. */
 const MAX_RUNNING_RUNS = 3
 /** Running rows older than this are treated as abandoned and do not count toward the cap. */
 const RUNNING_STALE_MS = 10 * 60 * 1000
-const CONCURRENCY_MESSAGE = '진행 중인 AI 작업이 너무 많습니다. 끝난 뒤 다시 시도해 주세요.'
+const CONCURRENCY_MESSAGE = '진행 중인 AI 작업이 너무 많아요. 끝난 뒤 다시 시도해 주세요.'
 /** Time limit for a structured call when neither the meta nor the task sets one. */
 export const DEFAULT_AI_TIMEOUT_MS = 120_000
 /** Time limit for a streamed text call (drafts). */
@@ -51,6 +62,7 @@ export type AiRunMeta = {
   userId: string
   workId: string | null
   chapterId?: string | null
+  trialCheck?: true
   signal?: AbortSignal
   timeoutMs?: number
   subRun?: true
@@ -171,7 +183,7 @@ export async function runAiTaskSplit<I, O>(
     onPart?: (info: { index: number; elapsedMs: number; ok: boolean }) => void
   },
 ): Promise<{ output: O; runId: string }> {
-  if (parts.length === 0) throw new AppError('VALIDATION', '실행할 항목이 없습니다.')
+  if (parts.length === 0) throw new AppError('VALIDATION', '실행할 항목이 없어요.')
   const taskModel = task.model?.()
   const runId = await startRun(db, meta, task.name, taskModel ?? client.defaultModel)
   const timeoutMs = resolveSplitTimeoutMs(meta, task)
@@ -507,20 +519,41 @@ function dailyTokenLimit(
   const cleaned = raw.replace(/[,_]/g, '').trim()
   const parsed = cleaned === '' ? Number.NaN : Number(cleaned)
   if (Number.isFinite(parsed)) return parsed
-  console.warn(
-    `${key} 값(${raw})을 숫자로 읽을 수 없어 기본값 ${defaultLimit}을 사용합니다.`,
-  )
+  console.warn(`${key} 값(${raw})을 숫자로 읽을 수 없어 기본값 ${defaultLimit}을 사용합니다.`)
   return defaultLimit
 }
 
-async function startRun(
-  db: Db,
-  meta: AiRunMeta,
-  task: AiTaskName,
-  model: string,
-): Promise<string> {
+async function assertTrialRunAllowed(db: Db, meta: AiRunMeta, task: AiTaskName): Promise<void> {
+  if (!meta.trialCheck || !meta.workId || !meta.chapterId || !TRIAL_CHECK_TASKS.has(task)) {
+    throw new AppError('FORBIDDEN', TRIAL_SIGNUP_MESSAGE)
+  }
+  const [chapter] = await db
+    .select({ position: chapters.position })
+    .from(chapters)
+    .innerJoin(works, eq(works.id, chapters.workId))
+    .where(
+      and(
+        eq(works.id, meta.workId),
+        eq(works.ownerId, meta.userId),
+        eq(chapters.id, meta.chapterId),
+      ),
+    )
+    .limit(1)
+  if (!chapter || !isTrialCheckChapter(chapter.position)) {
+    throw new AppError('FORBIDDEN', TRIAL_SIGNUP_MESSAGE)
+  }
+  const attempts = await db
+    .select({ id: aiRuns.id })
+    .from(aiRuns)
+    .where(eq(aiRuns.userId, meta.userId))
+    .limit(TRIAL_RUN_LIMIT)
+  if (attempts.length >= TRIAL_RUN_LIMIT) throw new AppError('AI_LIMIT', TRIAL_SIGNUP_MESSAGE)
+}
+
+async function startRun(db: Db, meta: AiRunMeta, task: AiTaskName, model: string): Promise<string> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${meta.userId}))`)
+    if (await isTrialUser(tx, meta.userId)) await assertTrialRunAllowed(tx, meta, task)
     await assertCanStartRun(tx, meta)
     const [row] = await tx
       .insert(aiRuns)
@@ -626,5 +659,5 @@ function toRunError(error: unknown, signal?: AbortSignal, deadline?: AbortSignal
     return error.details === undefined ? error : new AppError(error.code, error.message)
   }
   const reason = error instanceof Error ? error.message : String(error)
-  return new AppError('AI_ERROR', `AI 호출에 실패했습니다: ${reason.slice(0, 120)}`)
+  return new AppError('AI_ERROR', `AI 호출에 실패했어요: ${reason.slice(0, 120)}`)
 }

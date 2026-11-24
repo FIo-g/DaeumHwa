@@ -49,7 +49,10 @@ const inferred = [
 ]
 
 beforeEach(() => {
-  run.mockResolvedValue({ ok: true } as never)
+  run.mockImplementation(async (promise) => {
+    const result = await promise
+    return result.ok ? result.data : null
+  })
 })
 
 afterEach(() => {
@@ -71,7 +74,7 @@ describe('DirectiveList inferred proposals (s4)', () => {
     )
     expect(screen.getByText('수정에서 찾은 요청')).toBeInTheDocument()
     expect(
-      screen.getByText('작가님이 고친 곳을 보고 찾은 것입니다. 추가해야 적용됩니다.'),
+      screen.getByText('작가님이 초안을 고친 곳에서 찾아낸 요청이에요. 추가해야 적용돼요.'),
     ).toBeInTheDocument()
     // Above the active list.
     const inferredHeading = screen.getByText('수정에서 찾은 요청')
@@ -105,8 +108,10 @@ describe('DirectiveList inferred proposals (s4)', () => {
   })
 
   it('calls decideInferredAction with add and moves the row to the active list', async () => {
-    decide.mockResolvedValue({ ok: true, data: { directiveId: 'd-new' } } as never)
-    run.mockImplementation((p: unknown) => p as never)
+    decide.mockResolvedValue({
+      ok: true,
+      data: { runId: 'run-1', index: 0, decision: 'added', directiveId: 'd-new' },
+    })
     render(
       <DirectiveList
         workId="w1"
@@ -136,8 +141,10 @@ describe('DirectiveList inferred proposals (s4)', () => {
   })
 
   it('calls decideInferredAction with ignore and removes the row', async () => {
-    decide.mockResolvedValue({ ok: true, data: {} } as never)
-    run.mockImplementation((p: unknown) => p as never)
+    decide.mockResolvedValue({
+      ok: true,
+      data: { runId: 'run-1', index: 1, decision: 'ignored', directiveId: null },
+    })
     render(
       <DirectiveList
         workId="w1"

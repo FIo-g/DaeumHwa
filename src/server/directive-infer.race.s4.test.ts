@@ -110,7 +110,7 @@ describe('decideInferred concurrency (s4)', () => {
     expect(rejected).toHaveLength(1)
     expect(rejected[0].reason).toMatchObject({
       code: 'BAD_STATE',
-      message: '이미 정한 제안입니다.',
+      message: '이미 정한 제안이에요.',
     })
 
     const rows = await s.db

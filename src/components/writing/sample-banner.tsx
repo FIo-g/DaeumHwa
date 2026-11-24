@@ -45,22 +45,19 @@ export function SampleBanner({
   const targetPosition = chapterPosition === 3 ? 2 : 3
   const target = chapters.find((c) => c.position === targetPosition)
   return (
-    <div className="rounded-xl border bg-muted/40 p-4 text-sm">
+    <div className="wg-writing-notice">
       <p className="font-medium">샘플 작품</p>
-      <p className="mt-1 text-muted-foreground">
-        1~3화 원고에 설정 오류 3곳을 심어 두었습니다. 2화에 1곳, 3화에 2곳입니다. 점검 결과에서 원고
-        문장과 위키 근거를 나란히 확인해 보세요.
+      <p className="min-w-0 flex-1 basis-64">
+        1~3화에 설정 오류를 세 군데 숨겨 뒀어요. 2화에 1곳, 3화에 2곳이에요. 점검 결과에서 원고
+        문장과 위키 근거를 같이 확인해 보세요.
       </p>
-      <div className="mt-2 flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-x-3">
         {target && (
-          <Link
-            href={`/works/${workId}/chapters/${target.id}?demo=1`}
-            className="underline underline-offset-4"
-          >
+          <Link href={`/works/${workId}/chapters/${target.id}?demo=1`} className="b-link">
             {targetPosition}화 점검하기
           </Link>
         )}
-        <Link href={`/works/${workId}/wiki`} className="underline underline-offset-4">
+        <Link href={`/works/${workId}/wiki`} className="b-link">
           설정 보드 보기
         </Link>
       </div>

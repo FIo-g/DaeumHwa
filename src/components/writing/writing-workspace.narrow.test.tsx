@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChapterRow, Role } from '@/db/types'
 import type { WritingData } from './types'
@@ -139,6 +139,22 @@ describe('WritingWorkspace narrow layout', () => {
       />,
     )
 
+    expect(await screen.findByRole('region', { name: '회차 점검' })).toBeInTheDocument()
+  })
+  it('keeps the selected tab across sheet closes and reopens', async () => {
+    render(
+      <WritingWorkspace
+        data={makeData()}
+        loadServerCopy={async () => ({ ok: true, data: {} }) as never}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '패널 열기' }))
+    fireEvent.click(await screen.findByRole('tab', { name: /^점검$/ }))
+    expect(await screen.findByRole('region', { name: '회차 점검' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '작업 패널' })).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: '패널 열기' }))
     expect(await screen.findByRole('region', { name: '회차 점검' })).toBeInTheDocument()
   })
 })

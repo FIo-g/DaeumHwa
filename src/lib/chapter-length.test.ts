@@ -19,7 +19,7 @@ describe('lengthShortfall', () => {
 describe('shortfallMessage', () => {
   it('states the target, the count and the percent', () => {
     expect(shortfallMessage(4265, 5500)).toBe(
-      '목표 5,500자 중 4,265자(78%)입니다. 그래도 완료할까요?',
+      '목표 5,500자 중 4,265자(78%)예요. 그래도 완료할까요?',
     )
   })
 })

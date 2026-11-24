@@ -83,10 +83,10 @@ describe('FactList', () => {
         canEdit
       />,
     )
-    expect(screen.getByText('12화부터 ~20화')).toBeInTheDocument()
+    expect(screen.getByRole('listitem')).toHaveTextContent('12화부터 ~20화')
   })
 
-  it('dims a superseded fact and links to the fact that replaced it', () => {
+  it('strikes out a superseded fact and links to the fact that replaced it', () => {
     const newer = fact({ id: 'f2', content: '서윤은 활을 쓴다', validFromPosition: 12 })
     render(
       <FactList
@@ -105,7 +105,8 @@ describe('FactList', () => {
         canEdit
       />,
     )
-    expect(screen.getByText('(12화부터 바뀜)')).toBeInTheDocument()
+    expect(screen.getByText('서윤은 검을 쓴다').closest('del')).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('(12화부터 바뀜)')
     expect(screen.getByRole('link', { name: '새 사실 보기' })).toHaveAttribute('href', '#fact-f2')
   })
 

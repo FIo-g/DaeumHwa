@@ -30,7 +30,7 @@ describe('parseProposalPayload', () => {
     }
     expect(caught).toBeInstanceOf(AppError)
     expect((caught as AppError).code).toBe('VALIDATION')
-    expect((caught as AppError).message).toBe('제안 내용 형식이 올바르지 않습니다.')
+    expect((caught as AppError).message).toBe('제안 내용 형식이 올바르지 않아요.')
   })
 
   it('accepts thread_create with nested events and rejects an unknown event kind', () => {

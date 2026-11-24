@@ -2,16 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
+import { PopButton } from '@/components/motion'
 import { runAction } from '@/lib/client/run-action'
 import { createSampleWorkAction } from '@/server/actions/sample-work'
 
-type SampleWorkButtonProps = {
-  variant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive' | 'link'
-}
-
 /** One-click demo work: builds the sample and opens chapter 3 with the auto check. */
-export function SampleWorkButton({ variant = 'default' }: SampleWorkButtonProps) {
+export function SampleWorkButton() {
   const router = useRouter()
   const [pending, setPending] = useState(false)
 
@@ -19,7 +15,7 @@ export function SampleWorkButton({ variant = 'default' }: SampleWorkButtonProps)
     setPending(true)
     try {
       const result = await runAction(createSampleWorkAction(), {
-        success: '샘플 작품을 만들었습니다.',
+        success: '샘플 작품을 만들었어요.',
       })
       if (result) {
         // Stay pending: the page is navigating away, and a second click would build another work.
@@ -33,8 +29,24 @@ export function SampleWorkButton({ variant = 'default' }: SampleWorkButtonProps)
   }
 
   return (
-    <Button variant={variant} disabled={pending} onClick={() => void onClick()}>
-      {pending ? '만드는 중…' : '샘플 작품으로 체험하기'}
-    </Button>
+    <PopButton
+      className="wg-works-sample"
+      pending={pending}
+      pendingLabel={
+        <>
+          만드는 중…
+          <span className="wg-works-sample-cells" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </span>
+        </>
+      }
+      onClick={() => void onClick()}
+    >
+      샘플 작품으로 체험하기
+    </PopButton>
   )
 }

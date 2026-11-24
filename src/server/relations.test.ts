@@ -58,7 +58,7 @@ describe('createRelation', () => {
         kind: '동료',
       }),
       'VALIDATION',
-      '같은 카드끼리는 연결할 수 없습니다.',
+      '같은 카드끼리는 연결할 수 없어요.',
     )
   })
 
@@ -76,7 +76,7 @@ describe('createRelation', () => {
         endPosition: 2,
       }),
       'VALIDATION',
-      '시작 회차가 끝 회차보다 늦습니다.',
+      '시작 회차가 끝 회차보다 늦어요.',
     )
   })
 
@@ -163,7 +163,7 @@ describe('updateRelation, archiveRelation and listRelations', () => {
     await expectAppError(
       updateRelation(db, actor, row.id, { startPosition: 6 }),
       'VALIDATION',
-      '시작 회차가 끝 회차보다 늦습니다.',
+      '시작 회차가 끝 회차보다 늦어요.',
     )
     const updated = await updateRelation(db, actor, row.id, { kind: '스승', endPosition: null })
     expect(updated.kind).toBe('스승')

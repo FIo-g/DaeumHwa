@@ -295,7 +295,7 @@ describe('runProofread: split into parts', () => {
     const rows = await countRuns()
     expect(rows).toHaveLength(1)
     expect(rows[0].status).toBe('error')
-    expect(rows[0].error).toBe('취소했습니다.')
+    expect(rows[0].error).toBe('취소했어요.')
   })
 
   it('useAi false makes no AI call', async () => {

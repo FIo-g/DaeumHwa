@@ -1,272 +1,109 @@
 ---
 name: 다음화
-description: 웹소설 작가의 원고를 설정 위키와 맞춰 보고, 교정지처럼 표시해 돌려주는 연재 파트너
+description: 장기 연재 웹소설 작가를 위한 원고와 설정 위키
 colors:
-  desk: "#eef0ed"
-  sheet: "#fafbf9"
-  graphite: "#2b2d2c"
-  graphite-muted: "#565b58"
-  pencil-grey: "#8f9591"
-  margin-rule: "#c9cdc8"
-  hairline: "#d3d7d2"
-  wash: "#e2e5e1"
-  wash-muted: "#e4e7e3"
-  proof-red: "#c8321f"
-  blue-pencil: "#2f5d9e"
+  paper: '#fbfaf5'
+  ink: '#1c1b19'
+  grid: '#3f8f6b'
+  muted: '#55534e'
+  proof: '#d6311f'
+  wiki: '#1f3a8a'
 typography:
-  display:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "3.75rem"
-    fontWeight: 700
-    lineHeight: 1.18
-    letterSpacing: "-0.02em"
-  headline:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "2.25rem"
-    fontWeight: 600
-    lineHeight: 1.25
-  title:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "1.75rem"
-    fontWeight: 600
-    lineHeight: 1.25
-    letterSpacing: "-0.01em"
+  heading:
+    fontFamily: 'Noto Serif KR, AppleMyungjo, Batang, serif'
+    fontWeight: 900
   manuscript:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "17px"
+    fontFamily: 'Noto Serif KR, AppleMyungjo, Batang, serif'
     fontWeight: 400
-    lineHeight: 2.1
-  canon-quote:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "15px"
-    fontWeight: 400
-    lineHeight: "28px"
-  lede:
-    fontFamily: "Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, system-ui, sans-serif"
-    fontSize: "1.25rem"
-    fontWeight: 400
-    lineHeight: 1.625
+    lineHeight: 'var(--b-manuscript-line)'
+  quote:
+    fontFamily: 'Noto Serif KR, AppleMyungjo, Batang, serif'
+    fontWeight: 700
   body:
-    fontFamily: "Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, system-ui, sans-serif"
-    fontSize: "0.875rem"
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, sans-serif'
     fontWeight: 400
-    lineHeight: 1.43
-  label:
-    fontFamily: "Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, system-ui, sans-serif"
-    fontSize: "0.75rem"
+  control:
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, sans-serif'
     fontWeight: 500
-    lineHeight: 1.33
+  number:
+    fontFamily: 'Nanum Gothic Coding, Apple SD Gothic Neo, monospace'
+    fontWeight: 400
 rounded:
-  sm: "2.4px"
-  md: "4px"
+  field: '0'
+  button: '0'
+  card: '0'
+  sheet: '0'
 spacing:
-  xs: "8px"
-  sm: "12px"
-  md: "16px"
-  lg: "24px"
-  xl: "40px"
-  sheet: "80px"
-components:
-  button-primary:
-    backgroundColor: "{colors.graphite}"
-    textColor: "{colors.sheet}"
-    typography: "{typography.body}"
-    rounded: "{rounded.md}"
-    height: "32px"
-    padding: "0 10px"
-  button-start:
-    backgroundColor: "{colors.graphite}"
-    textColor: "{colors.sheet}"
-    rounded: "{rounded.md}"
-    height: "48px"
-    padding: "0 24px"
-  button-outline:
-    backgroundColor: "{colors.desk}"
-    textColor: "{colors.graphite}"
-    rounded: "{rounded.md}"
-    height: "32px"
-    padding: "0 10px"
-  button-outline-hover:
-    backgroundColor: "{colors.wash-muted}"
-  button-ghost-hover:
-    backgroundColor: "{colors.wash-muted}"
-    textColor: "{colors.graphite}"
-  input:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.graphite}"
-    rounded: "{rounded.md}"
-    height: "32px"
-    padding: "4px 10px"
-  finding-card:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.graphite}"
-    rounded: "{rounded.sm}"
-    padding: "16px"
-  fact-badge-confirmed:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.blue-pencil}"
-    typography: "{typography.label}"
-    rounded: "{rounded.sm}"
-    height: "20px"
-    padding: "2px 8px"
-  nav-item:
-    textColor: "{colors.graphite-muted}"
-    typography: "{typography.body}"
-    rounded: "{rounded.sm}"
-    padding: "6px 12px"
-  nav-item-active:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.graphite}"
+  edge: 'clamp(16px, 4.4vw, 64px)'
+  band: 'clamp(36px, 4.85vw, 72px)'
+  app: 'clamp(16px, 2.45vw, 36px)'
 ---
 
-# Design System: 다음화
+# 다음화 원고지 테마
 
-## Overview
+원고의 어긋난 문장에 교정 부호를 그린다. 근거가 된 위키 원문을 난외에 적고 지시선으로 문장과 잇는다. 작가는 원고와 위키 중 고칠 쪽을 고른다.
 
-**Creative North Star: "The Returned Galley Proof" (교정지)**
+## 색
 
-Every screen is an editor's proof handed back to the author: cool proof paper on a slightly darker desk, graphite type, one hairline margin rule, and two pencils. A proof-red pencil marks what is wrong in the manuscript; a blue pencil quotes the canon, the settled fact from the wiki. The intro page plays this out at full size, with a circled word and a red leader running into the margin. Inside the app the same world shows as precision and restraint: sheet-coloured working areas, serif for anything that is manuscript or canon, a quiet system sans for controls.
+| 이름      | 토큰        | 값        | 쓰임                                        |
+| --------- | ----------- | --------- | ------------------------------------------- |
+| 종이      | `--b-paper` | `#fbfaf5` | 전체 바탕과 먹색 칸 위 글자                 |
+| 먹        | `--b-ink`   | `#1c1b19` | 글자, 포커스, 대표 버튼, 선택 탭, 떡밥 표시 |
+| 괘선      | `--b-grid`  | `#3f8f6b` | 원고지 칸, 구획선과 접는 선                 |
+| 교정 주홍 | `--b-proof` | `#d6311f` | 원고의 교정 부호와 교정 글자                |
+| 위키 남색 | `--b-wiki`  | `#1f3a8a` | 위키 원문 인용과 인용 지시선                |
 
-Density is that of a working document, not a dashboard. Surfaces are flat paper separated by 1px rules; the only lift in the system is the sheet itself sitting on the desk. Light scene only: there is no theme switch, and the inherited shadcn dark block in `globals.css` is not part of this system.
+설명, 캡션, 도움말, 출처, 날짜·시각, 가장자리 표기, 입력 예시, 아직 쓰지 않은 회차 숫자와 하단 안내에는 옅은 먹 `--b-muted`를 쓴다. 제목, 본문, 값, 라벨, 버튼, 링크와 원고에는 먹 `--b-ink`를 쓴다. 하단 길잡이에도 하단 안내 색을 쓴다. 교정 부호와 위키 원문 인용에는 각각 전용 색을 쓴다. 종이 위 글자의 명암비는 4.5:1 이상으로 맞춘다. 괘선은 선에만 쓴다.
 
-The world refuses the category default for this product: a SaaS hero beside a framed app screenshot, then a row of feature cards.
+## 글꼴
 
-**Key Characteristics:**
-- Cool proof paper (sheet on desk), graphite text, a single 1px margin rule.
-- Two pencils with fixed jobs: proof red for errors, blue pencil for the canon.
-- Myeongjo serif for headlines, manuscript and canon quotes; system Hangul sans for UI.
-- Marks are drawn strokes (circle, underline, leader), drawn once.
-- Corners of 2 to 4px; flat surfaces; one soft sheet lift.
+- 명조는 Noto Serif KR이다. 화면 제목은 900, 시연 문장과 위키 인용은 700, 원고 본문은 400을 쓴다. Tailwind에서는 `font-heading`을 쓴다.
+- 조작 글자는 IBM Plex Sans KR이다. 메뉴, 버튼과 탭은 500, 설명은 400을 쓴다. Tailwind에서는 `font-sans`를 쓴다.
+- 계수 글자는 Nanum Gothic Coding이다. 칸 수, 쪽 번호, 회차, 날짜와 건수에 `font-mono`를 쓴다.
 
-## Colors
+## 형태
 
-A near-neutral cool paper palette carrying exactly two inks, each with a single job.
+- 기본 모서리는 0이다. 그림자는 없다. 구획은 1px 괘선, 2px 접는 선과 여백으로 만든다. `Sheet`는 위아래 괘선과 선택 가장자리 표기를 둔다. `PageHeaderFrame`은 화면 머리를 감싼다. `20×10`은 화면 머리의 `PageEdge` 한 곳에 둔다. 가장자리의 장식 표기는 보조 기술에서 숨긴다.
+- `GridTitle`은 칸마다 한 글자를 쓴다. 띄어쓰기에는 빈칸을 두고 마침표와 쉼표는 칸 왼쪽 아래에 둔다. 괄호, 숫자와 영문자는 가운데에 둔다. 정수 px로 정한 칸 크기를 글자와 공유 경계의 기준으로 쓴다. 로그인 뒤에는 화면의 `h1` 하나만 칸으로 조판한다. 구역과 패널의 제목은 일반 명조 700을 쓴다. 소개 제목, 화면 제목, 소개 구역 제목은 각각 `--b-cell-hero`, `--b-cell-page`, `--b-cell-section`을 쓴다.
+- 목록은 괘선으로 행을 나눈다. 마우스를 올리거나 키보드 포커스가 들어오면 같은 1px 괘선이 먹으로 바뀌고 왼쪽에 줄 번호가 나타난다.
+- 대표 버튼은 먹으로 채운 칸이다. 보조 버튼과 링크에는 밑줄을 쓴다. 탭은 괘선으로 나누고 선택한 칸에는 먹 바탕과 종이색 글자를 쓴다. 버튼은 `--b-action-height`, 탭은 `--b-tab-height`를 쓴다. 포커스 윤곽은 먹 2px이다. 먹으로 채운 칸에는 종이색 2px 윤곽을 안쪽에 그린다.
+- 상태는 괘선 칸 안의 작은 글자나 글자 앞의 채운 점, 빈 겹동그라미, 점선으로 표시한다.
+- 원고에는 주홍 밑줄, 삭제 고리, 삽입 부호와 교정 글자를 쓴다. 위키 원문은 남색 난외주에 적는다. 가는 남색 지시선으로 원고의 오류 지점과 잇는다.
+- 아이콘은 필요한 자리에만 쓰고 선 굵기는 1.5px로 맞춘다. 입력 글자와 라벨의 왼쪽을 아래 괘선에 맞춘다. 원고와 여러 줄 입력은 글자 크기 `--b-t-manuscript`와 줄 높이 `--b-manuscript-line`을 쓴다. 줄 높이는 글자 크기의 2.4배를 정수 px로 내림한다. 실제 글줄을 가진 요소에 `1lh`마다 옅은 가로 괘선을 긋는다.
+- `CellMeter`는 같은 너비의 칸을 채운다. 이웃한 칸은 경계선 하나를 공유한다.
+- 떡밥 축은 `thread-geometry`로 회차 칸의 중심을 구한다. 심은 화와 회수 목표가 같은 칸이면 고리 안에 점을 겹친다. 두 기호의 중심을 맞추고 점과 고리 사이에 최소 1.5px의 종이색 틈을 둔다.
+- 대화상자, 시트, 펼침 목록, 말풍선과 토스트에는 종이 바탕과 1px 괘선을 사방에 둔다. 가림막에는 먹을 30% 불투명도로 쓴다.
 
-### Primary
-- **Graphite** (`graphite`): all text, primary buttons, the active tab underline, the pending count chip. It is the ink of the page; buttons in graphite read as type, not as brand colour.
+## 움직임
 
-### Secondary
-- **Proof Red** (`proof-red`): marks on the manuscript (circle, underline, leader), the correction word, the finding kind label, the suggested sentence, destructive actions and error text. Nothing decorative.
+1. 글자를 칸마다 한 자씩 쓴다. 커서 칸을 다음 칸으로 옮긴다.
+2. 펜으로 교정 밑줄, 삭제 고리, 지시선 또는 떡밥 선을 긋는다.
+3. 괘선을 왼쪽에서 오른쪽으로 그린다.
+4. 버튼, 선택 또는 진행 상태의 칸을 먹으로 채운다.
+5. 행 위에 마우스를 올리거나 포커스가 들어오면 줄 번호를 보이고 괘선을 먹으로 바꾼다.
+6. 위 줄부터 순서대로 글을 왼쪽에서 오른쪽으로 드러낸다. 글자의 위치는 고정한다.
+7. 대화상자, 시트 또는 탭을 종이 한 장처럼 직선으로 들여놓는다.
+8. 건수나 회차 숫자를 칸 안에서 올린다.
 
-### Tertiary
-- **Blue Pencil** (`blue-pencil`): the canon. Quoted wiki originals, links to wiki cards, confirmed and assumed fact markers, planted points on the thread ledger, focus rings, caret, selection tint (22%) and native `accent-color`.
+| 토큰          | 값                                  | 쓰임                   |
+| ------------- | ----------------------------------- | ---------------------- |
+| `--b-quick`   | 170ms                               | 마우스와 포커스 반응   |
+| `--b-cell`    | 52ms                                | 제목 한 칸             |
+| `--b-step`    | 260ms                               | 종이 이동과 한 줄 진입 |
+| `--b-draw`    | 460ms                               | 펜과 괘선              |
+| `--b-trace`   | 920ms                               | 긴 선                  |
+| `--b-stagger` | 70ms                                | 진입 순서              |
+| `--b-out`     | `cubic-bezier(0.22, 0.74, 0.24, 1)` | 기본 이징              |
 
-### Neutral
-- **Desk** (`desk`): page background behind the sheet, the app sidebar column, outline button fill.
-- **Sheet** (`sheet`): the proof paper. Cards, popovers, the top bar, the working area of a work, the auth card, the landing sheet.
-- **Graphite Muted** (`graphite-muted`): secondary text, captions, field labels, inactive nav.
-- **Pencil Grey** (`pencil-grey`): input strokes, undecided (dotted) markers, unplanted thread lines, scrollbar thumb.
-- **Margin Rule** (`margin-rule`): the 1px rule. Section dividers, the margin column's left rule, card borders, top-bar and tab baselines.
-- **Hairline** (`hairline`): the default component border from the shadcn layer.
-- **Wash / Wash Muted** (`wash`, `wash-muted`): secondary button fill and hover fill for outline and ghost controls.
+화면 진입은 900ms 안에 마친다. 제목, 괘선, 본문 순서로 한 장면을 구성한다. 주 조작에 전환을 붙인다. 마우스와 키보드 포커스에 같은 반응을 제공한다. 내용이 있는 선, 막대와 숫자는 한 번 재생하고 최종 상태를 유지한다. 반복 재생은 진행 중일 때만 쓴다. 커서 깜빡임은 세 번 뒤 멈춘다.
 
-### Named Rules
-**The Two Pencils Rule.** Proof red only marks what is wrong; blue pencil only carries the canon and focus. Never swap them, never use either as a solid fill (translucent text highlights only: 5% red hover, 12% blue comment highlight, 22% blue selection), and never introduce a third accent.
+애니메이션은 `transform`, `opacity`, `clip-path`, `stroke-dashoffset`을 쓴다. 입력 칸과 원고 편집 칸은 고정한다. 펼침에는 `Disclosure`를 쓴다. 스크립트가 늦어도 서버에서 그린 내용을 읽을 수 있게 한다. 모션 감소 설정에는 정지한 최종 상태를 제공한다.
 
-**The Shape Carries Status Rule.** Fact status reads without colour: confirmed is a solid blue line, assumed is dashed blue, undecided is dotted grey.
+## 금지
 
-## Typography
+- 크림색과 베이지색 바탕, 색면 머리 띠, 굵은 검정 테두리, 둥근 모서리, 그림자, 카드 격자, 알약 칩, 큰 번호 카드, 사방 테두리로 구획한 본문 상자.
+- 기울이거나 겹친 카드, 손글씨 메모, 종이 결, 색 그라데이션, 유리 효과, 발광, 이모지, 장식 삽화, Tailwind 기본 색.
+- 아이콘과 제목과 설명을 넣은 3열 카드, 제목과 설명과 버튼 두 개를 가운데 쌓은 구성, 왼쪽에 굵은 선을 댄 인용.
+- 기울기, 튐, 흔들림, 회전, 확대, 흐림, 그림자 변화, 시차, 부유 효과, 흐르는 띠.
 
-**Display Font:** Noto Serif KR via `next/font` (with AppleMyungjo, Nanum Myeongjo, serif)
-**Body Font:** system Hangul sans (Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, system-ui)
-
-**Character:** A typeset Myeongjo for everything that is the story or the canon, against an unbranded system sans for everything that is a control. The split tells the author at a glance which text is theirs.
-
-### Hierarchy
-- **Display** (700, 2.5rem mobile to 3.75rem desktop, 1.18): the intro page headline only, balanced, two lines.
-- **Headline** (600, 1.875rem to 2.25rem, 1.25): intro page section heads.
-- **Title** (600, 1.75rem, 1.25): app page titles (page header), auth wordmark at 1.875rem/700.
-- **Manuscript** (400, 17px, 2.1): the editor and its highlight layer, which must share exactly this font, padding and leading. Landing excerpts use the same 2.1 leading at 20 to 24px.
-- **Canon quote** (400, 15px, 28px): quoted manuscript and wiki lines inside findings; the margin note uses 18px relaxed.
-- **Lede** (sans 400, 1.125 to 1.25rem, 1.625, max 34rem): intro paragraphs.
-- **Body** (sans 400, 0.875rem): UI text, nav, descriptions.
-- **Label** (sans 500, 0.75rem): badges, finding kind, field captions such as 원고 / 위키 원문.
-
-### Named Rules
-**The Whose Text Rule.** Serif means manuscript, canon or a heading; sans means interface. A control is never set in serif, and a quoted sentence is never set in sans.
-
-**The Keep-Words Rule.** Korean headings and prose use `break-keep` so words do not split mid-syllable-block.
-
-## Layout
-
-The intro page is one centred sheet (max 1320px) on the desk with a 24px desk margin from `sm` up. Inside, a two-column proof row from `lg`: a text block (max 44 to 46rem) and a margin column of 21rem (24rem at `xl`) behind a 1px rule with 40px inner padding. Sheet gutters are 24px, 48px at `sm`, 80px at `lg`; sections are separated by a full-width rule and 64 to 96px of vertical space. Below `lg` the margin note stacks under its sentence with a top rule, and leaders are hidden.
-
-The app is a top bar (56px, sheet, bottom rule), then on a work a 224px sidebar on the desk and a sheet working area with a left rule (16px padding mobile, 40px desktop). The writing screen splits manuscript and side panel; findings switch to two columns (manuscript | canon) inside their card via a container query. Auth pages are a single 384px sheet card.
-
-Spacing steps observed: 8, 12, 16, 24, 40 and 80px.
-
-## Elevation & Depth
-
-Flat by default. Depth comes from tone (sheet on desk) and 1px rules, not shadows. There is one shadow in the system, for the sheet itself.
-
-### Shadow Vocabulary
-- **Sheet lift** (`box-shadow: 0 1px 2px rgb(43 45 44 / 0.06), 0 18px 40px -24px rgb(43 45 44 / 0.35)`): the landing sheet and the auth card, where a whole page of paper sits on the desk. Not on cards, panels or buttons.
-
-### Named Rules
-**The One Sheet Rule.** Only a full sheet of paper lifts. Cards inside the sheet are bordered with the margin rule, never shadowed.
-
-## Shapes
-
-Nearly square paper. The base radius is 4px (buttons, inputs, tabs' list); cards, badges, nav items and findings use the small step (about 2.4px). Full circles appear only as ledger dots and the hand-drawn proof circle. Borders are always 1px, in margin rule or hairline; the 2px weight is reserved for marks (underlines, ledger lines, active tab).
-
-## Components
-
-### Buttons
-Type-like and plain.
-- **Shape:** 4px corners, 32px tall (28px small), sans 14px medium.
-- **Primary:** graphite fill, sheet text. The intro page start button is the same at 48px tall, 24px side padding, 16px semibold.
-- **Hover / Focus:** primary fades to 80% graphite; focus shows a 3px blue-pencil ring at 50%; press nudges down 1px.
-- **Outline / Ghost / Secondary:** outline sits on desk with a hairline border; ghost is bare; both hover to wash. Secondary is a wash fill.
-- **Text links as actions:** underlined with the margin rule colour, darkening to the current colour on hover (로그인, card links).
-
-### Chips (filters, statuses)
-- **Filters:** URL-driven links styled as small buttons; active is primary, inactive is outline.
-- **Fact status:** outline badge on sheet, 20px, small radius. Confirmed solid blue, assumed dashed blue with `[가정]`, undecided dotted grey.
-
-### Cards / Containers
-- **Corner Style:** small radius (about 2.4px).
-- **Background:** sheet.
-- **Shadow Strategy:** none (see The One Sheet Rule).
-- **Border:** 1px margin rule.
-- **Internal Padding:** 16px (12px compact).
-
-### Inputs / Fields
-- **Style:** 1px pencil-grey stroke, transparent on sheet, 4px corners, 32px tall; caret in blue pencil.
-- **Focus:** border turns blue pencil with a 3px ring at 50%.
-- **Error / Disabled:** border in proof red with a 20% red ring; disabled at 50% opacity.
-
-### Navigation
-- **Top bar:** sheet, bottom rule, serif wordmark left, user name and ghost 로그아웃 right.
-- **Work sidebar:** on desk, the work title in serif, a 홈 item, then plain-text group labels (원고, 설정, 연재, 작품). Items are 14px sans muted; active sits on sheet with an inset 1px margin-rule outline and medium weight. The approvals count is a graphite chip with tabular numerals. Mobile collapses to a title row with a menu.
-- **Tabs:** a line under the row in margin rule; the active tab is semibold graphite with a 2px graphite underline.
-
-### Proof Mark (signature)
-The finding mark, drawn once.
-- **Intro page:** a hand-drawn proof-red ellipse (1.75px, round caps, non-scaling) around the wrong words, plus on `lg` a 1.5px red leader from the circle to the margin note, which aligns to the marked line. The first-screen mark draws itself (0.45s stroke, then the leader reaches in 0.25s after 0.6s); later marks are static.
-- **In the app:** a 2px proof-red underline under the issue in the manuscript, drawn left to right once in 0.45s when the finding lands, thickening to 3px when the finding is active. This is the user's settled choice; the app does not use the circle.
-- **Motion:** one pencil-stroke draw, `cubic-bezier(0.16, 1, 0.3, 1)`, under 900ms in total. Reduced motion shows the mark already drawn.
-
-### Finding Card
-Sheet card with a kind label in proof red and severity in muted text, then 원고 (the sentence underlined in red, clickable to jump) beside 위키 원문 (the fact in blue serif, with a link to its card), split by a rule. The suggestion follows in red serif, then actions: 제안대로 고치기 (primary), 위키 고치기 (secondary), 무시 (ghost).
-
-### Margin Note
-On the intro page: the correction in red serif 24px semibold, the wiki original in blue serif 18px, and a muted caption naming the source card.
-
-## Do's and Don'ts
-
-### Do:
-- **Do** keep proof red for marks and errors and blue pencil for the canon and focus, nothing else.
-- **Do** draw marks as strokes: circle and leader on the intro page, a 2px underline in the app, wavy red for spelling, dotted blue for naming.
-- **Do** set manuscript and canon text in Noto Serif KR and controls in the system sans.
-- **Do** separate surfaces with the 1px margin rule (`#c9cdc8`) and keep corners at 2 to 4px.
-- **Do** quote both texts in full when showing a finding: the manuscript sentence and the wiki original.
-- **Do** write every UI string in short, plain Korean; compose shadcn (Base UI) parts with the `render` prop.
-- **Do** honour reduced motion by showing marks already drawn.
-
-### Don't:
-- **Don't** mark findings with tinted left borders, coloured backgrounds or pill badges.
-- **Don't** shadow cards, panels or buttons; only a whole sheet lifts.
-- **Don't** add a third accent colour or use either pencil as a large fill.
-- **Don't** build a SaaS hero with a framed app screenshot followed by a row of feature cards.
-- **Don't** add a dark theme or theme switch; the system is light only.
-- **Don't** author motion beyond the pencil-stroke draw (plain hover and colour transitions aside), and never loop it.
+1440, 1280, 1093, 768, 390, 320px에서 내용 잘림과 가로 넘침을 확인한다. 좁은 화면에서는 넓은 표만 자체 영역 안에서 가로로 스크롤한다.

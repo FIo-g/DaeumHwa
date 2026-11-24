@@ -17,7 +17,7 @@ export async function POST(
   { params }: { params: Promise<{ jobId: string }> },
 ): Promise<Response> {
   const user = await getSessionUser()
-  if (!user) return jsonError(401, '로그인이 필요합니다.')
+  if (!user) return jsonError(401, '로그인이 필요해요.')
 
   const { jobId } = await params
   try {

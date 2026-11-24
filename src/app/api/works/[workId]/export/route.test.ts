@@ -37,7 +37,7 @@ describe('GET /api/works/[workId]/export', () => {
     const work = await createTestWork(db, owner.id)
     const response = await callGet(work.id)
     expect(response.status).toBe(401)
-    expect(await response.json()).toEqual({ error: '로그인이 필요합니다.' })
+    expect(await response.json()).toEqual({ error: '로그인이 필요해요.' })
   })
 
   it('returns the backup payload for the owner', async () => {
@@ -68,7 +68,7 @@ describe('GET /api/works/[workId]/export', () => {
 
     const response = await callGet(work.id)
     expect(response.status).toBe(403)
-    expect(await response.json()).toEqual({ error: '이 작업을 할 권한이 없습니다.' })
+    expect(await response.json()).toEqual({ error: '이 작업을 할 권한이 없어요.' })
   })
 
   it('returns 404 JSON for a non-member', async () => {
@@ -79,7 +79,7 @@ describe('GET /api/works/[workId]/export', () => {
 
     const response = await callGet(work.id)
     expect(response.status).toBe(404)
-    expect(await response.json()).toEqual({ error: '작품을 찾을 수 없습니다.' })
+    expect(await response.json()).toEqual({ error: '작품을 찾을 수 없어요.' })
   })
 
   it('returns 404 JSON for a malformed work id', async () => {

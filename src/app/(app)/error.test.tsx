@@ -16,7 +16,7 @@ describe('AppError boundary', () => {
   it('shows Korean copy and hides the raw error message', () => {
     render(<AppError error={new Error('boom')} retry={() => undefined} />)
 
-    expect(screen.getByText('문제가 발생했습니다')).toBeInTheDocument()
+    expect(screen.getByText('페이지를 불러오지 못했어요')).toBeInTheDocument()
     expect(screen.queryByText(/boom/)).not.toBeInTheDocument()
   })
 

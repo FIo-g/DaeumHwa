@@ -222,8 +222,64 @@ describe('CheckPanel', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(fetchMock.mock.calls[0][0]).toBe('/api/works/work-1/chapters/c1/check')
-    expect(screen.getByText('점검 중… 0초')).toBeTruthy()
+    expect(screen.getByText(/^점검 중…$/)).toHaveTextContent('점검 중… 0초')
     expect(screen.getByRole('button', { name: '취소' })).toBeTruthy()
+  })
+
+  it('hides the empty state while a check runs and brings it back after a cancel', async () => {
+    fetchMock.mockImplementation(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          )
+        }),
+    )
+    render(<CheckPanel data={makeData({ issues: [] })} api={makeApi()} text="본문" />)
+    expect(screen.getByText('열린 지적이 없어요.')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '회차 점검' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '취소' })).toBeTruthy())
+    expect(screen.getByRole('status').textContent).toBe(
+      '설정과 어긋나는 문장을 찾고 있어요. 보통 15~25초 걸려요.',
+    )
+    expect(screen.queryByText('열린 지적이 없어요.')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(await screen.findByText('열린 지적이 없어요.')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('hides the previous count, disables findings and removes proof marks during a recheck, then restores them on cancel', async () => {
+    fetchMock.mockImplementation(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          )
+        }),
+    )
+    const count = () => screen.queryByText((_, element) => element?.textContent === '열린 지적 1건')
+    const api = makeApi()
+    render(<CheckPanel data={makeData()} api={api} text={`안녕.\n${QUOTE}`} />)
+    expect(count()).toBeVisible()
+    expect(screen.getByRole('button', { name: '제안대로 고치기' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '회차 점검' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    expect(count()).toBeNull()
+    expect(screen.queryByRole('button', { name: '제안대로 고치기' })).toBeNull()
+    expect(screen.getByText(WIKI)).toBeVisible()
+    expect(api.setHighlights).toHaveBeenLastCalledWith('check', [])
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(await screen.findByRole('button', { name: '제안대로 고치기' })).toBeVisible()
+    expect(count()).toBeVisible()
+    expect(api.setHighlights).toHaveBeenLastCalledWith('check', [
+      expect.objectContaining({ id: 'issue-1' }),
+    ])
   })
 
   it('cancels a running check, aborts its request and brings back the check button', async () => {
@@ -245,7 +301,7 @@ describe('CheckPanel', () => {
 
     expect(await screen.findByRole('button', { name: '회차 점검' })).toBeTruthy()
     expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true)
-    expect(toast).toHaveBeenCalledWith('취소했습니다.')
+    expect(toast).toHaveBeenCalledWith('취소했어요.')
     expect(toast.error).not.toHaveBeenCalled()
   })
 
@@ -254,8 +310,20 @@ describe('CheckPanel', () => {
 
     expect(screen.getByText('원고')).toBeTruthy()
     expect(screen.getByText('위키 원문')).toBeTruthy()
-    expect(screen.getByText(QUOTE)).toBeTruthy()
+    expect(screen.getByRole('button', { name: QUOTE })).toHaveTextContent(QUOTE)
     expect(screen.getByText(WIKI)).toBeTruthy()
+  })
+
+  it('opens and closes evidence without replacing the finding or its original quotes', () => {
+    render(<CheckPanel data={makeData()} api={makeApi()} text={`안녕.\n${QUOTE}`} />)
+    const toggle = screen.getByRole('button', { name: /설정 충돌/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: '제안대로 고치기' })).toBeNull()
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: QUOTE })).toBeInTheDocument()
+    expect(screen.getByText(WIKI)).toBeVisible()
   })
 
   it('applies the suggestion to the manuscript and marks the issue accepted', async () => {
@@ -348,7 +416,7 @@ describe('CheckPanel', () => {
 
     lastToastAction()()
     expect(api.getText()).toBe(`안녕.\n${SUGGESTION} 그리고 더 썼다.`)
-    expect(vi.mocked(toast.error)).toHaveBeenCalledWith('그 사이 원고가 바뀌어 되돌릴 수 없습니다.')
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith('그 사이 원고가 바뀌어 되돌릴 수 없어요.')
   })
 
   it('hides the check and fix controls for commenters', () => {

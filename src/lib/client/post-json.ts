@@ -1,7 +1,7 @@
 import type { ActionResult } from '@/lib/result'
 
 const RETRY_MESSAGE = '잠시 후 다시 시도해 주세요.'
-const CANCELLED_MESSAGE = '취소했습니다.'
+const CANCELLED_MESSAGE = '취소했어요.'
 
 /**
  * POSTs JSON to a route handler that answers with an ActionResult. Use it for AI calls that

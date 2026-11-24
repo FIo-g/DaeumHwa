@@ -2,17 +2,18 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { AiBadge } from '@/components/app/ai-badge'
 import { FactStatusSelect } from '@/components/app/fact-status-select'
 import { Button } from '@/components/ui/button'
 import type { FactStatus } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
-import { chapterLabel, PROPOSAL_SOURCE_LABEL, PROPOSAL_TYPE_LABEL } from '@/lib/labels'
+import { chapterLabel } from '@/lib/labels'
 import type { ProposalPayloadMap } from '@/lib/proposal-payloads'
 import { approveProposalAction, rejectProposalAction } from '@/server/actions/proposals'
 import type { ProposalView } from '@/server/proposals'
-import { evidenceOf, summarizeProposal } from './proposal-summary'
+import { ProposalDetails } from './proposal-details'
 import { ProposalPayloadEditor } from './proposal-payload-editor'
+
+export type ProposalDecision = 'approved' | 'rejected'
 
 export type ProposalChapterOption = { id: string; position: number; title: string }
 
@@ -23,6 +24,10 @@ type ProposalCardProps = {
   /** Called after the proposal is approved or rejected, so the list can drop it. */
   onDone?: (id: string) => void
   compact?: boolean
+  queueBusy?: boolean
+  decision?: ProposalDecision
+  onBeginDecision?: () => boolean
+  onFinishDecision?: (id: string, decision: ProposalDecision | null) => void
 }
 
 /** One proposal: what it would change, its source sentence, and approve / edit / reject. */
@@ -32,6 +37,10 @@ export function ProposalCard({
   chapters,
   onDone,
   compact = false,
+  queueBusy = false,
+  decision,
+  onBeginDecision,
+  onFinishDecision,
 }: ProposalCardProps) {
   const isFact = proposal.type === 'fact_create'
   const suggested = (proposal.payload as Partial<ProposalPayloadMap['fact_create']>).suggestedStatus
@@ -47,10 +56,15 @@ export function ProposalCard({
 
   const chapter = proposal.chapterId ? chapters.find((c) => c.id === proposal.chapterId) : undefined
   const chapterText = chapter ? chapterLabel(chapter.position, chapter.title) : null
-  const summary = summarizeProposal(proposal.type, draft)
-  const evidence = evidenceOf(proposal.type, draft)
+
+  function finish(result: boolean, outcome: ProposalDecision) {
+    setBusy(false)
+    if (onFinishDecision) onFinishDecision(proposal.id, result ? outcome : null)
+    else if (result) onDone?.(proposal.id)
+  }
 
   async function approve() {
+    if (busy || queueBusy || (onBeginDecision && !onBeginDecision())) return
     setBusy(true)
     const input: {
       proposalId: string
@@ -59,52 +73,43 @@ export function ProposalCard({
     } = { proposalId: proposal.id }
     if (edited) input.payloadOverride = draft
     if (isFact) input.factStatus = factStatus
-    const data = await runAction(approveProposalAction(input), { success: '승인했습니다.' })
-    setBusy(false)
-    if (data) onDone?.(proposal.id)
+    const data = await runAction(approveProposalAction(input), { success: '승인했어요.' })
+    finish(data != null, 'approved')
   }
 
   async function reject() {
+    if (busy || queueBusy || (onBeginDecision && !onBeginDecision())) return
     setBusy(true)
     const data = await runAction(rejectProposalAction({ proposalId: proposal.id }), {
-      success: '거절했습니다.',
+      success: '거절했어요.',
     })
-    setBusy(false)
-    if (data) onDone?.(proposal.id)
+    finish(data != null, 'rejected')
   }
 
   return (
     <article
-      className={
-        compact
-          ? 'grid gap-2 rounded-sm border border-rule bg-sheet p-3'
-          : 'grid gap-3 rounded-sm border border-rule bg-sheet p-4'
-      }
+      className="wg-approvals-card"
+      data-compact={compact}
+      data-decision={decision}
+      aria-busy={busy || undefined}
     >
-      <div className="grid gap-1">
-        <p className="font-serif text-[15px] font-semibold">{summary.headline}</p>
-        {summary.detail && <p className="text-sm text-muted-foreground">{summary.detail}</p>}
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <AiBadge />
-          <span>{PROPOSAL_TYPE_LABEL[proposal.type]}</span>
-          <span>{PROPOSAL_SOURCE_LABEL[proposal.source]}</span>
-          {chapter && chapterText && (
-            <Link href={`/works/${workId}/chapters/${chapter.id}`} className="underline">
+      <ProposalDetails
+        proposal={proposal}
+        payload={draft}
+        compact={compact}
+        chapter={
+          chapter &&
+          chapterText && (
+            <Link href={`/works/${workId}/chapters/${chapter.id}`} className="b-link">
               {chapterText}
             </Link>
-          )}
-        </p>
-      </div>
-
-      {!compact && evidence && (
-        <blockquote className="border-l border-rule pl-3 font-serif text-sm leading-relaxed text-foreground/80">
-          &ldquo;{evidence}&rdquo;
-        </blockquote>
-      )}
+          )
+        }
+      />
 
       {isFact && (
-        <div className="grid gap-1.5">
-          <p className="text-xs text-muted-foreground">태그</p>
+        <div className="wg-approvals-fact grid justify-items-start gap-1.5">
+          <p className="text-xs text-muted-ink">태그</p>
           <FactStatusSelect value={factStatus} onChange={setFactStatus} />
         </div>
       )}
@@ -120,20 +125,20 @@ export function ProposalCard({
         />
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="wg-approvals-actions">
         <Button
           size="sm"
-          variant="ghost"
+          variant="link"
           aria-expanded={editing}
           onClick={() => setEditing((v) => !v)}
-          disabled={busy}
+          disabled={busy || queueBusy}
         >
           {editing ? '수정 닫기' : '수정'}
         </Button>
-        <Button size="sm" variant="outline" onClick={reject} disabled={busy}>
+        <Button size="sm" variant="outline" onClick={reject} disabled={busy || queueBusy}>
           거절
         </Button>
-        <Button size="sm" onClick={approve} disabled={busy}>
+        <Button size={compact ? 'sm' : 'default'} onClick={approve} disabled={busy || queueBusy}>
           승인
         </Button>
       </div>

@@ -37,6 +37,21 @@ afterEach(() => {
 })
 
 describe('ManuscriptEditor', () => {
+  it('labels each finding link as a number and hides the links while rechecking', () => {
+    const onShowIssue = vi.fn()
+    const { rerender, props } = renderEditor({
+      highlights: [{ id: 'issue', start: 0, end: 2, kind: 'issue', order: 0 }],
+      onShowIssue,
+    })
+    expect(screen.getByRole('group', { name: '원고의 지적 번호' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '지적 1번 보기' }))
+    expect(onShowIssue).toHaveBeenCalledWith('issue')
+    rerender(
+      <ManuscriptEditor {...props} check={{ checking: true, resultKey: 0, issueCount: 1 }} />,
+    )
+    expect(screen.queryByRole('button', { name: '지적 1번 보기' })).toBeNull()
+  })
+
   it('reports typed text through onBodyChange', () => {
     const { props } = renderEditor()
     fireEvent.change(bodyBox(), { target: { value: '가나다라마바사아' } })
@@ -57,7 +72,7 @@ describe('ManuscriptEditor', () => {
     expect(props.onComposingChange).toHaveBeenLastCalledWith(false)
   })
 
-  it('keeps highlights frozen while composing and applies them after compositionend', () => {
+  it('keeps the previous findings while composing and applies new ones after compositionend', () => {
     const first: Highlight[] = [{ id: 'a', start: 0, end: 2, kind: 'issue' }]
     const second: Highlight[] = [{ id: 'b', start: 5, end: 7, kind: 'issue' }]
     const { rerender, props } = renderEditor({ highlights: first })
@@ -65,13 +80,14 @@ describe('ManuscriptEditor', () => {
     const marksBefore = Array.from(document.querySelectorAll('mark')).map((m) => m.textContent)
     expect(marksBefore).toEqual(['가나'])
 
+    bodyBox().setSelectionRange(props.body.length, props.body.length)
     fireEvent.compositionStart(bodyBox())
     // The author keeps typing inside the composition: the body changes, highlights change too.
     fireEvent.change(bodyBox(), { target: { value: '가나다라마바사ㅇ' } })
     expect(props.onBodyChange).toHaveBeenCalledWith('가나다라마바사ㅇ')
     rerender(<ManuscriptEditor {...props} body="가나다라마바사ㅇ" highlights={second} />)
 
-    // Highlight layer must not have been recomputed yet.
+    // The previous finding remains visible until composition ends.
     expect(Array.from(document.querySelectorAll('mark')).map((m) => m.textContent)).toEqual([
       '가나',
     ])
@@ -105,40 +121,37 @@ describe('ManuscriptEditor', () => {
     expect(screen.getByLabelText('회차 제목')).toHaveAttribute('readonly')
   })
 
-  it('keeps the window scroll position when the textarea is re-measured', () => {
-    // Browser clamp: collapsing the textarea to height auto shortens the page for one layout
-    // pass, and reading scrollHeight at that moment resets window.scrollY to 0.
-    let scrollPos = 1234
-    const originalScrollY = Object.getOwnPropertyDescriptor(window, 'scrollY')
-    Object.defineProperty(window, 'scrollY', { configurable: true, get: () => scrollPos })
-    const scrollTo = vi
-      .spyOn(window, 'scrollTo')
-      .mockImplementation((options?: ScrollToOptions | number) => {
-        if (typeof options === 'object' && options.top !== undefined) scrollPos = options.top
-      })
+  it('shares the text layout and keeps a final empty row in the sizing mirror', () => {
+    const { rerender, props } = renderEditor({ body: '첫 줄' })
+    const mirror = document.querySelector('.wg-writing-mirror')
+    expect(bodyBox()).toHaveClass('wg-writing-text')
+    expect(mirror).toHaveClass('wg-writing-text')
 
-    try {
-      const { rerender, props } = renderEditor({ body: '가나다' })
-      scrollTo.mockClear()
-      scrollPos = 1234
+    rerender(<ManuscriptEditor {...props} body={'첫 줄\n'} />)
 
-      const el = bodyBox()
-      Object.defineProperty(el, 'scrollHeight', {
-        configurable: true,
-        get() {
-          scrollPos = 0
-          return 400
-        },
-      })
+    expect(mirror?.textContent).toBe('첫 줄\n\u200b')
+    expect(bodyBox().value).toBe('첫 줄\n')
+    expect(bodyBox().style.height).toBe('')
+  })
 
-      rerender(<ManuscriptEditor {...props} body="가나다라마바사" />)
+  it('follows a highlighted phrase after the composing character changes its offset', () => {
+    const highlight: Highlight = { id: 'a', start: 1, end: 3, kind: 'issue' }
+    const { rerender, props } = renderEditor({ body: '가나다', highlights: [highlight] })
+    bodyBox().setSelectionRange(0, 0)
+    fireEvent.compositionStart(bodyBox())
+    rerender(<ManuscriptEditor {...props} body="ㅎ가나다" />)
 
-      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 1234 }))
-      expect(scrollPos).toBe(1234)
-    } finally {
-      scrollTo.mockRestore()
-      if (originalScrollY) Object.defineProperty(window, 'scrollY', originalScrollY)
-      else delete (window as unknown as Record<string, unknown>).scrollY
-    }
+    expect(document.querySelector('mark')).toHaveTextContent('나다')
+    expect(document.querySelector('.wg-writing-mirror')).toHaveTextContent('ㅎ가나다')
+  })
+
+  it('pauses a highlight when composition replaces part of the highlighted phrase', () => {
+    const highlight: Highlight = { id: 'a', start: 0, end: 2, kind: 'issue' }
+    const { rerender, props } = renderEditor({ body: '가나다', highlights: [highlight] })
+    bodyBox().setSelectionRange(1, 2)
+    fireEvent.compositionStart(bodyBox())
+    rerender(<ManuscriptEditor {...props} body="가ㅎ다" />)
+
+    expect(document.querySelector('mark')).toBeNull()
   })
 })

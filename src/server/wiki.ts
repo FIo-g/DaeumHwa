@@ -91,7 +91,7 @@ function sameList(a: string[], b: string[]): boolean {
 
 async function loadEntry(db: Db, entryId: string): Promise<EntryRow> {
   const [row] = await db.select().from(wikiEntries).where(eq(wikiEntries.id, entryId)).limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
@@ -243,7 +243,7 @@ export async function updateEntry(
   return db.transaction(async (tx) => {
     await lockWork(tx, workId)
     const current = await loadEntry(tx, entryId)
-    if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드는 수정할 수 없습니다.')
+    if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드는 수정할 수 없어요.')
 
     const values = normalizeEntry({
       kind: patch.kind ?? current.kind,
@@ -288,7 +288,7 @@ export async function archiveEntry(
   const workId = await requireRowWork(db, 'wiki_entries', entryId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadEntry(db, entryId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 카드입니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 카드예요.')
 
   return db.transaction(async (tx) => {
     const now = new Date()
@@ -324,7 +324,7 @@ export async function restoreEntry(
   return db.transaction(async (tx) => {
     await lockWork(tx, workId)
     const current = await loadEntry(tx, entryId)
-    if (!current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드가 아닙니다.')
+    if (!current.archivedAt) throw new AppError('BAD_STATE', '보관된 카드가 아니에요.')
     await assertEntryNameFree(tx, workId, current.kind, current.name, entryId)
     const [row] = await tx
       .update(wikiEntries)

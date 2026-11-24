@@ -1,0 +1,248 @@
+@layer components {
+  .wg-auth-main {
+    flex: 1;
+    min-inline-size: 0;
+    padding-block: var(--b-band-pad);
+  }
+
+  .wg-auth-status {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    align-items: start;
+    max-inline-size: 48rem;
+    gap: var(--b-s4);
+    padding-block: var(--b-band-pad);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-auth-status-header::after {
+      animation: wg-shell-rule-in var(--b-draw) var(--b-out) both;
+    }
+  }
+
+  .wg-auth-invite-notice {
+    margin-block-end: var(--b-s4);
+  }
+
+  .wg-auth-footer {
+    border-block-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-auth-sheet {
+    max-inline-size: 56rem;
+    padding-block-end: var(--b-s5);
+  }
+
+  .wg-auth-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    align-items: start;
+    column-gap: clamp(var(--b-s5), 3.3vw, var(--b-s7));
+    padding-block-start: var(--b-s4);
+  }
+
+  .wg-auth-heading {
+    display: grid;
+    gap: var(--b-s4);
+    min-inline-size: 0;
+    word-break: keep-all;
+  }
+
+  .wg-auth-body {
+    align-self: stretch;
+    min-inline-size: 0;
+    border-inline-start: var(--b-line) solid var(--b-grid);
+    padding-inline-start: clamp(var(--b-s5), 3.3vw, var(--b-s7));
+  }
+
+  .wg-auth-menu {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-block: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-auth-menu-item {
+    display: grid;
+    min-block-size: 44px;
+    place-items: center;
+    font-size: var(--b-t-label);
+    font-weight: 500;
+  }
+
+  .wg-auth-menu-item + .wg-auth-menu-item {
+    border-inline-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-auth-menu-item[aria-current='page'] {
+    color: var(--b-paper);
+    background-color: var(--b-ink);
+  }
+
+  a.wg-auth-menu-item:is(:hover, :focus-visible) {
+    text-decoration: underline var(--b-rule);
+  }
+
+  .wg-auth-input-rule {
+    position: relative;
+  }
+
+  .wg-auth-input-rule > [data-slot='input']:not([aria-invalid='true']) {
+    border-block-end-color: transparent;
+  }
+
+  .wg-auth-input-rule::before,
+  .wg-auth-input-rule::after {
+    position: absolute;
+    z-index: 1;
+    inset: auto 0 0;
+    border-block-end: var(--b-line) solid var(--b-grid);
+    pointer-events: none;
+    content: '';
+  }
+
+  .wg-auth-input-rule::after {
+    border-block-end: var(--b-rule) solid var(--b-ink);
+    clip-path: inset(0 100% 0 0);
+  }
+
+  .wg-auth-input-rule:is(:hover, :focus-within)::after {
+    clip-path: inset(0);
+  }
+
+  .wg-auth-input-rule:has([aria-invalid='true'])::before {
+    border-color: var(--b-ink);
+  }
+
+  .wg-auth-error {
+    align-self: stretch;
+    border-block-start: var(--b-rule) solid var(--b-grid);
+    padding-block-start: var(--b-s2);
+    color: var(--b-ink);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  .wg-auth-action[aria-busy='true'] {
+    opacity: 1;
+  }
+
+  .wg-auth-trial {
+    min-inline-size: min(12rem, 100%);
+  }
+
+  .wg-auth-trial[data-size='large'] {
+    min-inline-size: min(13rem, 100%);
+  }
+
+  .wg-auth-progress {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    inline-size: 2rem;
+    block-size: 0.5rem;
+    background-color: var(--b-paper);
+  }
+
+  .wg-auth-progress > span {
+    position: relative;
+    border: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-auth-progress > span + span {
+    border-inline-start: 0;
+  }
+
+  .wg-auth-progress > span::after {
+    position: absolute;
+    inset: 0;
+    background-color: var(--b-ink);
+    content: '';
+  }
+
+  @media (width < 48rem) {
+    .wg-auth-columns {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: var(--b-s5);
+      padding-block-start: var(--b-s2);
+    }
+
+    .wg-auth-body {
+      border-inline-start: 0;
+      border-block-start: var(--b-line) solid var(--b-grid);
+      padding: var(--b-s5) 0 0;
+    }
+
+    .wg-auth-heading + .wg-auth-body {
+      border-block-start: 0;
+      padding-block-start: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-auth-written-line,
+    .wg-auth-error {
+      animation: wg-auth-write-line var(--b-step) var(--b-out) backwards;
+    }
+
+    .wg-auth-written-line {
+      animation-delay: var(--wg-auth-line-start, var(--b-step));
+    }
+
+    .wg-auth-field {
+      --wg-auth-line-start: var(--b-step);
+    }
+
+    .wg-auth-field:nth-child(2) {
+      --wg-auth-line-start: calc(var(--b-step) + var(--b-stagger));
+    }
+
+    .wg-auth-field:nth-child(3) {
+      --wg-auth-line-start: calc(var(--b-step) + var(--b-stagger) * 2);
+    }
+
+    .wg-auth-input-rule::before {
+      animation: wg-auth-write-line var(--b-draw) var(--b-out) var(--wg-auth-line-start) backwards;
+    }
+
+    .wg-auth-input-rule::after {
+      transition: clip-path var(--b-quick) var(--b-out);
+    }
+
+    .wg-auth-progress > span::after {
+      animation: wg-auth-fill-cells calc(var(--b-cell) * 16) steps(1, end) infinite backwards;
+    }
+
+    .wg-auth-progress > span:nth-child(2)::after {
+      animation-delay: var(--b-stagger);
+    }
+
+    .wg-auth-progress > span:nth-child(3)::after {
+      animation-delay: calc(var(--b-stagger) * 2);
+    }
+
+    .wg-auth-progress > span:nth-child(4)::after {
+      animation-delay: calc(var(--b-stagger) * 3);
+    }
+  }
+
+  @keyframes wg-auth-write-line {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-auth-fill-cells {
+    0%,
+    75%,
+    100% {
+      opacity: 0;
+    }
+    6.25% {
+      opacity: 1;
+    }
+  }
+}

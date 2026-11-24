@@ -20,7 +20,7 @@ describe('GlobalError boundary', () => {
     )
 
     expect(html).toContain('<html lang="ko">')
-    expect(html).toContain('문제가 발생했습니다')
+    expect(html).toContain('페이지를 불러오지 못했어요')
     expect(html).not.toContain('>x<')
   })
 
@@ -28,7 +28,7 @@ describe('GlobalError boundary', () => {
     const retry = vi.fn()
     render(<GlobalError error={new Error('x')} retry={retry} />)
 
-    expect(screen.getByRole('heading', { name: '문제가 발생했습니다' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '페이지를 불러오지 못했어요' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
 
     expect(retry).toHaveBeenCalledTimes(1)

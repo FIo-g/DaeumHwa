@@ -73,9 +73,9 @@ function ApprovalQueue({
       return
     }
     if (result.failed.length > 0) {
-      toast.error(`${result.failed.length}건은 승인하지 못했습니다.`)
+      toast.error(`${result.failed.length}건은 승인하지 못했어요.`)
     } else {
-      toast.success(`${result.approved}건을 승인했습니다.`)
+      toast.success(`${result.approved}건을 승인했어요.`)
     }
     onChanged()
     const reloaded = await runAction(listProposalsAction({ workId, chapterId, status: 'pending' }))
@@ -94,19 +94,15 @@ function ApprovalQueue({
     <>
       <DialogHeader>
         <DialogTitle>이 회차에서 찾은 위키 후보 {count}건</DialogTitle>
-        <DialogDescription>
-          승인하면 위키에 반영됩니다. 거절한 후보는 위키에 들어가지 않습니다.
-        </DialogDescription>
+        <DialogDescription>승인한 후보만 위키에 들어가요.</DialogDescription>
       </DialogHeader>
 
       {items === null && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
 
-      {items !== null && items.length === 0 && (
-        <EmptyState title="승인 대기 중인 후보가 없습니다." />
-      )}
+      {items !== null && items.length === 0 && <EmptyState title="승인 대기 중인 후보가 없어요." />}
 
       {items !== null && items.length > 0 && (
-        <div className="grid gap-3">
+        <div className="wg-panels-approval-list">
           {items.map((item) => (
             <ProposalCard
               key={item.id}
@@ -123,7 +119,7 @@ function ApprovalQueue({
       {count > 0 && (
         <div className="flex justify-end">
           <Button onClick={() => void approveAll()} disabled={busy}>
-            모두 승인 (AI 태그 그대로)
+            AI 태그로 모두 승인
           </Button>
         </div>
       )}

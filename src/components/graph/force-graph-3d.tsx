@@ -1,45 +1,64 @@
 'use client'
 
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
-import { CanvasTexture, Sprite, SpriteMaterial, SRGBColorSpace } from 'three'
-import { ENTRY_KIND_COLOR, type GraphEdge, type GraphNode } from './graph-model'
 import {
+  CanvasTexture,
+  MeshBasicMaterial,
+  type PerspectiveCamera,
+  Sphere,
+  Sprite,
+  SpriteMaterial,
+  SRGBColorSpace,
+  Vector3,
+} from 'three'
+import { usePrefersReducedMotion } from '@/components/motion'
+import type { GraphEdge, GraphNode } from './graph-model'
+import {
+  isLinkedTo,
   linkCurvatures,
   nodeLabel,
-  relationColor,
   relationLabel,
   type ForceGraphRendererProps,
 } from './force-graph-renderer'
+import { type GraphPalette, drawKindMark } from './graph-style'
 
 const SPRITE_HEIGHT = 46
 const DOT_CENTER_X = 18
 const LABEL_LEFT = 34
 const MAX_TEXT_WIDTH = 380
-const LABEL_FONT = '600 26px sans-serif'
 
-function makeNodeSprite(node: GraphNode, foreground: string, background: string): Sprite {
+function makeNodeSprite(
+  node: GraphNode,
+  palette: GraphPalette,
+  font: string,
+  selected: boolean,
+  highlighted: boolean,
+): Sprite {
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  if (!context) return new Sprite(new SpriteMaterial({ color: ENTRY_KIND_COLOR[node.kind] }))
+  if (!context) return new Sprite(new SpriteMaterial({ color: palette.ink }))
+  const background = selected ? palette.ink : palette.paper
+  const ink = selected ? palette.paper : palette.ink
+  const labelFont = `700 26px ${font}`
 
-  context.font = LABEL_FONT
+  context.font = labelFont
   const textWidth = Math.min(MAX_TEXT_WIDTH, Math.ceil(context.measureText(node.name).width))
   canvas.width = LABEL_LEFT + textWidth + 10
   canvas.height = SPRITE_HEIGHT
 
+  const thickness = selected || highlighted ? 4 : 3
+  const inset = thickness / 2
   context.fillStyle = background
-  context.beginPath()
-  context.roundRect(1, 1, canvas.width - 2, SPRITE_HEIGHT - 2, 8)
-  context.fill()
-  context.fillStyle = ENTRY_KIND_COLOR[node.kind]
-  context.beginPath()
-  context.arc(DOT_CENTER_X, SPRITE_HEIGHT / 2, 9, 0, Math.PI * 2)
-  context.fill()
+  context.fillRect(0, 0, canvas.width, SPRITE_HEIGHT)
+  context.lineWidth = thickness
+  context.strokeStyle = selected ? palette.ink : palette.grid
+  context.strokeRect(inset, inset, canvas.width - thickness, SPRITE_HEIGHT - thickness)
+  drawKindMark(context, node.kind, DOT_CENTER_X, SPRITE_HEIGHT / 2, 8, ink, background, 2.5)
 
-  context.font = LABEL_FONT
+  context.font = labelFont
   context.textBaseline = 'middle'
-  context.fillStyle = foreground
+  context.fillStyle = ink
   context.fillText(node.name, LABEL_LEFT, SPRITE_HEIGHT / 2, MAX_TEXT_WIDTH)
 
   const texture = new CanvasTexture(canvas)
@@ -60,23 +79,74 @@ export default function Graph3D({
   data,
   width,
   height,
-  palette: { foreground, background },
+  palette,
+  font,
+  focusedNodeId,
+  selectedEdgeId,
+  selectedNodeId,
   onNodeSelect,
   onLinkSelect,
   onBackgroundSelect,
 }: ForceGraphRendererProps) {
+  const reducedMotion = usePrefersReducedMotion()
   const renderer = useRef<ForceGraphMethods<GraphNode, GraphEdge>>(undefined)
+  const sprites = useRef(new WeakMap<GraphNode, Sprite>())
+  const [hoveredNodeId, setHoveredNodeId] = useState<string>()
+  const highlightedNodeId = hoveredNodeId ?? focusedNodeId
+
   const hasFramedGraph = useRef(false)
   const frameGraph = useCallback(() => {
-    if (hasFramedGraph.current || !renderer.current) return
+    if (hasFramedGraph.current) return
     hasFramedGraph.current = true
-    renderer.current.zoomToFit(0, Math.min(width, height) * 0.18)
-  }, [width, height])
+    // The engine reports completion before applying the final node positions to the scene.
+    requestAnimationFrame(() => {
+      const graph = renderer.current
+      if (!graph) return
+      const bounds = new Sphere()
+      const reach = new Sphere()
+      const scale = new Vector3()
+      for (const node of data.nodes) {
+        const sprite = sprites.current.get(node)
+        if (!sprite) continue
+        const { x, y } = sprite.getWorldScale(scale)
+        // Each label faces the camera and extends from the kind mark, off center.
+        reach.radius = Math.hypot(
+          x * Math.max(sprite.center.x, 1 - sprite.center.x),
+          y * Math.max(sprite.center.y, 1 - sprite.center.y),
+        )
+        sprite.getWorldPosition(reach.center)
+        bounds.union(reach)
+      }
+      if (bounds.isEmpty()) return
+      const { center, radius } = bounds
+      const camera = graph.camera() as PerspectiveCamera
+      const halfFov = (camera.getEffectiveFOV() * Math.PI) / 360
+      // Keep a margin on the shorter viewport axis.
+      const visibleHalfFov = Math.atan(0.8 * Math.tan(halfFov) * Math.min(1, width / height))
+      const distance = radius / Math.sin(visibleHalfFov)
+      const cameraPosition = new Vector3(-0.7, 0.6, 0.45).setLength(distance).add(center)
+      graph.cameraPosition(cameraPosition, center)
+    })
+  }, [data.nodes, width, height])
   const curvatures = useMemo(() => linkCurvatures(data.links), [data])
+  const linkMaterial = useCallback(
+    () => new MeshBasicMaterial({ color: palette.ink, toneMapped: false }),
+    [palette.ink],
+  )
   // Three-forcegraph disposes each custom object's texture and material when it removes the node.
   const nodeObject = useCallback(
-    (node: GraphNode) => makeNodeSprite(node, foreground, background),
-    [foreground, background],
+    (node: GraphNode) => {
+      const sprite = makeNodeSprite(
+        node,
+        palette,
+        font,
+        node.id === selectedNodeId,
+        node.id === highlightedNodeId,
+      )
+      sprites.current.set(node, sprite)
+      return sprite
+    },
+    [palette, font, highlightedNodeId, selectedNodeId],
   )
 
   return (
@@ -85,23 +155,32 @@ export default function Graph3D({
       graphData={data}
       width={width}
       height={height}
-      backgroundColor={background}
+      backgroundColor={palette.paper}
       showNavInfo={false}
       nodeLabel={nodeLabel}
+      nodeColor={() => palette.ink}
       nodeThreeObject={nodeObject}
-      linkColor={relationColor}
-      linkWidth={0}
+      linkColor={() => palette.ink}
+      linkMaterial={linkMaterial}
+      linkWidth={(link) =>
+        link.id === selectedEdgeId ||
+        isLinkedTo(link, selectedNodeId) ||
+        isLinkedTo(link, highlightedNodeId)
+          ? 1.15
+          : 0.55
+      }
       linkHoverPrecision={2}
-      linkOpacity={0.85}
+      linkOpacity={1}
       linkCurvature={(link) => curvatures.get(link.id) ?? 0}
       linkLabel={relationLabel}
       linkDirectionalArrowLength={(link) => (link.directed ? 4 : 0)}
-      linkDirectionalArrowColor={relationColor}
+      linkDirectionalArrowColor={() => palette.ink}
       linkDirectionalArrowRelPos={0.8}
-      warmupTicks={24}
-      cooldownTicks={90}
+      warmupTicks={reducedMotion ? 114 : 24}
+      cooldownTicks={reducedMotion ? 0 : 90}
       cooldownTime={1800}
       onEngineStop={frameGraph}
+      onNodeHover={(node) => setHoveredNodeId(node?.id)}
       onNodeClick={(node) => onNodeSelect(node.id)}
       onLinkClick={(link) => onLinkSelect(link.id)}
       onBackgroundClick={onBackgroundSelect}

@@ -16,10 +16,17 @@ test('relation graph renders and the backup downloads', async ({ page }) => {
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('heading', { name: '관계 추가', exact: true })).toBeVisible()
 
-  await dialog.getByRole('combobox', { name: '첫 번째 카드', exact: true }).click()
-  await page.getByRole('option', { name: '서윤', exact: true }).click()
-  await dialog.getByRole('combobox', { name: '두 번째 카드', exact: true }).click()
-  await page.getByRole('option', { name: '도현', exact: true }).click()
+  for (const [label, name] of [
+    ['첫 번째 카드', '서윤'],
+    ['두 번째 카드', '도현'],
+  ]) {
+    const picker = dialog.getByRole('combobox', { name: label, exact: true })
+    await picker.click()
+    await expect(picker).toHaveAttribute('aria-controls', /.+/)
+    const listId = await picker.getAttribute('aria-controls')
+    await page.locator(`[id="${listId}"]`).getByRole('option', { name, exact: true }).click()
+    await expect(picker.getByText(name, { exact: true })).toBeVisible()
+  }
   await dialog.getByLabel('관계 종류', { exact: true }).fill('가족')
   await dialog.getByRole('button', { name: '관계 추가', exact: true }).click()
   await expect(dialog).toBeHidden()
@@ -44,6 +51,12 @@ test('relation graph renders and the backup downloads', async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/works/${workId}/wiki/graph`))
   await expect(page.getByRole('img', { name: '관계 그래프', exact: true })).toBeVisible()
   await expect(nodeLayer).toHaveCount(1)
+  // The graph page keeps the settings board tab bar, with its own tab marked.
+  await expect(
+    page
+      .getByRole('navigation', { name: '설정 보드 탭' })
+      .getByRole('link', { name: '관계 그래프', exact: true }),
+  ).toHaveAttribute('aria-current', 'page')
 
   await page.goto(`/works/${workId}/history`)
   const downloadPromise = page.waitForEvent('download')

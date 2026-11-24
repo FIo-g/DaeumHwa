@@ -25,14 +25,18 @@ function chooseFile(file: File) {
 
 describe('FileDrop', () => {
   it('reports the parse error and re-enables the file input instead of hanging', async () => {
-    parseFile.mockRejectedValue(new Error('HWP 파일은 지원하지 않습니다.'))
+    parseFile.mockRejectedValue(
+      new Error('HWP 파일은 지원하지 않아요. 한글에서 DOCX 또는 TXT로 저장한 뒤 올려 주세요.'),
+    )
     const onParsed = vi.fn()
     render(<FileDrop onParsed={onParsed} />)
 
     chooseFile(new File(['x'], '원고.hwp'))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('HWP 파일은 지원하지 않습니다.')
-    expect(screen.queryByText('파일을 읽는 중입니다.')).not.toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'HWP 파일은 지원하지 않아요. 한글에서 DOCX 또는 TXT로 저장한 뒤 올려 주세요.',
+    )
+    expect(screen.queryByText('파일을 읽고 있어요.')).not.toBeInTheDocument()
     expect(screen.getByLabelText('원고 파일')).toBeEnabled()
     expect(onParsed).not.toHaveBeenCalled()
   })
@@ -44,7 +48,7 @@ describe('FileDrop', () => {
     chooseFile(new File(['x'], '원고.txt'))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      '파일을 읽지 못했습니다. 다시 시도해 주세요.',
+      '파일을 읽지 못했어요. 다시 시도해 주세요.',
     )
   })
 

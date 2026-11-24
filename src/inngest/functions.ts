@@ -11,6 +11,7 @@ import { inngest } from '@/inngest/client'
 // The new run picks up at the cursor, so no chapter is skipped or processed twice.
 
 const IMPORT_EVENT = 'import/run'
+const LEGACY_BUSY_MESSAGE = '다른 AI 작업이 끝나면 이어서 진행합니다.'
 // Leave room under the 1000-step cap for a sleep after every advance and the continuation event.
 export const MAX_STEPS_PER_RUN = 499
 
@@ -25,7 +26,9 @@ export const importRun = inngest.createFunction(
     for (let i = 0; i < MAX_STEPS_PER_RUN; i++) {
       const result = await step.run(`advance-${i}`, () => advanceImportJob(getDb(), jobId))
       if (result.done || result.status !== 'running') return result
-      if (result.message === BUSY_MESSAGE) await step.sleep(`busy-${i}`, '2s')
+      if (result.message === BUSY_MESSAGE || result.message === LEGACY_BUSY_MESSAGE) {
+        await step.sleep(`busy-${i}`, '2s')
+      }
     }
     await step.sendEvent('continue-import', { name: IMPORT_EVENT, data: { jobId } })
     return { status: 'running' as const, done: false }

@@ -32,13 +32,13 @@ export async function saveResumePoint(
   await requireWorkRole(db, input.workId, actor.userId, 'viewer')
 
   if (input.chapterId) {
-    if (!UUID_RE.test(input.chapterId)) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+    if (!UUID_RE.test(input.chapterId)) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
     const [chapter] = await db
       .select({ id: chapters.id })
       .from(chapters)
       .where(and(eq(chapters.id, input.chapterId), eq(chapters.workId, input.workId)))
       .limit(1)
-    if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+    if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
   }
 
   const now = new Date()

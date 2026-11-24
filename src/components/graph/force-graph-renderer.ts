@@ -1,33 +1,18 @@
-import { RELATION_KIND_SUGGESTIONS, type GraphEdge, type GraphNode } from './graph-model'
+import type { GraphEdge, GraphNode } from './graph-model'
+import type { GraphPalette } from './graph-style'
 
 export type ForceGraphRendererProps = {
   data: { nodes: GraphNode[]; links: GraphEdge[] }
   width: number
   height: number
-  palette: { foreground: string; background: string }
+  palette: GraphPalette
+  font: string
+  focusedNodeId?: string
+  selectedEdgeId?: string
+  selectedNodeId?: string
   onNodeSelect: (id: string) => void
   onLinkSelect: (id: string) => void
   onBackgroundSelect: () => void
-}
-
-const RELATION_COLORS = [
-  '#3769a6',
-  '#ad5880',
-  '#b8543d',
-  '#458653',
-  '#8060ad',
-  '#956920',
-  '#378282',
-]
-
-export function relationKindColor(kind: string): string {
-  const suggested = RELATION_KIND_SUGGESTIONS.findIndex((suggestion) => suggestion === kind)
-  if (suggested >= 0) return RELATION_COLORS[suggested]
-
-  // Free-text kinds still receive a stable color across chapters and renderers.
-  let hash = 0
-  for (const character of kind) hash = Math.imul(hash, 31) + character.charCodeAt(0)
-  return `hsl(${(hash >>> 0) % 360}, 54%, 44%)`
 }
 
 function tooltipText(text: string): string {
@@ -41,10 +26,6 @@ export function nodeLabel(node: GraphNode): string {
 
 export function relationLabel(link: GraphEdge): string {
   return tooltipText(link.kind)
-}
-
-export function relationColor(link: GraphEdge): string {
-  return relationKindColor(link.kind)
 }
 
 export function linkCurvatures(links: GraphEdge[]): Map<string, number> {
@@ -66,4 +47,13 @@ export function linkCurvatures(links: GraphEdge[]): Map<string, number> {
     }
   }
   return curvatures
+}
+
+export function isLinkedTo(link: GraphEdge, nodeId?: string): boolean {
+  if (!nodeId) return false
+  // The force engine replaces each endpoint ID with its node object.
+  const endpoints: (string | GraphNode)[] = [link.source, link.target]
+  return endpoints.some(
+    (endpoint) => (typeof endpoint === 'string' ? endpoint : endpoint.id) === nodeId,
+  )
 }

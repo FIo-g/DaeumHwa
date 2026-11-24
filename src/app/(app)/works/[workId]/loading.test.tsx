@@ -11,6 +11,6 @@ describe('WorkLoading', () => {
 
     const status = screen.getByRole('status')
     expect(status).toHaveAttribute('aria-busy', 'true')
-    expect(status).toHaveTextContent('불러오는 중입니다.')
+    expect(status).toHaveTextContent('불러오는 중이에요.')
   })
 })

@@ -11,6 +11,7 @@ import type { InterviewFocus } from '@/db/types'
 const MAX_ANSWER_LENGTH = 5000
 
 type QuestionCardProps = {
+  number: number
   topic: string
   question: string
   rationale: string
@@ -25,6 +26,7 @@ type QuestionCardProps = {
 
 /** The one question on screen: topic, question, why it is asked, and the answer box. */
 export function QuestionCard({
+  number,
   topic,
   question,
   rationale,
@@ -39,21 +41,33 @@ export function QuestionCard({
   const trimmed = answer.trim()
 
   return (
-    <article aria-labelledby="interview-question" className="grid gap-4 rounded-xl border p-5">
-      <div className="grid gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {topic && <Badge variant="secondary">{topic}</Badge>}
+    <article
+      aria-labelledby="interview-question"
+      className="wg-import-question wg-import-row grid min-w-0 gap-4"
+    >
+      <span className="wg-import-question-number font-mono text-sm" aria-hidden="true">
+        {String(number).padStart(2, '0')}
+      </span>
+      <div className="wg-import-question-heading grid min-w-0 gap-2">
+        <div className="wg-import-write flex min-w-0 flex-wrap items-center gap-2">
+          {topic && (
+            <Badge variant="outline" className="max-w-full wrap-anywhere">
+              {topic}
+            </Badge>
+          )}
           <Badge variant="outline">{focus === 'story' ? '다음 전개' : '설정 채우기'}</Badge>
         </div>
-        <h2 id="interview-question" className="text-lg font-semibold leading-snug">
+        <h2 id="interview-question" className="wg-import-question-text b-subhead wrap-anywhere">
           {question}
         </h2>
-        {rationale && <p className="text-sm text-muted-foreground">{rationale}</p>}
+        {rationale && (
+          <p className="wg-import-write text-sm text-muted-ink wrap-anywhere">{rationale}</p>
+        )}
       </div>
 
       {canEdit ? (
         <form
-          className="grid gap-3"
+          className="grid min-w-0 gap-3"
           onSubmit={(event) => {
             event.preventDefault()
             if (trimmed) onAnswer(trimmed)
@@ -65,9 +79,10 @@ export function QuestionCard({
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
             rows={5}
+            className="min-h-32 font-heading"
             maxLength={MAX_ANSWER_LENGTH}
             disabled={busy}
-            placeholder="떠오르는 대로 적어도 됩니다."
+            placeholder="떠오르는 대로 적어 주세요."
           />
           {answering ? (
             <AiRunStatus
@@ -80,14 +95,14 @@ export function QuestionCard({
               <Button type="submit" disabled={busy || trimmed.length === 0}>
                 답하기
               </Button>
-              <Button type="button" variant="outline" disabled={busy} onClick={onSkip}>
+              <Button type="button" variant="link" disabled={busy} onClick={onSkip}>
                 건너뛰기
               </Button>
             </div>
           )}
         </form>
       ) : (
-        <p className="text-sm text-muted-foreground">편집자 이상만 답할 수 있습니다.</p>
+        <p className="text-sm text-muted-ink">편집자 이상만 답할 수 있어요.</p>
       )}
     </article>
   )

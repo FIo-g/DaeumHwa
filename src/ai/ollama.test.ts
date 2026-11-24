@@ -211,7 +211,7 @@ describe('OllamaAiClient.generateObject', () => {
 
     expect(error).toMatchObject({
       code: 'AI_ERROR',
-      message: expect.stringContaining('중간에 끊겼습니다'),
+      message: expect.stringContaining('중간에 끊겼어요'),
     })
   })
 
@@ -583,7 +583,7 @@ describe('OllamaAiClient.streamText', () => {
     })
 
     await expect(final).rejects.toMatchObject({ code: 'AI_ERROR' })
-    await expect(final).rejects.toThrow('중간에 끊겼습니다')
+    await expect(final).rejects.toThrow('중간에 끊겼어요')
   })
 })
 

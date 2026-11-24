@@ -132,7 +132,7 @@ describe('DraftPanel stream results', () => {
     startDraft()
 
     expect(await screen.findByRole('button', { name: '새 회차로 만들기' })).toBeInTheDocument()
-    expect(screen.queryByText('중간에 멈춘 초안입니다.')).not.toBeInTheDocument()
+    expect(screen.queryByText('중간에 멈춘 초안이에요.')).not.toBeInTheDocument()
   })
 
   it('keeps the partial text and offers only append when the stream breaks mid-way', async () => {
@@ -140,7 +140,7 @@ describe('DraftPanel stream results', () => {
     renderPanel()
     startDraft()
 
-    expect(await screen.findByText('중간에 멈춘 초안입니다.')).toBeInTheDocument()
+    expect(await screen.findByText('중간에 멈춘 초안이에요.')).toBeInTheDocument()
     expect(screen.getByText('앞부분 초안')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '현재 원고 끝에 붙이기' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '새 회차로 만들기' })).not.toBeInTheDocument()
@@ -153,7 +153,7 @@ describe('DraftPanel stream results', () => {
     startDraft()
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled())
-    expect(screen.queryByText('초안을 기다리는 중입니다.')).not.toBeInTheDocument()
+    expect(screen.queryByText('초안을 기다리는 중이에요.')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '새 회차로 만들기' })).not.toBeInTheDocument()
   })
 
@@ -165,12 +165,12 @@ describe('DraftPanel stream results', () => {
     expect(await screen.findByText('취소 전 글')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
 
-    expect(await screen.findByText('중간에 멈춘 초안입니다.')).toBeInTheDocument()
+    expect(await screen.findByText('중간에 멈춘 초안이에요.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '새 회차로 만들기' })).not.toBeInTheDocument()
   })
 
   it('shows the error the stream ends with, drops the record from the draft, and marks it stopped', async () => {
-    const message = 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.'
+    const message = 'AI 응답이 너무 오래 걸려 멈췄어요. 다시 시도해 주세요.'
     vi.mocked(fetch).mockResolvedValue(
       draftResponse(
         new ReadableStream<Uint8Array>({
@@ -184,7 +184,7 @@ describe('DraftPanel stream results', () => {
     renderPanel()
     startDraft()
 
-    expect(await screen.findByText('중간에 멈춘 초안입니다.')).toBeInTheDocument()
+    expect(await screen.findByText('중간에 멈춘 초안이에요.')).toBeInTheDocument()
     expect(toast.error).toHaveBeenCalledWith(message)
     expect(screen.getByText('앞부분 초안')).toBeInTheDocument()
     expect(document.body.textContent).not.toContain('\u001e')

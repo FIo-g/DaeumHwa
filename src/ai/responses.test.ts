@@ -252,7 +252,7 @@ describe('ResponsesAiClient response parsing', () => {
     ])
     await expect(makeClient(fetchImpl).generateObject(baseArgs)).rejects.toMatchObject({
       code: 'AI_ERROR',
-      message: 'AI가 이 요청을 처리하지 않았습니다.',
+      message: 'AI가 이 요청을 처리하지 않았어요.',
     })
   })
 
@@ -267,7 +267,7 @@ describe('ResponsesAiClient response parsing', () => {
       },
     ])
     await expect(makeClient(fetchImpl).generateObject(baseArgs)).rejects.toMatchObject({
-      message: 'AI가 이 요청을 처리하지 않았습니다.',
+      message: 'AI가 이 요청을 처리하지 않았어요.',
     })
   })
 
@@ -286,7 +286,7 @@ describe('ResponsesAiClient response parsing', () => {
         .generateObject(baseArgs)
         .catch((e: unknown) => e)
       expect(error).toBeInstanceOf(AppError)
-      expect((error as AppError).message).toBe(`AI 호출에 실패했습니다: ${reason}`)
+      expect((error as AppError).message).toBe(`AI 호출에 실패했어요: ${reason}`)
     }
   })
 })
@@ -337,7 +337,7 @@ describe('ResponsesAiClient transient retries', () => {
       .generateObject(baseArgs)
       .catch((e: unknown) => e)
     expect(requests).toHaveLength(2)
-    expect((error as AppError).message).toBe('AI 호출에 실패했습니다: HTTP 503')
+    expect((error as AppError).message).toBe('AI 호출에 실패했어요: HTTP 503')
   })
 
   it('stops a Retry-After wait as soon as the caller cancels', async () => {
@@ -351,7 +351,7 @@ describe('ResponsesAiClient transient retries', () => {
     const error = await makeClient(fetchImpl)
       .generateObject({ ...baseArgs, signal: controller.signal })
       .catch((e: unknown) => e)
-    expect(error).toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+    expect(error).toMatchObject({ code: 'CANCELLED', message: '취소했어요.' })
     expect(Date.now() - started).toBeLessThan(5000)
     expect(requests).toHaveLength(1)
   })
@@ -628,7 +628,7 @@ describe('ResponsesAiClient cancel and timeout', () => {
     const error = await makeClient(fetchImpl)
       .generateObject({ ...baseArgs, signal: controller.signal })
       .catch((e: unknown) => e)
-    expect(error).toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+    expect(error).toMatchObject({ code: 'CANCELLED', message: '취소했어요.' })
   })
 
   it('applies the timeout when no signal is given', async () => {

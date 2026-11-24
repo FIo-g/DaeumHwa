@@ -50,7 +50,7 @@ describe('computeSchedule', () => {
     expect(r.slots.some((s) => s.date === '2026-10-19')).toBe(false)
     expect(r.bufferRunsOutOn).toBe('2026-10-22')
     expect(r.hiatusDays).toEqual(['2026-10-19'])
-    expect(r.warnings).toContain('비축분이 목표(5화)보다 적습니다 (현재 3화).')
+    expect(r.warnings).toContain('비축분이 목표(5화)보다 적어요 (현재 3화).')
   })
 
   it('does not count published or unfinished chapters as buffer', () => {
@@ -155,7 +155,7 @@ describe('computeSchedule', () => {
       }),
       '2026-10-16',
     )
-    expect(r.warnings).toContain('마감이 2일 남았습니다: 교정 마감')
+    expect(r.warnings).toContain('마감이 2일 남았어요: 교정 마감')
     expect(r.nextDeadline).toEqual({
       id: 'd1',
       title: '교정 마감',
@@ -188,7 +188,7 @@ describe('computeSchedule', () => {
       }),
       '2026-10-16',
     )
-    expect(r.warnings).toContain('지난 마감이 있습니다: 지난 일')
+    expect(r.warnings).toContain('지난 마감이 있어요: 지난 일')
     expect(r.warnings.some((w) => w.includes('끝난 일'))).toBe(false)
     expect(r.nextDeadline).toBeNull()
   })

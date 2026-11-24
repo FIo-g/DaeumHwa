@@ -13,7 +13,7 @@ vi.mock('@/db/client', () => ({ getDb: () => mocks.db }))
 vi.mock('@/server/session', () => ({
   requireUser: async () => {
     if (!mocks.userId)
-      throw new (await import('@/lib/errors')).AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+      throw new (await import('@/lib/errors')).AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return { id: mocks.userId, name: '작가', email: 'a@test.local' }
   },
 }))
@@ -35,7 +35,7 @@ describe('works actions', () => {
     const result = await createWorkAction({ title: '별빛' })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'UNAUTHENTICATED', message: '로그인이 필요합니다.' },
+      error: { code: 'UNAUTHENTICATED', message: '로그인이 필요해요.' },
     })
   })
 
@@ -68,7 +68,7 @@ describe('works actions', () => {
     const result = await updateWorkAction({ workId: work.id, title: '바꿈' })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'FORBIDDEN', message: '이 작업을 할 권한이 없습니다.' },
+      error: { code: 'FORBIDDEN', message: '이 작업을 할 권한이 없어요.' },
     })
   })
 

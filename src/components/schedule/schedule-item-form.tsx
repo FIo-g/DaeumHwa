@@ -59,7 +59,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
               chapterId,
               note,
             }),
-            { success: '일정을 고쳤습니다.' },
+            { success: '일정을 고쳤어요.' },
           )
         : await runAction(
             createScheduleItemAction({
@@ -71,7 +71,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
               chapterId,
               note,
             }),
-            { success: '일정을 추가했습니다.' },
+            { success: '일정을 추가했어요.' },
           )
       if (saved) {
         if (item) {
@@ -90,7 +90,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
+    <form onSubmit={onSubmit} className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={fieldId('kind')}>종류</Label>
         <Select
@@ -128,6 +128,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
         <Input
           id={fieldId('date')}
           type="date"
+          className="font-mono"
           required
           value={date}
           onChange={(e) => setDate(e.target.value)}
@@ -139,6 +140,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
           <Input
             id={fieldId('end-date')}
             type="date"
+            className="font-mono"
             value={endDate}
             min={date}
             onChange={(e) => setEndDate(e.target.value)}

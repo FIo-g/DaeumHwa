@@ -8,7 +8,7 @@ import {
 
 describe('draftErrorRecord', () => {
   it('writes the mark followed by the message as JSON', () => {
-    expect(draftErrorRecord('취소했습니다.')).toBe('\u001e{"error":"취소했습니다."}')
+    expect(draftErrorRecord('취소했어요.')).toBe('\u001e{"error":"취소했어요."}')
     expect(draftErrorRecord('x').startsWith(DRAFT_ERROR_MARK)).toBe(true)
   })
 })
@@ -19,10 +19,10 @@ describe('parseDraftStream', () => {
   })
 
   it('splits the draft from a trailing error record', () => {
-    const raw = `앞부분 초안${draftErrorRecord('AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.')}`
+    const raw = `앞부분 초안${draftErrorRecord('AI 응답이 너무 오래 걸려 멈췄어요. 다시 시도해 주세요.')}`
     expect(parseDraftStream(raw)).toEqual({
       text: '앞부분 초안',
-      error: 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.',
+      error: 'AI 응답이 너무 오래 걸려 멈췄어요. 다시 시도해 주세요.',
     })
   })
 

@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { AiBadge } from '@/components/app/ai-badge'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
+import { Disclosure } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import type { ChangeRow, ChangeTargetTable, ProposerType } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
-import { formatKoreanDateTime } from '@/lib/dates'
+import { formatKoreanDateTime, seoulToday } from '@/lib/dates'
 import { listChangesAction, revertChangeAction } from '@/server/actions/history'
 import { ChangeDiff } from './change-diff'
 import { CHANGE_TARGET_LABEL, HISTORY_PAGE_SIZE } from './history-config'
@@ -34,17 +35,7 @@ export function ChangeList({
 }: ChangeListProps) {
   const [rows, setRows] = useState<ChangeView[]>(initialRows)
   const [hasMore, setHasMore] = useState(initialRows.length >= HISTORY_PAGE_SIZE)
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
-
-  function toggle(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
 
   async function loadMore() {
     const last = rows[rows.length - 1]
@@ -66,7 +57,7 @@ export function ChangeList({
 
   async function revert(changeId: string) {
     const reverted = await runAction(revertChangeAction({ changeId }), {
-      success: '되돌렸습니다.',
+      success: '되돌렸어요.',
     })
     if (!reverted) return
     // Reloads the first page so the new 'revert' entry appears at the top.
@@ -77,64 +68,45 @@ export function ChangeList({
   }
 
   if (rows.length === 0) {
-    return <EmptyState title="변경 이력이 없습니다." />
+    return <EmptyState title="변경 이력이 없어요." />
+  }
+
+  const groups = new Map<string, { row: ChangeView; order: number }[]>()
+  for (const [index, row] of rows.entries()) {
+    const day = seoulToday(new Date(row.createdAt))
+    const group = groups.get(day)
+    const entry = { row, order: Math.min(index, 2) }
+    if (group) group.push(entry)
+    else groups.set(day, [entry])
   }
 
   return (
-    <div className="grid gap-4">
-      <ul className="grid gap-3">
-        {rows.map((row) => {
-          const open = expanded.has(row.id)
-          const panelId = `change-diff-${row.id}`
+    <div className="grid min-w-0 gap-4">
+      <div className="wg-history-timeline">
+        {[...groups].map(([day, entries]) => {
+          const [year, month, date] = day.split('-').map(Number)
           return (
-            <li key={row.id} className="grid gap-2 rounded-lg border p-3 sm:p-4">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <time dateTime={new Date(row.createdAt).toISOString()}>
-                  {formatKoreanDateTime(row.createdAt)}
+            <section key={day} aria-labelledby={`history-${day}`} className="wg-history-day">
+              <h2 id={`history-${day}`} className="wg-history-date">
+                <time dateTime={day}>
+                  {year}년 {month}월 {date}일
                 </time>
-                <span>{CHANGE_TARGET_LABEL[row.targetTable]}</span>
-                {row.proposerType === 'ai' && <AiBadge />}
-                {row.proposerType === 'ai' && <span>승인</span>}
-                <span>{row.actorName ?? '알 수 없음'}</span>
-              </div>
-              <p className="font-medium break-words">{row.summary}</p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-expanded={open}
-                  aria-controls={panelId}
-                  onClick={() => toggle(row.id)}
-                >
-                  {open ? '접기' : '자세히 보기'}
-                </Button>
-                {canEdit && (
-                  <ConfirmButton
-                    size="sm"
-                    title="이 변경을 되돌릴까요?"
-                    description="되돌리기는 새 이력으로 남습니다."
-                    confirmLabel="되돌리기"
-                    disabled={!row.revertable}
-                    onConfirm={() => revert(row.id)}
+              </h2>
+              <ul className="wg-history-entries">
+                {entries.map(({ row, order }) => (
+                  <li
+                    key={row.id}
+                    className="wg-history-row"
+                    style={{ '--wg-history-order': order } as CSSProperties}
                   >
-                    되돌리기
-                  </ConfirmButton>
-                )}
-                {canEdit && !row.revertable && (
-                  <span className="self-center text-xs text-muted-foreground">
-                    이후 변경이 있어 되돌릴 수 없습니다.
-                  </span>
-                )}
-              </div>
-              {open && (
-                <div id={panelId} className="border-t pt-3">
-                  <ChangeDiff targetTable={row.targetTable} before={row.before} after={row.after} />
-                </div>
-              )}
-            </li>
+                    <ChangeEntry row={row} canEdit={canEdit} onRevert={revert} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )
         })}
-      </ul>
+      </div>
       {hasMore && (
         <div>
           <Button variant="outline" onClick={loadMore} disabled={busy}>
@@ -143,5 +115,61 @@ export function ChangeList({
         </div>
       )}
     </div>
+  )
+}
+
+function ChangeEntry({
+  row,
+  canEdit,
+  onRevert,
+}: {
+  row: ChangeView
+  canEdit: boolean
+  onRevert: (id: string) => Promise<void>
+}) {
+  const [detail, setDetail] = useState<'unopened' | 'open' | 'closed'>('unopened')
+  return (
+    <article className="wg-history-entry">
+      <span className="wg-history-line-number" aria-hidden="true" />
+      <div className="wg-history-meta">
+        <time className="b-mono" dateTime={new Date(row.createdAt).toISOString()}>
+          {formatKoreanDateTime(row.createdAt)}
+        </time>
+        <span className="wg-history-target">{CHANGE_TARGET_LABEL[row.targetTable]}</span>
+        {row.proposerType === 'ai' && <AiBadge />}
+        {row.proposerType === 'ai' && <span>승인</span>}
+        <span>{row.actorName ?? '알 수 없음'}</span>
+      </div>
+      <p className="wg-history-summary b-row__title">{row.summary}</p>
+      {canEdit && (
+        <div className="wg-history-actions">
+          <ConfirmButton
+            size="sm"
+            title="이 변경을 되돌릴까요?"
+            description="되돌리기는 새 이력으로 남아요."
+            confirmLabel="되돌리기"
+            disabled={!row.revertable}
+            onConfirm={() => onRevert(row.id)}
+          >
+            되돌리기
+          </ConfirmButton>
+          {!row.revertable && (
+            <span className="b-label text-muted-ink">이후 변경이 있어 되돌릴 수 없어요.</span>
+          )}
+        </div>
+      )}
+      <Disclosure
+        className="wg-history-disclosure"
+        title={detail === 'open' ? '접기' : '자세히 보기'}
+        open={detail === 'open'}
+        onOpenChange={(open) => setDetail(open ? 'open' : 'closed')}
+      >
+        {detail !== 'unopened' && (
+          <div className="wg-history-detail" data-open={detail === 'open'}>
+            <ChangeDiff targetTable={row.targetTable} before={row.before} after={row.after} />
+          </div>
+        )}
+      </Disclosure>
+    </article>
   )
 }

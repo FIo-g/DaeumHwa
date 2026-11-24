@@ -78,15 +78,13 @@ export function computeSchedule(
 
   const warnings: string[] = []
   if (buffer.length < settings.bufferTarget) {
-    warnings.push(
-      `비축분이 목표(${settings.bufferTarget}화)보다 적습니다 (현재 ${buffer.length}화).`,
-    )
+    warnings.push(`비축분이 목표(${settings.bufferTarget}화)보다 적어요 (현재 ${buffer.length}화).`)
   }
   for (const item of deadlines) {
     const days = daysBetween(today, item.date)
-    if (days < 0) warnings.push(`지난 마감이 있습니다: ${item.title}`)
+    if (days < 0) warnings.push(`지난 마감이 있어요: ${item.title}`)
     else if (days <= DEADLINE_WARNING_DAYS)
-      warnings.push(`마감이 ${days}일 남았습니다: ${item.title}`)
+      warnings.push(`마감이 ${days}일 남았어요: ${item.title}`)
   }
 
   const upcoming = deadlines

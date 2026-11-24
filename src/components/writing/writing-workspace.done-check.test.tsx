@@ -153,7 +153,7 @@ describe('WritingWorkspace done auto check', () => {
   it('does not start a check when the status change fails', async () => {
     mocks.setChapterStatusAction.mockResolvedValue({
       ok: false,
-      error: { code: 'FORBIDDEN', message: '권한이 없습니다.' },
+      error: { code: 'FORBIDDEN', message: '이 작업을 할 권한이 없어요.' },
     })
     render(
       <WritingWorkspace
@@ -164,7 +164,9 @@ describe('WritingWorkspace done auto check', () => {
 
     fireEvent.click(statusButton('완료'))
 
-    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalledWith('권한이 없습니다.'))
+    await waitFor(() =>
+      expect(vi.mocked(toast.error)).toHaveBeenCalledWith('이 작업을 할 권한이 없어요.'),
+    )
     expect(mocks.startAutoCheck).not.toHaveBeenCalled()
   })
 

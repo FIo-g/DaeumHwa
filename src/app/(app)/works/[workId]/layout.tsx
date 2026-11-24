@@ -12,16 +12,19 @@ export default async function WorkLayout({
   params: Promise<{ workId: string }>
 }) {
   const { workId } = await params
-  const { db, actor } = await pageContext(`/works/${workId}`)
+  const { db, actor, user } = await pageContext(`/works/${workId}`)
   const work = await guardPage(() => getWork(db, actor, workId))
   const pendingCount = await guardPage(() => countPendingProposals(db, workId))
 
   return (
-    <div className="flex flex-1 flex-col md:flex-row">
-      <WorkSidebar workId={workId} workTitle={work.title} pendingCount={pendingCount} />
-      <div className="min-w-0 flex-1 bg-sheet px-4 py-6 md:border-l md:border-rule md:px-10 md:py-8">
-        {children}
-      </div>
+    <div className="wg-shell-work flex min-w-0 flex-1 flex-col md:flex-row">
+      <WorkSidebar
+        workId={workId}
+        workTitle={work.title}
+        pendingCount={pendingCount}
+        trial={user.isAnonymous === true}
+      />
+      <div className="b-work-content min-w-0 flex-1 px-edge py-6 md:px-app">{children}</div>
     </div>
   )
 }

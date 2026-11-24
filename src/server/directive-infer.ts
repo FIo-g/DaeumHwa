@@ -15,6 +15,7 @@ import { editHunks } from '@/lib/edit-hunks'
 import { AppError } from '@/lib/errors'
 import { requireWorkRole } from '@/server/access'
 import { createDirective, listDirectives } from '@/server/directives'
+import { requireRegisteredUser } from '@/server/trial-access'
 import { recordUsageEvent } from '@/server/usage-events'
 
 // Lasting requests inferred from the author's edits to an AI draft (stage 4, task 2). The
@@ -121,13 +122,14 @@ export async function inferDirectives(
   signal?: AbortSignal,
 ): Promise<{ runId: string | null; proposals: InferredProposal[] }> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   const [chapter] = await db
     .select()
     .from(chapters)
     .where(eq(chapters.id, input.chapterId))
     .limit(1)
   if (!chapter || chapter.workId !== input.workId || chapter.archivedAt) {
-    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   }
   if (chapter.status !== 'done') return { runId: null, proposals: [] }
 
@@ -297,13 +299,13 @@ export async function decideInferred(
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
   const [run] = await db.select().from(aiRuns).where(eq(aiRuns.id, input.runId)).limit(1)
   if (!run || run.workId !== input.workId || run.task !== 'directive-infer') {
-    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   }
   const stored = readStored(run.output)
   const proposal = stored.proposals[input.index]
-  if (!proposal) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!proposal) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   if (stored.decided[String(input.index)] !== undefined) {
-    throw new AppError('BAD_STATE', '이미 정한 제안입니다.')
+    throw new AppError('BAD_STATE', '이미 정한 제안이에요.')
   }
 
   const decided = input.decision === 'add' ? 'added' : 'ignored'
@@ -328,7 +330,7 @@ export async function decideInferred(
         ),
       )
       .returning({ id: aiRuns.id })
-    if (updated.length === 0) throw new AppError('BAD_STATE', '이미 정한 제안입니다.')
+    if (updated.length === 0) throw new AppError('BAD_STATE', '이미 정한 제안이에요.')
     if (input.decision === 'ignore') return null
     const created = await createDirective(tx, actor, {
       workId: input.workId,

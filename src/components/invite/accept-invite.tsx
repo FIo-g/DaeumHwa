@@ -2,8 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { AuthProgress } from '@/components/auth/auth-progress'
+import { PopButton } from '@/components/motion'
 import type { Role } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { hasJongseong } from '@/lib/korean/josa'
@@ -28,7 +28,7 @@ export function AcceptInvite({ token, inviterName, workTitle, role }: AcceptInvi
     setPending(true)
     try {
       const result = await runAction(acceptInviteAction({ token }), {
-        success: '작품에 참여했습니다.',
+        success: '작품에 참여했어요.',
       })
       if (result) router.push(`/works/${result.workId}`)
     } finally {
@@ -37,15 +37,20 @@ export function AcceptInvite({ token, inviterName, workTitle, role }: AcceptInvi
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardContent className="flex flex-col gap-4">
-        <p>{`${inviterName}님이 '${workTitle}' 작품에 ${roleLabel}${particle} 초대했습니다.`}</p>
-        <div>
-          <Button onClick={join} disabled={pending}>
-            참여하기
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col items-start gap-5">
+      <p className="b-lede wg-auth-written-line wrap-anywhere break-keep">
+        {`${inviterName}님이 '${workTitle}' 작품에 `}
+        <span className="whitespace-nowrap">{`${roleLabel}${particle} 초대했어요.`}</span>
+      </p>
+      <PopButton
+        onClick={join}
+        pending={pending}
+        pendingLabel={<span>참여하기</span>}
+        className="wg-auth-action"
+        arrow={pending ? <AuthProgress /> : undefined}
+      >
+        참여하기
+      </PopButton>
+    </div>
   )
 }

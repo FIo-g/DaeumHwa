@@ -1,21 +1,34 @@
 import type { ReactNode } from 'react'
-import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { redirect } from 'next/navigation'
+import { AuthEmailProvider } from '@/components/auth/auth-email'
+import { PublicNav } from '@/components/landing/public-nav'
+import { PopLink } from '@/components/motion'
 import { getSessionUser } from '@/server/session'
 
 export default async function AuthLayout({ children }: { children: ReactNode }) {
-  if (await getSessionUser()) redirect('/works')
+  const user = await getSessionUser()
+  if (user && !user.isAnonymous) redirect('/works')
+
   return (
-    <main className="flex flex-1 items-start justify-center px-4 py-10 sm:items-center sm:py-16">
-      <div className="w-full max-w-sm bg-sheet px-6 py-8 shadow-sheet sm:px-8 sm:py-10">
-        <header className="mb-8 flex flex-col gap-2">
-          <h1 className="font-serif text-3xl font-bold tracking-tight">
-            <Link href="/">다음화</Link>
-          </h1>
-          <p className="text-sm text-muted-foreground">설정과 떡밥을 기억하는 웹소설 연재 파트너</p>
-        </header>
-        {children}
-      </div>
-    </main>
+    <div className="b-root flex min-w-0 flex-1 flex-col">
+      <PublicNav />
+      <main className="wg-auth-main">
+        <AuthEmailProvider>{children}</AuthEmailProvider>
+      </main>
+      <footer className="wg-auth-footer">
+        <div className="b-wrap flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3">
+          <p className="b-label b-muted">다음화 · 장기 연재 작가를 위한 설정 위키와 회차 점검</p>
+          <nav className="flex flex-wrap gap-2" aria-label="돌아가기">
+            <PopLink href="/" variant="flat" arrow={<ArrowLeft className="b-icon" />}>
+              소개
+            </PopLink>
+            <PopLink href="/#b-sample" variant="flat">
+              샘플 원고 보기
+            </PopLink>
+          </nav>
+        </div>
+      </footer>
+    </div>
   )
 }

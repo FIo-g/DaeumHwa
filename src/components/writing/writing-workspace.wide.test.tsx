@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
+import { renderToString } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChapterRow, Role } from '@/db/types'
 import type { WritingData } from './types'
@@ -104,14 +105,14 @@ const checkCalls: CheckCall[] = []
 beforeEach(() => {
   window.sessionStorage.clear()
   checkCalls.length = 0
-  // Wide layout: the side panel sits beside the editor.
+  // Model a 1093px viewport so the old 1280px breakpoint would open the sheet.
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
-    value: vi.fn().mockReturnValue({
-      matches: true,
+    value: vi.fn((query: string) => ({
+      matches: query === '(min-width: 1093px)',
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
-    }),
+    })),
   })
   vi.stubGlobal(
     'fetch',
@@ -157,7 +158,7 @@ afterEach(() => {
 })
 
 describe('WritingWorkspace wide layout', () => {
-  it('issues only one check request when the auto check is on', async () => {
+  it('runs a single check in the side panel at laptop width', async () => {
     render(
       <WritingWorkspace
         data={makeData()}
@@ -166,10 +167,30 @@ describe('WritingWorkspace wide layout', () => {
       />,
     )
 
-    expect(await screen.findByRole('region', { name: '회차 점검' })).toBeInTheDocument()
+    const check = await screen.findByRole('region', { name: '회차 점검' })
+    expect(screen.getByRole('complementary')).toContainElement(check)
+    expect(screen.queryByRole('dialog', { name: '작업 패널' })).toBeNull()
     await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(checkCalls).toHaveLength(1)
     expect(checkCalls[0]).toMatchObject({ aborted: false, completed: true })
+  })
+
+  it('reserves the panel column and keeps the sheet shut before the width is known', () => {
+    // The server render is what the browser paints before hydration.
+    const html = renderToString(
+      <WritingWorkspace
+        data={makeData()}
+        loadServerCopy={async () => ({ ok: true, data: {} }) as never}
+        autoCheck
+      />,
+    )
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+
+    const aside = doc.querySelector('aside')
+    expect(aside?.classList).toContain('wg-writing-aside')
+    expect(doc.querySelector('[role="dialog"]')).toBeNull()
+    const trigger = [...doc.querySelectorAll('button')].find((b) => b.textContent === '패널 열기')
+    expect(trigger?.parentElement?.classList).toContain('wg-writing-mobile-dock')
   })
 })

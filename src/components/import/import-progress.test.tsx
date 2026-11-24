@@ -25,7 +25,7 @@ function job(overrides: Partial<ImportJobRow> = {}): ImportJobRow {
     processedChapters: 1,
     proposalCount: 0,
     state: { knownEntities: [], threadTitles: [] },
-    error: '2화에서 멈췄습니다: AI 호출에 실패했습니다: refusal',
+    error: '2화에서 멈췄어요: AI 호출에 실패했어요: refusal',
     runner: 'client',
     createdBy: '00000000-0000-4000-8000-000000000003',
     createdAt: new Date(),
@@ -73,4 +73,27 @@ describe('ImportProgress skip control', () => {
     render(<ImportProgress workId="w" initial={toSnapshot(skipped)} canEdit />)
     expect(screen.getByText('건너뛴 회차: 2화')).toBeTruthy()
   })
+})
+
+it('marks the live process step and reports actual chapter progress', () => {
+  const { unmount } = render(<ImportProgress workId="w" initial={toSnapshot(job())} canEdit />)
+  expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('설정 추출')
+  expect(screen.getByRole('progressbar', { name: '처리 진행률' })).toHaveAttribute(
+    'aria-valuenow',
+    '33',
+  )
+  unmount()
+
+  render(
+    <ImportProgress
+      workId="w"
+      initial={toSnapshot(job({ status: 'done', processedChapters: 3, error: null }))}
+      canEdit
+    />,
+  )
+  expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('승인 대기')
+  expect(screen.getByRole('progressbar', { name: '처리 진행률' })).toHaveAttribute(
+    'aria-valuenow',
+    '100',
+  )
 })

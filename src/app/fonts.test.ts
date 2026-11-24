@@ -3,19 +3,40 @@ import { describe, expect, it } from 'vitest'
 
 const layout = readFileSync(new URL('./layout.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./globals.css', import.meta.url), 'utf8')
+const redesign = readFileSync(new URL('./redesign.css', import.meta.url), 'utf8')
 
 describe('font setup', () => {
-  it('loads only the Noto Serif KR Myeongjo from next/font', () => {
-    expect(layout).toMatch(/import \{ Noto_Serif_KR \} from 'next\/font\/google'/)
-    expect(layout).toContain('--font-serif-ko')
-    expect(layout).not.toContain('Geist')
+  it('loads the three manuscript-theme typefaces on the document with next/font', () => {
+    expect(layout).toMatch(
+      /import \{ IBM_Plex_Sans_KR, Nanum_Gothic_Coding, Noto_Serif_KR \} from 'next\/font\/google'/,
+    )
+    expect(layout).toMatch(
+      /Noto_Serif_KR\(\{\s*weight: \['400', '500', '700', '900'\][\s\S]*?variable: '--font-display-ko'/,
+    )
+    expect(layout).toMatch(
+      /IBM_Plex_Sans_KR\(\{\s*weight: \['400', '500', '600', '700'\][\s\S]*?variable: '--font-body-ko'/,
+    )
+    expect(layout).toMatch(
+      /Nanum_Gothic_Coding\(\{\s*weight: \['400', '700'\][\s\S]*?variable: '--font-mono-ko'/,
+    )
+    expect(layout).toMatch(/<html[\s\S]*?display\.variable,\s*body\.variable,\s*mono\.variable/)
   })
 
-  it('keeps the Korean system font stack for UI text', () => {
-    expect(css).toMatch(/Apple SD Gothic Neo/)
-    expect(css).toMatch(/Malgun Gothic/)
-    expect(css).toMatch(/Noto Sans KR/)
-    expect(css).toMatch(/--font-serif: var\(--font-serif-ko\)/)
-    expect(css).not.toContain('Geist')
+  it('maps titles to the serif, interface text to the sans and counts to the mono stack', () => {
+    for (const [utility, variable] of [
+      ['sans', 'body'],
+      ['serif', 'body'],
+      ['heading', 'title'],
+      ['mono', 'mono'],
+    ]) {
+      expect(css).toContain(`--font-${utility}: var(--b-font-${variable});`)
+    }
+    expect(redesign).toMatch(/--b-font-title:\s*var\(--font-display-ko, 'Noto Serif KR'\)/)
+    expect(redesign).toMatch(/--b-font-body:\s*var\(--font-body-ko, 'IBM Plex Sans KR'\)/)
+    expect(redesign).toMatch(/--b-font-mono:\s*var\(--font-mono-ko, 'Nanum Gothic Coding'\)/)
+    expect(redesign).toMatch(/Apple SD Gothic Neo/)
+    expect(redesign).toMatch(/Malgun Gothic/)
+    expect(css + redesign).not.toMatch(/Black\s+Han\s+Sans/)
+    expect(css + redesign).not.toMatch(/Nanum\s+Pen\s+Script/)
   })
 })

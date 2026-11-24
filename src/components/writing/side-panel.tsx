@@ -15,6 +15,8 @@ import type { WritingSidePanelProps } from './types'
 
 type TabKey = 'related' | 'threads' | 'check' | 'proofread' | 'comments' | 'draft' | 'reader'
 
+const TRIAL_TABS = new Set<TabKey>(['related', 'threads', 'check'])
+
 const TABS: { value: TabKey; label: string }[] = [
   { value: 'related', label: '관련 카드' },
   { value: 'threads', label: '떡밥' },
@@ -29,11 +31,18 @@ const TABS: { value: TabKey; label: string }[] = [
  * The writing screen's side panels. Every panel stays mounted (inactive ones are hidden), so a
  * running draft or a loaded check result survives switching tabs.
  */
-export function WritingSidePanel({ data, api, text, position, autoCheck }: WritingSidePanelProps) {
+export function WritingSidePanel({
+  data,
+  api,
+  text,
+  position,
+  autoCheck,
+  findings,
+}: WritingSidePanelProps) {
   const auto = useAutoCheck(data.chapter.id)
   // The panel only mounts on the client (after the layout effect), so the session read is safe.
   const [tab, setTab] = useState<TabKey>(() =>
-    autoCheck || isSampleChapter(data.chapter.id) ? 'check' : 'related',
+    autoCheck || findings?.requestedId || isSampleChapter(data.chapter.id) ? 'check' : 'related',
   )
   // Render-time previous-value state: switch tabs as soon as an auto check starts, without an effect.
   const [autoWasRunning, setAutoWasRunning] = useState(false)
@@ -42,24 +51,29 @@ export function WritingSidePanel({ data, api, text, position, autoCheck }: Writi
     if (auto.running) setTab('check')
   }
 
+  const requested = findings?.requestedId ?? null
+  const [previousRequest, setPreviousRequest] = useState(requested)
+  if (requested !== previousRequest) {
+    setPreviousRequest(requested)
+    if (requested) setTab('check')
+  }
+
   return (
-    <div data-chapter-position={position} className="flex min-w-0 flex-col gap-3">
+    <div data-chapter-position={position} className="min-w-0">
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-3">
-        <TabsList
-          variant="line"
-          aria-label="작업 패널 탭"
-          className="h-auto w-full flex-wrap justify-start gap-x-3 gap-y-2 rounded-none border-b border-rule p-0 pb-2 group-data-horizontal/tabs:h-auto"
-        >
-          {TABS.map((item) => (
-            <TabsTrigger
-              key={item.value}
-              value={item.value}
-              className="flex-none rounded-none px-0 py-1 text-muted-foreground group-data-horizontal/tabs:after:bottom-[-9px] data-active:font-semibold"
-            >
-              {item.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="wg-writing-tab-dock">
+          <TabsList aria-label="작업 패널 탭" className="wg-writing-tabs flex w-full flex-wrap">
+            {TABS.filter((item) => !data.trial || TRIAL_TABS.has(item.value)).map((item) => (
+              <TabsTrigger
+                key={item.value}
+                value={item.value}
+                className="wg-writing-tab flex-auto px-2 whitespace-normal max-md:px-3"
+              >
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <TabsContent value="related" keepMounted>
           <RelatedCards data={data} api={api} text={text} />
@@ -68,20 +82,24 @@ export function WritingSidePanel({ data, api, text, position, autoCheck }: Writi
           <OpenThreads data={data} api={api} />
         </TabsContent>
         <TabsContent value="check" keepMounted>
-          <CheckPanel data={data} api={api} text={text} autoRun={autoCheck} />
+          <CheckPanel data={data} api={api} text={text} autoRun={autoCheck} findings={findings} />
         </TabsContent>
-        <TabsContent value="proofread" keepMounted>
-          <ProofreadPanel data={data} api={api} text={text} />
-        </TabsContent>
-        <TabsContent value="comments" keepMounted>
-          <CommentsPanel data={data} api={api} text={text} />
-        </TabsContent>
-        <TabsContent value="draft" keepMounted>
-          <DraftPanel data={data} api={api} />
-        </TabsContent>
-        <TabsContent value="reader" keepMounted>
-          <ReaderPanel data={data} api={api} text={text} />
-        </TabsContent>
+        {!data.trial && (
+          <>
+            <TabsContent value="proofread" keepMounted>
+              <ProofreadPanel data={data} api={api} text={text} />
+            </TabsContent>
+            <TabsContent value="comments" keepMounted>
+              <CommentsPanel data={data} api={api} text={text} />
+            </TabsContent>
+            <TabsContent value="draft" keepMounted>
+              <DraftPanel data={data} api={api} />
+            </TabsContent>
+            <TabsContent value="reader" keepMounted>
+              <ReaderPanel data={data} api={api} text={text} />
+            </TabsContent>
+          </>
+        )}
       </Tabs>
     </div>
   )

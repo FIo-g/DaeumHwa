@@ -12,6 +12,15 @@ export type SampleWorkData = {
     summary: string
   }[]
   facts: { entryKey: string; content: string }[]
+  relations: {
+    sourceKey: string
+    targetKey: string
+    kind: string
+    description: string
+    directed: boolean
+    startPosition: number | null
+    endPosition: number | null
+  }[]
   chapters: { title: string; body: string }[]
   threads: {
     title: string
@@ -74,6 +83,36 @@ export const SAMPLE_WORK: SampleWorkData = {
     { entryKey: 'key', content: '은색 열쇠는 달이 찬 밤에만 자물쇠에 꽂을 수 있다.' },
     { entryKey: 'harbor', content: '청해항 시장은 낮에만 문을 연다.' },
   ],
+  // Only what the cards and the manuscript already say, so the graph has lines to show.
+  relations: [
+    {
+      sourceKey: 'serin',
+      targetKey: 'doyunseo',
+      kind: '만남',
+      description: '종루 문 앞에서 만난다.',
+      directed: false,
+      startPosition: 3,
+      endPosition: null,
+    },
+    {
+      sourceKey: 'doyunseo',
+      targetKey: 'harbor',
+      kind: '출신',
+      description: '도윤서는 청해항 출신이다.',
+      directed: true,
+      startPosition: null,
+      endPosition: null,
+    },
+    {
+      sourceKey: 'jongru',
+      targetKey: 'harbor',
+      kind: '위치',
+      description: '종루는 청해항 북쪽 언덕에 있다.',
+      directed: true,
+      startPosition: null,
+      endPosition: null,
+    },
+  ],
   chapters: [
     {
       title: '청해항 입항',
@@ -84,7 +123,7 @@ export const SAMPLE_WORK: SampleWorkData = {
       body: '해가 기울 무렵 세린은 낡은 여관의 계단을 올라갔다. 복도 끝 방문 앞에는 누군가 두고 간 등불이 흔들리고 있었다. 19살의 세린은 말없이 고개를 숙였다. 문을 연 주인은 그녀의 옷차림을 한참 살피더니 값을 먼저 치르라고 말했다. 세린은 품에서 은화 두 닢을 꺼내 탁자 위에 올려놓았다. 주인은 은화를 저울에 올려보고는 방 번호가 적힌 나무 패를 건넸다. 세린은 나무 패를 손에 꼭 쥐고 방으로 들어갔다. 창밖으로 멀리 잿빛 종루의 그림자가 보였다. 종루는 밤이 되어도 불을 켜지 않았다. 세린은 창문을 닫고 침대 끝에 앉아 편지를 다시 꺼냈다. 봉인에는 바다의 상징인 물결 무늬가 찍혀 있었다. 그녀는 봉인을 손끝으로 쓸어 보다가 편지를 도로 접었다. 방 안은 좁았지만 창문이 높아 바람이 잘 통했다. 세린은 신발을 벗고 벽에 등을 기댔다. 오늘 하루 동안 있었던 일들이 천천히 머릿속에서 정리되었다. 어머니가 사라진 날의 기억은 여전히 흐릿했다.',
     },
     {
-      title: '열한 층',
+      title: '종루의 손짓',
       body: '아침 일찍 세린은 항구 북쪽의 언덕길을 올랐다. 길 끝에는 돌로 쌓은 높은 탑이 서 있었고, 사람들은 그곳을 그냥 탑이라고 불렀다. 종루지기가 열한 층 꼭대기에서 손을 흔들었다. 세린은 그 손짓이 무슨 뜻인지 알 수 없어 걸음을 멈췄다. 언덕 아래에서는 바다가 넓게 펼쳐져 보였다. 배들이 천천히 항구를 빠져나가고 있었고, 바람은 차갑고 짰다. 윤서는 왼손에 단검을 쥐고 문 앞에 섰다. 그의 눈은 탑 안쪽의 어둠을 천천히 훑고 있었다. 세린이 다가가자 그는 말없이 고개만 끄덕였다. 두 사람은 한동안 아무 말도 하지 않았다. 문틈에서 쇠가 긁히는 소리가 길게 울렸다. 세린은 숨을 죽이고 그 소리를 세었다. 탑의 입구는 좁고 어두웠다. 바닥에는 오래된 발자국들이 겹겹이 찍혀 있었고, 벽에는 누군가 긁어 놓은 표식이 남아 있었다. 세린은 그 표식들을 하나씩 눈으로 따라 읽었다.',
     },
   ],

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 import { SubmitButton } from '@/components/app/submit-button'
+import { CountCell } from '@/components/motion'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -35,18 +36,22 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
 
   if (!canEdit) {
     return (
-      <dl className="grid gap-3 text-sm sm:grid-cols-3">
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground">연재 요일</dt>
+      <dl className="wg-schedule-ledger">
+        <div>
+          <dt>연재 요일</dt>
           <dd>{dayText || '없음'}</dd>
         </div>
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground">하루 회차 수</dt>
-          <dd>{settings.chaptersPerPublishDay}화</dd>
+        <div>
+          <dt>하루 회차 수</dt>
+          <dd>
+            <CountCell value={settings.chaptersPerPublishDay} />화
+          </dd>
         </div>
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground">비축 목표</dt>
-          <dd>{settings.bufferTarget}화</dd>
+        <div>
+          <dt>비축 목표</dt>
+          <dd>
+            <CountCell value={settings.bufferTarget} />화
+          </dd>
         </div>
       </dl>
     )
@@ -73,7 +78,7 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             bufferTarget: bufferNumber,
           },
         }),
-        { success: '연재 설정을 저장했습니다.' },
+        { success: '연재 설정을 저장했어요.' },
       )
       if (saved) router.refresh()
     } finally {
@@ -90,17 +95,21 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
           value={days}
           onValueChange={setDays}
           aria-labelledby="publish-days-label"
-          variant="outline"
           size="sm"
-          className="flex-wrap"
+          spacing={0}
+          className="wg-schedule-publish-days grid w-full grid-cols-7"
         >
           {WEEKDAY_LABELS.map((label, index) => (
-            <ToggleGroupItem key={label} value={String(index)}>
+            <ToggleGroupItem
+              key={label}
+              value={String(index)}
+              className="aspect-square h-auto min-w-0 group-data-[spacing=0]/toggle-group:px-0"
+            >
               {label}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        {!validDays && <p className="text-xs text-destructive">연재 요일을 하나 이상 고르세요.</p>}
+        {!validDays && <p className="text-xs text-ink">연재 요일을 하나 이상 고르세요.</p>}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
@@ -113,11 +122,9 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             max={10}
             value={perDay}
             onChange={(e) => setPerDay(e.target.value)}
-            className="max-w-32"
+            className="max-w-32 font-mono"
           />
-          {!validPerDay && (
-            <p className="text-xs text-destructive">1~10 사이의 숫자를 입력하세요.</p>
-          )}
+          {!validPerDay && <p className="text-xs text-ink">1~10 사이의 숫자를 입력하세요.</p>}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="buffer-target">비축 목표 (화)</Label>
@@ -129,11 +136,9 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             max={100}
             value={buffer}
             onChange={(e) => setBuffer(e.target.value)}
-            className="max-w-32"
+            className="max-w-32 font-mono"
           />
-          {!validBuffer && (
-            <p className="text-xs text-destructive">0~100 사이의 숫자를 입력하세요.</p>
-          )}
+          {!validBuffer && <p className="text-xs text-ink">0~100 사이의 숫자를 입력하세요.</p>}
         </div>
       </div>
       <div>

@@ -176,7 +176,7 @@ describe('getPeriodicAlerts: stale proposals and buffer', () => {
 
     const alerts = await getPeriodicAlerts(db, work.id)
 
-    expect(alerts.bufferWarning).toBe('비축분이 목표(5화)보다 적습니다 (현재 0화).')
+    expect(alerts.bufferWarning).toBe('비축분이 목표(5화)보다 적어요 (현재 0화).')
     expect(alerts.total).toBe(1)
   })
 

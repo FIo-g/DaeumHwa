@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { renderToString } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runAction } from '@/lib/client/run-action'
 import { NewWorkForm } from './new-work-form'
@@ -34,6 +35,17 @@ describe('NewWorkForm', () => {
     expect(screen.getByLabelText('한 줄 소개')).toBeInTheDocument()
   })
 
+  it('waits for the client to attach before accepting input or submission', () => {
+    const markup = renderToString(<NewWorkForm />)
+    const server = new DOMParser().parseFromString(markup, 'text/html')
+    expect(server.querySelector<HTMLInputElement>('#title')?.readOnly).toBe(true)
+    expect(server.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true)
+
+    render(<NewWorkForm />)
+    expect(screen.getByLabelText('제목')).not.toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: '작품 만들기' })).toBeEnabled()
+  })
+
   it('creates the work and then offers the three ways to start', async () => {
     run.mockResolvedValue({ id: 'w1', title: '별빛 계약' } as never)
     render(<NewWorkForm />)
@@ -64,6 +76,6 @@ describe('NewWorkForm', () => {
 
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
     expect(screen.queryByRole('link', { name: '바로 쓰기' })).not.toBeInTheDocument()
-    expect(screen.getByLabelText('제목')).toBeInTheDocument()
+    expect(screen.getByLabelText('제목')).toHaveValue('별빛 계약')
   })
 })

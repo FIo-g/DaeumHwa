@@ -1,38 +1,45 @@
 'use client'
 
 import { type DragEvent, useState } from 'react'
-import { Input } from '@/components/ui/input'
+import { Sheet } from '@/components/motion'
+import { buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { getTextWorker } from '@/lib/client/worker-client'
-import { cn } from '@/lib/utils'
 
 const ACCEPT = '.txt,.md,.docx'
 
+export type SelectedFile = { fileName: string; size: number }
+
 type FileDropProps = {
   disabled?: boolean
+  onSelect?: (file: SelectedFile) => void
   /** Called with the plain text of the file once the worker has decoded it. */
   onParsed: (file: { fileName: string; text: string }) => void
 }
 
 /** Step 1 of the import: pick or drop a TXT, MD or DOCX file and decode it in the worker. */
-export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
+export function FileDrop({ disabled = false, onSelect, onParsed }: FileDropProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [selected, setSelected] = useState<SelectedFile | null>(null)
 
   async function readFile(file: File) {
+    const selection = { fileName: file.name, size: file.size }
+    setSelected(selection)
+    onSelect?.(selection)
     setError(null)
     setBusy(true)
     try {
       const bytes = await file.arrayBuffer()
       const parsed = await getTextWorker().parseFile(file.name, bytes)
       if (parsed.text.trim().length === 0) {
-        setError('원고 내용이 비어 있습니다. 다른 파일을 골라 주세요.')
+        setError('빈 원고예요. 다른 파일을 골라 주세요.')
         return
       }
       onParsed({ fileName: file.name, text: parsed.text })
     } catch (e) {
-      setError(e instanceof Error ? e.message : '파일을 읽지 못했습니다. 다시 시도해 주세요.')
+      setError(e instanceof Error ? e.message : '파일을 읽지 못했어요. 다시 시도해 주세요.')
     } finally {
       setBusy(false)
     }
@@ -50,45 +57,66 @@ export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
     <div
       onDragOver={(event) => {
         event.preventDefault()
-        if (!disabled) setDragging(true)
+        if (!disabled && !busy) setDragging(true)
       }}
-      onDragLeave={() => setDragging(false)}
+      onDragLeave={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          event.currentTarget.contains(event.relatedTarget)
+        )
+          return
+        setDragging(false)
+      }}
+      data-dragging={dragging}
       onDrop={handleDrop}
-      className={cn(
-        'grid gap-4 rounded-xl border border-dashed p-6 text-center transition-colors',
-        dragging && 'border-primary bg-muted/50',
-      )}
+      className="wg-import-drop"
     >
-      <div className="grid gap-1">
-        <p className="font-medium">원고 파일을 끌어다 놓거나 아래에서 고르세요</p>
-        <p className="text-sm text-muted-foreground">
-          TXT, MD, DOCX 파일을 올릴 수 있습니다. HWP는 한글에서 DOCX나 TXT로 저장한 뒤 올려 주세요.
+      <Sheet as="div" className="wg-import-drop-sheet">
+        <p className="wg-import-write font-medium">
+          원고 파일을 끌어다 놓거나 아래에서 골라 주세요.
         </p>
-      </div>
-      <div className="mx-auto grid w-full max-w-xs gap-1.5 text-left">
-        <Label htmlFor="manuscript-file">원고 파일</Label>
-        <Input
-          id="manuscript-file"
-          type="file"
-          accept={ACCEPT}
-          disabled={disabled || busy}
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ''
-            if (file) void readFile(file)
-          }}
-        />
-      </div>
-      {busy && (
-        <p role="status" className="text-sm text-muted-foreground">
-          파일을 읽는 중입니다.
+        <p className="wg-import-write text-sm text-muted-ink">
+          txt, md, docx 파일을 올릴 수 있어요. hwp 파일은 한글에서 docx나 txt로 저장해 주세요.
         </p>
-      )}
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+        <div className="wg-import-file-field wg-import-write">
+          <Label htmlFor="manuscript-file" className={buttonVariants()}>
+            원고 파일
+          </Label>
+          <input
+            id="manuscript-file"
+            className="sr-only"
+            type="file"
+            accept={ACCEPT}
+            disabled={disabled || busy}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void readFile(file)
+            }}
+          />
+        </div>
+        {selected && <FileDetails file={selected} />}
+        {busy && (
+          <p role="status" className="text-sm text-muted-ink">
+            파일을 읽고 있어요.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="wg-import-error text-sm">
+            {error}
+          </p>
+        )}
+        <div className="wg-import-drop-cells" aria-hidden="true" />
+      </Sheet>
     </div>
+  )
+}
+
+export function FileDetails({ file }: { file: SelectedFile }) {
+  return (
+    <p className="wg-import-write flex flex-wrap items-baseline gap-x-3 font-mono text-sm">
+      <span className="min-w-0 wrap-anywhere">{file.fileName}</span>
+      <span className="text-muted-ink">{file.size.toLocaleString('ko-KR')} B</span>
+    </p>
   )
 }

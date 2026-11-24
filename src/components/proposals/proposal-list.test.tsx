@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runAction } from '@/lib/client/run-action'
-import { bulkApproveAction } from '@/server/actions/proposals'
+import { approveProposalAction, bulkApproveAction } from '@/server/actions/proposals'
 import type { ProposalView } from '@/server/proposals'
 import { ProposalList } from './proposal-list'
 
@@ -16,6 +17,9 @@ vi.mock('@/server/actions/proposals', () => ({
 vi.mock('@/lib/client/run-action', () => ({
   runAction: vi.fn(),
 }))
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 const run = vi.mocked(runAction)
 const bulk = vi.mocked(bulkApproveAction)
@@ -82,7 +86,7 @@ afterEach(() => {
 })
 
 describe('ProposalList', () => {
-  it('approves a whole card group at once and removes it from the list', async () => {
+  it('approves a whole card group and marks its rows in reading order', async () => {
     run.mockResolvedValue({ approved: 2, failed: [] } as never)
     render(
       <ProposalList
@@ -95,9 +99,51 @@ describe('ProposalList', () => {
     )
 
     const group = screen.getByRole('region', { name: '이서윤' })
-    fireEvent.click(within(group).getByRole('button', { name: '이 묶음 승인' }))
+    expect(within(group).getByRole('heading', { name: '이서윤 2건' })).toHaveTextContent(
+      /^이서윤 2건$/,
+    )
+    group.parentElement!.style.setProperty('--b-draw', '100ms')
+    group.parentElement!.style.setProperty('--b-stagger', '70ms')
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: '이 묶음 승인' }))
+    })
 
     expect(bulk).toHaveBeenCalledWith({ workId: 'work-1', proposalIds: ['p-entry', 'p-fact'] })
+    const marked = within(group).getAllByRole('article')
+    expect(marked.map((row) => row.parentElement!.dataset.decision)).toEqual([
+      'approved',
+      'approved',
+    ])
+    expect(
+      marked.map((row) =>
+        row.parentElement!.style.getPropertyValue('--wg-approvals-decision-index'),
+      ),
+    ).toEqual(['0', '1'])
+    await waitFor(() => expect(screen.queryByRole('region', { name: '이서윤' })).toBeNull())
+    expect(screen.getByRole('region', { name: '민준' })).toBeInTheDocument()
+  })
+
+  it('approves an import batch after confirmation and leaves the other batches pending', async () => {
+    run.mockResolvedValueOnce({ approved: 1, failed: [] } as never)
+    render(
+      <ProposalList
+        proposals={[entry, { ...minjun, sourceRef: 'job-2' }]}
+        workId="work-1"
+        chapters={chapters}
+        grouping="entity"
+        importBatches={[{ sourceRef: 'job-1', count: 1 }]}
+      />,
+    )
+
+    const batch = screen.getByRole('region', { name: '원고 가져오기 제안' })
+    expect(within(batch).getByText('원고 가져오기 제안 1건')).toBeVisible()
+    fireEvent.click(within(batch).getByRole('button', { name: '이 가져오기의 제안 모두 승인' }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toHaveAccessibleName('제안 1건을 모두 승인할까요?')
+    expect(dialog).toHaveAccessibleDescription('기본 태그가 붙어 위키에 바로 반영돼요.')
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }))
+
+    expect(bulk).toHaveBeenCalledWith({ workId: 'work-1', sourceRef: 'job-1' })
     await waitFor(() => expect(screen.queryByRole('region', { name: '이서윤' })).toBeNull())
     expect(screen.getByRole('region', { name: '민준' })).toBeInTheDocument()
   })
@@ -143,7 +189,7 @@ describe('ProposalList', () => {
     )
 
     expect(screen.getAllByRole('article')).toHaveLength(20)
-    expect(screen.getByText('전체 45건')).toBeInTheDocument()
+    expect(screen.getByText(/^전체/)).toHaveTextContent(/^전체 45건$/)
     fireEvent.click(screen.getByRole('button', { name: '더 보기 (남은 25묶음)' }))
     expect(screen.getAllByRole('article')).toHaveLength(40)
     fireEvent.click(screen.getByRole('button', { name: '더 보기 (남은 5묶음)' }))
@@ -174,13 +220,106 @@ describe('ProposalList', () => {
     const group = screen.getByRole('region', { name: '인물0' })
     fireEvent.click(within(group).getByRole('button', { name: '이 묶음 승인' }))
     await waitFor(() => expect(screen.queryByRole('region', { name: '인물0' })).toBeNull())
-    expect(screen.getByText('전체 20건')).toBeInTheDocument()
+    expect(screen.getByText(/^전체/)).toHaveTextContent(/^전체 20건$/)
     expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull()
     expect(screen.getAllByRole('article')).toHaveLength(20)
   })
 
+  it('stamps a confirmed change even when the server has already removed it from props', async () => {
+    let respond: (data: unknown) => void = () => {}
+    run.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          respond = resolve
+        }),
+    )
+    const props = { workId: 'work-1', chapters, grouping: 'entity' } as const
+    const { rerender } = render(<ProposalList {...props} proposals={[entry, minjun]} />)
+    const card = within(screen.getByRole('region', { name: '이서윤' })).getByRole('article')
+    const approve = within(card).getByRole('button', { name: '승인' })
+    approve.focus()
+    fireEvent.click(approve)
+
+    rerender(<ProposalList {...props} proposals={[minjun]} />)
+    expect(card).toBeInTheDocument()
+    expect(approve).toBeDisabled()
+    await act(async () => respond({}))
+    expect(card).toHaveAttribute('data-decision', 'approved')
+    await waitFor(() => expect(card).not.toBeInTheDocument())
+    expect(screen.getByRole('region', { name: '민준' }).contains(document.activeElement)).toBe(true)
+  })
+
+  it('keeps selected cards and edited data when an approval fails', async () => {
+    const { runAction: realRun } =
+      await vi.importActual<typeof import('@/lib/client/run-action')>('@/lib/client/run-action')
+    run.mockImplementationOnce(realRun)
+    vi.mocked(approveProposalAction).mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'BAD_STATE', message: '이 제안을 승인할 수 없어요.' },
+    })
+    render(
+      <ProposalList
+        proposals={[entry]}
+        workId="work-1"
+        chapters={chapters}
+        grouping="entity"
+        selectable
+      />,
+    )
+    fireEvent.click(screen.getByRole('checkbox', { name: '이 제안 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '수정' }))
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '새 이름' } })
+    fireEvent.click(screen.getByRole('button', { name: '승인' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '승인' })).toBeEnabled())
+    expect(toast.error).toHaveBeenCalledWith('이 제안을 승인할 수 없어요.')
+    expect(screen.getByRole('article')).not.toHaveAttribute('data-decision')
+    expect(screen.getByLabelText('이름')).toHaveValue('새 이름')
+    expect(screen.getByRole('checkbox', { name: '이 제안 선택' })).toBeChecked()
+  })
+
+  it('keeps failed bulk approvals selected while stamping the successful ones', async () => {
+    run.mockResolvedValueOnce({ approved: 1, failed: [{ proposalId: 'p-minjun' }] } as never)
+    render(
+      <ProposalList
+        proposals={[entry, minjun]}
+        workId="work-1"
+        chapters={chapters}
+        grouping="entity"
+        selectable
+      />,
+    )
+    const rejected = screen.getByRole('region', { name: '민준' })
+    for (const checkbox of screen.getAllByRole('checkbox', { name: '이 제안 선택' })) {
+      fireEvent.click(checkbox)
+    }
+    fireEvent.click(screen.getByRole('button', { name: '선택 승인 (2)' }))
+    await waitFor(() => expect(screen.queryByRole('region', { name: '이서윤' })).toBeNull())
+    expect(within(rejected).getByRole('checkbox', { name: '이 제안 선택' })).toBeChecked()
+    expect(screen.getByRole('button', { name: '선택 승인 (1)' })).toBeEnabled()
+  })
+
+  it('folds a rejected proposal before removing it', async () => {
+    run.mockResolvedValueOnce({})
+    render(
+      <ProposalList
+        proposals={[entry, minjun]}
+        workId="work-1"
+        chapters={chapters}
+        grouping="entity"
+      />,
+    )
+    const group = screen.getByRole('region', { name: '이서윤' })
+    group.parentElement!.style.setProperty('--b-draw', '100ms')
+    fireEvent.click(within(group).getByRole('button', { name: '거절' }))
+    await waitFor(() =>
+      expect(within(group).getByRole('article')).toHaveAttribute('data-decision', 'rejected'),
+    )
+    await waitFor(() => expect(group).not.toBeInTheDocument())
+    expect(screen.getByRole('region', { name: '민준' })).toBeInTheDocument()
+  })
+
   it('shows an empty state when nothing is waiting', () => {
     render(<ProposalList proposals={[]} workId="work-1" chapters={chapters} grouping="entity" />)
-    expect(screen.getByText('승인 대기 중인 제안이 없습니다.')).toBeInTheDocument()
+    expect(screen.getByText('승인 대기 중인 제안이 없어요.')).toBeInTheDocument()
   })
 })

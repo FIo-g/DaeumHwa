@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
-const CANCELLED_MESSAGE = '취소했습니다.'
+const CANCELLED_MESSAGE = '취소했어요.'
 
 /**
  * Tracks one AI call from a panel: whether it runs, how many seconds it has taken, and a cancel

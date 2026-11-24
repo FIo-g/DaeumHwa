@@ -49,7 +49,7 @@ test('marking a chapter done runs the check and queues candidates', async ({ pag
   await expect(confirm).toBeVisible()
   await confirm.getByRole('button', { name: '완료하기', exact: true }).click()
 
-  await expect(page.getByText('1화 점검을 마쳤습니다.', { exact: true })).toBeVisible({
+  await expect(page.getByText('1화 점검을 마쳤어요.', { exact: true })).toBeVisible({
     timeout: 60_000,
   })
 

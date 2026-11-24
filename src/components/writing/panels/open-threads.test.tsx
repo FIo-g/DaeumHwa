@@ -71,6 +71,27 @@ afterEach(() => {
 })
 
 describe('OpenThreads', () => {
+  it('uses the chapter range for the axis and renders both marks for a shared chapter', () => {
+    const thread = makeThread({ status: 'planted', plantedPosition: 2, targetChapterPosition: 2 })
+    const data = makeData('viewer', thread)
+    data.chapters = [
+      { id: 'c1', position: 1, title: '1화' },
+      ...data.chapters,
+      { id: 'c24', position: 24, title: '24화' },
+    ]
+    const { container } = render(<OpenThreads data={data} api={api} />)
+
+    const plot = container.querySelector<HTMLElement>('.wg-panels-axis-plot')
+    expect(plot?.style.getPropertyValue('--wg-panels-axis-count')).toBe('24')
+    const seed = plot?.querySelector<HTMLElement>('.wg-panels-axis-seed')
+    const target = plot?.querySelector<HTMLElement>('.wg-panels-axis-target')
+    expect(seed?.style.insetInlineStart).toBe('6.25%')
+    expect(target?.style.insetInlineStart).toBe('6.25%')
+    expect(seed).toHaveAttribute('data-thread-coincident', 'seed')
+    expect(target).toHaveAttribute('data-thread-coincident', 'target')
+    expect(plot?.querySelector('.wg-panels-axis-line')).toBeNull()
+  })
+
   it('offers 이 회차에 심음 for a planned thread and records it on this chapter', async () => {
     render(<OpenThreads data={makeData('editor', makeThread({ status: 'planned' }))} api={api} />)
 
@@ -121,6 +142,6 @@ describe('OpenThreads', () => {
     render(<OpenThreads data={makeData('viewer', makeThread({ status: 'planned' }))} api={api} />)
 
     expect(screen.queryByRole('button', { name: '이 회차에 심음' })).toBeNull()
-    expect(screen.getByText('편집자 이상만 실행할 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('편집 권한이 있어야 실행할 수 있어요.')).toBeTruthy()
   })
 })

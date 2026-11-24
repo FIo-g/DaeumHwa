@@ -1,16 +1,17 @@
+import type { CSSProperties } from 'react'
 import { FilterLinks, type FilterOption } from '@/components/history/filter-links'
+import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
 import type { ProposalChapterOption } from '@/components/proposals/proposal-card'
+import { ProposalDetails } from '@/components/proposals/proposal-details'
 import { ProposalList } from '@/components/proposals/proposal-list'
-import { PROPOSAL_SOURCE_LABEL } from '@/lib/labels'
+import { chapterLabel, PROPOSAL_SOURCE_LABEL } from '@/lib/labels'
 import { PROPOSAL_SOURCES, type ProposalSource } from '@/db/types'
 import { hasRole } from '@/server/access'
 import { listChapters } from '@/server/chapters'
 import { guardPage, pageContext } from '@/server/page-helpers'
-import { countImportBatches, listProposals } from '@/server/proposals'
+import { countImportBatches, listProposals, type ProposalView } from '@/server/proposals'
 import { getWork } from '@/server/works'
-import { ImportBatchBanner } from './import-batch-banner'
-import { ReadOnlyProposals } from './read-only-proposals'
 
 // Source filters shown on this page. Manual proposals appear only under 전체.
 const FILTER_SOURCES: ProposalSource[] = ['interview', 'import', 'post_chapter', 'style']
@@ -27,6 +28,41 @@ function approvalsHref(workId: string, source: ProposalSource | undefined, group
   if (grouping === 'chapter') params.set('group', 'chapter')
   const query = params.toString()
   return query ? `/works/${workId}/approvals?${query}` : `/works/${workId}/approvals`
+}
+
+function ReadOnlyProposals({ proposals }: { proposals: ProposalView[] }) {
+  if (proposals.length === 0) {
+    return <EmptyState title="승인 대기 중인 제안이 없어요." />
+  }
+
+  return (
+    <div className="grid min-w-0 gap-3">
+      <p className="text-sm text-muted-ink">승인과 거절은 편집자만 할 수 있어요.</p>
+      <ul className="wg-approvals-group">
+        {proposals.map((proposal, index) => (
+          <li
+            key={proposal.id}
+            className="wg-approvals-row"
+            style={{ '--wg-approvals-entry-index': Math.min(index, 3) } as CSSProperties}
+          >
+            <span className="wg-approvals-line-number" aria-hidden="true">
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <div className="wg-approvals-card">
+              <ProposalDetails
+                proposal={proposal}
+                chapter={
+                  proposal.chapterPosition !== null && (
+                    <span>{chapterLabel(proposal.chapterPosition, proposal.chapterTitle)}</span>
+                  )
+                }
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 export default async function ApprovalsPage({
@@ -80,20 +116,16 @@ export default async function ApprovalsPage({
   ]
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="wg-approvals-page">
       <PageHeader
         title="승인 대기"
-        description="AI와 가져오기가 만든 제안을 확인하고 위키에 반영합니다."
+        description="AI가 찾은 설정 후보와 가져온 원고에서 나온 제안이에요. 승인한 것만 위키에 들어가요."
       />
 
-      <div className="flex flex-col gap-3">
+      <div className="wg-approvals-filters">
         <FilterLinks label="출처" options={sourceOptions} />
         <FilterLinks label="묶음" options={groupOptions} />
       </div>
-
-      {batches.map(({ sourceRef, count }) => (
-        <ImportBatchBanner key={sourceRef} workId={workId} sourceRef={sourceRef} count={count} />
-      ))}
 
       {canEdit ? (
         <ProposalList
@@ -102,6 +134,7 @@ export default async function ApprovalsPage({
           workId={workId}
           chapters={chapterOptions}
           grouping={grouping}
+          importBatches={batches}
           selectable
         />
       ) : (

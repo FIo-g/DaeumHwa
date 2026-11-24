@@ -290,7 +290,7 @@ export class ResponsesAiClient implements AiClient {
     })
     body.stream = true
     const response = await this.post(body, args)
-    if (!response.body) throw new Error('응답 본문이 비어 있습니다')
+    if (!response.body) throw new Error('응답 본문이 비어 있어요')
 
     let text = ''
     let final: ResponseBody | undefined
@@ -308,7 +308,7 @@ export class ResponsesAiClient implements AiClient {
         throw new Error(typeof event.message === 'string' ? event.message : '스트림 오류')
       }
     }
-    if (!final) throw new Error('응답이 끝나기 전에 스트림이 끊겼습니다')
+    if (!final) throw new Error('응답이 끝나기 전에 스트림이 끊겼어요')
     const usage = usageOf(final.usage)
     assertFinished(final, usage)
     channel.close()
@@ -392,7 +392,7 @@ function assertFinished(body: ResponseBody, usage: AiUsage): void {
   }
   if (body.status === 'failed') {
     const reason = body.error?.message ?? '알 수 없는 오류'
-    throw aiErrorWithUsage(`AI 호출에 실패했습니다: ${reason}`, usage)
+    throw aiErrorWithUsage(`AI 호출에 실패했어요: ${reason}`, usage)
   }
   if (hasRefusal(body.output)) throw aiErrorWithUsage(REFUSAL_MESSAGE, usage)
 }
@@ -538,7 +538,7 @@ function failure(error: unknown, billed: AiUsage, signal?: AbortSignal): AppErro
   if (isTimeoutError(error)) return aiErrorWithUsage(AI_TIMEOUT_MESSAGE, billed)
   if (error instanceof AppError) return aiErrorWithUsage(error.message, billed)
   if (error instanceof UnstructuredAnswer) return aiErrorWithUsage(FORMAT_MESSAGE, billed)
-  return aiErrorWithUsage(`AI 호출에 실패했습니다: ${reasonOf(error).slice(0, 120)}`, billed)
+  return aiErrorWithUsage(`AI 호출에 실패했어요: ${reasonOf(error).slice(0, 120)}`, billed)
 }
 
 /** The fetch timeout (AbortSignal.timeout) rejects with a TimeoutError. */

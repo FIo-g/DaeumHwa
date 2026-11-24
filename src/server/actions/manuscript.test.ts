@@ -13,7 +13,7 @@ vi.mock('@/db/client', () => ({ getDb: () => mocks.db }))
 vi.mock('@/server/session', () => ({
   requireUser: async () => {
     if (!mocks.userId)
-      throw new (await import('@/lib/errors')).AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+      throw new (await import('@/lib/errors')).AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return { id: mocks.userId, name: '작가', email: 'a@test.local' }
   },
 }))
@@ -42,7 +42,7 @@ describe('chapter actions', () => {
     const result = await createChapterAction({ workId: '00000000-0000-4000-8000-000000000000' })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'UNAUTHENTICATED', message: '로그인이 필요합니다.' },
+      error: { code: 'UNAUTHENTICATED', message: '로그인이 필요해요.' },
     })
   })
 
@@ -52,7 +52,7 @@ describe('chapter actions', () => {
     const result = await createChapterAction({ workId: 'not-a-uuid' })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'VALIDATION', message: '입력값이 올바르지 않습니다.' },
+      error: { code: 'VALIDATION', message: '입력값이 올바르지 않아요.' },
     })
   })
 
@@ -116,7 +116,7 @@ describe('manuscript actions', () => {
       ok: false,
       error: {
         code: 'CONFLICT',
-        message: '다른 곳에서 먼저 수정된 원고가 있습니다.',
+        message: '다른 곳에서 먼저 수정된 원고가 있어요.',
         details: { currentVersion: 2 },
       },
     })

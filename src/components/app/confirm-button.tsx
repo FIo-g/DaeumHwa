@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { ScanLine } from '@/components/motion'
 import { Button, type buttonVariants } from '@/components/ui/button'
 import type { VariantProps } from 'class-variance-authority'
 
@@ -52,9 +53,7 @@ export function ConfirmButton({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger
-        render={<Button variant={variant} size={size} disabled={disabled} />}
-      >
+      <AlertDialogTrigger render={<Button variant={variant} size={size} disabled={disabled} />}>
         {children}
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -64,7 +63,8 @@ export function ConfirmButton({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>취소</AlertDialogCancel>
-          <AlertDialogAction onClick={confirm} disabled={pending}>
+          <AlertDialogAction onClick={confirm} disabled={pending} aria-busy={pending}>
+            <ScanLine active={pending} className="wg-shell-scan wg-shell-scan-button" />
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>

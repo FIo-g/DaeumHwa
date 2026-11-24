@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/server/session', () => ({
   getSessionUser: async () => state.user,
   requireUser: async () => {
-    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return state.user
   },
 }))
@@ -55,7 +55,7 @@ describe('runProofreadAction input rules', () => {
     })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'VALIDATION', message: '입력값이 올바르지 않습니다.' },
+      error: { code: 'VALIDATION', message: '입력값이 올바르지 않아요.' },
     })
   })
 })

@@ -230,7 +230,7 @@ async function linkedEntryIds(db: Db, threadId: string): Promise<string[]> {
  */
 export async function threadSnapshot(db: Db, threadId: string) {
   const [row] = await db.select().from(threads).where(eq(threads.id, threadId)).limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return { ...row, relatedEntryIds: await linkedEntryIds(db, threadId) }
 }
 
@@ -530,7 +530,7 @@ async function assertCanUnsupersede(db: Db, target: Snapshot, current: Snapshot)
   if (successor && !successor.archivedAt) {
     throw new AppError(
       'CONFLICT',
-      '이 사실을 대체한 새 사실이 있어 먼저 새 사실의 추가를 되돌려야 합니다.',
+      '이 사실을 대체한 새 사실이 있어요. 먼저 그 추가를 되돌려야 해요.',
     )
   }
 }
@@ -608,7 +608,7 @@ export async function revertChange(db: Db, actor: Actor, changeId: string): Prom
 
   return db.transaction(async (tx) => {
     const [original] = await tx.select().from(changeLog).where(eq(changeLog.id, changeId)).limit(1)
-    if (!original) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    if (!original) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
 
     const [latest] = await tx
       .select({ id: changeLog.id })
@@ -624,16 +624,16 @@ export async function revertChange(db: Db, actor: Actor, changeId: string): Prom
       .orderBy(desc(changeLog.createdAt), desc(changeLog.id))
       .limit(1)
     if (latest?.id !== original.id) {
-      throw new AppError('CONFLICT', '이후 변경이 있어 먼저 그 변경을 되돌려야 합니다.')
+      throw new AppError('CONFLICT', '이후 변경이 있어요. 그 변경부터 되돌려야 해요.')
     }
 
     const current = await readRow(tx, original.targetTable, original.targetId)
-    if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
 
     const now = new Date()
     const hasBefore = original.before !== null && original.before !== undefined
     if (!hasBefore && !isArchivable(original.targetTable)) {
-      throw new AppError('BAD_STATE', '되돌릴 수 없는 변경입니다.')
+      throw new AppError('BAD_STATE', '되돌릴 수 없는 변경이에요.')
     }
     // A create has no `before`: reverting it archives the row instead.
     const target = hasBefore ? (original.before as Snapshot) : { archivedAt: now }

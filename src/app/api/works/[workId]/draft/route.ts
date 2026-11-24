@@ -67,12 +67,12 @@ export async function POST(
   { params }: { params: Promise<{ workId: string }> },
 ): Promise<Response> {
   const user = await getSessionUser()
-  if (!user) return Response.json({ error: '로그인이 필요합니다.' }, { status: 401 })
+  if (!user) return Response.json({ error: '로그인이 필요해요.' }, { status: 401 })
 
   const { workId } = await params
   const parsed = DraftBodySchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return Response.json({ error: '입력값이 올바르지 않습니다.' }, { status: 400 })
+    return Response.json({ error: '입력값이 올바르지 않아요.' }, { status: 400 })
   }
 
   const { acceptsReplace, ...draftInput } = parsed.data
@@ -121,6 +121,6 @@ export async function POST(
       return Response.json({ error: error.message }, { status })
     }
     console.error(error)
-    return Response.json({ error: '알 수 없는 오류가 발생했습니다.' }, { status: 500 })
+    return Response.json({ error: '알 수 없는 오류가 발생했어요.' }, { status: 500 })
   }
 }

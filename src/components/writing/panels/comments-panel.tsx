@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -88,7 +87,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
         quoteStart: selection.start,
         quoteEnd: selection.end,
       }),
-      { success: '코멘트를 남겼습니다.' },
+      { success: '코멘트를 남겼어요.' },
     )
     setBusy(false)
     if (result) {
@@ -104,7 +103,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
     setBusy(true)
     const result = await runAction(
       addCommentAction({ chapterId: data.chapter.id, body: trimmed, parentId: parent.id }),
-      { success: '답글을 남겼습니다.' },
+      { success: '답글을 남겼어요.' },
     )
     setBusy(false)
     if (result) {
@@ -117,14 +116,14 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
   async function setResolved(comment: CommentView) {
     const resolved = comment.status !== 'resolved'
     const result = await runAction(setCommentResolvedAction({ commentId: comment.id, resolved }), {
-      success: resolved ? '해결했습니다.' : '다시 열었습니다.',
+      success: resolved ? '해결했어요.' : '다시 열었어요.',
     })
     if (result) api.refresh()
   }
 
   async function remove(commentId: string) {
     const result = await runAction(deleteCommentAction({ commentId }), {
-      success: '코멘트를 지웠습니다.',
+      success: '코멘트를 지웠어요.',
     })
     if (result !== null) api.refresh()
   }
@@ -132,16 +131,17 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
   function focus(comment: CommentView) {
     const range = rangeOf(text, comment.quote, comment.quoteStart)
     if (range) api.focusRange(range.start, range.end)
-    else toast.error('원고에서 해당 문장을 찾지 못했습니다.')
+    else toast.error('원고에서 해당 문장을 찾지 못했어요.')
   }
 
   return (
-    <section aria-label="코멘트" className="grid gap-4">
+    <section aria-label="코멘트" className="wg-panels-section">
+      <h2 className="wg-panels-heading">코멘트</h2>
       {canComment && (
-        <div className="grid gap-3 rounded-lg border p-3">
+        <div className="wg-panels-form">
           {selection ? (
             <>
-              <p className="rounded-md bg-muted/60 p-2 text-sm leading-6">“{selection.text}”</p>
+              <p className="wg-panels-sentence">“{selection.text}”</p>
               <Label htmlFor="comment-body">코멘트 내용</Label>
               <Textarea
                 id="comment-body"
@@ -160,7 +160,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
                 </Button>
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="link"
                   onClick={() => {
                     setSelection(null)
                     setBody('')
@@ -171,7 +171,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
               </div>
             </>
           ) : (
-            <Button size="sm" variant="outline" onClick={startComment}>
+            <Button size="sm" variant="link" onClick={startComment}>
               선택한 문장에 코멘트
             </Button>
           )}
@@ -184,48 +184,43 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
       )}
 
       {!canComment && (
-        <p className="text-xs text-muted-foreground">
-          코멘트는 코멘트 작성자 이상이 남길 수 있습니다.
-        </p>
+        <p className="text-xs text-muted-foreground">코멘트는 작성 권한이 있어야 남길 수 있어요.</p>
       )}
 
-      {data.comments.length === 0 && <EmptyState title="아직 코멘트가 없습니다." />}
+      {data.comments.length === 0 && <EmptyState title="아직 코멘트가 없어요." />}
 
-      <ul className="grid gap-3">
-        {data.comments.map((comment) => {
+      <ul className="wg-panels-list">
+        {data.comments.map((comment, index) => {
           const resolved = comment.status === 'resolved'
           return (
             <li
               key={comment.id}
-              className={
-                resolved
-                  ? 'grid gap-2 rounded-lg border p-3 opacity-70'
-                  : 'grid gap-2 rounded-lg border p-3'
-              }
+              style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
+              className="wg-panels-row grid gap-2"
             >
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{comment.authorName}</span>
-                <span>{formatKoreanDateTime(comment.createdAt)}</span>
-                {resolved && <Badge variant="secondary">해결됨</Badge>}
+                <span className="font-mono">{formatKoreanDateTime(comment.createdAt)}</span>
+                {resolved && (
+                  <span className="b-state" data-mark="dot">
+                    해결됨
+                  </span>
+                )}
               </div>
               {comment.quote && (
-                <button
-                  type="button"
-                  onClick={() => focus(comment)}
-                  className="rounded-md bg-muted/60 p-2 text-left text-sm leading-6 hover:bg-muted"
-                >
+                <button type="button" onClick={() => focus(comment)} className="wg-panels-quote">
                   “{comment.quote}”
                 </button>
               )}
               <p className="whitespace-pre-wrap text-sm leading-6">{comment.body}</p>
 
               {comment.replies.length > 0 && (
-                <ul className="grid gap-2 border-l pl-3">
+                <ul className="wg-panels-replies">
                   {comment.replies.map((reply) => (
                     <li key={reply.id} className="grid gap-1">
                       <div className="text-xs text-muted-foreground">
                         <span className="font-medium text-foreground">{reply.authorName}</span>{' '}
-                        {formatKoreanDateTime(reply.createdAt)}
+                        <span className="font-mono">{formatKoreanDateTime(reply.createdAt)}</span>
                       </div>
                       <p className="whitespace-pre-wrap text-sm leading-6">{reply.body}</p>
                     </li>
@@ -237,7 +232,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="link"
                     onClick={() => {
                       setReplyTo(replyTo === comment.id ? null : comment.id)
                       setReplyBody('')
@@ -245,14 +240,14 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
                   >
                     답글
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void setResolved(comment)}>
+                  <Button size="sm" variant="link" onClick={() => void setResolved(comment)}>
                     {resolved ? '다시 열기' : '해결'}
                   </Button>
                   <ConfirmButton
                     title="코멘트를 지울까요?"
-                    description="답글도 함께 지워집니다."
+                    description="이 댓글에 달린 답글도 지워요."
                     confirmLabel="지우기"
-                    variant="ghost"
+                    variant="link"
                     size="sm"
                     onConfirm={() => remove(comment.id)}
                   >
@@ -262,7 +257,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
               )}
 
               {canComment && replyTo === comment.id && (
-                <div className="grid gap-2">
+                <div className="wg-panels-replies">
                   <Label htmlFor={`reply-${comment.id}`}>답글 내용</Label>
                   <Textarea
                     id={`reply-${comment.id}`}

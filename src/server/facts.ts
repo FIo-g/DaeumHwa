@@ -57,7 +57,7 @@ export async function assertEntryInWork(
     .from(wikiEntries)
     .where(and(eq(wikiEntries.id, entryId), eq(wikiEntries.workId, workId)))
     .limit(1)
-  if (!entry) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!entry) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return entry
 }
 
@@ -72,7 +72,7 @@ export async function assertChapterInWork(
     .from(chapters)
     .where(and(eq(chapters.id, chapterId), eq(chapters.workId, workId)))
     .limit(1)
-  if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+  if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
 }
 
 // ---- Reads ----
@@ -236,7 +236,7 @@ export type SupersedeInput = {
 
 async function loadFact(db: Db, factId: string): Promise<FactRow> {
   const [row] = await db.select().from(facts).where(eq(facts.id, factId)).limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
@@ -264,7 +264,7 @@ function assertValidRange(from: number | null | undefined, to: number | null | u
     throw new AppError('VALIDATION', '유효 회차는 1 이상으로 적어 주세요.')
   }
   if (from !== null && from !== undefined && to !== null && to !== undefined && to < from) {
-    throw new AppError('VALIDATION', '끝 회차는 시작 회차보다 앞설 수 없습니다.')
+    throw new AppError('VALIDATION', '끝 회차는 시작 회차보다 앞설 수 없어요.')
   }
 }
 
@@ -333,7 +333,7 @@ export async function updateFact(
   const workId = await requireRowWork(db, 'facts', factId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadFact(db, factId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 사실은 수정할 수 없습니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 사실은 수정할 수 없어요.')
 
   const set: Partial<typeof facts.$inferInsert> = {}
   if (patch.content !== undefined) set.content = requireContent(patch.content)
@@ -389,7 +389,7 @@ export async function archiveFact(
   const workId = await requireRowWork(db, 'facts', factId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadFact(db, factId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 사실입니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 사실이에요.')
 
   return db.transaction(async (tx) => {
     const now = new Date()
@@ -428,7 +428,7 @@ export async function supersedeFact(
   return db.transaction(async (tx) => {
     await lockWork(tx, workId)
     const old = await loadFact(tx, input.factId)
-    if (old.archivedAt) throw new AppError('BAD_STATE', '보관된 사실은 바꿀 수 없습니다.')
+    if (old.archivedAt) throw new AppError('BAD_STATE', '보관된 사실은 바꿀 수 없어요.')
     if (old.supersededByFactId) {
       const [successor] = await tx
         .select({ archivedAt: facts.archivedAt })
@@ -436,7 +436,7 @@ export async function supersedeFact(
         .where(eq(facts.id, old.supersededByFactId))
         .limit(1)
       if (successor && !successor.archivedAt) {
-        throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실입니다.')
+        throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실이에요.')
       }
       // Older archives can leave a stale successor link on the previous fact.
       await tx
@@ -445,7 +445,7 @@ export async function supersedeFact(
         .where(and(eq(facts.id, old.id), eq(facts.supersededByFactId, old.supersededByFactId)))
     }
     if (input.fromPosition <= (old.validFromPosition ?? 0)) {
-      throw new AppError('VALIDATION', '바뀌는 회차는 기존 사실이 유효해진 회차 이후여야 합니다.')
+      throw new AppError('VALIDATION', '바뀌는 회차는 기존 사실이 유효해진 회차 이후여야 해요.')
     }
     const content = requireContent(input.content)
     if (input.sourceChapterId) {
@@ -481,7 +481,7 @@ export async function supersedeFact(
       })
       .where(and(eq(facts.id, old.id), isNull(facts.supersededByFactId)))
       .returning()
-    if (!ended) throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실입니다.')
+    if (!ended) throw new AppError('CONFLICT', '이미 다른 사실로 바뀐 사실이에요.')
 
     await logChange(tx, actor, o, {
       workId,

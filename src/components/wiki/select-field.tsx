@@ -27,7 +27,7 @@ export function SelectField<T extends string>({
 }: SelectFieldProps<T>) {
   const labels = new Map<string, string>(options.map((o) => [o.value, o.label]))
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="wg-wiki-form-row">
       <Label htmlFor={id}>{label}</Label>
       <Select
         value={value}

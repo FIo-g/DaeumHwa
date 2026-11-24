@@ -1,0 +1,416 @@
+@layer components {
+  .wg-chapters-contents,
+  .wg-chapters-versions {
+    position: relative;
+  }
+
+  .wg-chapters-contents > [data-slot='table-container'] {
+    container: wg-chapters / inline-size;
+  }
+
+  .wg-chapters-contents {
+    --wg-chapters-cell-inline-pad: var(--b-s3);
+    --wg-chapters-cell-block-pad: var(--b-s2);
+    --wg-chapters-title-inset: 2.5rem;
+    --wg-chapters-date-width: 9rem;
+  }
+
+  .wg-chapters-cell-label {
+    display: none;
+  }
+
+  .wg-chapters-title-cell {
+    min-inline-size: 11.5rem;
+  }
+
+  .wg-chapters-contents::before,
+  .wg-chapters-versions::before {
+    position: absolute;
+    z-index: 1;
+    inset: 0 0 auto;
+    height: var(--b-line);
+    background: var(--b-grid);
+    pointer-events: none;
+    content: '';
+  }
+
+  .wg-chapters-title {
+    display: inline-block;
+    max-inline-size: 18rem;
+    font: 700 1rem/1.65 var(--b-font-title);
+    vertical-align: middle;
+    white-space: normal;
+    text-wrap: balance;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  a.wg-chapters-title {
+    text-decoration: underline;
+    text-decoration-thickness: var(--b-line);
+  }
+
+  .wg-chapters-table-row:is(:hover, :focus-within) a.wg-chapters-title {
+    text-decoration-thickness: var(--b-rule);
+  }
+
+  .wg-chapters-table-row[data-archived] {
+    color: var(--b-muted);
+  }
+
+  .wg-chapters-line-number {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0.625rem;
+    block-size: 1em;
+    margin-block: auto;
+    font: 400 0.6875rem/1 var(--b-font-mono);
+    color: var(--b-muted);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :is(.wg-chapters-table-row, .wg-chapters-version-row):is(:hover, :focus-within)
+    .wg-chapters-line-number {
+    opacity: 1;
+  }
+
+  .wg-chapters-status {
+    position: relative;
+    display: inline-block;
+    padding-inline-start: 1.125rem;
+  }
+
+  .wg-chapters-status::before,
+  .wg-chapters-status::after {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 0.6875rem;
+    block-size: 0.6875rem;
+    margin-block: auto;
+    border-radius: 50%;
+    content: '';
+  }
+
+  .wg-chapters-status::before {
+    clip-path: inset(0 100% 0 0);
+    background: currentColor;
+  }
+
+  .wg-chapters-status::after {
+    border: calc(3 * var(--b-line)) double currentColor;
+  }
+
+  .wg-chapters-status[data-status='done']::before {
+    clip-path: inset(0);
+  }
+
+  .wg-chapters-status[data-status='done']::after {
+    opacity: 0;
+  }
+
+  .wg-chapters-date[data-empty]:not(:focus)::-webkit-datetime-edit {
+    opacity: 0;
+  }
+
+  .wg-chapters-history {
+    display: grid;
+    align-items: start;
+    gap: var(--b-s5);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wg-chapters-history-page {
+    container: wg-history-page / inline-size;
+  }
+
+  .wg-chapters-version-row {
+    position: relative;
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-chapters-version-row:is(:hover, :focus-within) {
+    border-block-end-color: var(--b-ink);
+  }
+
+  .wg-chapters-version-button {
+    position: relative;
+    display: grid;
+    gap: var(--b-s1);
+    inline-size: 100%;
+    padding: var(--b-s3) var(--b-s2) var(--b-s3) 2.5rem;
+    text-align: start;
+  }
+
+  .wg-chapters-version-button::before {
+    position: absolute;
+    inset: 0 auto 0 0;
+    inline-size: var(--b-rule);
+    transform: scaleY(0);
+    transform-origin: top;
+    background: var(--b-ink);
+    pointer-events: none;
+    content: '';
+  }
+
+  .wg-chapters-version-button[aria-pressed='true']::before {
+    transform: scaleY(1);
+  }
+
+  .wg-chapters-version-button:is(:hover, :focus-visible, [aria-pressed='true'])
+    .wg-chapters-version-label {
+    text-decoration: underline;
+    text-underline-offset: 0.24em;
+  }
+
+  .wg-chapters-version-button[aria-pressed='true'] .wg-chapters-version-label {
+    text-decoration-thickness: var(--b-rule);
+  }
+
+  .wg-chapters-proof {
+    display: grid;
+    gap: var(--b-s2);
+  }
+
+  .wg-chapters-proof-scroll {
+    line-height: var(--b-manuscript-line);
+    max-block-size: 70vh;
+    max-block-size: round(down, 70vh, 1lh);
+    overflow-y: auto;
+    padding-inline: var(--b-s2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .wg-chapters-proof-lines {
+    position: relative;
+    max-inline-size: none;
+  }
+
+  .wg-chapters-proof-lines :is(ins, del) {
+    text-decoration: none;
+  }
+
+  .wg-chapters-proof-lines :is(ins, [data-mark='insert']) {
+    font-weight: 700;
+  }
+
+  .wg-chapters-proof-lines del {
+    color: var(--b-muted);
+  }
+
+  .wg-chapters-proof-marks {
+    position: absolute;
+    inset: 0;
+    color: transparent;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .wg-chapters-proof-marks [data-mark]::before {
+    content: attr(data-content);
+  }
+
+  .wg-chapters-proof-marks [data-mark='insert'] {
+    text-decoration: underline var(--b-ink) var(--b-line);
+    text-underline-offset: 0.22em;
+  }
+
+  .wg-chapters-proof-marks [data-mark='delete'] {
+    text-decoration: line-through var(--b-ink) var(--b-line);
+  }
+
+  @container wg-history-page (width >= 37rem) {
+    .wg-chapters-history {
+      grid-template-columns: minmax(13rem, 1fr) minmax(0, 3fr);
+    }
+  }
+
+  @container wg-chapters (width < 58rem) {
+    .wg-chapters-contents [data-slot='table'] {
+      --wg-chapters-cell-inline-pad: 0px;
+      --wg-chapters-cell-block-pad: 0px;
+      --wg-chapters-title-inset: var(--b-s5);
+      --wg-chapters-date-width: 100%;
+      display: block;
+    }
+
+    .wg-chapters-contents [data-slot='table-header'] {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    .wg-chapters-contents [data-slot='table-body'] {
+      display: block;
+    }
+
+    .wg-chapters-table-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(7.25rem, 1.5fr) minmax(0, 0.65fr) minmax(
+          0,
+          0.95fr
+        );
+      align-items: start;
+      gap: var(--b-s2) var(--b-s3);
+      padding: var(--b-s2);
+    }
+
+    .wg-chapters-cell {
+      min-inline-size: 0;
+    }
+
+    .wg-chapters-title-cell {
+      grid-column: span 3;
+      align-self: center;
+      min-inline-size: 0;
+    }
+
+    .wg-chapters-status-cell {
+      justify-self: end;
+      align-self: center;
+    }
+
+    .wg-chapters-cell:has(> .wg-chapters-cell-label) {
+      display: grid;
+      grid-row: span 2;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: subgrid;
+      justify-items: start;
+      row-gap: 0;
+    }
+
+    .wg-chapters-manage-cell {
+      grid-column: span 2;
+    }
+
+    .wg-chapters-cell-label {
+      display: block;
+      color: var(--b-muted);
+      font: 500 var(--b-t-label)/1.35 var(--b-font-body);
+      text-align: start;
+      white-space: normal;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    .wg-chapters-cell time {
+      white-space: normal;
+    }
+
+    .wg-chapters-date {
+      font-size: var(--b-t-label);
+    }
+  }
+
+  @container wg-chapters (width < 20rem) {
+    .wg-chapters-table-row {
+      --wg-chapters-title-inset: var(--b-s4);
+      grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(3.6rem, 1fr);
+      column-gap: var(--b-s2);
+    }
+
+    .wg-chapters-cell:has(> .wg-chapters-cell-label) {
+      grid-column: span 2;
+    }
+
+    .wg-chapters-cell.wg-chapters-updated-cell {
+      grid-column: 1 / -1;
+    }
+
+    .wg-chapters-cell.wg-chapters-order-cell {
+      grid-column: span 3;
+    }
+
+    .wg-chapters-cell.wg-chapters-manage-cell {
+      grid-column: span 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-chapters-contents::before,
+    .wg-chapters-versions::before {
+      animation: wg-chapters-draw var(--b-quick) var(--b-out) var(--b-step) both;
+    }
+
+    .wg-chapters-row-text,
+    .wg-chapters-status,
+    .wg-chapters-version-heading {
+      animation: wg-chapters-write var(--b-quick) var(--b-out)
+        calc(var(--b-step) + var(--b-quick) + var(--wg-chapters-row, 0) * var(--b-stagger)) both;
+    }
+
+    .wg-chapters-table-row:focus-within :is(.wg-chapters-row-text, .wg-chapters-status),
+    .wg-chapters-version-button:focus-visible .wg-chapters-version-heading {
+      animation: none;
+    }
+
+    .wg-chapters-line-number,
+    .wg-chapters-status::after {
+      transition: opacity var(--b-quick) var(--b-out);
+    }
+
+    .wg-chapters-status::before {
+      transition: clip-path var(--b-quick) var(--b-out);
+    }
+
+    .wg-chapters-version-button::before {
+      transition: transform var(--b-quick) var(--b-out);
+    }
+
+    .wg-chapters-proof-scroll[data-replay] {
+      animation: wg-chapters-write-lines var(--b-step) steps(8, end) both;
+    }
+
+    .wg-chapters-proof-scroll[data-replay] .wg-chapters-proof-marks {
+      animation: wg-chapters-draw var(--b-draw) var(--b-out) var(--b-step) both;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .wg-chapters-proof-marks {
+      display: none;
+    }
+
+    .wg-chapters-proof-lines ins {
+      text-decoration: underline;
+    }
+
+    .wg-chapters-proof-lines del {
+      text-decoration: line-through;
+    }
+  }
+
+  @keyframes wg-chapters-write {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes wg-chapters-write-lines {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-chapters-draw {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+
+    to {
+      clip-path: inset(0);
+    }
+  }
+}

@@ -157,7 +157,7 @@ describe('CheckPanel autoRun', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(fetchMock.mock.calls[0][0]).toBe('/api/works/work-1/chapters/c1/check')
     expect(replaceSpy).toHaveBeenCalled()
-    expect(toast).not.toHaveBeenCalledWith('취소했습니다.')
+    expect(toast).not.toHaveBeenCalledWith('취소했어요.')
   })
 
   it('does not open the approval dialog in auto mode', async () => {
@@ -202,7 +202,11 @@ describe('CheckPanel autoRun', () => {
       </StrictMode>,
     )
 
-    await waitFor(() => expect(screen.getByText('그는 왼손에 검을 쥐었다.')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '그는 왼손에 검을 쥐었다.' })).toHaveTextContent(
+        '그는 왼손에 검을 쥐었다.',
+      ),
+    )
     expect(completed()).toBe(1)
     await waitFor(() => expect(screen.queryByText('점검 중')).toBeNull())
   })

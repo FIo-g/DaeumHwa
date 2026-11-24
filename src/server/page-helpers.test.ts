@@ -39,7 +39,7 @@ describe('guardPage', () => {
   it('maps NOT_FOUND to notFound()', async () => {
     await expect(
       guardPage(async () => {
-        throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+        throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
       }),
     ).rejects.toThrow('NEXT_NOT_FOUND')
     expect(mocks.notFound).toHaveBeenCalled()
@@ -48,13 +48,13 @@ describe('guardPage', () => {
   it('maps UNAUTHENTICATED to a redirect to /login', async () => {
     await expect(
       guardPage(async () => {
-        throw new AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+        throw new AppError('UNAUTHENTICATED', '로그인이 필요해요.')
       }),
     ).rejects.toThrow('NEXT_REDIRECT:/login')
   })
 
   it('rethrows other errors unchanged', async () => {
-    const forbidden = new AppError('FORBIDDEN', '이 작업을 할 권한이 없습니다.')
+    const forbidden = new AppError('FORBIDDEN', '이 작업을 할 권한이 없어요.')
     await expect(
       guardPage(async () => {
         throw forbidden

@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { chapterLabel, SOURCE_TYPE_LABEL } from '@/lib/labels'
+import { SOURCE_TYPE_LABEL } from '@/lib/labels'
 import type { FactSourceType } from '@/db/types'
+import { ChapterCaption } from './chapter-caption'
 
 type SourceLabelProps = {
   workId: string
@@ -14,11 +15,11 @@ export function SourceLabel({ workId, sourceType, chapter }: SourceLabelProps) {
     return (
       <Link
         href={`/works/${workId}/chapters/${chapter.id}`}
-        className="underline underline-offset-4"
+        className="wg-shell-source wg-shell-source-link"
       >
-        {chapterLabel(chapter.position, chapter.title)}
+        <ChapterCaption {...chapter} />
       </Link>
     )
   }
-  return <span>{SOURCE_TYPE_LABEL[sourceType]}</span>
+  return <span className="wg-shell-source">{SOURCE_TYPE_LABEL[sourceType]}</span>
 }

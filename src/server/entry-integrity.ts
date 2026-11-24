@@ -66,7 +66,7 @@ export async function assertEntryNameFree(
       ),
     )
     .limit(1)
-  if (dup) throw new AppError('CONFLICT', '같은 이름의 카드가 이미 있습니다.')
+  if (dup) throw new AppError('CONFLICT', '같은 이름의 카드가 이미 있어요.')
 }
 
 /**

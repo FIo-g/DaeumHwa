@@ -202,9 +202,9 @@ describe('ChapterTable', () => {
       render(<ChapterTable workId="w1" chapters={[shortDraft]} targetChars={5500} canEdit />)
       fireEvent.click(screen.getByRole('button', { name: '4화 상태 바꾸기' }))
       const dialog = await screen.findByRole('alertdialog')
-      expect(within(dialog).getByText('분량이 목표보다 적습니다')).toBeInTheDocument()
+      expect(within(dialog).getByText('분량이 목표보다 적어요')).toBeInTheDocument()
       expect(
-        within(dialog).getByText('목표 5,500자 중 4,265자(78%)입니다. 그래도 완료할까요?'),
+        within(dialog).getByText('목표 5,500자 중 4,265자(78%)예요. 그래도 완료할까요?'),
       ).toBeInTheDocument()
       expect(mocks.setChapterStatusAction).not.toHaveBeenCalled()
 
@@ -344,7 +344,7 @@ describe('ChapterTable', () => {
     it('puts the saved date back when the save fails', async () => {
       mocks.setChapterPublishedOnAction.mockResolvedValue({
         ok: false,
-        error: { code: 'VALIDATION', message: '연재일 형식이 올바르지 않습니다.' },
+        error: { code: 'VALIDATION', message: '연재일 형식이 올바르지 않아요.' },
       })
       render(<ChapterTable workId="w1" chapters={rows} targetChars={5500} canEdit />)
       const input = dateInput()

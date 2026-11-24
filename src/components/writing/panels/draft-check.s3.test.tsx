@@ -171,7 +171,7 @@ describe('DraftCheck', () => {
     expect(screen.getByText('장면 2: 중요한 순간을 설명으로 넘김')).toBeTruthy()
     expect(screen.getByText('장면 3: 요청과 다름')).toBeTruthy()
     expect(screen.getByText('고친 장면 미리 보기')).toBeTruthy()
-    expect(screen.getByText('초록은 새 글, 빨강 취소선은 지워지는 글입니다.')).toBeTruthy()
+    expect(screen.getByText('표시한 부분은 새 글이에요. 지울 글에는 취소선을 그어요.')).toBeTruthy()
     expect(onPreviewChange).toHaveBeenLastCalledWith(true)
   })
 
@@ -179,19 +179,17 @@ describe('DraftCheck', () => {
     renderCheck({
       findings: [{ scene: 1, reason: 'request', note: "'입꼬리'" }],
       fix: null,
-      notice: 'AI 점검을 하지 못했습니다. 코드 점검 결과만 보여 드립니다.',
+      notice: 'AI 점검을 하지 못했어요. 코드 점검 결과만 보여 드려요.',
     })
 
     expect(await screen.findByText('점검 결과')).toBeTruthy()
-    expect(
-      screen.getByText('AI 점검을 하지 못했습니다. 코드 점검 결과만 보여 드립니다.'),
-    ).toBeTruthy()
+    expect(screen.getByText('AI 점검을 하지 못했어요. 코드 점검 결과만 보여 드려요.')).toBeTruthy()
   })
 
   it('says nothing needed fixing when there are no findings', async () => {
     const { onPreviewChange } = renderCheck(EMPTY_RESULT)
 
-    expect(await screen.findByText('고칠 곳을 찾지 못했습니다.')).toBeTruthy()
+    expect(await screen.findByText('고칠 곳을 찾지 못했어요.')).toBeTruthy()
     expect(onPreviewChange).not.toHaveBeenCalledWith(true)
   })
 
@@ -211,7 +209,7 @@ describe('DraftCheck', () => {
       runId: 'run-1',
       token: 'token-1',
     })
-    expect(toast.success).toHaveBeenCalledWith('고친 장면으로 바꿨습니다.')
+    expect(toast.success).toHaveBeenCalledWith('고친 장면으로 바꿨어요.')
     expect(onPreviewChange).toHaveBeenLastCalledWith(false)
   })
 
@@ -239,7 +237,7 @@ describe('DraftCheck', () => {
       <DraftCheck workId="work-1" runId="run-1" onApplied={vi.fn()} onPreviewChange={vi.fn()} />,
     )
 
-    expect(await screen.findByText('점검을 하지 못했습니다.')).toBeTruthy()
+    expect(await screen.findByText('점검하지 못했어요.')).toBeTruthy()
   })
 })
 
@@ -278,7 +276,7 @@ describe('DraftPanel with DraftCheck', () => {
     render(<DraftPanel data={makeData()} api={makeApi()} />)
 
     startDraft()
-    expect(await screen.findByText('점검을 하지 못했습니다.')).toBeTruthy()
+    expect(await screen.findByText('점검하지 못했어요.')).toBeTruthy()
 
     const append = screen.getByRole('button', { name: '현재 원고 끝에 붙이기' })
     expect(append.hasAttribute('disabled')).toBe(false)

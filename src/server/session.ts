@@ -3,20 +3,20 @@ import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth'
 import { AppError } from '@/lib/errors'
 
-export type SessionUser = { id: string; name: string; email: string }
+export type SessionUser = { id: string; name: string; email: string; isAnonymous?: boolean }
 
 /** Returns the signed-in user for this request, or null. */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const session = await getAuth().api.getSession({ headers: await headers() })
   if (!session) return null
-  const { id, name, email } = session.user
-  return { id, name, email }
+  const { id, name, email, isAnonymous } = session.user
+  return isAnonymous === true ? { id, name, email, isAnonymous } : { id, name, email }
 }
 
 /** For server actions and route handlers: throws when signed out. */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser()
-  if (!user) throw new AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+  if (!user) throw new AppError('UNAUTHENTICATED', '로그인이 필요해요.')
   return user
 }
 

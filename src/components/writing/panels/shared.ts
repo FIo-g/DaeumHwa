@@ -28,7 +28,7 @@ export function rangeOf(
 }
 
 /** Shown under a disabled write control, so the reason is visible without hovering. */
-export const EDITOR_ONLY_NOTE = '편집자 이상만 실행할 수 있습니다.'
+export const EDITOR_ONLY_NOTE = '편집 권한이 있어야 실행할 수 있어요.'
 
 /**
  * Shows a toast with 되돌리기 after a panel edit. `before` is the whole text from before the edit.
@@ -41,7 +41,7 @@ export function offerUndo(api: WorkspaceApi, before: string, message: string): v
       label: '되돌리기',
       onClick: () => {
         if (api.getText() !== after) {
-          toast.error('그 사이 원고가 바뀌어 되돌릴 수 없습니다.')
+          toast.error('그 사이 원고가 바뀌어 되돌릴 수 없어요.')
           return
         }
         api.replaceRange(0, after.length, before)

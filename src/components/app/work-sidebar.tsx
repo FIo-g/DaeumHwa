@@ -2,16 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { MenuIcon } from 'lucide-react'
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { cn } from '@/lib/utils'
+import { CountCell, MenuSheet } from '@/components/motion'
 
 type WorkSidebarProps = {
   workId: string
   workTitle: string
   pendingCount: number
+  trial: boolean
 }
 
 type NavItem = {
@@ -19,9 +16,11 @@ type NavItem = {
   label: string
   path: string
   badge?: 'pending'
+  requiresSignup?: boolean
 }
 
 const HOME_ITEM: NavItem = { key: 'home', label: '홈', path: '' }
+const SIGNUP_REQUIRED = '가입 필요'
 
 // Grouped by what the author is doing: writing, keeping the canon, running the serial, the work.
 const GROUPS: { label: string; items: NavItem[] }[] = [
@@ -44,16 +43,16 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
     label: '연재',
     items: [
       { key: 'schedule', label: '일정', path: '/schedule' },
-      { key: 'advice', label: '방향 조언', path: '/advice' },
-      { key: 'reader-sim', label: '독자 시뮬레이션', path: '/reader-sim' },
+      { key: 'advice', label: '방향 조언', path: '/advice', requiresSignup: true },
+      { key: 'reader-sim', label: '독자 시뮬레이션', path: '/reader-sim', requiresSignup: true },
     ],
   },
   {
     label: '작품',
     items: [
       { key: 'settings', label: '작품 설정', path: '/settings' },
-      { key: 'import', label: '가져오기', path: '/import' },
-      { key: 'interview', label: '인터뷰', path: '/interview' },
+      { key: 'import', label: '가져오기', path: '/import', requiresSignup: true },
+      { key: 'interview', label: '인터뷰', path: '/interview', requiresSignup: true },
     ],
   },
 ]
@@ -63,55 +62,56 @@ function isActive(pathname: string, href: string, homeHref: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-function NavList({
-  workId,
-  pendingCount,
-  onNavigate,
-}: {
-  workId: string
-  pendingCount: number
-  onNavigate?: () => void
-}) {
+function NavList({ workId, pendingCount, trial }: Omit<WorkSidebarProps, 'workTitle'>) {
   const pathname = usePathname()
   const base = `/works/${workId}`
 
-  const renderItem = (item: NavItem) => {
+  const renderItem = (item: NavItem, index = 0) => {
     const href = `${base}${item.path}`
     const active = isActive(pathname, href, base)
+    const signupRequired = trial && item.requiresSignup
     return (
       <li key={item.key}>
         <Link
           href={href}
-          onClick={onNavigate}
+          aria-label={signupRequired ? `${item.label} ${SIGNUP_REQUIRED}` : undefined}
           aria-current={active ? 'page' : undefined}
-          className={cn(
-            'flex items-center justify-between gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-sheet hover:text-foreground',
-            active
-              ? 'bg-sheet font-medium text-foreground shadow-[inset_0_0_0_1px_var(--rule)]'
-              : 'text-muted-foreground',
-          )}
+          className="wg-shell-menu-link"
         >
-          <span>{item.label}</span>
+          <span className="wg-shell-line-number" aria-hidden="true">
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <span className="wg-shell-menu-label">{item.label}</span>
           {item.badge === 'pending' && pendingCount > 0 && (
-            <span
-              data-slot="pending-count"
-              className="min-w-5 rounded-sm bg-primary px-1.5 py-0.5 text-center text-xs text-primary-foreground tabular-nums"
-            >
-              {pendingCount}
+            <span data-slot="pending-count" className="wg-shell-pending-count">
+              <CountCell value={pendingCount} />
             </span>
           )}
+          {signupRequired && <span className="wg-shell-cell-label">{SIGNUP_REQUIRED}</span>}
         </Link>
       </li>
     )
   }
 
   return (
-    <nav aria-label="작품 메뉴" className="flex flex-col gap-5">
-      <ul className="flex flex-col gap-0.5">{renderItem(HOME_ITEM)}</ul>
-      {GROUPS.map((group) => (
-        <div key={group.label} className="flex flex-col gap-1">
-          <p className="px-3 text-xs text-muted-foreground">{group.label}</p>
-          <ul className="flex flex-col gap-0.5">{group.items.map(renderItem)}</ul>
+    <nav aria-label="작품 메뉴" className="wg-shell-menu">
+      <ul>{renderItem(HOME_ITEM)}</ul>
+      {GROUPS.map((group, groupIndex) => (
+        <div key={group.label} className="wg-shell-menu-group">
+          <p className="wg-shell-menu-heading">{group.label}</p>
+          <ul>
+            {group.items.map((item, index) =>
+              renderItem(
+                item,
+                1 +
+                  GROUPS.slice(0, groupIndex).reduce(
+                    (count, previous) => count + previous.items.length,
+                    0,
+                  ) +
+                  index,
+              ),
+            )}
+          </ul>
         </div>
       ))}
     </nav>
@@ -122,34 +122,24 @@ function NavList({
  * Work-section navigation: a fixed sidebar on wide screens, a sheet on narrow ones.
  * Every member sees the same links; the settings page itself shows read-only views to non-owners.
  */
-export function WorkSidebar({ workId, workTitle, pendingCount }: WorkSidebarProps) {
-  const [open, setOpen] = useState(false)
+export function WorkSidebar({ workId, workTitle, pendingCount, trial }: WorkSidebarProps) {
   return (
     <>
-      <div className="flex items-center gap-3 border-b border-rule px-4 py-2 md:hidden">
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger render={<Button variant="outline" size="sm" />}>
-            <MenuIcon aria-hidden="true" />
-            작품 메뉴 열기
-          </SheetTrigger>
-          <SheetContent side="left">
-            <SheetHeader>
-              <SheetTitle>{workTitle}</SheetTitle>
-            </SheetHeader>
-            <div className="px-4 pb-6">
-              <NavList
-                workId={workId}
-                pendingCount={pendingCount}
-                onNavigate={() => setOpen(false)}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
-        <span className="truncate font-serif text-sm font-semibold">{workTitle}</span>
+      <div className="wg-shell-mobile-menu md:hidden">
+        <span className="wg-shell-work-name">{workTitle}</span>
+        <MenuSheet
+          title={workTitle}
+          label="작품 메뉴 열기"
+          triggerText="작품 메뉴 열기"
+          className="wg-shell-menu-sheet"
+          triggerClassName="wg-shell-work-trigger"
+        >
+          <NavList workId={workId} pendingCount={pendingCount} trial={trial} />
+        </MenuSheet>
       </div>
-      <aside className="hidden w-56 shrink-0 flex-col gap-6 px-3 py-8 md:flex">
-        <p className="truncate px-3 font-serif text-base font-semibold">{workTitle}</p>
-        <NavList workId={workId} pendingCount={pendingCount} />
+      <aside className="wg-shell-sidebar hidden md:block">
+        <p className="wg-shell-work-name">{workTitle}</p>
+        <NavList workId={workId} pendingCount={pendingCount} trial={trial} />
       </aside>
     </>
   )

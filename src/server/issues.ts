@@ -118,8 +118,8 @@ export async function resolveIssue(
   const workId = await requireRowWork(db, 'issues', input.issueId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const [current] = await db.select().from(issues).where(eq(issues.id, input.issueId)).limit(1)
-  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
-  if (current.status !== 'open') throw new AppError('BAD_STATE', '이미 처리된 지적입니다.')
+  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
+  if (current.status !== 'open') throw new AppError('BAD_STATE', '이미 처리된 지적이에요.')
   const [updated] = await db
     .update(issues)
     .set({ status: input.status, resolvedBy: actor.userId, resolvedAt: new Date() })
@@ -133,7 +133,7 @@ export async function reopenIssue(db: Db, actor: Actor, issueId: string): Promis
   const workId = await requireRowWork(db, 'issues', issueId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const [current] = await db.select().from(issues).where(eq(issues.id, issueId)).limit(1)
-  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   if (current.status === 'open') return current
   const [updated] = await db
     .update(issues)

@@ -53,7 +53,7 @@ describe('InvitesPanel', () => {
     render(<InvitesPanel workId="w1" invites={[]} />)
     expect(
       screen.getByText(
-        '초대 링크를 받은 사람은 로그인한 뒤 이 작품에 참여합니다. 링크는 한 번만 쓸 수 있고 7일 뒤 만료됩니다.',
+        '초대받은 사람은 로그인한 뒤 작품에 참여해요. 링크는 한 번만 쓸 수 있어요. 7일 뒤 만료돼요.',
       ),
     ).toBeInTheDocument()
   })
@@ -102,4 +102,17 @@ describe('InvitesPanel', () => {
     expect(revoke).toHaveBeenCalledWith({ inviteId: 'i-1' })
     expect(refresh).toHaveBeenCalledTimes(1)
   })
+})
+
+it('confirms a successful clipboard write beside the link', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+  try {
+    render(<InvitesPanel workId="w1" invites={activeInvites} />)
+    fireEvent.click(screen.getByRole('button', { name: '링크 복사' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('복사했어요')
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/invite/tok-existing`)
+  } finally {
+    Reflect.deleteProperty(navigator, 'clipboard')
+  }
 })

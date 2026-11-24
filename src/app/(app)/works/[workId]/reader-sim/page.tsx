@@ -1,3 +1,5 @@
+import { ReaderSimControls } from '@/components/reader-sim/reader-sim-controls'
+import { hasRole } from '@/server/access'
 import { READER_PERSONAS } from '@/ai/personas'
 import { PageHeader } from '@/components/app/page-header'
 import {
@@ -7,15 +9,27 @@ import {
 } from '@/components/reader-sim/reader-sim-list'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import { chapterLabel } from '@/lib/labels'
+import { TrialToolGate } from '@/components/app/trial-tool-gate'
 import { listChapters } from '@/server/chapters'
 import { listReaderSimRuns } from '@/server/ai-features'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getWork } from '@/server/works'
 
+export const maxDuration = 300
+
 export default async function ReaderSimPage({ params }: { params: Promise<{ workId: string }> }) {
   const { workId } = await params
-  const { db, actor } = await pageContext(`/works/${workId}/reader-sim`)
-  await guardPage(() => getWork(db, actor, workId))
+  const { db, actor, user } = await pageContext(`/works/${workId}/reader-sim`)
+  const work = await guardPage(() => getWork(db, actor, workId))
+  if (user.isAnonymous) {
+    return (
+      <TrialToolGate
+        title="독자 시뮬레이션"
+        band="kraft"
+        description="집필 화면의 ‘독자 반응’ 탭에서도 실행할 수 있어요."
+      />
+    )
+  }
   const runs = await guardPage(() => listReaderSimRuns(db, actor, workId))
   const chapters = await guardPage(() => listChapters(db, actor, workId, { includeArchived: true }))
 
@@ -46,12 +60,21 @@ export default async function ReaderSimPage({ params }: { params: Promise<{ work
   const personaNames = Object.fromEntries(READER_PERSONAS.map((p) => [p.id, p.name]))
 
   return (
-    <div className="flex flex-col">
-      <PageHeader
-        title="독자 시뮬레이션"
-        description="회차마다 독자 페르소나가 남긴 반응을 모아 봅니다."
-      />
-      <ReaderSimList groups={[...groupMap.values()]} personaNames={personaNames} />
+    <div className="wg-advice-page">
+      <PageHeader title="독자 시뮬레이션" />
+      <div className="wg-advice-body">
+        {hasRole(work.role, 'editor') && (
+          <ReaderSimControls
+            workId={workId}
+            chapters={chapters
+              .filter((chapter) => chapter.archivedAt === null)
+              .map(({ id, position, title }) => ({ id, position, title }))}
+            personas={READER_PERSONAS.map(({ id, name }) => ({ id, name }))}
+            initialChapter={runs[0]?.chapterId ?? null}
+          />
+        )}
+        <ReaderSimList groups={[...groupMap.values()]} personaNames={personaNames} />
+      </div>
     </div>
   )
 }

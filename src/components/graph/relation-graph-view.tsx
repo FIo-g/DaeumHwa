@@ -4,13 +4,13 @@ import Link from 'next/link'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button, buttonVariants } from '@/components/ui/button'
-import type { EntryKind } from '@/db/types'
+import { ENTRY_KINDS, type EntryKind } from '@/db/types'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import type { GraphViewData } from '@/server/relations'
-import { relationKindColor } from './force-graph-renderer'
 import { GraphControls } from './graph-controls'
 import { createForceGraphData, defaultPosition, formatRelationRange } from './graph-model'
 import { GraphViewport } from './graph-viewport'
+import { KindIcon } from './kind-icon'
 
 type RelationGraphViewProps = GraphViewData & { workId: string }
 type Selection = { type: 'node' | 'edge'; id: string } | null
@@ -26,6 +26,7 @@ export function RelationGraphView({
   const [position, setPosition] = useState(() => defaultPosition(latestPosition))
   const [showAll, setShowAll] = useState(false)
   const [hiddenKinds, setHiddenKinds] = useState(initiallyHiddenKinds)
+  const [focusedNodeId, setFocusedNodeId] = useState<string>()
   const [selection, setSelection] = useState<Selection>(null)
   const detailsRef = useRef<HTMLElement>(null)
   const [mode, setMode] = useState<'3d' | '2d'>('3d')
@@ -33,7 +34,10 @@ export function RelationGraphView({
   const renderMode = unavailable3D ? '2d' : mode
   const chapter = showAll ? null : Math.min(position, defaultPosition(latestPosition))
 
-  const kinds = useMemo(() => [...new Set(nodes.map((node) => node.kind))], [nodes])
+  const kinds = useMemo(() => {
+    const present = new Set(nodes.map((node) => node.kind))
+    return ENTRY_KINDS.filter((kind) => present.has(kind))
+  }, [nodes])
   const nodeNames = useMemo(() => new Map(nodes.map((node) => [node.id, node.name])), [nodes])
   const graph = useMemo(() => {
     // A different renderer needs fresh data because force-graph mutates nodes and links.
@@ -86,12 +90,8 @@ export function RelationGraphView({
   if (nodes.length === 0) {
     return (
       <EmptyState
-        title="카드를 먼저 만들면 관계 그래프가 그려집니다."
-        action={
-          <Link href={`/works/${workId}/wiki`} className={buttonVariants({ variant: 'outline' })}>
-            설정 보드로 가기
-          </Link>
-        }
+        title="카드가 있어야 관계 그래프를 그릴 수 있어요."
+        description="인물이나 세계관 탭에서 카드를 만드세요."
       />
     )
   }
@@ -126,7 +126,7 @@ export function RelationGraphView({
         </div>
         {unavailable3D && (
           <p role="status" className="text-xs text-muted-foreground">
-            3D 그래프를 불러오지 못해 2D로 표시합니다.
+            3D 그래프를 불러오지 못해 2D로 보여 줘요.
           </p>
         )}
       </div>
@@ -143,9 +143,12 @@ export function RelationGraphView({
         onToggleKind={toggleKind}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)]">
+      <div className="wg-graph-layout">
         <GraphViewport
           mode={graph.mode}
+          selectedEdgeId={selectedEdge?.id}
+          selectedNodeId={selectedNode?.id}
+          focusedNodeId={focusedNodeId}
           data={graph.data}
           onNodeSelect={selectNodeFromCanvas}
           onLinkSelect={selectEdgeFromCanvas}
@@ -156,11 +159,11 @@ export function RelationGraphView({
         <aside
           ref={detailsRef}
           aria-label="카드 및 관계"
-          className="flex min-w-0 scroll-mt-4 flex-col gap-4 rounded-xl border p-4 text-sm break-keep [overflow-wrap:anywhere]"
+          className="wg-graph-panel scroll-mt-20 text-sm break-keep"
         >
           <div aria-live="polite">
             {selectedNode && (
-              <div className="flex flex-col gap-2">
+              <div key={selectedNode.id} className="wg-graph-selection flex flex-col gap-2">
                 <h2 className="text-base font-medium">{selectedNode.name}</h2>
                 <p className="text-muted-foreground">
                   {ENTRY_KIND_LABEL[selectedNode.kind]} ·{' '}
@@ -168,7 +171,7 @@ export function RelationGraphView({
                     ? '등장 기록 없음'
                     : `${selectedNode.firstAppearance}화에 처음 등장`}
                 </p>
-                <p className="whitespace-pre-wrap">{selectedNode.summary || '요약이 없습니다.'}</p>
+                <p className="whitespace-pre-wrap">{selectedNode.summary || '요약이 없어요.'}</p>
                 <Link
                   href={`/works/${workId}/wiki/entries/${selectedNode.id}`}
                   className={buttonVariants({ variant: 'outline', size: 'sm', className: 'w-fit' })}
@@ -179,7 +182,7 @@ export function RelationGraphView({
             )}
 
             {selectedEdge && (
-              <div className="flex flex-col gap-2">
+              <div key={selectedEdge.id} className="wg-graph-selection flex flex-col gap-2">
                 <h2 className="text-base font-medium">{edgeTitle(selectedEdge)}</h2>
                 <p>{selectedEdge.kind}</p>
                 {selectedEdge.description && (
@@ -191,7 +194,7 @@ export function RelationGraphView({
                     <dd>
                       {selectedEdge.evidenceChapter
                         ? `${selectedEdge.evidenceChapter.position}화 · ${selectedEdge.evidenceChapter.title}`
-                        : '등록된 근거 회차가 없습니다.'}
+                        : '등록된 근거 회차가 없어요.'}
                     </dd>
                   </div>
                   <div>
@@ -213,46 +216,46 @@ export function RelationGraphView({
             )}
           </div>
 
-          <section aria-label="표시된 카드" className="flex flex-col gap-2 border-t pt-4">
-            <h2 className="font-medium">카드 {graph.visibleNodes.length}개</h2>
-            <ul className="max-h-40 space-y-1 overflow-y-auto p-0.5">
+          <section aria-label="표시된 카드" className="wg-graph-roster">
+            <h2 className="font-mono font-medium">카드 {graph.visibleNodes.length}개</h2>
+            <ul className="wg-graph-list">
               {graph.visibleNodes.map((node) => (
                 <li key={node.id}>
                   <button
                     type="button"
-                    className="w-full rounded-md px-2 py-1 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-muted"
+                    className="wg-graph-option"
                     aria-pressed={selectedNode?.id === node.id}
+                    onFocus={() => setFocusedNodeId(node.id)}
+                    onBlur={() => setFocusedNodeId(undefined)}
                     onClick={() => selectNode(node.id)}
                   >
-                    {node.name}
-                    <span className="text-muted-foreground"> · {ENTRY_KIND_LABEL[node.kind]}</span>
+                    <KindIcon kind={node.kind} />
+                    <span>
+                      {node.name}
+                      <span className="wg-graph-option-meta"> · {ENTRY_KIND_LABEL[node.kind]}</span>
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
           </section>
 
-          <section aria-label="표시된 관계" className="flex flex-col gap-2 border-t pt-4">
-            <h2 className="font-medium">관계 {graph.visibleEdges.length}개</h2>
+          <section aria-label="표시된 관계" className="wg-graph-roster">
+            <h2 className="font-mono font-medium">관계 {graph.visibleEdges.length}개</h2>
             {graph.visibleEdges.length === 0 ? (
-              <p className="text-muted-foreground">표시할 관계가 없습니다.</p>
+              <p className="text-muted-foreground">표시할 관계가 없어요.</p>
             ) : (
-              <ul className="max-h-40 space-y-1 overflow-y-auto p-0.5">
+              <ul className="wg-graph-list">
                 {graph.visibleEdges.map((edge) => (
                   <li key={edge.id}>
                     <button
                       type="button"
-                      className="w-full rounded-md px-2 py-1 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-muted"
+                      className="wg-graph-option"
                       aria-pressed={selectedEdge?.id === edge.id}
                       onClick={() => selectEdge(edge.id)}
                     >
-                      <span
-                        aria-hidden="true"
-                        className="mr-1.5 inline-block h-0.5 w-3 align-middle"
-                        style={{ backgroundColor: relationKindColor(edge.kind) }}
-                      />
                       {edgeTitle(edge)}
-                      <span className="text-muted-foreground"> · {edge.kind}</span>
+                      <span className="wg-graph-option-meta"> · {edge.kind}</span>
                     </button>
                   </li>
                 ))}

@@ -1,44 +1,31 @@
-"use client"
+'use client'
 
-import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { cn } from 'cn'
+import { Toaster as Sonner, type ToasterProps } from 'sonner'
+import { CheckIcon, InfoIcon, SlashIcon, TriangleAlertIcon } from 'lucide-react'
 
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = ({ className, ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="light"
-      className="toaster group"
+      position="bottom-right"
+      className={cn('wg-ui-toaster group', className)}
       customAriaLabel="알림"
       icons={{
-        success: (
-          <CircleCheckIcon className="size-4" />
-        ),
-        info: (
-          <InfoIcon className="size-4" />
-        ),
-        warning: (
-          <TriangleAlertIcon className="size-4" />
-        ),
-        error: (
-          <OctagonXIcon className="size-4" />
-        ),
-        loading: (
-          <Loader2Icon className="size-4 animate-spin" />
-        ),
+        success: <CheckIcon className="size-4" strokeWidth={1.5} />,
+        info: <InfoIcon className="size-4" strokeWidth={1.5} />,
+        warning: <TriangleAlertIcon className="size-4" strokeWidth={1.5} />,
+        error: <SlashIcon className="size-4" strokeWidth={1.5} />,
+        loading: <span aria-hidden="true" className="wg-ui-loading relative block h-2 w-4" />,
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          '--normal-bg': 'var(--b-paper)',
+          '--normal-text': 'var(--b-ink)',
+          '--normal-border': 'var(--b-grid)',
+          '--border-radius': '0',
         } as React.CSSProperties
       }
-      toastOptions={{
-        classNames: {
-          toast: "cn-toast",
-        },
-      }}
       {...props}
     />
   )

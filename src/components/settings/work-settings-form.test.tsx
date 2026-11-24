@@ -57,7 +57,7 @@ describe('WorkSettingsForm', () => {
     expect(screen.getByLabelText('시놉시스')).toBeDisabled()
     expect(screen.getByLabelText('목표 글자 수')).toBeDisabled()
     expect(screen.queryByRole('button', { name: '저장' })).not.toBeInTheDocument()
-    expect(screen.getByText('소유자만 작품 정보를 바꿀 수 있습니다.')).toBeInTheDocument()
+    expect(screen.getByText('소유자만 작품 정보를 바꿀 수 있어요.')).toBeInTheDocument()
   })
 
   it('saves the changed fields and refreshes the page', async () => {
@@ -77,5 +77,24 @@ describe('WorkSettingsForm', () => {
       settings: { absenceThreshold: 10, targetChars: 6000 },
     })
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the logline on one logical line and submits it with Enter', async () => {
+    run.mockResolvedValue({} as never)
+    render(
+      <WorkSettingsForm workId="w1" canEdit initial={{ ...initial, logline: '별빛\r\n계약' }} />,
+    )
+    const logline = screen.getByRole('textbox', { name: '한 줄 소개' })
+    expect(logline).toHaveValue('별빛계약')
+    fireEvent.change(logline, { target: { value: '새로운\n소개' } })
+    expect(logline).toHaveValue('새로운소개')
+
+    fireEvent.keyDown(logline, { key: 'Enter', isComposing: true })
+    expect(update).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(logline, { key: 'Enter' })
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ logline: '새로운소개' })),
+    )
   })
 })

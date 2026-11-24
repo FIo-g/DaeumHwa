@@ -23,7 +23,7 @@ vi.mock('@/server/actions/ai-features', () => ({
 }))
 
 const encoder = new TextEncoder()
-const REVISION_PLACEHOLDER = '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 윤서가 먼저 말을 걸게)'
+const REVISION_PLACEHOLDER = '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 주인공이 먼저 말을 걸게)'
 
 function makeData(): WritingData {
   return {

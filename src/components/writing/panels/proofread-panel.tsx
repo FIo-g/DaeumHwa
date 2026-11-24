@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AiBadge } from '@/components/app/ai-badge'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
-import { Badge } from '@/components/ui/badge'
+import { ProofStrike, ScanLine } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
@@ -98,10 +98,10 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
     const before = api.getText()
     const replaced = api.replaceQuote(item.quote, item.replacement, item.start)
     if (!replaced) {
-      toast.error('원고가 바뀌어 문장을 찾지 못했습니다. 다시 검사해 주세요.')
+      toast.error('원고가 바뀌어 문장을 찾지 못했어요. 다시 검사해 주세요.')
       return false
     }
-    offerUndo(api, before, '문장을 바꿨습니다.')
+    offerUndo(api, before, '문장을 바꿨어요.')
     setItems((prev) => (prev ? prev.filter((x) => x !== item) : prev))
     return true
   }
@@ -113,11 +113,11 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
     const before = api.getText()
     const done = rules.filter((item) => api.replaceQuote(item.quote, item.replacement, item.start))
     if (done.length < rules.length) {
-      toast.error(`${rules.length - done.length}곳은 원고가 바뀌어 고치지 못했습니다.`)
+      toast.error(`${rules.length - done.length}곳은 원고가 바뀌어 고치지 못했어요.`)
     }
     if (done.length > 0) {
       // One snapshot for the whole batch, so a single 되돌리기 restores every change.
-      offerUndo(api, before, `${done.length}곳을 고쳤습니다.`)
+      offerUndo(api, before, `${done.length}곳을 고쳤어요.`)
       setItems((prev) => (prev ? prev.filter((x) => !done.includes(x)) : prev))
     }
   }
@@ -125,13 +125,14 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
   const ruleCount = items?.filter((item) => item.source === 'rule').length ?? 0
 
   return (
-    <section aria-label="맞춤법과 표현" className="grid gap-3">
+    <section aria-label="맞춤법과 표현" className="wg-panels-section">
+      <h2 className="wg-panels-heading">맞춤법</h2>
       <div className="flex flex-wrap items-center gap-2">
         {editable ? (
           <>
             <Button
               size="sm"
-              variant="outline"
+              variant="link"
               disabled={ruleRunning || ai.running}
               onClick={() => void runRules()}
             >
@@ -149,37 +150,43 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
           <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>
         )}
         {editable && ruleCount > 0 && (
-          <Button size="sm" variant="ghost" onClick={applyAllRules}>
+          <Button size="sm" variant="link" onClick={applyAllRules}>
             모두 적용 (규칙)
           </Button>
         )}
       </div>
 
+      <ScanLine active={ruleRunning} />
+
       {items === null && (
         <p className="text-sm text-muted-foreground">
-          규칙 검사는 흔한 맞춤법과 띄어쓰기 오류를 바로 찾습니다. AI 교정은 어색한 표현까지
-          찾습니다.
+          규칙 검사는 맞춤법과 띄어쓰기를 살펴요. AI 교정은 어색한 표현도 찾아요.
         </p>
       )}
 
-      {items !== null && items.length === 0 && <EmptyState title="고칠 곳을 찾지 못했습니다." />}
+      {items !== null && items.length === 0 && <EmptyState title="고칠 곳을 찾지 못했어요." />}
 
-      <ul className="grid gap-2">
+      <ul className="wg-panels-list">
         {(items ?? []).map((item, index) => (
-          <li key={`${item.start}-${index}`} className="grid gap-2 rounded-lg border p-3">
+          <li
+            key={`${item.start}-${index}`}
+            style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
+            className="wg-panels-row wg-panels-finding grid gap-2"
+          >
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
+              <h3 className="wg-panels-finding-title">{KIND_LABEL[item.kind]}</h3>
               {item.source === 'ai' && <AiBadge />}
             </div>
-            <p className="text-sm leading-6">
-              <span className="line-through decoration-destructive">{item.quote}</span>
-              <span aria-hidden="true"> → </span>
-              <span className="font-medium">{item.replacement}</span>
+            <p className="wg-panels-sentence wg-panels-spelling">
+              <span className="wg-panels-revision">
+                <span className="wg-panels-correction">{item.replacement}</span>
+                <ProofStrike>{item.quote}</ProofStrike>
+              </span>
             </p>
             <p className="text-sm text-muted-foreground">{item.reason}</p>
             {editable && (
               <div>
-                <Button size="sm" variant="outline" onClick={() => apply(item)}>
+                <Button size="sm" onClick={() => apply(item)}>
                   적용
                 </Button>
               </div>

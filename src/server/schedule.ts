@@ -38,7 +38,7 @@ export type ScheduleItemPatch = {
 
 function assertKind(kind: string): asserts kind is ScheduleKind {
   if (!(SCHEDULE_KINDS as readonly string[]).includes(kind)) {
-    throw new AppError('VALIDATION', '일정 종류가 올바르지 않습니다.')
+    throw new AppError('VALIDATION', '일정 종류가 올바르지 않아요.')
   }
 }
 
@@ -52,7 +52,7 @@ function assertDate(value: string): void {
       return
     }
   }
-  throw new AppError('VALIDATION', '날짜 형식이 올바르지 않습니다.')
+  throw new AppError('VALIDATION', '날짜 형식이 올바르지 않아요.')
 }
 
 /** Empty titles fall back to the kind's Korean label. */
@@ -71,7 +71,7 @@ function normalizeTiming(
   if (kind === 'hiatus' && end === null) end = date
   if (end !== null) {
     assertDate(end)
-    if (end < date) throw new AppError('VALIDATION', '끝나는 날이 시작일보다 빠릅니다.')
+    if (end < date) throw new AppError('VALIDATION', '끝나는 날이 시작일보다 빨라요.')
   }
   return { date, endDate: end }
 }
@@ -82,7 +82,7 @@ async function assertChapterInWork(db: Db, workId: string, chapterId: string): P
     .from(chapters)
     .where(and(eq(chapters.id, chapterId), eq(chapters.workId, workId)))
     .limit(1)
-  if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+  if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
 }
 
 /** Schedule items of a work, by start date. With a range, only items overlapping it. Viewer role or higher. */
@@ -151,7 +151,7 @@ export async function updateScheduleItem(
     .from(scheduleItems)
     .where(eq(scheduleItems.id, itemId))
     .limit(1)
-  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
 
   const kind = patch.kind ?? current.kind
   assertKind(kind)
@@ -203,7 +203,7 @@ export async function setScheduleItemDone(
     .set({ done: input.done, updatedAt: new Date() })
     .where(eq(scheduleItems.id, input.itemId))
     .returning()
-  if (!updated) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!updated) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return updated
 }
 
@@ -222,7 +222,7 @@ export async function getScheduleInput(
     .from(works)
     .where(eq(works.id, workId))
     .limit(1)
-  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
 
   const chapterRows = await db
     .select({

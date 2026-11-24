@@ -84,7 +84,7 @@ describe('InterviewSession question generation', () => {
     vi.mocked(postAction).mockReturnValue(new Promise(() => {}))
     renderSession({})
     fireEvent.click(screen.getByRole('button', { name: '다음 질문' }))
-    expect(screen.getByText('질문 만드는 중… 0초')).toBeInTheDocument()
+    expect(screen.getByText('질문 만드는 중…')).toHaveTextContent(/^질문 만드는 중… 0초$/)
     expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument()
   })
 
@@ -92,14 +92,14 @@ describe('InterviewSession question generation', () => {
     vi.mocked(postAction)
       .mockResolvedValueOnce({
         ok: false,
-        error: { code: 'AI_ERROR', message: 'AI 호출에 실패했습니다.' },
+        error: { code: 'AI_ERROR', message: 'AI 호출에 실패했어요.' },
       })
       .mockResolvedValueOnce({ ok: true, data: turn() })
     renderSession({})
 
     fireEvent.click(screen.getByRole('button', { name: '다음 질문' }))
-    expect(await screen.findByText('질문을 만들지 못했습니다.')).toBeInTheDocument()
-    expect(screen.getByText('AI 호출에 실패했습니다.')).toBeInTheDocument()
+    expect(await screen.findByText('질문을 만들지 못했어요.')).toBeInTheDocument()
+    expect(screen.getByText('AI 호출에 실패했어요.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
     expect(await screen.findByText('주인공은 누구인가요?')).toBeInTheDocument()
@@ -120,14 +120,14 @@ describe('InterviewSession question generation', () => {
       ok: false,
       error: {
         code: 'AI_ERROR',
-        message: 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.',
+        message: 'AI 응답이 너무 오래 걸려 멈췄어요. 다시 시도해 주세요.',
       },
     })
     renderSession({})
 
     fireEvent.click(screen.getByRole('button', { name: '다음 질문' }))
     expect(
-      await screen.findByText('AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.'),
+      await screen.findByText('AI 응답이 너무 오래 걸려 멈췄어요. 다시 시도해 주세요.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
   })
@@ -135,12 +135,17 @@ describe('InterviewSession question generation', () => {
   it('shows the daily limit message and hides the retry button', async () => {
     vi.mocked(postAction).mockResolvedValueOnce({
       ok: false,
-      error: { code: 'AI_LIMIT', message: '오늘 AI 사용량을 모두 썼습니다.' },
+      error: {
+        code: 'AI_LIMIT',
+        message: '오늘 AI 사용량 한도를 넘었어요. 내일 다시 시도해 주세요.',
+      },
     })
     renderSession({})
 
     fireEvent.click(screen.getByRole('button', { name: '다음 질문' }))
-    expect(await screen.findByText('오늘 AI 사용량을 모두 썼습니다.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('오늘 AI 사용량 한도를 넘었어요. 내일 다시 시도해 주세요.'),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument()
   })
 
@@ -151,7 +156,7 @@ describe('InterviewSession question generation', () => {
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
 
     await waitFor(() => expect(routerMock.refresh).toHaveBeenCalled())
-    expect(screen.queryByText('질문을 만들지 못했습니다.')).not.toBeInTheDocument()
+    expect(screen.queryByText('질문을 만들지 못했어요.')).not.toBeInTheDocument()
   })
 })
 
@@ -176,7 +181,7 @@ describe('InterviewSession answers', () => {
     renderSession({ current: turn() })
     fireEvent.change(screen.getByLabelText('답변'), { target: { value: '서윤은 검객이다.' } })
     fireEvent.click(screen.getByRole('button', { name: '답하기' }))
-    expect(screen.getByText('답 정리하는 중… 0초')).toBeInTheDocument()
+    expect(screen.getByText('답 정리하는 중…')).toHaveTextContent(/^답 정리하는 중… 0초$/)
     expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument()
   })
 
@@ -211,13 +216,13 @@ describe('InterviewSession answers', () => {
   it('reloads the turn state when the server says the question is already answered', async () => {
     vi.mocked(postAction).mockResolvedValue({
       ok: false,
-      error: { code: 'CONFLICT', message: '이미 답한 질문입니다.' },
+      error: { code: 'CONFLICT', message: '이미 답한 질문이에요.' },
     })
     renderSession({ current: turn() })
     fireEvent.change(screen.getByLabelText('답변'), { target: { value: '서윤은 검객이다.' } })
     fireEvent.click(screen.getByRole('button', { name: '답하기' }))
 
     await waitFor(() => expect(routerMock.refresh).toHaveBeenCalled())
-    expect(toast.error).toHaveBeenCalledWith('이미 답한 질문입니다.')
+    expect(toast.error).toHaveBeenCalledWith('이미 답한 질문이에요.')
   })
 })

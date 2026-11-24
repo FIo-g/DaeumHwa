@@ -1,6 +1,6 @@
-import { Badge } from '@/components/ui/badge'
+import type { CSSProperties } from 'react'
+import { CellMeter } from '@/components/motion'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
-import { cn } from '@/lib/utils'
 
 export type ReaderSimPersonaResult = ReaderSimResult['personas'][number]
 export type ReaderSimMoment = ReaderSimPersonaResult['moments'][number]
@@ -11,14 +11,6 @@ const REACTION_LABEL: Record<ReaderSimMoment['reaction'], string> = {
   excited: '몰입',
   dropoff: '이탈 위험',
   moved: '감동',
-}
-
-const REACTION_STYLE: Record<ReaderSimMoment['reaction'], string> = {
-  confused: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
-  bored: 'bg-muted text-muted-foreground',
-  excited: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200',
-  dropoff: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
-  moved: 'bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200',
 }
 
 const RISK_LABEL: Record<ReaderSimPersonaResult['dropOffRisk'], string> = {
@@ -34,43 +26,49 @@ export function ratingStars(rating: number): string {
 }
 
 /** One persona's reaction to a chapter: rating, drop-off risk, summary, and moments. */
-export function ReaderSimResultCard({
+export function ReaderSimReaction({
+  index,
   name,
   persona,
 }: {
+  index: number
   name: string
   persona: ReaderSimPersonaResult
 }) {
   const rating = Math.min(5, Math.max(0, Math.round(persona.rating)))
   return (
-    <article className="flex flex-col gap-3 rounded-xl border p-4">
-      <header className="flex flex-wrap items-center gap-2">
-        <h3 className="font-medium">{name}</h3>
-        <span role="img" className="text-amber-600" aria-label={`별점 ${rating}점 (5점 만점)`}>
-          {ratingStars(persona.rating)}
+    <article
+      className="wg-advice-row wg-advice-reply"
+      style={{ '--wg-advice-row': Math.min(index, 3) } as CSSProperties}
+      tabIndex={0}
+    >
+      <div className="wg-advice-gutter" aria-hidden="true">
+        <span className="wg-advice-row-number">{index + 1}</span>
+      </div>
+      <header className="wg-advice-reply-heading wg-advice-writing">
+        <h3 className="b-subhead">{name}</h3>
+        <span role="img" className="wg-advice-rating" aria-label={`별점 ${rating}점 (5점 만점)`}>
+          <CellMeter value={rating} max={5} className="wg-advice-rating-cells" />
+          <span aria-hidden="true">{`${rating}/5`}</span>
         </span>
-        <Badge variant="outline" className={cn(persona.dropOffRisk === 'high' && 'border-red-300')}>
-          {`이탈 위험 ${RISK_LABEL[persona.dropOffRisk]}`}
-        </Badge>
+        <span className="b-label">{`이탈 위험 ${RISK_LABEL[persona.dropOffRisk]}`}</span>
       </header>
-      <p className="text-sm">{persona.overall}</p>
-      {persona.moments.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {persona.moments.map((moment, index) => (
-            <li key={`${index}-${moment.quote}`} className="flex flex-col gap-1 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className={REACTION_STYLE[moment.reaction]}>
-                  {REACTION_LABEL[moment.reaction]}
-                </Badge>
-              </div>
-              <blockquote className="border-l-2 pl-3 text-muted-foreground">
-                {moment.quote}
-              </blockquote>
-              <p>{moment.comment}</p>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="wg-advice-reply-body">
+        <p className="wg-advice-prose wg-advice-writing">{persona.overall}</p>
+        {persona.moments.length > 0 && (
+          <ul>
+            {persona.moments.map((moment, index) => (
+              <li key={`${index}-${moment.quote}`} className="wg-advice-detail">
+                <span className="b-label font-medium">{REACTION_LABEL[moment.reaction]}</span>
+                <div>
+                  <blockquote className="wg-advice-quote">{moment.quote}</blockquote>
+                  <p>{moment.comment}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </article>
   )
 }

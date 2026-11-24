@@ -182,7 +182,7 @@ describe('DraftPanel request ledger (stage 2)', () => {
   it('still starts the plan when keeping the instruction fails', async () => {
     vi.mocked(createDirectiveAction).mockResolvedValue({
       ok: false,
-      error: { code: 'FORBIDDEN', message: '권한이 없습니다.' },
+      error: { code: 'FORBIDDEN', message: '이 작업을 할 권한이 없어요.' },
     } as never)
     renderPanel()
 

@@ -131,7 +131,7 @@ export async function previewDraftRefinement(
   }
   if (!written) {
     // The draft changed while this preview ran (an apply or a newer preview won).
-    throw new AppError('BAD_STATE', '초안이 바뀌어 다듬기 결과를 버렸습니다. 다시 다듬어 주세요.')
+    throw new AppError('BAD_STATE', '초안이 바뀌어 다듬기 결과를 버렸어요. 다시 다듬어 주세요.')
   }
 
   const parts: DiffPart[] = changed ? diffTexts(stored, refined, 'words') : []
@@ -162,13 +162,13 @@ export async function applyDraftRefinement(
 
   const candidate = readRefinement(output.refinement)
   if (candidate === null) {
-    throw new AppError('BAD_STATE', '적용할 다듬기 결과가 없습니다. 다시 다듬어 주세요.')
+    throw new AppError('BAD_STATE', '적용할 다듬기 결과가 없어요. 다시 다듬어 주세요.')
   }
   if (candidate.token !== input.token) {
-    throw new AppError('BAD_STATE', '다듬기 결과가 바뀌었습니다. 다시 다듬어 주세요.')
+    throw new AppError('BAD_STATE', '다듬기 결과가 바뀌었어요. 다시 다듬어 주세요.')
   }
   if (candidate.base !== stored) {
-    throw new AppError('BAD_STATE', '초안이 바뀌어 적용할 수 없습니다. 다시 다듬어 주세요.')
+    throw new AppError('BAD_STATE', '초안이 바뀌어 적용할 수 없어요. 다시 다듬어 주세요.')
   }
 
   // Conditional on the text and the candidate still being the ones checked above, so a preview or
@@ -192,7 +192,7 @@ export async function applyDraftRefinement(
     )
     .returning({ id: aiRuns.id })
   if (updated.length === 0) {
-    throw new AppError('BAD_STATE', '다듬기 결과가 바뀌었습니다. 다시 다듬어 주세요.')
+    throw new AppError('BAD_STATE', '다듬기 결과가 바뀌었어요. 다시 다듬어 주세요.')
   }
   return { runId, text: candidate.text }
 }
@@ -206,13 +206,13 @@ async function loadDraftRun(db: Db, actor: Actor, workId: string, runId: string)
     run.userId !== actor.userId ||
     run.task !== 'draft-chapter'
   ) {
-    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   }
   if (run.status !== 'done') {
-    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 다듬을 수 있습니다.')
+    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 다듬을 수 있어요.')
   }
   const stored = draftText(run.output)
-  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없습니다.')
+  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없어요.')
   return { run, output: run.output as Record<string, unknown>, stored }
 }
 

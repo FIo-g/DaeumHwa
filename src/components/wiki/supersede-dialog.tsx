@@ -32,14 +32,14 @@ export function SupersedeDialog({ fact, chapters }: SupersedeDialogProps) {
   const [open, setOpen] = useState(false)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+      <DialogTrigger render={<Button variant="ghost" size="sm" />}>
         특정 회차부터 바뀜
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>특정 회차부터 바뀜</DialogTitle>
           <DialogDescription>
-            기존 사실은 그 전 회차까지만 유효하게 남고, 새 사실이 그 회차부터 유효해집니다.
+            기존 사실은 직전 회차까지만 유효해요. 이 회차부터는 새 사실을 따라요.
           </DialogDescription>
         </DialogHeader>
         <SupersedeFields fact={fact} chapters={chapters} onDone={() => setOpen(false)} />
@@ -77,7 +77,7 @@ function SupersedeFields({
         sourceChapterId: chapter.id,
         sourceType: 'chapter',
       }),
-      { success: '바뀐 사실을 기록했습니다.' },
+      { success: '바뀐 사실을 기록했어요.' },
     )
     setPending(false)
     if (saved) {
@@ -87,31 +87,32 @@ function SupersedeFields({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">기존 사실: {fact.content}</p>
-      <div className="flex flex-col gap-1.5">
-        <span id="supersede-chapter-label" className="text-sm font-medium">
+    <form onSubmit={onSubmit} className="wg-wiki-form">
+      <p className="wg-wiki-fact-text">기존 사실: {fact.content}</p>
+      <div className="wg-wiki-form-row">
+        <span id="supersede-chapter-label" className="b-label font-medium">
           바뀌는 회차
         </span>
         <div role="group" aria-labelledby="supersede-chapter-label">
           <ChapterPicker chapters={chapters} value={chapterId} onChange={setChapterId} />
         </div>
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="wg-wiki-form-row">
         <Label htmlFor="supersede-content">바뀐 내용</Label>
         <Textarea
           id="supersede-content"
+          className="b-manuscript"
           rows={3}
           maxLength={2000}
           value={content}
           onChange={(e) => setContent(e.target.value)}
         />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">태그</span>
+      <div className="wg-wiki-form-row">
+        <span className="b-label font-medium">태그</span>
         <FactStatusSelect value={status} onChange={setStatus} />
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="wg-wiki-form-row">
         <Label htmlFor="supersede-evidence">근거 문장</Label>
         <Input
           id="supersede-evidence"

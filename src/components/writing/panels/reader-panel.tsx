@@ -1,9 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { type CSSProperties, useEffect, useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
-import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -106,7 +105,8 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
   const nameOf = (id: string) => PERSONAS.find((p) => p.id === id)?.name ?? id
 
   return (
-    <section aria-label="독자 반응" className="grid gap-4">
+    <section aria-label="독자 반응" className="wg-panels-section">
+      <h2 className="wg-panels-heading">독자 반응</h2>
       {!editable && <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>}
 
       {editable && (
@@ -142,7 +142,7 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
             )}
             <Link
               href={`/works/${data.workId}/reader-sim`}
-              className={buttonVariants({ variant: 'ghost' })}
+              className={buttonVariants({ variant: 'link' })}
             >
               지난 결과 보기
             </Link>
@@ -162,20 +162,24 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
       {output && (
         <div className="grid gap-4">
           <p className="text-sm leading-6">{output.result.summary}</p>
-          {output.result.personas.map((persona) => {
+          {output.result.personas.map((persona, index) => {
             const rating = Math.min(5, Math.max(1, Math.round(persona.rating)))
             return (
-              <article key={persona.personaId} className="grid gap-2 rounded-lg border p-3">
+              <article
+                key={persona.personaId}
+                style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
+                className="wg-panels-row grid gap-2"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-medium">{nameOf(persona.personaId)}</h3>
+                  <h3 className="wg-panels-subhead">{nameOf(persona.personaId)}</h3>
                   <span className="text-sm" aria-label={`평점 ${rating}점 (5점 만점)`}>
                     {'★'.repeat(rating)}
                     {'☆'.repeat(5 - rating)}
                   </span>
                 </div>
-                <Badge variant="outline" className="w-fit">
+                <span className="wg-panels-kind w-fit">
                   이탈 위험 {RISK_LABEL[persona.dropOffRisk] ?? persona.dropOffRisk}
-                </Badge>
+                </span>
                 <p className="text-sm leading-6">{persona.overall}</p>
                 {persona.moments.length > 0 && (
                   <ul className="grid gap-2">
@@ -184,7 +188,7 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
                         <button
                           type="button"
                           onClick={() => focusQuote(moment.quote)}
-                          className="rounded-md bg-muted/60 p-2 text-left leading-6 hover:bg-muted"
+                          className="wg-panels-quote"
                         >
                           {moment.quote}
                         </button>

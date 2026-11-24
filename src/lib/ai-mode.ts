@@ -4,7 +4,7 @@
  */
 export type AiProvider = 'anthropic' | 'opencode'
 
-export const AI_KEY_MISSING_MESSAGE = 'AI 키가 설정되지 않아 AI 기능을 쓸 수 없습니다.'
+export const AI_KEY_MISSING_MESSAGE = 'AI 키가 설정되지 않아 AI 기능을 쓸 수 없어요.'
 
 const KNOWN_PROVIDERS: readonly AiProvider[] = ['anthropic', 'opencode']
 const KEY_NAME: Record<AiProvider, string> = {

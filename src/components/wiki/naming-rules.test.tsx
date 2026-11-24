@@ -34,22 +34,25 @@ afterEach(() => {
 })
 
 describe('NamingRules', () => {
-  it('lists the correct spelling with its wrong spellings as chips', () => {
+  it('lists the correct spelling with its struck-through variants', () => {
     render(<NamingRules workId="w1" rules={rules} canEdit />)
-    const row = screen.getByText('서윤').closest('tr') as HTMLElement
-    expect(within(row).getByText('서연')).toBeInTheDocument()
-    expect(within(row).getByText('서유')).toBeInTheDocument()
+    const row = screen.getByText('서윤').closest('li') as HTMLElement
+    expect(within(row).getByText('서연', { selector: 's' })).toBeInTheDocument()
+    expect(within(row).getByText('서유', { selector: 's' })).toBeInTheDocument()
     expect(within(row).getByText('주인공 이름')).toBeInTheDocument()
   })
 
   it('creates a rule with trimmed, split wrong spellings', async () => {
     render(<NamingRules workId="w1" rules={[]} canEdit />)
-    fireEvent.click(screen.getByRole('button', { name: '표기 규칙 추가' }))
-    fireEvent.change(screen.getByLabelText('올바른 표기'), { target: { value: ' 도현 ' } })
-    fireEvent.change(screen.getByLabelText('잘못된 표기 (쉼표로 구분)'), {
+    const add = screen.getByRole('button', { name: '표기 규칙 추가' })
+    fireEvent.click(add)
+    expect(add).toHaveAttribute('aria-expanded', 'true')
+    const form = screen.getByRole('region', { name: '표기 규칙 추가' })
+    fireEvent.change(within(form).getByLabelText('올바른 표기'), { target: { value: ' 도현 ' } })
+    fireEvent.change(within(form).getByLabelText('잘못된 표기 (쉼표로 구분)'), {
       target: { value: '도연, 도현이, ' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+    fireEvent.click(within(form).getByRole('button', { name: '저장' }))
 
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     expect(create).toHaveBeenCalledWith({

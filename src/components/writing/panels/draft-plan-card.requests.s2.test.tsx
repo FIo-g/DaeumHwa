@@ -79,7 +79,7 @@ describe('DraftPlanCardView requests (stage 2)', () => {
     expect(screen.getByText('계속 지킬 요청으로 보이는 것')).toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: '앞으로도 지키기' })[0])
 
-    await waitFor(() => expect(screen.getByText('장부에 넣었습니다')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('장부에 넣었어요')).toBeInTheDocument())
     expect(createDirectiveAction).toHaveBeenCalledWith({
       workId: 'work-1',
       scope: 'work',

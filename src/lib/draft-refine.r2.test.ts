@@ -21,37 +21,37 @@ function preview(overrides: Partial<DraftRefinePreview> = {}): DraftRefinePrevie
 describe('refineSummary', () => {
   it('names the paragraphs and sentences that were fixed', () => {
     expect(refineSummary(preview({ paragraphsBefore: 2, paragraphsAfter: 0, repaired: 3 }))).toBe(
-      '긴 문단 2곳, 문장 3곳을 고쳤습니다.',
+      '긴 문단 2곳, 문장 3곳을 고쳤어요.',
     )
   })
 
   it('leaves out a part that is zero', () => {
     expect(refineSummary(preview({ paragraphsBefore: 1, paragraphsAfter: 0, repaired: 0 }))).toBe(
-      '긴 문단 1곳을 고쳤습니다.',
+      '긴 문단 1곳을 고쳤어요.',
     )
     expect(refineSummary(preview({ paragraphsBefore: 0, paragraphsAfter: 0, repaired: 2 }))).toBe(
-      '문장 2곳을 고쳤습니다.',
+      '문장 2곳을 고쳤어요.',
     )
   })
 
   it('reports paragraphs it could not fix', () => {
     expect(refineSummary(preview({ paragraphsBefore: 2, paragraphsAfter: 1, repaired: 0 }))).toBe(
-      '긴 문단 1곳을 고쳤습니다. 문장이 많은 문단 1곳은 그대로 뒀습니다.',
+      '긴 문단 1곳을 고쳤어요. 문장이 많은 문단 1곳은 안 고쳤어요.',
     )
   })
 
   it('has a fallback when nothing was counted', () => {
-    expect(refineSummary(preview({ changed: true }))).toBe('글을 다듬었습니다.')
+    expect(refineSummary(preview({ changed: true }))).toBe('글을 다듬었어요.')
   })
 })
 
 describe('refineRepairNote', () => {
   it('explains a failed sentence repair and a skipped one', () => {
     expect(refineRepairNote(preview({ repairState: 'failed' }))).toBe(
-      '문장 고치기는 하지 못했습니다. 문단 다듬기 결과만 보입니다.',
+      '문장 고치기는 못했어요. 문단 다듬기 결과만 보여요.',
     )
     expect(refineRepairNote(preview({ repairState: 'skipped' }))).toBe(
-      '시간이 모자라 문장 고치기는 건너뛰었습니다.',
+      '시간이 모자라 문장 고치기는 건너뛰었어요.',
     )
   })
 

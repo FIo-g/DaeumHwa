@@ -17,6 +17,7 @@ import { chapterLabel, stripEpisodePrefix } from '@/lib/labels'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { recomputeAppearances } from '@/server/appearances'
 import { recordChange } from '@/server/changes'
+import { requireRegisteredUser } from '@/server/trial-access'
 import { updateDraftEditRatio } from '@/server/usage-events'
 import { lockWork } from '@/server/work-lock'
 
@@ -92,12 +93,12 @@ async function loadChapter(
   const workId = await requireRowWork(db, 'chapters', chapterId)
   const { role } = await requireWorkRole(db, workId, actor.userId, min)
   const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1)
-  if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+  if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
   return { chapter, role }
 }
 
 function assertNotArchived(chapter: ChapterRow): void {
-  if (chapter.archivedAt) throw new AppError('BAD_STATE', '보관된 회차는 수정할 수 없습니다.')
+  if (chapter.archivedAt) throw new AppError('BAD_STATE', '보관된 회차는 수정할 수 없어요.')
 }
 
 /**
@@ -204,8 +205,9 @@ export async function createChapter(
   input: CreateChapterInput,
 ): Promise<ChapterRow> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
+  if (input.position !== undefined) await requireRegisteredUser(db, actor.userId)
   if (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 1)) {
-    throw new AppError('VALIDATION', '회차 위치가 올바르지 않습니다.')
+    throw new AppError('VALIDATION', '회차 위치가 올바르지 않아요.')
   }
   const body = input.body ?? ''
 
@@ -361,15 +363,11 @@ export async function saveChapterWithTitleChange(
       .where(and(eq(chapters.id, chapter.id), eq(chapters.version, input.expectedVersion)))
       .returning()
     if (!updated) {
-      const [current] = await tx
-        .select()
-        .from(chapters)
-        .where(eq(chapters.id, chapter.id))
-        .limit(1)
+      const [current] = await tx.select().from(chapters).where(eq(chapters.id, chapter.id)).limit(1)
       if (current && current.title === title && current.body === body) {
         return { saved: { chapter: current, titleChanged: false }, changed: false }
       }
-      throw new AppError('CONFLICT', '다른 곳에서 먼저 수정된 원고가 있습니다.', {
+      throw new AppError('CONFLICT', '다른 곳에서 먼저 수정된 원고가 있어요.', {
         currentVersion: current?.version,
       })
     }
@@ -427,7 +425,7 @@ export async function setChapterPublishedOn(
   publishedOn: string | null,
 ): Promise<ChapterRow> {
   if (publishedOn !== null && !isPlausibleIsoDate(publishedOn)) {
-    throw new AppError('VALIDATION', '연재일 형식이 올바르지 않습니다.')
+    throw new AppError('VALIDATION', '연재일 형식이 올바르지 않아요.')
   }
   const { chapter } = await loadChapter(db, actor, chapterId, 'editor')
   assertNotArchived(chapter)
@@ -448,7 +446,8 @@ export async function moveChapter(
 ): Promise<void> {
   await db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, chapterId, 'editor')
-    if (chapter.archivedAt) throw new AppError('BAD_STATE', '보관된 회차는 이동할 수 없습니다.')
+    await requireRegisteredUser(tx, actor.userId)
+    if (chapter.archivedAt) throw new AppError('BAD_STATE', '보관된 회차는 이동할 수 없어요.')
 
     const [neighbour] = await tx
       .select({ id: chapters.id, position: chapters.position })
@@ -481,6 +480,7 @@ export async function moveChapter(
 /** Archives a chapter (kept with its history; hidden from lists). Editor role. */
 export async function archiveChapter(db: Db, actor: Actor, chapterId: string): Promise<ChapterRow> {
   const { chapter } = await loadChapter(db, actor, chapterId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   if (chapter.archivedAt) return chapter
   const now = new Date()
   const [updated] = await db
@@ -498,6 +498,7 @@ export async function archiveChapter(db: Db, actor: Actor, chapterId: string): P
 export async function restoreChapter(db: Db, actor: Actor, chapterId: string): Promise<ChapterRow> {
   return db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, chapterId, 'editor')
+    await requireRegisteredUser(tx, actor.userId)
     if (!chapter.archivedAt) return chapter
 
     const [clash] = await tx
@@ -553,14 +554,14 @@ export async function getVersion(
   actor: Actor,
   versionId: string,
 ): Promise<ChapterVersionRow> {
-  if (!UUID_RE.test(versionId)) throw new AppError('NOT_FOUND', '버전을 찾을 수 없습니다.')
+  if (!UUID_RE.test(versionId)) throw new AppError('NOT_FOUND', '버전을 찾을 수 없어요.')
   const [row] = await db
     .select({ version: chapterVersions, workId: chapters.workId })
     .from(chapterVersions)
     .innerJoin(chapters, eq(chapters.id, chapterVersions.chapterId))
     .where(eq(chapterVersions.id, versionId))
     .limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '버전을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '버전을 찾을 수 없어요.')
   await requireWorkRole(db, row.workId, actor.userId, 'viewer')
   return row.version
 }

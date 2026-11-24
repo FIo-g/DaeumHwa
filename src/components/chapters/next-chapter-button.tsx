@@ -11,7 +11,13 @@ import { openNextChapterAction } from '@/server/actions/chapters'
  * Opens the newest draft chapter, or creates the next chapter when there is no draft,
  * then moves to its writing screen.
  */
-export function NextChapterButton({ workId }: { workId: string }) {
+export function NextChapterButton({
+  workId,
+  variant = 'default',
+}: {
+  workId: string
+  variant?: 'default' | 'link'
+}) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
 
@@ -26,7 +32,7 @@ export function NextChapterButton({ workId }: { workId: string }) {
   }
 
   return (
-    <Button onClick={onClick} disabled={pending}>
+    <Button variant={variant} onClick={onClick} disabled={pending}>
       <PenLineIcon aria-hidden="true" />
       다음 화 쓰기
     </Button>

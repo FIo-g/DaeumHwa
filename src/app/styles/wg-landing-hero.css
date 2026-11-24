@@ -1,0 +1,403 @@
+@layer components {
+  .wg-landing-hero-nav .b-nav-inner {
+    min-block-size: 65px;
+  }
+
+  .wg-landing-hero-logo {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-block-size: 44px;
+    font: 900 1.375rem/1 var(--b-font-title);
+  }
+
+  .wg-landing-hero-logo span {
+    display: grid;
+    place-items: center;
+    inline-size: 34px;
+    block-size: 33px;
+    border-block: var(--b-line) solid var(--b-grid);
+    border-inline-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-logo span:last-child {
+    border-inline-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-logo:is(:hover, :focus-visible) span {
+    color: var(--b-paper);
+    background: var(--b-ink);
+  }
+
+  .wg-landing-hero-nav-link {
+    display: flex;
+    align-items: center;
+    min-block-size: 44px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: underline var(--b-line);
+    text-underline-offset: 0.28em;
+  }
+
+  .wg-landing-hero-intro {
+    display: grid;
+    grid-template-areas: 'title' 'copy' 'proof';
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--b-s5);
+    padding-block: clamp(var(--b-s5), 3vw, var(--b-s7)) clamp(var(--b-s7), 5.9vw, var(--b-s9));
+    --b-cell-hero: clamp(2.5rem, 12vw, 5.75rem);
+  }
+
+  .wg-landing-hero-title {
+    grid-area: title;
+    min-inline-size: 0;
+  }
+
+  .wg-landing-hero-title .wg-title-grid {
+    row-gap: clamp(6px, 0.85vw, 12px);
+  }
+
+  .wg-landing-hero-copy {
+    grid-area: copy;
+  }
+
+  .wg-landing-hero-copy .b-lede {
+    margin-block-end: var(--b-s5);
+    word-break: keep-all;
+  }
+
+  .wg-landing-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--b-s2) clamp(var(--b-s3), 1.55vw, var(--b-s5));
+    font-weight: 500;
+  }
+
+  .wg-landing-hero-actions > * {
+    white-space: nowrap;
+  }
+
+  .wg-landing-hero-actions > .wg-pop {
+    min-inline-size: max-content;
+  }
+
+  .wg-landing-hero-actions > a {
+    padding-block: var(--b-s2);
+  }
+
+  .wg-landing-hero-edge {
+    font: 400 0.8125rem/1.35 var(--b-font-mono);
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-block-end: var(--b-s2);
+  }
+
+  .wg-landing-hero-edge::after,
+  .wg-landing-hero-boundary::before,
+  .wg-landing-hero-boundary::after {
+    content: '';
+    inline-size: 11px;
+    block-size: 7px;
+    border-block: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-proof {
+    --wg-landing-hero-title-time: min(
+      calc(var(--wg-landing-hero-letter-count) * var(--b-cell)),
+      var(--b-arrival)
+    );
+    grid-area: proof;
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  .wg-landing-hero-proof[data-replayed='true'] {
+    --wg-landing-hero-title-time: 0ms;
+  }
+
+  .wg-landing-hero-proof > h2 {
+    position: relative;
+    padding-block: clamp(var(--b-s3), 1.5vw, var(--b-s5));
+    border-block-end: var(--b-line) solid var(--b-grid);
+    font: 900 clamp(1.625rem, 3.2vw, 2.9375rem)/1.24 var(--b-font-title);
+  }
+
+  .wg-landing-hero-proof > h2::before,
+  .wg-landing-hero-closing-rule {
+    content: '';
+    display: block;
+    border-block-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-proof > h2::before {
+    position: absolute;
+    inset: 0 0 auto;
+  }
+
+  .wg-landing-hero-row {
+    --wg-landing-hero-pen-start: calc(
+      var(--wg-landing-hero-title-time) + var(--wg-landing-hero-order) * var(--b-stagger)
+    );
+    --wg-landing-hero-leader-start: calc(var(--wg-landing-hero-pen-start) + var(--b-draw));
+    --wg-landing-hero-note-start: calc(var(--wg-landing-hero-leader-start) + var(--b-quick));
+    position: relative;
+    isolation: isolate;
+  }
+
+  .wg-landing-hero-line-no {
+    position: absolute;
+    inset-block-start: 1.22rem;
+    inset-inline-end: calc(100% + var(--b-s1));
+    opacity: 0;
+    font: 400 0.625rem/1 var(--b-font-mono);
+    pointer-events: none;
+  }
+
+  .wg-landing-hero-ruled {
+    --wg-landing-hero-rule-ink: color-mix(in srgb, var(--b-grid) 24%, transparent);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0 calc(1lh - var(--b-line)),
+      var(--wg-landing-hero-rule-ink) calc(1lh - var(--b-line)) 1lh
+    );
+  }
+
+  :is(.wg-landing-hero-row, .wg-landing-sample-row):is(:hover, :focus-within)
+    .wg-landing-hero-ruled {
+    --wg-landing-hero-rule-ink: color-mix(in srgb, var(--b-grid) 66%, transparent);
+  }
+
+  .wg-landing-hero-row:is(:hover, :focus-within) .wg-landing-hero-line-no {
+    opacity: 1;
+  }
+
+  .wg-landing-hero-proof .wg-landing-hero-pair {
+    grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+  }
+
+  .wg-landing-hero-pair .wg-proof-pair-manuscript,
+  .wg-landing-hero-pair .wg-proof-pair-note {
+    padding-block: clamp(var(--b-s3), 1.05vw, var(--b-s4)) clamp(var(--b-s3), 1.55vw, var(--b-s5));
+  }
+
+  .wg-landing-hero-pair .wg-proof-pair-manuscript {
+    padding-inline-end: var(--b-s4);
+  }
+
+  .wg-landing-hero-pair .wg-proof-pair-note {
+    padding-inline-start: clamp(var(--b-s3), 1.4vw, var(--b-s5));
+  }
+
+  .wg-landing-hero-manuscript-label {
+    margin-block-end: var(--b-s1);
+    font: 500 0.8125rem/1.5 var(--b-font-body);
+  }
+
+  .wg-landing-hero-sentence {
+    --wg-landing-hero-leading: 1.8em;
+    --wg-landing-hero-line: round(down, var(--wg-landing-hero-leading), var(--b-line));
+    font: 700 clamp(1.0625rem, 1.47vw, 1.375rem) / var(--wg-landing-hero-line) var(--b-font-title);
+    word-break: keep-all;
+  }
+
+  .wg-landing-hero-sentence .wg-proof-mark {
+    white-space: nowrap;
+  }
+
+  .wg-landing-hero-sentence-corrected {
+    --wg-landing-hero-correction-scale: 0.65;
+    /* Set aside one correction slot per line, then move its top half below the text. */
+    --wg-landing-hero-correction-space: calc(1.75em * var(--wg-landing-hero-correction-scale));
+    --wg-landing-hero-line: round(
+      down,
+      calc(var(--wg-landing-hero-leading) + var(--wg-landing-hero-correction-space)),
+      var(--b-line)
+    );
+  }
+
+  .wg-landing-hero-sentence-corrected > .wg-landing-hero-words {
+    position: relative;
+    inset-block-start: calc(-0.5 * var(--wg-landing-hero-correction-space));
+  }
+
+  .wg-landing-hero-correction-anchor {
+    position: relative;
+    white-space: nowrap;
+  }
+
+  .wg-landing-hero-correction {
+    position: absolute;
+    inset-block-start: calc(100% + 0.5em);
+    inset-inline-start: 0;
+    color: var(--b-proof);
+    font: 400 calc(1em * var(--wg-landing-hero-correction-scale)) / 1 var(--b-font-title);
+    pointer-events: none;
+  }
+
+  .wg-landing-hero-caption,
+  .wg-landing-hero-closing-edge {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--b-s2);
+    padding-block-start: var(--b-s2);
+    font-size: 0.8125rem;
+  }
+
+  .wg-landing-hero-replay {
+    min-block-size: 44px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .wg-landing-hero-boundary {
+    position: relative;
+    border-block-start: var(--b-rule) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-boundary + #b-sample {
+    border-block-start-width: 0;
+  }
+
+  .wg-landing-hero-boundary::before,
+  .wg-landing-hero-boundary::after {
+    position: absolute;
+    inset-block-start: var(--b-s1);
+  }
+
+  .wg-landing-hero-boundary::before {
+    inset-inline-start: var(--b-edge);
+  }
+
+  .wg-landing-hero-boundary::after {
+    inset-inline-end: var(--b-edge);
+  }
+
+  .wg-landing-hero-closing {
+    display: grid;
+    container-type: inline-size;
+    align-items: center;
+    column-gap: var(--b-s6);
+    row-gap: var(--b-s4);
+    padding-block: clamp(var(--b-s6), 3vw, var(--b-s7)) var(--b-s4);
+  }
+
+  .wg-landing-hero-closing-edge {
+    position: relative;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .wg-landing-hero-closing-rule {
+    position: absolute;
+    inset: 0 0 auto;
+  }
+
+  .wg-landing-hero-footer {
+    border-block-start: var(--b-line) solid var(--b-grid);
+    font-size: 0.8125rem;
+  }
+
+  @media (min-width: 1024px) {
+    .wg-landing-hero-intro {
+      --b-cell-hero: clamp(2.5rem, 6.4vw, 5.75rem);
+      grid-template-areas: 'title proof' 'copy proof';
+      grid-template-columns: minmax(0, 8fr) minmax(0, 5.8fr);
+      grid-template-rows: auto 1fr;
+      column-gap: clamp(var(--b-s5), 3vw, var(--b-s7));
+      row-gap: clamp(var(--b-s5), 5vw, 4.5rem);
+    }
+
+    .wg-landing-hero-closing {
+      grid-template-columns: minmax(0, 1fr) max-content;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .wg-landing-hero-lede-detail {
+      display: none;
+    }
+
+    .wg-landing-hero-copy .b-lede {
+      margin-block-end: var(--b-s3);
+    }
+
+    .wg-landing-hero-actions {
+      column-gap: var(--b-s2);
+      font-size: 0.875rem;
+    }
+
+    .wg-landing-hero-proof .wg-landing-hero-pair {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .wg-landing-hero-pair .wg-proof-pair-manuscript {
+      padding: var(--b-s3) 0 var(--b-s1);
+    }
+
+    .wg-landing-hero-pair .wg-proof-pair-note {
+      padding: var(--b-s1) 0 var(--b-s3) var(--b-s5);
+    }
+  }
+
+  @media (max-width: 639px) {
+    .wg-landing-hero-nav {
+      min-block-size: 54px;
+    }
+
+    .wg-landing-hero-nav .b-nav-inner {
+      min-block-size: 53px;
+    }
+
+    .wg-landing-hero-logo {
+      font-size: 1rem;
+    }
+
+    .wg-landing-hero-logo span {
+      inline-size: 23px;
+      block-size: 26px;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-landing-hero-line-no {
+      transition: opacity var(--b-quick) var(--b-out);
+    }
+
+    .wg-landing-hero-proof .wg-landing-hero-pair .wg-proof-mark {
+      animation-delay: var(--wg-landing-hero-pen-start);
+    }
+
+    .wg-landing-hero-proof .wg-landing-hero-pair .wg-proof-pair-leader {
+      animation-duration: var(--b-quick);
+      animation-delay: var(--wg-landing-hero-leader-start);
+    }
+
+    .wg-landing-hero-proof .wg-landing-hero-pair .wg-margin-note-quote,
+    .wg-landing-hero-correction {
+      animation: wg-landing-hero-write var(--b-quick) steps(8, jump-none)
+        var(--wg-landing-hero-note-start) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-landing-hero-proof > h2::before,
+    .wg-landing-hero-closing-rule {
+      animation: wg-landing-hero-write var(--b-draw) var(--b-out) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+  }
+
+  @keyframes wg-landing-hero-write {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+}

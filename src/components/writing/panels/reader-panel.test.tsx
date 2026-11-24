@@ -73,7 +73,7 @@ describe('ReaderPanel', () => {
       personaIds: ['reader-novice', 'reader-binge', 'reader-casual', 'reader-genre'],
     })
     expect(api.saveNow).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('독자 반응 보는 중… 0초')).toBeTruthy()
+    expect(screen.getByText(/^독자 반응 보는 중…$/)).toHaveTextContent('독자 반응 보는 중… 0초')
     expect(screen.getByRole('button', { name: '취소' })).toBeTruthy()
   })
 })

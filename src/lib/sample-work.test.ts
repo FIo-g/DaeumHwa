@@ -17,7 +17,7 @@ function fixtureChapterBody(position: number): string {
 }
 
 describe('SAMPLE_WORK', () => {
-  it('copies chapters 1-3 and the facts of the planted eval set verbatim', () => {
+  it('copies chapter titles, manuscripts and facts from the planted eval set', () => {
     expect(SAMPLE_WORK.chapters).toHaveLength(3)
     SAMPLE_WORK.chapters.forEach((chapter, index) => {
       const position = index + 1
@@ -28,6 +28,19 @@ describe('SAMPLE_WORK', () => {
     expect(SAMPLE_WORK.facts).toEqual(
       fixture.facts.map((fact) => ({ entryKey: fact.entry, content: fact.content })),
     )
+  })
+
+  it('links only cards of the sample, inside its chapters', () => {
+    const keys = new Set(SAMPLE_WORK.entries.map((entry) => entry.key))
+    expect(SAMPLE_WORK.relations.length).toBeGreaterThanOrEqual(2)
+    for (const relation of SAMPLE_WORK.relations) {
+      expect(keys.has(relation.sourceKey)).toBe(true)
+      expect(keys.has(relation.targetKey)).toBe(true)
+      expect(relation.sourceKey).not.toBe(relation.targetKey)
+      for (const position of [relation.startPosition, relation.endPosition]) {
+        if (position !== null) expect(position).toBeLessThanOrEqual(SAMPLE_WORK.chapters.length)
+      }
+    }
   })
 
   it('quotes each planted error verbatim in its chapter', () => {

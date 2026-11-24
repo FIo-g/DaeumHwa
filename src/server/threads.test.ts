@@ -151,7 +151,7 @@ describe('addThreadEvent', () => {
     await expectAppError(
       addThreadEvent(db, actor, { threadId: thread.id, kind: 'developed', chapterId: ch2.id }),
       'VALIDATION',
-      '아직 심지 않은 떡밥입니다. 먼저 심은 회차를 기록하세요.',
+      '아직 심지 않은 떡밥이에요. 먼저 심은 회차를 기록하세요.',
     )
   })
 
@@ -166,7 +166,7 @@ describe('addThreadEvent', () => {
     await expectAppError(
       addThreadEvent(db, actor, { threadId: thread.id, kind: 'planted', chapterId: ch2.id }),
       'BAD_STATE',
-      '이미 심은 떡밥입니다.',
+      '이미 심은 떡밥이에요.',
     )
   })
 
@@ -204,7 +204,7 @@ describe('addThreadEvent', () => {
     await expectAppError(
       addThreadEvent(db, actor, { threadId: thread.id, kind: 'developed', chapterId: ch2.id }),
       'VALIDATION',
-      '발전 기록은 떡밥을 심은 회차(3화) 이후여야 합니다.',
+      '발전 기록은 떡밥을 심은 회차(3화) 이후여야 해요.',
     )
   })
 
@@ -219,7 +219,7 @@ describe('addThreadEvent', () => {
     await expectAppError(
       addThreadEvent(db, actor, { threadId: thread.id, kind: 'resolved', chapterId: ch3.id }),
       'VALIDATION',
-      '회수는 떡밥을 심은 회차(3화) 이후에만 기록할 수 있습니다.',
+      '회수는 떡밥을 심은 회차(3화) 이후에만 기록할 수 있어요.',
     )
   })
 
@@ -250,7 +250,7 @@ describe('addThreadEvent', () => {
     await expectAppError(
       addThreadEvent(db, actor, { threadId: thread.id, kind: 'developed', chapterId: ch5.id }),
       'BAD_STATE',
-      '이미 회수되었거나 폐기된 떡밥입니다.',
+      '이미 회수됐거나 폐기된 떡밥이에요.',
     )
     const note = await addThreadEvent(db, actor, {
       threadId: thread.id,

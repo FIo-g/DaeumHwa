@@ -73,12 +73,12 @@ describe('ExportButton', () => {
   it('shows the server error and does not download when the export fails', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json({ error: '소유자만 내보낼 수 있습니다.' }, { status: 403 })),
+      vi.fn(async () => Response.json({ error: '이 작업을 할 권한이 없어요.' }, { status: 403 })),
     )
     render(<ExportButton workId="work-1" title="테스트 작품" />)
     fireEvent.click(screen.getByRole('button', { name: '내보내기' }))
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('소유자만 내보낼 수 있습니다.'))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('이 작업을 할 권한이 없어요.'))
     expect(downloadedName).toBeNull()
   })
 })

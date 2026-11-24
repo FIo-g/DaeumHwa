@@ -23,7 +23,7 @@ describe('SampleBanner', () => {
     render(<SampleBanner demo workId="w1" chapterId="c3" chapterPosition={3} chapters={chapters} />)
 
     expect(screen.getByText('샘플 작품', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText(/설정 오류 3곳을 심어 두었습니다/)).toBeInTheDocument()
+    expect(screen.getByText(/설정 오류를 세 군데 숨겨 뒀어요/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '2화 점검하기' })).toHaveAttribute(
       'href',
       '/works/w1/chapters/c2?demo=1',

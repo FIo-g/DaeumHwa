@@ -1,9 +1,10 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { workMembers, works } from '@/db/schema'
+import { user, workMembers, works } from '@/db/schema'
 import type { Actor, Role, WorkRow, WorkSettings } from '@/db/types'
 import { AppError } from '@/lib/errors'
-import { requireWorkRole } from '@/server/access'
+import { requireWorkRole, workMemberRole, workMembershipScope } from '@/server/access'
+import { requireRegisteredUser } from '@/server/trial-access'
 
 export type CreateWorkInput = {
   title: string
@@ -27,7 +28,13 @@ function requireTitle(title: string): string {
 }
 
 /** Creates a work; the creator becomes its owner member in the same transaction. */
-export async function createWork(db: Db, actor: Actor, input: CreateWorkInput): Promise<WorkRow> {
+export async function createWork(
+  db: Db,
+  actor: Actor,
+  input: CreateWorkInput,
+  options?: { trialSample: true },
+): Promise<WorkRow> {
+  if (!options?.trialSample) await requireRegisteredUser(db, actor.userId)
   const title = requireTitle(input.title)
   return db.transaction(async (tx) => {
     const [work] = await tx
@@ -40,7 +47,11 @@ export async function createWork(db: Db, actor: Actor, input: CreateWorkInput): 
         synopsis: input.synopsis ?? '',
       })
       .returning()
-    await tx.insert(workMembers).values({ workId: work.id, userId: actor.userId, role: 'owner' })
+    await tx.insert(workMembers).values({
+      workId: work.id,
+      userId: actor.userId,
+      role: options?.trialSample ? 'editor' : 'owner',
+    })
     return work
   })
 }
@@ -55,12 +66,13 @@ export async function listMyWorks(
   actor: Actor,
   o?: { includeArchived?: boolean },
 ): Promise<(WorkRow & { role: Role })[]> {
-  const conditions = [eq(workMembers.userId, actor.userId)]
+  const conditions = [eq(workMembers.userId, actor.userId), workMembershipScope]
   if (!o?.includeArchived) conditions.push(eq(works.status, 'active'))
   const rows = await db
-    .select({ work: works, role: workMembers.role })
+    .select({ work: works, role: workMemberRole })
     .from(workMembers)
     .innerJoin(works, eq(works.id, workMembers.workId))
+    .innerJoin(user, eq(user.id, workMembers.userId))
     .where(and(...conditions))
     .orderBy(desc(works.updatedAt))
   return rows.map((r) => ({ ...r.work, role: r.role }))
@@ -74,7 +86,7 @@ export async function getWork(
 ): Promise<WorkRow & { role: Role }> {
   const { role } = await requireWorkRole(db, workId, actor.userId, 'viewer')
   const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1)
-  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
   return { ...work, role }
 }
 
@@ -88,7 +100,7 @@ export async function updateWork(
   await requireWorkRole(db, workId, actor.userId, 'owner')
   return db.transaction(async (tx) => {
     const [current] = await tx.select().from(works).where(eq(works.id, workId)).limit(1)
-    if (!current) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+    if (!current) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
     const values: Partial<typeof works.$inferInsert> = { updatedAt: new Date() }
     if (patch.title !== undefined) values.title = requireTitle(patch.title)
     if (patch.genre !== undefined) values.genre = patch.genre
@@ -115,6 +127,6 @@ export async function setWorkArchived(
     .set({ status: archived ? 'archived' : 'active', updatedAt: new Date() })
     .where(eq(works.id, workId))
     .returning()
-  if (!updated) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  if (!updated) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
   return updated
 }

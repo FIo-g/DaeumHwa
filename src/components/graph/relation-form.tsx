@@ -84,10 +84,10 @@ export function RelationForm({
       }
       const saved = relation
         ? await runAction(updateRelationAction({ relationId: relation.id, ...fields }), {
-            success: '관계를 고쳤습니다.',
+            success: '관계를 고쳤어요.',
           })
         : await runAction(createRelationAction({ workId, ...fields }), {
-            success: '관계를 추가했습니다.',
+            success: '관계를 추가했어요.',
           })
       if (saved) {
         router.refresh()
@@ -99,9 +99,9 @@ export function RelationForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
+    <form onSubmit={onSubmit} className="wg-graph-form flex min-w-0 flex-col gap-4">
+      <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Label htmlFor={`${ids}-source`}>첫 번째 카드</Label>
           <Select value={sourceId} onValueChange={setSourceId}>
             <SelectTrigger id={`${ids}-source`} className="w-full">
@@ -116,7 +116,7 @@ export function RelationForm({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Label htmlFor={`${ids}-target`}>두 번째 카드</Label>
           <Select value={targetId} onValueChange={setTargetId}>
             <SelectTrigger id={`${ids}-target`} className="w-full">
@@ -159,7 +159,7 @@ export function RelationForm({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex min-w-0 flex-col gap-1.5">
         <Label htmlFor={`${ids}-description`}>설명</Label>
         <Input
           id={`${ids}-description`}
@@ -169,12 +169,13 @@ export function RelationForm({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
+      <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Label htmlFor={`${ids}-start`}>시작 회차</Label>
           <Input
             id={`${ids}-start`}
             type="number"
+            className="font-mono"
             inputMode="numeric"
             min={1}
             max={10000}
@@ -183,11 +184,12 @@ export function RelationForm({
             onChange={(e) => setStart(e.target.value)}
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Label htmlFor={`${ids}-end`}>끝 회차</Label>
           <Input
             id={`${ids}-end`}
             type="number"
+            className="font-mono"
             inputMode="numeric"
             min={1}
             max={10000}
@@ -210,7 +212,7 @@ export function RelationForm({
       </div>
 
       {formError && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-ink">
           {formError}
         </p>
       )}

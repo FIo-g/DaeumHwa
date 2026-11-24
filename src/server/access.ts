@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, or, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import {
   authorDirectives,
@@ -17,12 +17,15 @@ import {
   styleCards,
   threadEvents,
   threads,
+  user,
   wikiEntries,
   workInvites,
   workMembers,
+  works,
 } from '@/db/schema'
 import type { Role } from '@/db/types'
 import { AppError } from '@/lib/errors'
+import { requireRegisteredUser } from '@/server/trial-access'
 
 export const ROLE_RANK: Record<Role, number> = { viewer: 0, commenter: 1, editor: 2, owner: 3 }
 
@@ -31,6 +34,10 @@ export function hasRole(role: Role, min: Role): boolean {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Trials can only access their own sample, including accounts provisioned with the old viewer role.
+export const workMembershipScope = or(eq(user.isAnonymous, false), eq(works.ownerId, user.id))
+export const workMemberRole = sql<Role>`case when ${user.isAnonymous} then 'editor' else ${workMembers.role} end`
 
 export type RowTable =
   | 'chapters'
@@ -60,9 +67,11 @@ export async function getMembership(
 ): Promise<{ role: Role } | null> {
   if (!UUID_RE.test(workId)) return null
   const [row] = await db
-    .select({ role: workMembers.role })
+    .select({ role: workMemberRole })
     .from(workMembers)
-    .where(and(eq(workMembers.workId, workId), eq(workMembers.userId, userId)))
+    .innerJoin(works, eq(works.id, workMembers.workId))
+    .innerJoin(user, eq(user.id, workMembers.userId))
+    .where(and(eq(workMembers.workId, workId), eq(workMembers.userId, userId), workMembershipScope))
     .limit(1)
   return row ? { role: row.role } : null
 }
@@ -78,9 +87,10 @@ export async function requireWorkRole(
   min: Role,
 ): Promise<{ role: Role }> {
   const membership = await getMembership(db, workId, userId)
-  if (!membership) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  if (!membership) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
   if (!hasRole(membership.role, min)) {
-    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없습니다.')
+    await requireRegisteredUser(db, userId)
+    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없어요.')
   }
   return membership
 }
@@ -242,6 +252,6 @@ async function findWorkId(db: Db, table: RowTable, id: string): Promise<string |
  */
 export async function requireRowWork(db: Db, table: RowTable, id: string): Promise<string> {
   const workId = UUID_RE.test(id) ? await findWorkId(db, table, id) : undefined
-  if (!workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return workId
 }

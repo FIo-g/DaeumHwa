@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
+import { ProofStrike } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
@@ -96,7 +97,7 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
     if (!fix) return
     setApplying(true)
     const applied = await runAction(applySceneFixAction({ workId, runId, token: fix.token }), {
-      success: '고친 장면으로 바꿨습니다.',
+      success: '고친 장면으로 바꿨어요.',
     })
     setApplying(false)
     // A failure keeps the preview open; the toast carries the server's reason.
@@ -122,7 +123,7 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
   }
 
   if (failed) {
-    return <p className="text-sm text-muted-foreground">점검을 하지 못했습니다.</p>
+    return <p className="text-sm text-muted-foreground">점검하지 못했어요.</p>
   }
 
   if (result === null) return null
@@ -134,13 +135,13 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
     if (lines.length === 0) {
       return (
         <div className="grid gap-2">
-          <p className="text-sm text-muted-foreground">고칠 곳을 찾지 못했습니다.</p>
+          <p className="text-sm text-muted-foreground">고칠 곳을 찾지 못했어요.</p>
           {result.notice && <p className="text-sm text-muted-foreground">{result.notice}</p>}
         </div>
       )
     }
     return (
-      <div className="grid gap-1 rounded-lg border p-3 text-sm">
+      <div className="wg-panels-form text-sm">
         <p className="font-medium">점검 결과</p>
         <ul className="grid gap-1 text-muted-foreground">
           {lines.map((line) => (
@@ -155,7 +156,7 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
   return (
     <section role="region" aria-label="고친 장면 미리 보기" className="grid gap-3">
       {lines.length > 0 && (
-        <div className="grid gap-1 rounded-lg border p-3 text-sm">
+        <div className="wg-panels-form text-sm">
           <p className="font-medium">점검 결과</p>
           <ul className="grid gap-1 text-muted-foreground">
             {lines.map((line) => (
@@ -169,27 +170,21 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
       )}
       <p className="text-sm font-medium">고친 장면 미리 보기</p>
       <p className="text-xs text-muted-foreground">
-        초록은 새 글, 빨강 취소선은 지워지는 글입니다.
+        표시한 부분은 새 글이에요. 지울 글에는 취소선을 그어요.
       </p>
-      <div className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg border bg-muted/30 p-3 text-sm leading-7">
+      <div className="b-ruled wg-panels-manuscript">
         {fix.parts.map((part, index) => {
           if (part.type === 'insert') {
             return (
-              <ins
-                key={index}
-                className="bg-emerald-100 text-emerald-900 no-underline dark:bg-emerald-950 dark:text-emerald-200"
-              >
+              <ins key={index} className="wg-panels-insertion">
                 {part.value}
               </ins>
             )
           }
           if (part.type === 'delete') {
             return (
-              <del
-                key={index}
-                className="bg-red-100 text-red-900 line-through decoration-red-700 dark:bg-red-950 dark:text-red-200"
-              >
-                {part.value}
+              <del key={index} className="no-underline">
+                <ProofStrike>{part.value}</ProofStrike>
               </del>
             )
           }
@@ -201,7 +196,7 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
         <Button onClick={() => void apply()} disabled={applying}>
           적용
         </Button>
-        <Button variant="outline" onClick={() => void discard()} disabled={applying}>
+        <Button variant="link" onClick={() => void discard()} disabled={applying}>
           버리기
         </Button>
       </div>

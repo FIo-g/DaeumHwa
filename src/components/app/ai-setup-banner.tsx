@@ -4,12 +4,9 @@ import { isAiConfigured } from '@/lib/ai-mode'
 export function AiSetupBanner() {
   if (isAiConfigured()) return null
   return (
-    <div
-      role="status"
-      className="border-b bg-amber-50 px-4 py-2 text-center text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
-    >
-      AI 키가 설정되지 않았습니다. ANTHROPIC_API_KEY 또는 OPENCODE_API_KEY를 설정하면 AI 기능을 쓸
-      수 있습니다.
+    <div role="status" className="wg-shell-notice">
+      AI 키가 설정되지 않았어요. <code className="wrap-anywhere">ANTHROPIC_API_KEY</code> 또는{' '}
+      <code className="wrap-anywhere">OPENCODE_API_KEY</code>를 설정해 주세요.
     </div>
   )
 }

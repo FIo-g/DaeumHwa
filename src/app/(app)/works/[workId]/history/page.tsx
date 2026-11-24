@@ -74,13 +74,13 @@ export default async function HistoryPage({
   ]
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="wg-history-page">
       <PageHeader
         title="변경 이력"
         actions={isOwner ? <ExportButton workId={workId} title={work.title} /> : undefined}
       />
 
-      <div className="flex flex-col gap-3">
+      <div className="wg-history-filters">
         <FilterLinks label="대상" options={targetOptions} />
         <FilterLinks label="제안자" options={proposerOptions} />
       </div>

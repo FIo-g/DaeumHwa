@@ -24,7 +24,7 @@ import { getSessionUser, requirePageUser, requireUser } from './session'
 
 const signedIn = {
   session: { id: 's1' },
-  user: { id: 'u1', name: '테스트', email: 't@test.local', image: null },
+  user: { id: 'u1', name: '테스트', email: 't@test.local', image: null, isAnonymous: false },
 }
 
 beforeEach(() => {
@@ -38,6 +38,19 @@ describe('getSessionUser', () => {
       id: 'u1',
       name: '테스트',
       email: 't@test.local',
+    })
+  })
+
+  it('includes the anonymous flag for a trial session', async () => {
+    mocks.getSession.mockResolvedValue({
+      ...signedIn,
+      user: { ...signedIn.user, isAnonymous: true },
+    })
+    await expect(getSessionUser()).resolves.toEqual({
+      id: 'u1',
+      name: '테스트',
+      email: 't@test.local',
+      isAnonymous: true,
     })
   })
 
@@ -69,7 +82,7 @@ describe('requireUser', () => {
     const error = await requireUser().catch((e: unknown) => e)
     expect(error).toBeInstanceOf(AppError)
     expect((error as AppError).code).toBe('UNAUTHENTICATED')
-    expect((error as AppError).message).toBe('로그인이 필요합니다.')
+    expect((error as AppError).message).toBe('로그인이 필요해요.')
   })
 })
 

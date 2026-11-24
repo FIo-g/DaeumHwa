@@ -1,15 +1,16 @@
 'use client'
 
-import { Download, Loader2Icon } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import type { ExportPayload } from '@/db/types'
 import { backupFileName } from '@/lib/backup'
 import { Button } from '@/components/ui/button'
+import { ScanLine } from '@/components/motion'
 import { getTextWorker } from '@/lib/client/worker-client'
 import { seoulToday } from '@/lib/dates'
 
-const FALLBACK_MESSAGE = '백업 파일을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'
+const FALLBACK_MESSAGE = '백업 파일을 만들지 못했어요. 잠시 후 다시 시도해 주세요.'
 
 type ExportButtonProps = {
   workId: string
@@ -55,16 +56,13 @@ export function ExportButton({ workId, title }: ExportButtonProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button variant="outline" onClick={exportWork} disabled={busy}>
-        {busy ? (
-          <Loader2Icon className="animate-spin" aria-hidden="true" />
-        ) : (
-          <Download aria-hidden="true" />
-        )}
+        <Download aria-hidden="true" strokeWidth={1.5} />
         내보내기
       </Button>
       {busy && (
-        <p role="status" className="text-sm text-muted-foreground">
+        <p role="status" className="grid gap-1 text-sm text-muted-ink">
           백업 파일 만드는 중…
+          <ScanLine />
         </p>
       )}
     </div>

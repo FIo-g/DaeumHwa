@@ -1,9 +1,8 @@
 'use client'
 
-import { PlusIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { PopButton } from '@/components/motion'
 import { runAction } from '@/lib/client/run-action'
 import { createChapterAction } from '@/server/actions/chapters'
 
@@ -16,7 +15,7 @@ export function NewChapterButton({ workId }: { workId: string }) {
     setPending(true)
     try {
       const chapter = await runAction(createChapterAction({ workId }), {
-        success: '새 회차를 만들었습니다.',
+        success: '새 회차를 만들었어요.',
       })
       if (chapter) router.refresh()
     } finally {
@@ -25,8 +24,8 @@ export function NewChapterButton({ workId }: { workId: string }) {
   }
 
   return (
-    <Button onClick={onClick} disabled={pending}>
-      <PlusIcon aria-hidden="true" />새 회차
-    </Button>
+    <PopButton onClick={onClick} pending={pending} pendingLabel="만드는 중…">
+      새 회차
+    </PopButton>
   )
 }

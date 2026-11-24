@@ -1,0 +1,601 @@
+@layer components {
+  .wg-threads-toolbar,
+  .wg-threads-tools,
+  .wg-threads-dock {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: var(--b-s3) var(--b-s5);
+  }
+
+  .wg-threads-tools {
+    flex: 0 1 34rem;
+    min-inline-size: 0;
+    align-items: center;
+  }
+
+  .wg-threads-range-field {
+    flex: 1 1 12rem;
+    min-inline-size: 0;
+  }
+
+  .wg-threads-range {
+    position: relative;
+  }
+
+  .wg-threads-range-rules {
+    position: absolute;
+    inset: 50% 0 auto;
+    inline-size: 100%;
+    block-size: var(--b-s3);
+    border-inline-end: var(--b-line) solid var(--b-grid);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .wg-threads-range input {
+    position: relative;
+    display: block;
+    inline-size: 100%;
+    block-size: 44px;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  .wg-threads-range input:disabled {
+    cursor: default;
+  }
+
+  .wg-threads-range input:focus-visible {
+    outline: var(--b-rule) solid var(--b-ink);
+    outline-offset: -2px;
+  }
+
+  .wg-threads-range input::-webkit-slider-runnable-track {
+    block-size: 1px;
+    background: var(--b-grid);
+  }
+
+  .wg-threads-range input::-moz-range-track {
+    block-size: 1px;
+    background: var(--b-grid);
+  }
+
+  .wg-threads-range input::-webkit-slider-thumb {
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: calc((1px - 1rem) / 2);
+    border: var(--b-line) solid var(--b-ink);
+    appearance: none;
+    background: var(--b-ink);
+  }
+
+  .wg-threads-range input::-moz-range-thumb {
+    inline-size: 1rem;
+    block-size: 1rem;
+    border: var(--b-line) solid var(--b-ink);
+    border-radius: 0;
+    background: var(--b-ink);
+  }
+
+  .wg-threads-ledger {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--b-s3);
+  }
+
+  .wg-threads-dock {
+    align-items: center;
+  }
+
+  .wg-threads-counts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--b-s1) var(--b-s3);
+    font-size: var(--b-t-label);
+  }
+
+  .wg-threads-counts strong {
+    padding: var(--b-s1) var(--b-s2);
+    border-inline: var(--b-line) solid var(--b-grid);
+    font-weight: 500;
+  }
+
+  .wg-threads-counts > * {
+    white-space: nowrap;
+  }
+
+  .wg-threads-filters {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    border-block: var(--b-line) solid var(--b-grid);
+    border-inline-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-threads-filters button {
+    min-block-size: 44px;
+    padding-inline: var(--b-s2);
+    border-inline-start: var(--b-line) solid var(--b-grid);
+    font-size: var(--b-t-label);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .wg-threads-filters button:is(:hover, :focus-visible, [aria-pressed='true']),
+  .wg-threads-tick:is(:hover, :focus-visible, [aria-pressed='true'], [data-related='true']) {
+    color: var(--b-paper);
+    background: var(--b-ink);
+  }
+
+  .wg-threads-filters-sheet {
+    display: none;
+  }
+
+  .wg-threads-scroll {
+    container-type: inline-size;
+    min-inline-size: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .wg-threads-timeline {
+    --wg-thread-seed-size: var(--wg-threads-seed-size);
+    --wg-thread-target-size: var(--wg-threads-target-size);
+    --wg-threads-label-min: 10.5rem;
+    --wg-threads-label-width: clamp(var(--wg-threads-label-min), 23cqi, 16rem);
+    --wg-threads-min-cell: 3rem;
+    --wg-threads-plot-width: calc(var(--wg-threads-min-cell) * var(--wg-threads-chapters));
+    --wg-threads-now-height: calc(var(--b-t-label) + var(--b-s2));
+    --wg-threads-columns: repeat(var(--wg-threads-chapters), minmax(0, 1fr));
+    position: relative;
+    min-inline-size: calc(var(--wg-threads-label-width) + var(--wg-threads-plot-width));
+    display: grid;
+    grid-template-columns: var(--wg-threads-label-width) minmax(var(--wg-threads-plot-width), 1fr);
+  }
+
+  .wg-threads-ledger-rules {
+    position: absolute;
+    z-index: 1;
+    grid-column: 2;
+    inset: var(--wg-threads-now-height) 0 0;
+    display: grid;
+    grid-template-columns: var(--wg-threads-columns);
+    pointer-events: none;
+  }
+
+  .wg-threads-ledger-rules > span {
+    border-inline-start: var(--b-line) solid var(--b-grid);
+    min-inline-size: 0;
+  }
+
+  .wg-threads-ledger-rules > span:last-child {
+    border-inline-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-threads-ledger-rules > [data-highlight-start='true'] {
+    border-inline-start-width: var(--b-rule);
+  }
+
+  .wg-threads-ledger-rules > [data-highlight-end='true']:last-child {
+    border-inline-end-width: var(--b-rule);
+  }
+
+  .wg-threads-axis,
+  .wg-threads-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    min-inline-size: 0;
+  }
+
+  .wg-threads-axis {
+    align-items: stretch;
+  }
+
+  .wg-threads-axis-label,
+  .wg-threads-row-label {
+    position: sticky;
+    z-index: 2;
+    inset-inline-start: 0;
+    min-inline-size: 0;
+    color: var(--b-ink);
+    background: var(--b-paper);
+  }
+
+  .wg-threads-axis-label {
+    display: grid;
+    align-items: end;
+    padding: 0 var(--b-s3) var(--b-s3);
+    border-block-end: var(--b-line) solid var(--b-grid);
+    font-size: var(--b-t-label);
+    font-weight: 500;
+  }
+
+  .wg-threads-ticks {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--wg-threads-columns);
+    padding-block-start: var(--wg-threads-now-height);
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-threads-tick {
+    min-block-size: 44px;
+    padding-inline: var(--b-s1);
+    font-size: var(--b-t-label);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .wg-threads-tick[data-future='true'] .font-mono {
+    color: var(--b-muted);
+  }
+
+  .wg-threads-tick[data-future='true']:is(
+      :hover,
+      :focus-visible,
+      [aria-pressed='true'],
+      [data-related='true']
+    )
+    .font-mono {
+    color: inherit;
+    text-decoration: underline dotted;
+  }
+
+  .wg-threads-axis-rule {
+    position: absolute;
+    inset: var(--wg-threads-now-height) 0 auto;
+    border-block-start: var(--b-line) solid var(--b-grid);
+    pointer-events: none;
+  }
+
+  .wg-threads-axis-guide {
+    position: absolute;
+    inset-inline-start: 0;
+    inline-size: calc(100% / var(--wg-threads-chapters));
+    transform: translateX(calc(100% * var(--wg-threads-current)));
+    transition: transform var(--b-step) var(--b-out);
+    pointer-events: none;
+    inset-block-start: 0;
+    display: grid;
+    block-size: var(--wg-threads-now-height);
+    place-items: start center;
+    font: 500 var(--b-t-label) / 1 var(--b-font-body);
+  }
+
+  .wg-threads-workspace:has(.wg-threads-range input:active) .wg-threads-axis-guide {
+    transition: none;
+  }
+
+  .wg-threads-row {
+    position: relative;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .wg-threads-row-label {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+    align-content: center;
+    align-items: baseline;
+    gap: var(--b-s1) var(--b-s1);
+    padding: var(--b-s3) var(--b-s3) var(--b-s3) 0;
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-threads-row-label > :nth-child(n + 4) {
+    grid-column: 2 / -1;
+  }
+
+  .wg-threads-row-label::after,
+  .wg-threads-plot::after {
+    position: absolute;
+    inset: auto 0 0;
+    border-block-end: var(--b-line) solid var(--b-grid);
+    opacity: 0;
+    content: '';
+    pointer-events: none;
+  }
+
+  .wg-threads-row-number {
+    text-align: center;
+    font-size: var(--b-t-label);
+    opacity: 0;
+  }
+
+  .wg-threads-row-arrow {
+    align-self: center;
+  }
+
+  .wg-threads-row-label::after,
+  .wg-threads-plot::after,
+  .wg-threads-row-number {
+    transition: opacity var(--b-quick) var(--b-out);
+  }
+
+  .wg-threads-row:is(:hover, :focus-visible, [data-active='true']) .wg-threads-row-number {
+    opacity: 1;
+  }
+
+  .wg-threads-row:is(:hover, :focus-visible, [data-active='true']) .wg-threads-row-label::after,
+  .wg-threads-row:is(:hover, :focus-visible, [data-active='true']) .wg-threads-plot::after {
+    opacity: 1;
+  }
+
+  .wg-threads-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--b-s1) var(--b-s2);
+    color: var(--b-muted);
+    font-size: var(--b-t-label);
+  }
+
+  .wg-threads-row-meta:empty {
+    display: none;
+  }
+
+  .wg-threads-state {
+    padding-inline: var(--b-s1);
+    border-inline: var(--b-line) solid var(--b-grid);
+    color: var(--b-ink);
+    font-weight: 500;
+  }
+
+  .wg-threads-overdue,
+  .wg-threads-note {
+    color: var(--b-ink);
+    font-size: var(--b-t-label);
+  }
+
+  .wg-threads-overdue {
+    font-weight: 500;
+  }
+
+  .wg-threads-plot {
+    position: relative;
+    display: block;
+    block-size: 100%;
+    min-block-size: 2.75rem;
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-threads-line {
+    position: absolute;
+    inset-block-start: 50%;
+    border-block-start: var(--b-line) solid var(--b-ink);
+    transform: translateY(-50%);
+  }
+
+  .wg-threads-plot[data-planted='false'] .wg-threads-line {
+    border-block-start-style: dashed;
+  }
+
+  .wg-threads-row:is(:hover, :focus-visible, [data-active='true']) .wg-threads-line {
+    border-block-start-width: var(--b-rule);
+  }
+
+  .wg-threads-seed,
+  .wg-threads-target,
+  .wg-threads-dashes {
+    position: relative;
+    flex-shrink: 0;
+    display: inline-block;
+    color: var(--b-ink);
+  }
+
+  .wg-threads-seed {
+    inline-size: var(--wg-threads-seed-size);
+    block-size: var(--wg-threads-seed-size);
+    border-radius: 50%;
+    background: var(--b-ink);
+  }
+
+  .wg-threads-target {
+    inline-size: var(--wg-threads-target-size);
+    block-size: var(--wg-threads-target-size);
+    border: var(--b-line) solid var(--b-ink);
+    border-radius: 50%;
+    background: var(--b-paper);
+  }
+
+  .wg-threads-target::before {
+    position: absolute;
+    inset: var(--b-rule);
+    border: var(--b-line) solid var(--b-ink);
+    border-radius: 50%;
+    content: '';
+  }
+
+  .wg-threads-target[data-resolved='true']::before {
+    background: var(--b-ink);
+  }
+
+  .wg-threads-plot :is(.wg-threads-seed, .wg-threads-target, .wg-threads-development) {
+    position: absolute;
+    inset-block-start: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .wg-threads-plot .wg-threads-development {
+    block-size: var(--b-s3);
+    transform: translate(-50%, -80%);
+    border-inline-start: var(--b-line) solid var(--b-ink);
+  }
+
+  .wg-threads-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: end;
+    gap: var(--b-s2) var(--b-s4);
+  }
+
+  .wg-threads-legend li {
+    display: flex;
+    align-items: center;
+    gap: var(--b-s2);
+  }
+
+  .wg-threads-dashes {
+    inline-size: var(--b-s5);
+    border-block-start: var(--b-line) dashed var(--b-ink);
+  }
+
+  .wg-threads-scroll:focus-visible,
+  .wg-threads-row:focus-visible {
+    outline: var(--b-rule) solid var(--b-ink);
+    outline-offset: -2px;
+  }
+
+  .wg-threads-filters button:focus-visible,
+  .wg-threads-tick:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .wg-threads-info dd,
+  .wg-threads-info dt {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    padding-block: var(--b-s2);
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-threads-record {
+    padding-block: var(--b-s2);
+    border-block-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-threads-record-form,
+  .wg-threads-error {
+    padding-block-start: var(--b-s3);
+    border-block-start: var(--b-rule) solid var(--b-grid);
+  }
+
+  @media (max-width: 767px) {
+    .wg-threads-tools {
+      flex: 1 1 100%;
+      gap: var(--b-s2) var(--b-s3);
+    }
+
+    .wg-threads-filters-inline {
+      display: none;
+    }
+
+    .wg-threads-filters-sheet {
+      display: block;
+    }
+
+    .wg-threads-filters button {
+      padding-inline: var(--b-s1);
+      white-space: normal;
+    }
+
+    .wg-threads-timeline {
+      --wg-threads-label-min: min(7.75rem, 38cqi);
+      --wg-threads-label-width: clamp(var(--wg-threads-label-min), 35cqi, 10.5rem);
+      /* The tick label and its horizontal padding set the narrow track minimum. */
+      --wg-threads-min-cell: calc(
+        var(--b-t-label) + var(--wg-threads-tick-digits) * 1ch + 2 * var(--b-s1) + var(--b-line)
+      );
+    }
+
+    .wg-threads-row-label {
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: var(--b-s2) var(--b-s2) var(--b-s2) 0;
+      padding-block-start: var(--b-t-label);
+    }
+
+    .wg-threads-row-label > :nth-child(n + 4) {
+      grid-column: 1 / -1;
+    }
+
+    .wg-threads-row-number {
+      position: absolute;
+      inset: 0 var(--b-s2) auto auto;
+      line-height: 1;
+      pointer-events: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-threads-timeline[data-scene-finished='false'] .wg-threads-axis-rule {
+      animation:
+        wg-threads-draw var(--b-step) var(--b-out) both,
+        wg-threads-scene var(--b-arrival) var(--b-out) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-threads-timeline[data-scene-finished='false'] .wg-threads-row {
+      --wg-threads-draw-delay: calc(var(--b-step) + var(--wg-threads-order) * var(--b-stagger));
+    }
+
+    .wg-threads-timeline[data-scene-finished='false'] .wg-threads-line {
+      animation: wg-threads-draw var(--b-draw) var(--b-out) var(--wg-threads-draw-delay) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-threads-timeline[data-scene-finished='false'] [data-backward='true'] .wg-threads-line {
+      animation-name: wg-threads-draw-back;
+    }
+
+    .wg-threads-timeline[data-scene-finished='false'] .wg-threads-plot .wg-threads-seed {
+      animation: wg-threads-mark var(--b-quick) var(--b-out) var(--wg-threads-draw-delay) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+
+    .wg-threads-timeline[data-scene-finished='false']
+      .wg-threads-plot
+      :is(.wg-threads-target, .wg-threads-development) {
+      animation: wg-threads-mark var(--b-quick) var(--b-out)
+        calc(var(--wg-threads-draw-delay) + var(--b-draw) - var(--b-quick)) both;
+      animation-play-state: var(--wg-entry-play, running);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wg-threads-timeline *,
+    .wg-threads-timeline *::after {
+      transition: none;
+    }
+  }
+
+  @keyframes wg-threads-draw {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-threads-draw-back {
+    from {
+      clip-path: inset(0 0 0 100%);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-threads-mark {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes wg-threads-scene {
+    from,
+    to {
+      opacity: 1;
+    }
+  }
+}

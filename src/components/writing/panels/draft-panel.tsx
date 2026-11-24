@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
+import { ScanLine } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -41,14 +42,14 @@ type DraftPanelProps = {
 const TARGET_MIN = 500
 const TARGET_MAX = 20000
 const INSTRUCTION_PLACEHOLDER =
-  '무슨 일이 일어나야 하나요? 비워 두면 위키와 지난 화를 보고 계획을 제안해요.'
+  '무슨 일이 일어나야 하나요? 지시 없이도 위키와 앞 회차를 바탕으로 계획을 받을 수 있어요.'
 const NO_EDITS: PlanEdits = { revisions: 0, removed: 0, moved: 0, textEdits: 0 }
 // Shown while the stream is quiet for this long after the first text: the scenes are being expanded.
 const FILLING_NOTE_MS = 3000
 const FILLING_NOTE = '분량을 채우는 중'
 const FINDINGS_TITLE = '요청과 다른 곳'
 const USAGE_NOTICE =
-  '초안 품질을 높이려고 초안을 쓴 횟수와 고친 글자 비율 같은 숫자만 셉니다. 원고 내용은 모으지 않습니다.'
+  '초안 품질을 높이려고 작성 횟수와 수정한 글자 비율을 세어요. 원고 내용은 모으지 않아요.'
 
 /** One line per finding of a draft: which request it breaks, and where. */
 function findingLine(finding: DirectiveFinding, directive: DirectiveForPrompt | undefined): string {
@@ -56,7 +57,7 @@ function findingLine(finding: DirectiveFinding, directive: DirectiveForPrompt | 
   if (finding.kind === 'speech') {
     return `${directive?.entryName ?? '인물'}의 말투가 요청과 다른 대사 ${finding.count}곳`
   }
-  return `분량이 요청한 ${directive?.targetChars ?? 0}자와 다릅니다`
+  return `분량이 요청한 ${directive?.targetChars ?? 0}자와 달라요`
 }
 
 /** The findings of a draft under it. Renders nothing without findings. */
@@ -69,7 +70,7 @@ export function DirectiveFindingsView({
 }) {
   if (findings.length === 0) return null
   return (
-    <div className="grid gap-1 rounded-lg border p-3 text-sm">
+    <div className="wg-panels-form text-sm">
       <p className="font-medium">{FINDINGS_TITLE}</p>
       <ul className="grid gap-1 text-muted-foreground">
         {findings.map((finding) => (
@@ -257,7 +258,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       })
       if (!response.ok || !response.body) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null
-        toast.error(payload?.error ?? '초안을 쓰지 못했습니다.')
+        toast.error(payload?.error ?? '초안을 쓰지 못했어요.')
         setDraft(null)
         return false
       }
@@ -306,7 +307,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       }
       return true
     } catch {
-      if (!signal.aborted) toast.error('초안 작성이 중간에 끊겼습니다. 다시 시도해 주세요.')
+      if (!signal.aborted) toast.error('초안 작성이 중간에 끊겼어요. 다시 시도해 주세요.')
       return false
     }
   }
@@ -433,7 +434,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         priorChars: current.length,
       })
     }
-    toast.success('원고 끝에 붙였습니다. 저장은 자동으로 됩니다.')
+    toast.success('원고 끝에 붙였어요. 자동으로 저장해요.')
   }
 
   async function createChapter() {
@@ -441,7 +442,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
     setCreating(true)
     await api.saveNow()
     const chapter = await runAction(createChapterFromDraftAction({ workId: data.workId, runId }), {
-      success: '초안으로 새 회차를 만들었습니다.',
+      success: '초안으로 새 회차를 만들었어요.',
     })
     setCreating(false)
     if (chapter) router.push(`/works/${data.workId}/chapters/${chapter.id}`)
@@ -460,7 +461,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       : null
 
   return (
-    <section aria-label="AI 초안" className="grid gap-4">
+    <section aria-label="AI 초안" className="wg-panels-section">
+      <h2 className="wg-panels-heading">AI 초안</h2>
       <div className="grid gap-2">
         <Label htmlFor="draft-instructions">무슨 일이 일어나야 하나요?</Label>
         {activeRequests !== null && activeRequests > 0 && (
@@ -506,6 +508,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         <Label htmlFor="draft-target">목표 분량 (자)</Label>
         <Input
           id="draft-target"
+          className="font-mono"
           type="number"
           inputMode="numeric"
           min={TARGET_MIN}
@@ -553,14 +556,16 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
 
       <div className="flex flex-wrap gap-2">
         {streaming ? (
-          <AiRunStatus label="쓰는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+          <div className="w-full">
+            <AiRunStatus label="쓰는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+          </div>
         ) : (
           <>
             <Button onClick={() => void plan()} disabled={planning}>
               계획 세우기
             </Button>
             <Button
-              variant="outline"
+              variant="link"
               onClick={() => void write(false)}
               disabled={instructions.trim() === '' || planning}
             >
@@ -570,6 +575,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         )}
       </div>
 
+      <ScanLine active={planning && !streaming} />
+
       <p className="text-xs text-muted-foreground">{USAGE_NOTICE}</p>
 
       {draft !== null && (
@@ -578,30 +585,28 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
             role="region"
             aria-label="AI 초안 미리보기"
             aria-live="polite"
-            className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg border bg-muted/30 p-3 text-sm leading-7"
+            className="b-ruled wg-panels-manuscript"
           >
-            {draft === '' ? '초안을 기다리는 중입니다.' : draft}
+            {draft === '' ? '초안을 기다리는 중이에요.' : draft}
           </div>
           {filling && <p className="text-xs text-muted-foreground">{FILLING_NOTE}</p>}
-          <p className="text-xs text-muted-foreground">
-            AI 초안은 작가가 고치고 저장해야 원고가 됩니다.
-          </p>
-          {stopped && <p className="text-sm text-muted-foreground">중간에 멈춘 초안입니다.</p>}
+          <p className="text-xs text-muted-foreground">AI 초안은 직접 고쳐서 저장할 수 있어요.</p>
+          {stopped && <p className="text-sm text-muted-foreground">중간에 멈춘 초안이에요.</p>}
           {findings && (
             <DirectiveFindingsView findings={findings.findings} directives={findings.directives} />
           )}
           {finished && (
             <div className="flex flex-wrap gap-2">
               <Button
-                variant="outline"
+                variant="link"
                 onClick={appendToChapter}
                 disabled={appended || refineOpen || checkOpen}
               >
-                {appended ? '원고 끝에 붙였습니다' : '현재 원고 끝에 붙이기'}
+                {appended ? '원고 끝에 붙였어요' : '현재 원고 끝에 붙이기'}
               </Button>
               {complete && runId && (
                 <Button
-                  variant="outline"
+                  variant="link"
                   onClick={() => void createChapter()}
                   disabled={creating || refineOpen || checkOpen}
                 >

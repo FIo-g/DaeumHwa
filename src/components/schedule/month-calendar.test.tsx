@@ -75,7 +75,10 @@ describe('MonthCalendar', () => {
     )
     expect(within(cellOf(container, '2026-10-05')).getByText('3화 재회')).toBeInTheDocument()
     const empty = within(cellOf(container, '2026-10-06')).getByText('빈 연재일')
-    expect(empty.className).toContain('text-red')
+    expect(empty.previousElementSibling).toHaveAttribute('data-mark', 'ring')
+    expect(
+      cellOf(container, '2026-10-05').querySelector('[data-mark="square"]'),
+    ).toBeInTheDocument()
   })
 
   it('marks every hiatus day with 휴재 and leaves other days alone', () => {
@@ -121,7 +124,7 @@ describe('MonthCalendar', () => {
     )
     const today = cellOf(container, '2026-10-16')
     expect(today).toHaveAttribute('aria-current', 'date')
-    expect(today.className).toContain('outline-2')
+    expect(today).toHaveClass('wg-schedule-day')
     expect(cellOf(container, '2026-10-15')).not.toHaveAttribute('aria-current')
   })
 
@@ -140,6 +143,33 @@ describe('MonthCalendar', () => {
     expect(onMonthChange).toHaveBeenLastCalledWith('2026-11')
     fireEvent.click(screen.getByRole('button', { name: '이전 달' }))
     expect(onMonthChange).toHaveBeenLastCalledWith('2026-09')
+  })
+
+  it('moves focus by date and opens the full list of items when a day is selected', () => {
+    const { container } = render(
+      <MonthCalendar
+        month="2026-10"
+        today="2026-10-19"
+        slots={[]}
+        items={[...items, { ...items[1], id: 'd3', title: '두 번째 마감' }]}
+        onMonthChange={() => {}}
+      />,
+    )
+    const today = within(cellOf(container, '2026-10-19')).getByRole('button')
+    const nextDay = within(cellOf(container, '2026-10-20')).getByRole('button')
+    expect(today).toHaveAttribute('tabindex', '0')
+    expect(nextDay).toHaveAttribute('tabindex', '-1')
+    expect(within(nextDay).getByText('+1')).toBeInTheDocument()
+
+    fireEvent.keyDown(today, { key: 'ArrowRight' })
+    expect(nextDay).toHaveFocus()
+    fireEvent.click(nextDay)
+
+    expect(nextDay).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('두 번째 마감')).toBeVisible()
+    fireEvent.click(nextDay)
+    expect(nextDay).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('두 번째 마감')).not.toBeInTheDocument()
   })
 })
 

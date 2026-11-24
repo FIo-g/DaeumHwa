@@ -47,7 +47,7 @@ describe('useAiRun', () => {
     await expect(pending).resolves.toBeNull()
     expect(seen?.aborted).toBe(true)
     expect(result.current.running).toBe(false)
-    expect(toast).toHaveBeenCalledWith('취소했습니다.')
+    expect(toast).toHaveBeenCalledWith('취소했어요.')
   })
 
   it('aborts the signal given to fn on unmount without a cancel toast', async () => {

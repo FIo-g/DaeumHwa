@@ -1,0 +1,275 @@
+/* Manuscript-paper theme: settings. Class prefix: wg-settings- */
+@layer components {
+  .wg-settings-panel.wg-ui-lines {
+    container-type: inline-size;
+    border-block-end: var(--b-line) solid var(--b-grid);
+    animation: none;
+  }
+
+  .wg-settings-panel[data-ending-style] {
+    display: none;
+  }
+
+  .wg-settings-fold {
+    --wg-settings-fold-ink: var(--b-grid);
+    --wg-settings-fold-delay: calc(
+      5 * var(--b-cell) + var(--wg-settings-section-index, 0) * var(--b-stagger)
+    );
+    position: relative;
+    padding-block: var(--b-s4) var(--b-s5);
+  }
+
+  .wg-settings-fold:nth-child(2) {
+    --wg-settings-section-index: 1;
+  }
+
+  .wg-settings-fold:nth-child(3) {
+    --wg-settings-section-index: 2;
+  }
+
+  .wg-settings-fold:nth-child(4) {
+    --wg-settings-section-index: 3;
+  }
+
+  .wg-settings-fold[data-danger='true'] {
+    --wg-settings-fold-ink: var(--b-ink);
+  }
+
+  .wg-settings-fold::before {
+    position: absolute;
+    inset: 0 0 auto;
+    border-block-start: var(--b-rule) solid var(--wg-settings-fold-ink);
+    content: '';
+    pointer-events: none;
+    transform-origin: left;
+  }
+
+  .wg-settings-section {
+    display: grid;
+    grid-template-columns: minmax(0, clamp(10rem, 22%, 16rem)) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: clamp(var(--b-s5), 4vw, var(--b-s8));
+  }
+
+  .wg-settings-section > .wg-disclosure-trigger {
+    z-index: 1;
+    grid-area: 1 / 1;
+    align-self: start;
+    border: 0;
+    font-family: var(--b-font-title);
+    font-size: var(--b-t-subhead);
+    font-weight: 700;
+  }
+
+  .wg-settings-section .wg-disclosure-rule {
+    inset: auto 0 0;
+    border-color: var(--wg-settings-fold-ink);
+  }
+
+  .wg-settings-section > .wg-disclosure-region,
+  .wg-settings-section > .wg-disclosure-region > .wg-disclosure-content {
+    grid-area: 1 / 1 / -1 / -1;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    min-inline-size: 0;
+  }
+
+  .wg-settings-section > .wg-disclosure-region[data-open='true'],
+  .wg-settings-section > .wg-disclosure-region > .wg-disclosure-content {
+    display: grid;
+  }
+
+  .wg-settings-section > .wg-disclosure-region > .wg-disclosure-content {
+    padding: 0;
+    animation: none;
+  }
+
+  .wg-settings-lead {
+    display: grid;
+    grid-area: 2 / 1;
+    align-content: start;
+    gap: var(--b-s1);
+    color: var(--b-muted);
+    font-size: var(--b-t-label);
+    line-height: 1.65;
+  }
+
+  .wg-settings-lead > h2 {
+    color: var(--b-ink);
+    font-family: var(--b-font-title);
+    font-weight: 700;
+  }
+
+  .wg-settings-body {
+    grid-area: 1 / 2 / -1 / -1;
+    min-inline-size: 0;
+    padding-block-start: var(--b-s2);
+  }
+
+  .wg-settings-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--b-s5) var(--b-s6);
+  }
+
+  .wg-settings-field {
+    display: grid;
+    align-content: start;
+    gap: var(--b-s1);
+    min-inline-size: 0;
+  }
+
+  .wg-settings-field-wide,
+  .wg-settings-save {
+    grid-column: 1 / -1;
+  }
+
+  .wg-settings-logline.wg-ui-textarea {
+    resize: none;
+    background-image: none;
+    line-height: 1.5;
+  }
+
+  .wg-settings-save {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .wg-settings-save-cell {
+    display: grid;
+    place-items: center;
+    inline-size: 2.75rem;
+    border: var(--b-line) solid var(--b-grid);
+    border-inline-end: 0;
+  }
+
+  .wg-settings-save-cell > svg {
+    inline-size: 1.25rem;
+    stroke: var(--b-ink);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .wg-settings-list {
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-settings-row.b-row {
+    padding-inline-end: var(--b-s1);
+    cursor: default;
+  }
+
+  .wg-settings-row.b-row::before {
+    border-color: var(--b-ink);
+  }
+
+  .wg-settings-record.b-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--b-s3);
+  }
+
+  .wg-settings-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--b-s2);
+  }
+
+  .wg-settings-role {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.25rem;
+    padding-inline: var(--b-s3);
+    border-inline: var(--b-line) solid var(--b-grid);
+    font-size: var(--b-t-label);
+  }
+
+  .wg-settings-section:has(.wg-settings-form) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+  }
+
+  .wg-settings-section:has(.wg-settings-form) .wg-settings-body {
+    grid-area: 3 / 1;
+  }
+
+  @container (width < 41rem) {
+    .wg-settings-section {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto auto auto;
+    }
+
+    .wg-settings-body {
+      grid-area: 3 / 1;
+    }
+  }
+
+  @container (width < 30rem) {
+    .wg-settings-form,
+    .wg-settings-record.b-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-settings-page:has(.wg-shell-title) .wg-settings-fold::before {
+      animation: wg-settings-fold-line var(--b-quick) var(--b-out) var(--wg-settings-fold-delay)
+        backwards;
+    }
+
+    .wg-settings-field:nth-child(2) {
+      --wg-settings-line-index: 1;
+    }
+
+    .wg-settings-field:nth-child(3) {
+      --wg-settings-line-index: 2;
+    }
+
+    .wg-settings-field:nth-child(4) {
+      --wg-settings-line-index: 3;
+    }
+
+    .wg-settings-field:nth-child(5),
+    .wg-settings-field:nth-child(6) {
+      --wg-settings-line-index: 4;
+    }
+
+    .wg-settings-page:has(.wg-shell-title) :is(.wg-settings-lead, .wg-settings-write) {
+      animation: wg-settings-write-line var(--b-quick) steps(5, jump-none)
+        calc(
+          var(--wg-settings-fold-delay) + var(--b-quick) + var(--wg-settings-line-index, 0) *
+            var(--b-cell)
+        )
+        backwards;
+    }
+
+    .wg-settings-save-cell path {
+      stroke-dasharray: 1;
+      animation: wg-settings-save-mark var(--b-draw) var(--b-out) backwards;
+    }
+  }
+
+  @keyframes wg-settings-fold-line {
+    from {
+      transform: scaleX(0);
+    }
+  }
+
+  @keyframes wg-settings-write-line {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-settings-save-mark {
+    from {
+      stroke-dashoffset: 1;
+    }
+  }
+}

@@ -37,7 +37,9 @@ import {
   locateQuote,
   sentenceAt,
 } from '@/lib/korean/sentences'
+import { isTrialCheckChapter, TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { requireRowWork, requireWorkRole } from '@/server/access'
+import { isTrialUser, requireRegisteredUser } from '@/server/trial-access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
 import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { listNamingRules } from '@/server/naming'
@@ -230,12 +232,21 @@ async function loadEditableChapter(
   db: Db,
   actor: Actor,
   chapterId: string,
+  allowTrialCheck = false,
 ): Promise<{ chapter: ChapterRow; workId: string }> {
   const workId = await requireRowWork(db, 'chapters', chapterId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
+  if (!allowTrialCheck) await requireRegisteredUser(db, actor.userId)
   const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1)
   if (!chapter || chapter.archivedAt !== null) {
-    throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
+  }
+  if (
+    allowTrialCheck &&
+    !isTrialCheckChapter(chapter.position) &&
+    (await isTrialUser(db, actor.userId))
+  ) {
+    throw new AppError('FORBIDDEN', TRIAL_SIGNUP_MESSAGE)
   }
   return { chapter, workId }
 }
@@ -274,7 +285,7 @@ export async function runChapterCheck(
   client?: AiClient,
   signal?: AbortSignal,
 ): Promise<ChapterCheckResult> {
-  const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId)
+  const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId, true)
   const text = chapter.body
   // Stops the sibling call when the other one fails. The caller's cancel stops both.
   const sibling = new AbortController()
@@ -282,6 +293,7 @@ export async function runChapterCheck(
     userId: actor.userId,
     workId,
     chapterId: chapter.id,
+    trialCheck: true as const,
     signal: signal ? AbortSignal.any([signal, sibling.signal]) : sibling.signal,
   }
 
@@ -547,7 +559,7 @@ export async function runProofread(
   if (input.useAi && text.length > MAX_PROOFREAD_AI_CHARS) {
     throw new AppError(
       'VALIDATION',
-      `교정할 원고가 너무 깁니다. ${MAX_PROOFREAD_AI_CHARS / 10_000}만 자 이하로 나누어 교정해 주세요.`,
+      `교정할 원고가 너무 길어요. ${MAX_PROOFREAD_AI_CHARS / 10_000}만 자 이하로 나누어 교정해 주세요.`,
     )
   }
 
