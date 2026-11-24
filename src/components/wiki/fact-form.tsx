@@ -192,6 +192,7 @@ function FactFormFields({
         <Label htmlFor="fact-content">사실 내용</Label>
         <Textarea
           id="fact-content"
+          className="b-manuscript"
           required
           maxLength={2000}
           rows={3}
@@ -246,7 +247,7 @@ function FactFormFields({
             />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">빈칸은 처음부터 끝까지 적용돼요.</p>
+        <p className="b-muted text-xs">빈칸은 처음부터 끝까지 적용돼요.</p>
       </div>
       <div className="wg-wiki-form-row">
         <Label htmlFor="fact-evidence">근거 문장</Label>

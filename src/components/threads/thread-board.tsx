@@ -9,10 +9,9 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
-  type UIEvent,
 } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
-import { CountCell, GridTitle, MenuSheet, Reveal, Sheet } from '@/components/motion'
+import { CountCell, MenuSheet, Reveal, Sheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -26,6 +25,7 @@ import { THREAD_STATUSES, type Role, type ThreadStatus } from '@/db/types'
 import { IMPORTANCE_LABEL, THREAD_STATUS_LABEL } from '@/lib/labels'
 import { ThreadDetailDialog } from './thread-detail-dialog'
 import { ThreadForm } from './thread-form'
+import { threadChapterCenter } from './thread-geometry'
 import type { ChapterOption, EntryOption, ThreadItem } from './thread-types'
 
 type ThreadBoardProps = {
@@ -37,6 +37,11 @@ type ThreadBoardProps = {
 }
 type StatusFilter = 'all' | ThreadStatus
 const STATUS_FILTERS = ['all', ...THREAD_STATUSES] as const
+const MARKER_WIDTH_REM = { seed: 0.5, target: 0.9375 }
+const markerStyle = {
+  '--wg-threads-seed-size': `${MARKER_WIDTH_REM.seed}rem`,
+  '--wg-threads-target-size': `${MARKER_WIDTH_REM.target}rem`,
+} as CSSProperties
 
 function isOverdue(thread: ThreadItem, position: number) {
   return (
@@ -61,6 +66,7 @@ function StatusFilters({
         <button
           key={status}
           type="button"
+          className="wg-threads-filter"
           aria-pressed={value === status}
           onClick={() => onChange(status)}
         >
@@ -81,13 +87,13 @@ export function ThreadBoard({ workId, role, threads, chapters, entries }: Thread
   const [sceneFinished, setSceneFinished] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const axisRef = useRef<HTMLDivElement>(null)
-  const mirroredScroll = useRef(new WeakMap<HTMLElement, number>())
   const labelHeadRef = useRef<HTMLSpanElement>(null)
   const returnFocus = useRef<HTMLButtonElement>(null)
   const countsRef = useRef<HTMLDivElement>(null)
   const previousCounts = useRef<number[]>([])
   const rangeId = useId()
-  const latest = Math.max(1, ...chapters.map(({ position }) => position))
+  const writtenChapters = new Set(chapters.map(({ position }) => position))
+  const latest = Math.max(1, ...writtenChapters)
   const max = threads.reduce(
     (last, thread) =>
       Math.max(last, thread.targetChapterPosition ?? 0, thread.plantedPosition ?? 0),
@@ -136,65 +142,32 @@ export function ThreadBoard({ workId, role, threads, chapters, entries }: Thread
     return () => animations.forEach((animation) => animation.cancel())
   }, [current, plantedCount, plannedCount, overdueCount])
 
-  const alignTracks = useCallback((source: HTMLElement) => {
-    const tracks = scrollRef.current?.querySelectorAll<HTMLElement>('[data-track-scroll]')
-    if (!tracks) return
-    const left = source.scrollLeft
-    for (const track of tracks) {
-      const before = track.scrollLeft
-      if (track === source || before === left) continue
-      track.scrollLeft = left
-      if (track.scrollLeft !== before) mirroredScroll.current.set(track, track.scrollLeft)
+  const revealTick = useCallback((next: number, focusTick = false) => {
+    const scroll = scrollRef.current
+    const tick = axisRef.current?.querySelector<HTMLButtonElement>(`[data-position="${next}"]`)
+    if (!scroll || !tick) return
+    const view = scroll.getBoundingClientRect()
+    const target = tick.getBoundingClientRect()
+    const labelWidth = labelHeadRef.current?.getBoundingClientRect().width ?? 0
+    const left = view.left + labelWidth
+    if (target.left < left || target.right > view.right) {
+      const distance = (target.left + target.right - left - view.right) / 2
+      scroll.scrollLeft += distance / (scroll.currentCSSZoom || 1)
     }
+    if (focusTick) tick.focus({ preventScroll: true })
   }, [])
-
-  const revealTick = useCallback(
-    (next: number, focusTick = false) => {
-      const outer = scrollRef.current
-      const axis = axisRef.current
-      const tick = axis?.querySelector<HTMLButtonElement>(`[data-position="${next}"]`)
-      if (!outer || !axis || !tick) return
-      const scroll = axis.scrollWidth > axis.clientWidth ? axis : outer
-      const view = scroll.getBoundingClientRect()
-      const target = tick.getBoundingClientRect()
-      const stickyWidth = scroll === outer ? (labelHeadRef.current?.offsetWidth ?? 0) : 0
-      const left = view.left + stickyWidth
-      if (target.left < left || target.right > view.right) {
-        scroll.scrollLeft += (target.left + target.right - left - view.right) / 2
-        if (scroll === axis) {
-          mirroredScroll.current.set(axis, axis.scrollLeft)
-          alignTracks(axis)
-        }
-      }
-      if (focusTick) tick.focus({ preventScroll: true })
-    },
-    [alignTracks],
-  )
 
   useLayoutEffect(() => {
     const scroll = scrollRef.current
-    if (!scroll) return
+    const label = labelHeadRef.current
+    if (!scroll || !label) return
     revealTick(current)
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(() => revealTick(current))
     observer.observe(scroll)
+    observer.observe(label)
     return () => observer.disconnect()
   }, [current, max, threads.length, revealTick])
-
-  function syncTracks(event: UIEvent<HTMLDivElement>) {
-    const source = event.target
-    if (!(source instanceof HTMLElement) || !source.hasAttribute('data-track-scroll')) return
-    const mirrored = mirroredScroll.current.get(source)
-    // A queued event from a mirrored track must not overwrite a later gesture.
-    if (mirrored === source.scrollLeft) return
-    mirroredScroll.current.delete(source)
-    alignTracks(source)
-  }
-
-  useLayoutEffect(() => {
-    const axis = axisRef.current
-    if (axis) alignTracks(axis)
-  }, [filter, threads.length, alignTracks])
 
   function changePosition(next: number, focusTick = false) {
     setPosition(next)
@@ -217,10 +190,10 @@ export function ThreadBoard({ workId, role, threads, chapters, entries }: Thread
   return (
     <>
       <header className="wg-threads-toolbar">
-        <div className="min-w-0 space-y-2">
-          <GridTitle id="threads-heading" columns={5}>
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 id="threads-heading" className="b-subhead">
             떡밥 장부
-          </GridTitle>
+          </h2>
           <p className="b-label b-muted">심어 둔 떡밥이 지금 어디쯤 와 있는지 봐요.</p>
         </div>
         <div className="wg-threads-tools">
@@ -318,7 +291,6 @@ export function ThreadBoard({ workId, role, threads, chapters, entries }: Thread
               aria-label="떡밥 회차 축"
               tabIndex={0}
               ref={scrollRef}
-              onScrollCapture={syncTracks}
             >
               <Reveal
                 effectOnly
@@ -327,45 +299,60 @@ export function ThreadBoard({ workId, role, threads, chapters, entries }: Thread
                 style={
                   {
                     '--wg-threads-chapters': max,
+                    '--wg-threads-tick-digits': String(max).length,
                     '--wg-threads-current': current - 1,
+                    ...markerStyle,
                   } as CSSProperties
                 }
               >
+                <div className="wg-threads-ledger-rules" aria-hidden="true">
+                  {Array.from({ length: max }, (_, index) => (
+                    <span
+                      key={index}
+                      data-highlight-start={index + 1 === current || index === current}
+                      data-highlight-end={index + 1 === max && current === max}
+                    />
+                  ))}
+                </div>
                 <div className="wg-threads-axis">
                   <span className="wg-threads-axis-label" ref={labelHeadRef}>
                     떡밥
                   </span>
-                  <div className="wg-threads-axis-scroll" ref={axisRef} data-track-scroll="">
-                    <div className="wg-threads-ticks" role="group" aria-label="기준 회차">
-                      {Array.from({ length: max }, (_, index) => {
-                        const number = index + 1
-                        return (
-                          <button
-                            key={number}
-                            type="button"
-                            className="wg-threads-tick"
-                            aria-pressed={number === current}
-                            tabIndex={number === current ? 0 : -1}
-                            data-position={number}
-                            data-related={number === highlightStart || number === highlightEnd}
-                            onClick={() => changePosition(number)}
-                            onKeyDown={handleTickKey}
-                          >
-                            {number}화
-                          </button>
-                        )
-                      })}
-                      <span className="wg-threads-axis-guide" aria-hidden="true">
-                        <span>지금</span>
-                      </span>
-                      <span
-                        className="wg-threads-axis-rule"
-                        aria-hidden="true"
-                        onAnimationEnd={(event) => {
-                          if (event.animationName === 'wg-threads-scene') setSceneFinished(true)
-                        }}
-                      />
-                    </div>
+                  <div
+                    className="wg-threads-ticks"
+                    ref={axisRef}
+                    role="group"
+                    aria-label="기준 회차"
+                  >
+                    {Array.from({ length: max }, (_, index) => {
+                      const number = index + 1
+                      return (
+                        <button
+                          key={number}
+                          type="button"
+                          className="wg-threads-tick"
+                          aria-pressed={number === current}
+                          tabIndex={number === current ? 0 : -1}
+                          data-position={number}
+                          data-related={number === highlightStart || number === highlightEnd}
+                          data-future={!writtenChapters.has(number)}
+                          onClick={() => changePosition(number)}
+                          onKeyDown={handleTickKey}
+                        >
+                          <span className="font-mono">{number}</span>화
+                        </button>
+                      )
+                    })}
+                    <span className="wg-threads-axis-guide" aria-hidden="true">
+                      <span>지금</span>
+                    </span>
+                    <span
+                      className="wg-threads-axis-rule"
+                      aria-hidden="true"
+                      onAnimationEnd={(event) => {
+                        if (event.animationName === 'wg-threads-scene') setSceneFinished(true)
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -393,7 +380,7 @@ export function ThreadBoard({ workId, role, threads, chapters, entries }: Thread
                 떡밥이 없어요.
               </p>
             )}
-            <ul aria-label="범례" className="wg-threads-legend b-label">
+            <ul aria-label="범례" className="wg-threads-legend b-label" style={markerStyle}>
               <li>
                 <span className="wg-threads-seed" aria-hidden="true" />
                 심은 화
@@ -481,7 +468,8 @@ function TimelineRow({
   )
   const lo = Math.min(start, end, ...developments)
   const hi = Math.max(start, end, ...developments)
-  const chapterOffset = (chapter: number) => `${((chapter - 0.5) / chapters) * 100}%`
+  const chapterOffset = (chapter: number) => `${threadChapterCenter(chapter, chapters, 100)}%`
+  const coincident = thread.planted && plant === goal
   const singlePlannedCell = hi === lo && !thread.planted && goal !== null
 
   return (
@@ -525,47 +513,54 @@ function TimelineRow({
             {thread.relatedEntries.map(({ name }) => name).join(' · ')}
           </span>
         )}
-        {thread.overdue && <span className="wg-threads-overdue">회수 목표 지남</span>}
+        {thread.overdue && (
+          <>
+            <span className="wg-threads-overdue">회수 목표 지남</span>
+            <span className="wg-threads-note" aria-hidden="true">
+              거둘 때가 지났어요
+            </span>
+          </>
+        )}
       </span>
-      <span className="wg-threads-plot-scroll" aria-hidden="true" data-track-scroll="">
-        <span
-          className="wg-threads-plot"
-          data-planted={thread.planted}
-          data-coincident={thread.planted && plant === goal}
-          data-backward={end < start}
-        >
-          <TrackRules chapters={chapters} className="wg-threads-plot-rules" />
-          <span className="wg-threads-current-guide" />
-          {(hi !== lo || singlePlannedCell) && (
-            <span
-              className="wg-threads-line"
-              style={{
-                insetInlineStart: singlePlannedCell
-                  ? `calc(${chapterOffset(lo)} - .875rem)`
-                  : chapterOffset(lo),
-                inlineSize: singlePlannedCell ? '.875rem' : `${(100 * (hi - lo)) / chapters}%`,
-              }}
-            />
-          )}
-          {Array.from(developments, (chapter) => (
-            <span
-              className="wg-threads-development"
-              key={chapter}
-              style={{ insetInlineStart: chapterOffset(chapter) }}
-            />
-          ))}
-          {thread.planted && plant !== null && (
-            <span className="wg-threads-seed" style={{ insetInlineStart: chapterOffset(plant) }} />
-          )}
-          {goal !== null && (
-            <span
-              className="wg-threads-target"
-              data-resolved={thread.status === 'resolved'}
-              style={{ insetInlineStart: chapterOffset(goal) }}
-            />
-          )}
-          {thread.overdue && <span className="wg-threads-note">거둘 때가 지났어요</span>}
-        </span>
+      <span
+        className="wg-threads-plot"
+        data-planted={thread.planted}
+        data-backward={end < start}
+        aria-hidden="true"
+      >
+        {(hi !== lo || singlePlannedCell) && (
+          <span
+            className="wg-threads-line"
+            style={{
+              insetInlineStart: singlePlannedCell
+                ? `calc(${chapterOffset(lo)} - var(--wg-threads-target-size))`
+                : chapterOffset(lo),
+              insetInlineEnd: `calc(100% - ${chapterOffset(hi)})`,
+            }}
+          />
+        )}
+        {Array.from(developments, (chapter) => (
+          <span
+            className="wg-threads-development"
+            key={chapter}
+            style={{ insetInlineStart: chapterOffset(chapter) }}
+          />
+        ))}
+        {thread.planted && plant !== null && (
+          <span
+            className="wg-threads-seed"
+            data-thread-coincident={coincident ? 'seed' : undefined}
+            style={{ insetInlineStart: chapterOffset(plant) }}
+          />
+        )}
+        {goal !== null && (
+          <span
+            className="wg-threads-target"
+            data-resolved={thread.status === 'resolved'}
+            data-thread-coincident={coincident ? 'target' : undefined}
+            style={{ insetInlineStart: chapterOffset(goal) }}
+          />
+        )}
       </span>
     </button>
   )

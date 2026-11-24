@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { type FormEvent, useId, useRef, useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
-import { Disclosure, GridTitle } from '@/components/motion'
+import { Disclosure } from '@/components/motion'
 import { SubmitButton } from '@/components/app/submit-button'
 import { Button } from '@/components/ui/button'
 import {
@@ -84,7 +84,9 @@ export function NamingRules({ workId, rules, canEdit }: NamingRulesProps) {
   return (
     <section aria-labelledby="naming-heading" className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <GridTitle id="naming-heading">표기 통일</GridTitle>
+        <h2 id="naming-heading" className="wg-wiki-section-title">
+          표기 통일
+        </h2>
         <p className="b-label b-muted">작품에서 쓸 표기와 피할 표기를 정해요.</p>
       </div>
 

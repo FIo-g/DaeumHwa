@@ -1,8 +1,5 @@
-'use client'
-
 import Link from 'next/link'
-import { useLayoutEffect, useRef } from 'react'
-import { GridTitle } from '@/components/motion'
+import { PageHeader } from '@/components/app/page-header'
 
 export type WikiTab =
   'characters' | 'world' | 'threads' | 'graph' | 'naming' | 'summaries' | 'styles' | 'requests'
@@ -19,30 +16,8 @@ const TABS: { key: WikiTab; label: string; path: (workId: string) => string }[] 
 ]
 
 export function WikiTabs({ workId, active }: { workId: string; active: WikiTab }) {
-  const scrollRef = useRef<HTMLElement>(null)
-
-  useLayoutEffect(() => {
-    const scroll = scrollRef.current
-    const current = scroll?.querySelector<HTMLAnchorElement>('[aria-current="page"]')
-    if (!scroll || !current) return
-
-    const revealActive = () => {
-      if (
-        current.offsetLeft < scroll.scrollLeft ||
-        current.offsetLeft + current.offsetWidth > scroll.scrollLeft + scroll.clientWidth
-      ) {
-        scroll.scrollLeft = current.offsetLeft - (scroll.clientWidth - current.offsetWidth) / 2
-      }
-    }
-    revealActive()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(revealActive)
-    observer.observe(scroll)
-    return () => observer.disconnect()
-  }, [active, workId])
-
   return (
-    <nav ref={scrollRef} aria-label="설정 보드 탭" className="wg-wiki-tabs">
+    <nav aria-label="설정 보드 탭" className="wg-wiki-tabs">
       <div className="wg-wiki-tabs-strip">
         {TABS.map((tab) => (
           <Link
@@ -62,15 +37,9 @@ export function WikiTabs({ workId, active }: { workId: string; active: WikiTab }
 
 export function SettingsBoardHeader({ workId, active }: { workId: string; active: WikiTab }) {
   return (
-    <header className="wg-wiki-board">
-      <div className="b-edge" aria-hidden="true">
-        20×10
-      </div>
-      <GridTitle as="h1" size="page" columns={5}>
-        설정 보드
-      </GridTitle>
-      <p className="b-lede">작품 설정을 모아 둔 곳이에요.</p>
+    <div className="wg-wiki-board">
+      <PageHeader title="설정 보드" description="작품 설정을 모아 둔 곳이에요." />
       <WikiTabs workId={workId} active={active} />
-    </header>
+    </div>
   )
 }

@@ -261,7 +261,13 @@ function EntryFormFields({
       </div>
       <div className="wg-wiki-form-row">
         <Label htmlFor="entry-body">설명</Label>
-        <Textarea id="entry-body" value={body} onChange={(e) => setBody(e.target.value)} rows={5} />
+        <Textarea
+          id="entry-body"
+          className="b-manuscript"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={5}
+        />
       </div>
       <DialogFooter>
         <SubmitButton pending={pending}>저장</SubmitButton>

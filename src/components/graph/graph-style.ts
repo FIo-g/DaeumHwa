@@ -4,6 +4,7 @@ import type { EntryKind } from '@/db/types'
 export const GRAPH_COLOR_TOKENS = {
   ink: '--b-ink',
   paper: '--b-paper',
+  grid: '--b-grid',
 } as const
 
 export type GraphPalette = Record<keyof typeof GRAPH_COLOR_TOKENS, string>
@@ -30,6 +31,7 @@ export function readGraphPalette(
   return {
     ink: read('ink', computed.color),
     paper: read('paper', computed.backgroundColor),
+    grid: read('grid', computed.borderBlockStartColor),
   }
 }
 

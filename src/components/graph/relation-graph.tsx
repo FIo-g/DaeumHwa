@@ -270,10 +270,14 @@ export function RelationGraph({
     let cancelled = false
     let cy: Core | null = null
     let physics: ReturnType<typeof createGraphPhysics> | undefined
+    let sizeObserver: ResizeObserver | undefined
     async function mount() {
       const container = containerRef.current
       if (!container) return
-      const { default: cytoscape } = await import('cytoscape')
+      const [{ default: cytoscape }] = await Promise.all([
+        import('cytoscape'),
+        document.fonts.ready,
+      ])
       if (cancelled) return
       const timing = readGraphTiming(container)
       const palette = readGraphPalette(container)
@@ -282,17 +286,22 @@ export function RelationGraph({
         container,
         elements: toElements(nodes, edges, font),
         style: graphStyle(palette, font, timing),
+        // Reserve backing pixels for live CSS zoom, which does not change devicePixelRatio.
+        pixelRatio: window.devicePixelRatio * Math.max(1.25, container.currentCSSZoom || 1),
         maxZoom: 3,
         autounselectify: true,
         layout: circleLayout(nodes, edges),
       })
+      // Fit and pointer handling need current dimensions before the renderer's debounced resize.
+      sizeObserver = new ResizeObserver(() => cy?.resize())
+      sizeObserver.observe(container)
       cy.on('tap', 'node', (e) => setSelection({ type: 'node', id: e.target.id() }))
       cy.on('tap', 'edge', (e) => setSelection({ type: 'edge', id: e.target.id() }))
       cy.on('tap', (e) => {
         if (e.target === cy) setSelection(null)
       })
-      cy.on('mouseover mouseout', 'node', (e) => {
-        hoveredNode.current = e.type === 'mouseover' ? e.target.id() : null
+      cy.on('mousemove', (e) => {
+        hoveredNode.current = e.target !== cy && e.target.isNode() ? e.target.id() : null
         physics?.updatePreview(hoveredNode.current ?? focusedNode.current)
       })
       cyRef.current = cy
@@ -309,6 +318,7 @@ export function RelationGraph({
       cyRef.current = null
       physicsRef.current = null
       physics?.dispose()
+      sizeObserver?.disconnect()
       cy?.destroy()
     }
   }, [nodes, edges])

@@ -23,7 +23,7 @@ export function EntryHistory({ changes }: { changes: EntryHistoryItem[] }) {
           <span className="wg-wiki-line-number" aria-hidden="true">
             {String(index + 1).padStart(2, '0')}
           </span>
-          <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span className="b-muted flex flex-wrap items-center gap-2 text-xs">
             <time className="font-mono" dateTime={change.createdAt.toISOString()}>
               {formatKoreanDateTime(change.createdAt)}
             </time>

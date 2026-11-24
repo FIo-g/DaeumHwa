@@ -149,11 +149,6 @@
     animation: wg-wiki-tabs-pen var(--b-draw) var(--b-out) both;
   }
 
-  .wg-wiki-tabs-title.wg-title {
-    flex: 1 1 10rem;
-    inline-size: auto;
-  }
-
   .wg-wiki-tabs-sheets {
     border: 0;
   }
@@ -212,12 +207,6 @@
     border-block-start: var(--b-line) solid color-mix(in srgb, var(--b-grid) 35%, transparent);
   }
 
-  .wg-wiki-tabs-example {
-    color: var(--b-ink);
-    font: 400 var(--b-t-quote) / 1.75 var(--b-font-title);
-    white-space: pre-wrap;
-  }
-
   .wg-wiki-tabs-directive {
     display: grid;
     grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) minmax(5.5rem, max-content) auto;
@@ -250,6 +239,10 @@
   .wg-wiki-tabs-directive-meta {
     gap: var(--b-s1);
     color: var(--b-muted);
+  }
+
+  .wg-wiki-tabs-directive[data-status] .wg-wiki-tabs-directive-meta {
+    color: var(--b-ink);
   }
 
   .wg-wiki-tabs-status {

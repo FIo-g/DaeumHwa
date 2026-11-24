@@ -2,7 +2,16 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
-import { CanvasTexture, MeshBasicMaterial, Sprite, SpriteMaterial, SRGBColorSpace } from 'three'
+import {
+  CanvasTexture,
+  MeshBasicMaterial,
+  type PerspectiveCamera,
+  Sphere,
+  Sprite,
+  SpriteMaterial,
+  SRGBColorSpace,
+  Vector3,
+} from 'three'
 import { usePrefersReducedMotion } from '@/components/motion'
 import type { GraphEdge, GraphNode } from './graph-model'
 import {
@@ -43,7 +52,7 @@ function makeNodeSprite(
   context.fillStyle = background
   context.fillRect(0, 0, canvas.width, SPRITE_HEIGHT)
   context.lineWidth = thickness
-  context.strokeStyle = palette.ink
+  context.strokeStyle = selected ? palette.ink : palette.grid
   context.strokeRect(inset, inset, canvas.width - thickness, SPRITE_HEIGHT - thickness)
   drawKindMark(context, node.kind, DOT_CENTER_X, SPRITE_HEIGHT / 2, 8, ink, background, 2.5)
 
@@ -81,20 +90,44 @@ export default function Graph3D({
 }: ForceGraphRendererProps) {
   const reducedMotion = usePrefersReducedMotion()
   const renderer = useRef<ForceGraphMethods<GraphNode, GraphEdge>>(undefined)
+  const sprites = useRef(new WeakMap<GraphNode, Sprite>())
   const [hoveredNodeId, setHoveredNodeId] = useState<string>()
   const highlightedNodeId = hoveredNodeId ?? focusedNodeId
 
   const hasFramedGraph = useRef(false)
   const frameGraph = useCallback(() => {
-    const graph = renderer.current
-    if (hasFramedGraph.current || !graph) return
+    if (hasFramedGraph.current) return
     hasFramedGraph.current = true
-    const camera = graph.camera()
-    const distance = camera.position.length()
-    graph.cameraPosition({ x: -distance * 0.7, y: distance * 0.6, z: distance * 0.45 })
-    camera.lookAt(0, 0, 0)
-    graph.zoomToFit(0, Math.min(width, height) * 0.18)
-  }, [width, height])
+    // The engine reports completion before applying the final node positions to the scene.
+    requestAnimationFrame(() => {
+      const graph = renderer.current
+      if (!graph) return
+      const bounds = new Sphere()
+      const reach = new Sphere()
+      const scale = new Vector3()
+      for (const node of data.nodes) {
+        const sprite = sprites.current.get(node)
+        if (!sprite) continue
+        const { x, y } = sprite.getWorldScale(scale)
+        // Each label faces the camera and extends from the kind mark, off center.
+        reach.radius = Math.hypot(
+          x * Math.max(sprite.center.x, 1 - sprite.center.x),
+          y * Math.max(sprite.center.y, 1 - sprite.center.y),
+        )
+        sprite.getWorldPosition(reach.center)
+        bounds.union(reach)
+      }
+      if (bounds.isEmpty()) return
+      const { center, radius } = bounds
+      const camera = graph.camera() as PerspectiveCamera
+      const halfFov = (camera.getEffectiveFOV() * Math.PI) / 360
+      // Keep a margin on the shorter viewport axis.
+      const visibleHalfFov = Math.atan(0.8 * Math.tan(halfFov) * Math.min(1, width / height))
+      const distance = radius / Math.sin(visibleHalfFov)
+      const cameraPosition = new Vector3(-0.7, 0.6, 0.45).setLength(distance).add(center)
+      graph.cameraPosition(cameraPosition, center)
+    })
+  }, [data.nodes, width, height])
   const curvatures = useMemo(() => linkCurvatures(data.links), [data])
   const linkMaterial = useCallback(
     () => new MeshBasicMaterial({ color: palette.ink, toneMapped: false }),
@@ -102,14 +135,17 @@ export default function Graph3D({
   )
   // Three-forcegraph disposes each custom object's texture and material when it removes the node.
   const nodeObject = useCallback(
-    (node: GraphNode) =>
-      makeNodeSprite(
+    (node: GraphNode) => {
+      const sprite = makeNodeSprite(
         node,
         palette,
         font,
         node.id === selectedNodeId,
         node.id === highlightedNodeId,
-      ),
+      )
+      sprites.current.set(node, sprite)
+      return sprite
+    },
     [palette, font, highlightedNodeId, selectedNodeId],
   )
 
@@ -122,6 +158,7 @@ export default function Graph3D({
       backgroundColor={palette.paper}
       showNavInfo={false}
       nodeLabel={nodeLabel}
+      nodeColor={() => palette.ink}
       nodeThreeObject={nodeObject}
       linkColor={() => palette.ink}
       linkMaterial={linkMaterial}

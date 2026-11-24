@@ -101,6 +101,7 @@ function SupersedeFields({
         <Label htmlFor="supersede-content">바뀐 내용</Label>
         <Textarea
           id="supersede-content"
+          className="b-manuscript"
           rows={3}
           maxLength={2000}
           value={content}

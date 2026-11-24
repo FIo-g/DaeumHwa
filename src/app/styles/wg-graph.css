@@ -109,6 +109,7 @@
   }
 
   .wg-graph-surface {
+    --wg-graph-grid-cell: 2rem;
     --wg-graph-grid-ink: color-mix(in srgb, var(--b-grid) 12%, transparent);
     position: relative;
     isolation: isolate;
@@ -126,10 +127,10 @@
     z-index: -1;
     inset: 0;
     background-image:
-      linear-gradient(to right, var(--wg-graph-grid-ink) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--wg-graph-grid-ink) 1px, transparent 1px);
+      linear-gradient(to right, var(--wg-graph-grid-ink) var(--b-line), transparent var(--b-line)),
+      linear-gradient(to bottom, var(--wg-graph-grid-ink) var(--b-line), transparent var(--b-line));
     background-position: center;
-    background-size: 32px 32px;
+    background-size: var(--wg-graph-grid-cell) var(--wg-graph-grid-cell);
     content: '';
     pointer-events: none;
     animation: wg-graph-grid-in var(--b-quick) var(--b-out) both;

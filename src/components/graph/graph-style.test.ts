@@ -11,10 +11,11 @@ describe('ENTRY_KIND_MARK', () => {
     expect(new Set(looks).size).toBe(ENTRY_KINDS.length)
   })
 
-  it('uses only neutral tokens for card marks', () => {
+  it('uses only the paper, ink and rule tokens in the renderer', () => {
     expect(GRAPH_COLOR_TOKENS).toEqual({
       ink: '--b-ink',
       paper: '--b-paper',
+      grid: '--b-grid',
     })
   })
 })

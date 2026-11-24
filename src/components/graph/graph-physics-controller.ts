@@ -429,8 +429,12 @@ export function createGraphPhysics(
   function onPointerMove(event: PointerEvent) {
     if (event.pointerType !== 'mouse' || event.buttons || !canMove()) return
     const rect = container.getBoundingClientRect()
+    const scale = container.currentCSSZoom || 1
     pointer = {
-      point: { x: event.clientX - rect.left, y: event.clientY - rect.top },
+      point: {
+        x: (event.clientX - rect.left) / scale - container.clientLeft,
+        y: (event.clientY - rect.top) / scale - container.clientTop,
+      },
       at: performance.now(),
     }
     start()

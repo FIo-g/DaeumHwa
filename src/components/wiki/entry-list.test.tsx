@@ -68,7 +68,7 @@ describe('EntryList', () => {
     const row = screen.getAllByRole('listitem').find((item) => item.contains(link))!
     expect(within(row).getByText('윤')).toBeInTheDocument()
     expect(within(row).getByText('검을 쓰는 주인공')).toBeInTheDocument()
-    expect(within(row).getByText('사실 3개')).toBeInTheDocument()
+    expect(row).toHaveTextContent('사실 3개')
   })
 
   it('opens one preview, reveals its wiki facts and keeps a link to the card', () => {

@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThreadBoard } from './thread-board'
+import { threadChapterCenter } from './thread-geometry'
 import type { ChapterOption, EntryOption, ThreadItem } from './thread-types'
 
 vi.mock('next/navigation', () => ({
@@ -151,6 +152,64 @@ describe('ThreadBoard', () => {
     expect(slider).toHaveAttribute('max', '200')
     expect(screen.getByRole('button', { name: '200화' })).toBeInTheDocument()
   })
+
+  it('centers both shared-chapter markers and keeps the overdue note in the label', () => {
+    render(
+      <ThreadBoard
+        workId="w1"
+        role="viewer"
+        threads={[{ ...threads[0], plantedPosition: 2, targetChapterPosition: 2 }]}
+        chapters={chapters}
+        entries={entries}
+      />,
+    )
+    const row = screen.getByRole('button', { name: /빛나는 목걸이/ })
+    const seed = row.querySelector('[data-thread-coincident="seed"]')
+    const target = row.querySelector('[data-thread-coincident="target"]')
+    const center = threadChapterCenter(2, 6, 100)
+    expect(seed).toHaveStyle({ insetInlineStart: `${center}%` })
+    expect(target).toHaveStyle({ insetInlineStart: `${center}%` })
+    const notice = within(row).getByText('거둘 때가 지났어요')
+    expect(notice.closest('.wg-threads-row-label')).not.toBeNull()
+  })
+
+  it.each([3, 6, 12, 24])(
+    'uses the same %i chapter cells for ticks, rules, markers and line ends',
+    (chapterCount) => {
+      const { container } = render(
+        <ThreadBoard
+          workId="w1"
+          role="viewer"
+          threads={[{ ...threads[0], plantedPosition: 1, targetChapterPosition: chapterCount }]}
+          chapters={[{ id: 'c1', position: chapterCount - 1, title: '' }]}
+          entries={entries}
+        />,
+      )
+      const from = threadChapterCenter(1, chapterCount, 100)
+      const to = threadChapterCenter(chapterCount, chapterCount, 100)
+      const space = screen.getByRole('region', { name: '떡밥 회차 축' })
+      const ticks = within(space).getByRole('group', { name: '기준 회차' })
+      expect(within(ticks).getAllByRole('button')).toHaveLength(chapterCount)
+      expect(within(ticks).getByRole('button', { name: `${chapterCount}화` })).toHaveAttribute(
+        'data-future',
+        'true',
+      )
+      expect(container.querySelectorAll('.wg-threads-ledger-rules > span')).toHaveLength(
+        chapterCount,
+      )
+      expect(container.querySelector('.wg-threads-timeline')).toHaveStyle(
+        `--wg-threads-chapters: ${chapterCount}`,
+      )
+      const row = within(space).getByRole('button', { name: /빛나는 목걸이/ })
+      expect(row.querySelector('.wg-threads-seed')).toHaveStyle({ insetInlineStart: `${from}%` })
+      expect(row.querySelector('.wg-threads-target')).toHaveStyle({ insetInlineStart: `${to}%` })
+      const line = row.querySelector<HTMLElement>('.wg-threads-line')!
+      expect(Number.parseFloat(line.style.insetInlineStart)).toBeCloseTo(from)
+      expect(Number.parseFloat(line.style.insetInlineEnd.replace('calc(', ''))).toBeCloseTo(
+        100 - to,
+      )
+    },
+  )
 
   it('offers 새 떡밥 to editors and owners', () => {
     renderBoard('editor')

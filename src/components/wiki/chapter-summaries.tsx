@@ -111,7 +111,7 @@ function ChapterSummaryRow({
       </Label>
       <div className="wg-wiki-tabs-summary-edit">
         <Textarea
-          className="font-heading"
+          className="b-manuscript wg-wiki-tabs-summary-copy"
           id={`summary-${chapter.id}`}
           rows={3}
           maxLength={2000}

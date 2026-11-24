@@ -95,6 +95,7 @@ export const GraphViewport = memo(function GraphViewport({
         previous.height === height &&
         previous.palette.ink === palette.ink &&
         previous.palette.paper === palette.paper &&
+        previous.palette.grid === palette.grid &&
         previous.font === font
           ? previous
           : { width, height, palette, font },

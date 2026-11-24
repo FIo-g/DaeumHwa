@@ -7,7 +7,7 @@ import { AiRunStatus } from '@/components/app/ai-run-status'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
 import { SubmitButton } from '@/components/app/submit-button'
-import { GridTitle, Sheet } from '@/components/motion'
+import { Sheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -66,9 +66,9 @@ export function StyleCards({
     <div className="flex flex-col gap-5">
       <section aria-labelledby="style-cards-heading" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <GridTitle id="style-cards-heading" className="wg-wiki-tabs-title">
+          <h2 id="style-cards-heading" className="wg-wiki-section-title">
             문체 카드
-          </GridTitle>
+          </h2>
           {canEdit && (
             <StyleCardDialog
               workId={workId}
@@ -242,7 +242,7 @@ function StyleCardView({
             <dt className="b-label b-muted">예시</dt>
             <dd>
               {card.examples ? (
-                <blockquote className="wg-wiki-tabs-example">
+                <blockquote className="b-manuscript whitespace-pre-wrap">
                   <span aria-hidden="true">「</span>
                   <span>{card.examples}</span>
                   <span aria-hidden="true">」</span>
@@ -379,6 +379,7 @@ function StyleCardFields({
         <Label htmlFor="style-examples">예시</Label>
         <Textarea
           id="style-examples"
+          className="b-manuscript"
           rows={3}
           maxLength={4000}
           value={examples}

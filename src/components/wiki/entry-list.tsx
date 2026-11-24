@@ -1,15 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { useId, useRef, useState, type CSSProperties } from 'react'
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
 import { FactStatusBadge } from '@/components/app/fact-status-badge'
 import { Disclosure, MenuSheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EntryKind, FactStatus } from '@/db/types'
-import { ENTRY_KIND_LABEL, factValidityText } from '@/lib/labels'
+import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import { EntryFormDialog } from './entry-form'
+import { FactValidity } from './fact-validity'
 
 type FactPreview = {
   id: string
@@ -116,6 +117,7 @@ function LookupControls({
           <label key={value} className="wg-wiki-cell">
             <input
               type="radio"
+              aria-label={label}
               name={sortName}
               checked={order === value}
               onChange={() => onSort(value)}
@@ -150,6 +152,7 @@ export function EntryList({
     changed: false,
   })
   const { order } = sort
+  const indexList = useRef<HTMLOListElement>(null)
   const [selection, setSelection] = useState<{ id: string; open: boolean } | null>(
     initialEntryId ? { id: initialEntryId, open: true } : null,
   )
@@ -170,6 +173,33 @@ export function EntryList({
       return a.name.localeCompare(b.name, 'ko')
     })
   const selected = visible.find(({ entry }) => entry.id === selection?.id)
+  const openEntryId = selection?.open ? selected?.entry.id : undefined
+
+  useLayoutEffect(() => {
+    const list = indexList.current
+    const preview = list?.querySelector<HTMLElement>(
+      '.wg-wiki-index-disclosure > [data-open="true"]',
+    )
+    if (!list || !preview || !openEntryId) return
+
+    const setPreviewHeight = (height: number) => {
+      list.style.setProperty('--wg-wiki-preview-height', `${height}px`)
+      list.dataset.previewMeasured = 'true'
+    }
+    setPreviewHeight(preview.getBoundingClientRect().height / (preview.currentCSSZoom || 1))
+
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(([entry]) => setPreviewHeight(entry.borderBoxSize[0].blockSize))
+    observer?.observe(preview, { box: 'border-box' })
+    return () => {
+      observer?.disconnect()
+      list.style.removeProperty('--wg-wiki-preview-height')
+      delete list.dataset.previewMeasured
+    }
+  }, [openEntryId, order])
+
   const queryHref = (kind: EntryKind | null, value = search) => {
     const params = new URLSearchParams({ tab })
     if (kind) params.set('kind', kind)
@@ -255,7 +285,13 @@ export function EntryList({
           }
         />
       ) : (
-        <ol key={order} className="wg-wiki-index-list" role="list" data-sorted={sort.changed}>
+        <ol
+          key={order}
+          ref={indexList}
+          className="wg-wiki-index-list"
+          role="list"
+          data-sorted={sort.changed}
+        >
           {visible.map(({ entry, number }, index) => {
             const selectedEntry = selected?.entry.id === entry.id
             const expanded = selectedEntry && Boolean(selection?.open)
@@ -265,6 +301,7 @@ export function EntryList({
                 key={entry.id}
                 role="listitem"
                 className="wg-wiki-index-item"
+                data-expanded={expanded || undefined}
                 style={{ '--wg-wiki-row': Math.min(index, 3) } as CSSProperties}
               >
                 <div className="wg-wiki-index-row">
@@ -282,7 +319,9 @@ export function EntryList({
                       <span className="b-label b-muted">{entry.aliases.join(' · ')}</span>
                     )}
                     {entry.summary && <p className="text-sm">{entry.summary}</p>}
-                    <span className="b-label b-muted font-mono">사실 {entry.factCount}개</span>
+                    <span className="b-label b-muted">
+                      사실 <span className="font-mono">{entry.factCount}</span>개
+                    </span>
                   </div>
                 </div>
                 <Disclosure
@@ -320,9 +359,7 @@ function EntryPreview({ entry, detailHref }: { entry: EntryListItem; detailHref:
               <blockquote className="wg-wiki-fact-text">{fact.content}</blockquote>
               <div className="b-label b-muted flex flex-wrap items-center gap-2">
                 <FactStatusBadge status={fact.status} />
-                <span className="font-mono">
-                  {factValidityText(fact.validFromPosition, fact.validToPosition)}
-                </span>
+                <FactValidity from={fact.validFromPosition} to={fact.validToPosition} />
               </div>
             </li>
           ))}
@@ -330,10 +367,14 @@ function EntryPreview({ entry, detailHref }: { entry: EntryListItem; detailHref:
       ) : (
         <p className="b-muted b-label">아직 사실이 없어요.</p>
       )}
-      <p className="b-label b-muted font-mono">
-        {entry.firstAppearance === null
-          ? '등장 회차가 없어요.'
-          : `${entry.firstAppearance}화에 처음 등장`}
+      <p className="b-label b-muted">
+        {entry.firstAppearance === null ? (
+          '등장 회차가 없어요.'
+        ) : (
+          <>
+            <span className="font-mono">{entry.firstAppearance}화</span>에 처음 등장
+          </>
+        )}
       </p>
       <Link href={detailHref} className="b-link w-fit text-sm">
         카드 열기

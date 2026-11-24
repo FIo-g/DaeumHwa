@@ -5,15 +5,16 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
-import { Disclosure, GridTitle, Sheet } from '@/components/motion'
+import { PageHeader } from '@/components/app/page-header'
+import { Disclosure, Sheet } from '@/components/motion'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ENTRY_KINDS } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import {
   CHARACTER_FIELD_LABELS,
-  chapterLabel,
   ENTRY_KIND_LABEL,
   PLACE_FIELD_LABELS,
+  stripEpisodePrefix,
   THREAD_STATUS_LABEL,
 } from '@/lib/labels'
 import { archiveEntryAction, restoreEntryAction } from '@/server/actions/wiki'
@@ -76,20 +77,12 @@ export function EntryDetail({
         설정 보드로
       </Link>
 
-      <Sheet
-        page={entryNumber > 0 ? String(entryNumber).padStart(2, '0') : undefined}
-        label="20×10"
-        className="wg-wiki-detail"
-      >
-        <header className="wg-wiki-entry-heading">
-          <div className="wg-wiki-entry-title">
-            <GridTitle as="h1" size="page">
-              {entry.name}
-            </GridTitle>
-            <p className="wg-wiki-entry-meta">{description}</p>
-          </div>
-          {canEdit && (
-            <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title={entry.name}
+        description={description}
+        actions={
+          canEdit && (
+            <>
               {!archived && (
                 <EntryFormDialog
                   workId={workId}
@@ -118,10 +111,15 @@ export function EntryDetail({
                   onArchived={() => router.push(`/works/${workId}/wiki?tab=${backTab}`)}
                 />
               )}
-            </div>
-          )}
-        </header>
+            </>
+          )
+        }
+      />
 
+      <Sheet
+        page={entryNumber > 0 ? String(entryNumber).padStart(2, '0') : undefined}
+        className="wg-wiki-detail"
+      >
         {archived && (
           <p className="b-rule-top py-3 text-sm">
             보관된 카드예요. 복원해야 설정 보드에 다시 보여요.
@@ -130,7 +128,7 @@ export function EntryDetail({
 
         <Disclosure title="요약" defaultOpen className="wg-wiki-detail-section">
           <div className="wg-wiki-detail-content wrap-anywhere">
-            <p className="wg-wiki-fact-text">{entry.summary || '요약이 없어요.'}</p>
+            <p className="b-manuscript whitespace-pre-wrap">{entry.summary || '요약이 없어요.'}</p>
           </div>
         </Disclosure>
 
@@ -152,7 +150,7 @@ export function EntryDetail({
         {entry.body && (
           <Disclosure title="설명" defaultOpen className="wg-wiki-detail-section">
             <div className="wg-wiki-detail-content wrap-anywhere">
-              <p className="wg-wiki-fact-text whitespace-pre-line">{entry.body}</p>
+              <p className="b-manuscript whitespace-pre-wrap">{entry.body}</p>
             </div>
           </Disclosure>
         )}
@@ -173,7 +171,7 @@ export function EntryDetail({
         <Disclosure title="관계" defaultOpen className="wg-wiki-detail-section">
           <div className="wg-wiki-detail-content wrap-anywhere">
             {entry.relations.length === 0 ? (
-              <p className="text-sm text-muted-foreground">관계가 없어요.</p>
+              <p className="b-muted text-sm">관계가 없어요.</p>
             ) : (
               <ul className="wg-wiki-detail-list text-sm">
                 {entry.relations.map((r) => (
@@ -184,12 +182,10 @@ export function EntryDetail({
                     >
                       {r.otherName || '이름 없음'}
                     </Link>
-                    <span className="text-muted-foreground">
+                    <span className="b-muted">
                       {!r.directed ? '↔' : r.direction === 'out' ? '→' : '←'} {r.kind}
                     </span>
-                    {r.description && (
-                      <span className="text-muted-foreground">{r.description}</span>
-                    )}
+                    {r.description && <span className="b-muted">{r.description}</span>}
                   </li>
                 ))}
               </ul>
@@ -200,20 +196,29 @@ export function EntryDetail({
         <Disclosure title="등장 회차" defaultOpen className="wg-wiki-detail-section">
           <div className="wg-wiki-detail-content wrap-anywhere">
             {entry.appearances.length === 0 ? (
-              <p className="text-sm text-muted-foreground">등장 회차가 없어요.</p>
+              <p className="b-muted text-sm">등장 회차가 없어요.</p>
             ) : (
               <ul className="wg-wiki-detail-list text-sm">
-                {entry.appearances.map((a) => (
-                  <li key={a.chapterId}>
-                    <Link
-                      href={`/works/${workId}/chapters/${a.chapterId}`}
-                      className="b-link font-mono"
-                    >
-                      {chapterLabel(a.position, a.title)}
-                    </Link>
-                    <span className="b-muted font-mono"> · 언급 {a.mentionCount}회</span>
-                  </li>
-                ))}
+                {entry.appearances.map((a) => {
+                  const title = stripEpisodePrefix(a.title, a.position)
+                  return (
+                    <li key={a.chapterId}>
+                      <Link href={`/works/${workId}/chapters/${a.chapterId}`} className="b-link">
+                        <span className="font-mono">{a.position}화</span>
+                        {title && (
+                          <>
+                            {' '}
+                            <span className="font-heading">{title}</span>
+                          </>
+                        )}
+                      </Link>
+                      <span className="b-muted">
+                        {' · 언급 '}
+                        <span className="font-mono">{a.mentionCount}</span>회
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
@@ -222,7 +227,7 @@ export function EntryDetail({
         <Disclosure title="연결된 떡밥" defaultOpen className="wg-wiki-detail-section">
           <div className="wg-wiki-detail-content wrap-anywhere">
             {entry.threads.length === 0 ? (
-              <p className="text-sm text-muted-foreground">연결된 떡밥이 없어요.</p>
+              <p className="b-muted text-sm">연결된 떡밥이 없어요.</p>
             ) : (
               <ul className="wg-wiki-detail-list text-sm">
                 {entry.threads.map((t) => (
@@ -230,10 +235,7 @@ export function EntryDetail({
                     <Link href={`/works/${workId}/wiki/threads`} className="b-link">
                       {t.title}
                     </Link>
-                    <span className="text-muted-foreground">
-                      {' '}
-                      · {THREAD_STATUS_LABEL[t.status]}
-                    </span>
+                    <span className="b-muted"> · {THREAD_STATUS_LABEL[t.status]}</span>
                   </li>
                 ))}
               </ul>

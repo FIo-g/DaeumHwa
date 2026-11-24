@@ -7,7 +7,6 @@ import { type FormEvent, useRef, useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
 import { SubmitButton } from '@/components/app/submit-button'
-import { GridTitle } from '@/components/motion'
 import { buttonVariants, Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -148,7 +147,9 @@ export function DirectiveList({
     <div className="flex flex-col gap-5">
       {remaining.length > 0 && (
         <section aria-labelledby="directives-inferred-heading" className="flex flex-col gap-3">
-          <GridTitle id="directives-inferred-heading">수정에서 찾은 요청</GridTitle>
+          <h2 id="directives-inferred-heading" className="wg-wiki-section-title">
+            수정에서 찾은 요청
+          </h2>
           <p className="b-label b-muted">
             작가님이 초안을 고친 곳에서 찾아낸 요청이에요. 추가해야 적용돼요.
           </p>
@@ -166,7 +167,9 @@ export function DirectiveList({
         </section>
       )}
       <section aria-labelledby="directives-active-heading" className="flex flex-col gap-3">
-        <GridTitle id="directives-active-heading">적용 중인 요청</GridTitle>
+        <h2 id="directives-active-heading" className="wg-wiki-section-title">
+          적용 중인 요청
+        </h2>
         {active.length === 0 ? (
           <EmptyState title="아직 요청이 없어요. AI가 매번 지켜야 할 걸 적어 두세요." />
         ) : (
@@ -447,6 +450,7 @@ function DirectiveAddForm({ workId, characters }: { workId: string; characters: 
         <Label htmlFor="directive-text">요청 내용</Label>
         <Textarea
           id="directive-text"
+          className="b-manuscript"
           required
           maxLength={300}
           rows={2}

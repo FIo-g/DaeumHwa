@@ -136,6 +136,7 @@
   }
 
   .wg-threads-scroll {
+    container-type: inline-size;
     min-inline-size: 0;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
@@ -143,12 +144,44 @@
   }
 
   .wg-threads-timeline {
-    --wg-threads-label-width: clamp(10.5rem, 23%, 16rem);
+    --wg-thread-seed-size: var(--wg-threads-seed-size);
+    --wg-thread-target-size: var(--wg-threads-target-size);
+    --wg-threads-label-min: 10.5rem;
+    --wg-threads-label-width: clamp(var(--wg-threads-label-min), 23cqi, 16rem);
     --wg-threads-min-cell: 3rem;
     --wg-threads-plot-width: calc(var(--wg-threads-min-cell) * var(--wg-threads-chapters));
-    min-inline-size: max(100%, calc(10.5rem + var(--wg-threads-plot-width)));
+    --wg-threads-columns: repeat(var(--wg-threads-chapters), minmax(0, 1fr));
+    position: relative;
+    min-inline-size: calc(var(--wg-threads-label-width) + var(--wg-threads-plot-width));
     display: grid;
     grid-template-columns: var(--wg-threads-label-width) minmax(var(--wg-threads-plot-width), 1fr);
+  }
+
+  .wg-threads-ledger-rules {
+    position: absolute;
+    z-index: 1;
+    grid-column: 2;
+    inset: 0;
+    display: grid;
+    grid-template-columns: var(--wg-threads-columns);
+    pointer-events: none;
+  }
+
+  .wg-threads-ledger-rules > span {
+    border-inline-start: var(--b-line) solid var(--b-grid);
+    min-inline-size: 0;
+  }
+
+  .wg-threads-ledger-rules > span:last-child {
+    border-inline-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-threads-ledger-rules > [data-highlight-start='true'] {
+    border-inline-start-width: var(--b-rule);
+  }
+
+  .wg-threads-ledger-rules > [data-highlight-end='true']:last-child {
+    border-inline-end-width: var(--b-rule);
   }
 
   .wg-threads-axis,
@@ -182,16 +215,10 @@
     font-weight: 500;
   }
 
-  .wg-threads-axis-scroll,
-  .wg-threads-plot-scroll {
-    display: block;
-    min-inline-size: 0;
-  }
-
   .wg-threads-ticks {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(var(--wg-threads-chapters), minmax(0, 1fr));
+    grid-template-columns: var(--wg-threads-columns);
     padding-block-start: 1.25rem;
     border-block-end: var(--b-line) solid var(--b-grid);
   }
@@ -199,15 +226,24 @@
   .wg-threads-tick {
     min-block-size: 44px;
     padding-inline: var(--b-s1);
-    border-inline-start: var(--b-line) solid var(--b-grid);
-    font-family: var(--b-font-mono);
     font-size: var(--b-t-label);
     white-space: nowrap;
     cursor: pointer;
   }
 
-  .wg-threads-tick:nth-last-child(3) {
-    border-inline-end: var(--b-line) solid var(--b-grid);
+  .wg-threads-tick[data-future='true'] .font-mono {
+    color: var(--b-muted);
+  }
+
+  .wg-threads-tick[data-future='true']:is(
+      :hover,
+      :focus-visible,
+      [aria-pressed='true'],
+      [data-related='true']
+    )
+    .font-mono {
+    color: inherit;
+    text-decoration: underline dotted;
   }
 
   .wg-threads-axis-rule {
@@ -217,17 +253,13 @@
     pointer-events: none;
   }
 
-  .wg-threads-axis-guide,
-  .wg-threads-current-guide {
+  .wg-threads-axis-guide {
     position: absolute;
     inset-inline-start: 0;
     inline-size: calc(100% / var(--wg-threads-chapters));
     transform: translateX(calc(100% * var(--wg-threads-current)));
     transition: transform var(--b-step) var(--b-out);
     pointer-events: none;
-  }
-
-  .wg-threads-axis-guide {
     inset-block-start: 0;
     display: grid;
     block-size: 1.25rem;
@@ -235,13 +267,7 @@
     font: 500 var(--b-t-label) / 1 var(--b-font-body);
   }
 
-  .wg-threads-current-guide {
-    inset-block: 0;
-    border-inline: var(--b-rule) solid var(--b-grid);
-  }
-
-  .wg-threads-workspace:has(.wg-threads-range input:active)
-    :is(.wg-threads-axis-guide, .wg-threads-current-guide) {
+  .wg-threads-workspace:has(.wg-threads-range input:active) .wg-threads-axis-guide {
     transition: none;
   }
 
@@ -338,18 +364,10 @@
     border-block-end: var(--b-line) solid var(--b-grid);
   }
 
-  .wg-threads-plot-rules {
-    position: absolute;
-    inset: 0;
-    inline-size: 100%;
-    block-size: 100%;
-    border-inline-end: var(--b-line) solid var(--b-grid);
-  }
-
   .wg-threads-line {
     position: absolute;
     inset-block-start: 50%;
-    border-block-start: 1px solid var(--b-ink);
+    border-block-start: var(--b-line) solid var(--b-ink);
     transform: translateY(-50%);
   }
 
@@ -371,24 +389,24 @@
   }
 
   .wg-threads-seed {
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
+    inline-size: var(--wg-threads-seed-size);
+    block-size: var(--wg-threads-seed-size);
     border-radius: 50%;
     background: var(--b-ink);
   }
 
   .wg-threads-target {
-    inline-size: 0.9375rem;
-    block-size: 0.9375rem;
-    border: 1px solid var(--b-ink);
+    inline-size: var(--wg-threads-target-size);
+    block-size: var(--wg-threads-target-size);
+    border: var(--b-line) solid var(--b-ink);
     border-radius: 50%;
     background: var(--b-paper);
   }
 
   .wg-threads-target::before {
     position: absolute;
-    inset: 2px;
-    border: 1px solid var(--b-ink);
+    inset: var(--b-rule);
+    border: var(--b-line) solid var(--b-ink);
     border-radius: 50%;
     content: '';
   }
@@ -403,25 +421,10 @@
     transform: translate(-50%, -50%);
   }
 
-  .wg-threads-plot[data-coincident='true'] .wg-threads-seed {
-    transform: translate(calc(-50% - 0.5rem), -50%);
-  }
-
-  .wg-threads-plot[data-coincident='true'] .wg-threads-target {
-    transform: translate(calc(-50% + 0.5rem), -50%);
-  }
-
   .wg-threads-plot .wg-threads-development {
     block-size: var(--b-s3);
     transform: translate(-50%, -80%);
-    border-inline-start: 1px solid var(--b-ink);
-  }
-
-  .wg-threads-note {
-    position: absolute;
-    inset: auto var(--b-s2) var(--b-s1) auto;
-    padding-inline: var(--b-s1);
-    background: var(--b-paper);
+    border-inline-start: var(--b-line) solid var(--b-ink);
   }
 
   .wg-threads-legend {
@@ -439,20 +442,17 @@
 
   .wg-threads-dashes {
     inline-size: var(--b-s5);
-    border-block-start: 1px dashed var(--b-ink);
+    border-block-start: var(--b-line) dashed var(--b-ink);
   }
 
   .wg-threads-scroll:focus-visible,
-  .wg-threads-row:focus-visible,
-  .wg-threads-filters button:focus-visible,
-  .wg-threads-tick:focus-visible {
+  .wg-threads-row:focus-visible {
     outline: var(--b-rule) solid var(--b-ink);
     outline-offset: -2px;
   }
 
   .wg-threads-filters button:focus-visible,
   .wg-threads-tick:focus-visible {
-    outline-color: var(--b-paper);
     text-decoration: underline;
     text-underline-offset: 3px;
   }
@@ -495,48 +495,30 @@
       white-space: normal;
     }
 
-    .wg-threads-scroll {
-      overflow: visible;
-    }
-
     .wg-threads-timeline {
-      --wg-threads-min-cell: 2.75rem;
-      min-inline-size: 0;
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .wg-threads-axis-label,
-    .wg-threads-row-label {
-      position: relative;
-    }
-
-    .wg-threads-axis-label {
-      padding: 0;
-      border: 0;
+      --wg-threads-label-min: min(7.75rem, 38cqi);
+      --wg-threads-label-width: clamp(var(--wg-threads-label-min), 35cqi, 10.5rem);
+      /* The tick label and its horizontal padding set the narrow track minimum. */
+      --wg-threads-min-cell: calc(
+        var(--b-t-label) + var(--wg-threads-tick-digits) * 1ch + 2 * var(--b-s1) + var(--b-line)
+      );
     }
 
     .wg-threads-row-label {
-      padding-block: var(--b-s2);
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: var(--b-s2) var(--b-s2) var(--b-s2) 0;
+      padding-block-start: var(--b-t-label);
     }
 
-    .wg-threads-axis-scroll,
-    .wg-threads-plot-scroll {
-      overflow-x: auto;
-      overscroll-behavior-inline: contain;
-      scrollbar-width: thin;
+    .wg-threads-row-label > :nth-child(n + 4) {
+      grid-column: 1 / -1;
     }
 
-    .wg-threads-ticks,
-    .wg-threads-plot {
-      min-inline-size: var(--wg-threads-plot-width);
-    }
-
-    .wg-threads-plot {
-      min-block-size: 3.25rem;
-    }
-
-    .wg-threads-plot:has(.wg-threads-note) {
-      min-block-size: 3.75rem;
+    .wg-threads-row-number {
+      position: absolute;
+      inset: 0 var(--b-s2) auto auto;
+      line-height: 1;
+      pointer-events: none;
     }
   }
 
