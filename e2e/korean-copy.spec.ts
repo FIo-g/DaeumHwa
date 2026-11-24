@@ -106,7 +106,7 @@ test('main screens show no English words', async ({ page, browser }) => {
   })
 
   await page.goto(chapterPath)
-  await expect(page.getByRole('heading', { name: /열한 층/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /종루의 손짓/ })).toBeVisible()
   await page.getByRole('tab', { name: '점검', exact: true }).click()
   await expect(checkPanel.getByText(MANUSCRIPT_QUOTE)).toBeVisible({ timeout: 60_000 })
   const contextButton = page.getByRole('button', { name: 'AI가 참고한 설정 보기' })

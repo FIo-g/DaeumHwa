@@ -3,6 +3,7 @@ import type { Db } from '@/db/client'
 import { SAMPLE_WORK, type SampleWorkData } from '@/lib/sample-work'
 import { createChaptersBulk } from './chapters'
 import { createFact } from './facts'
+import { createRelation } from './relations'
 import { createThread } from './threads'
 import { createEntry } from './wiki'
 import { createWork } from './works'
@@ -45,6 +46,22 @@ export async function createSampleWork(
         content: fact.content,
         status: 'confirmed',
         sourceType: 'author',
+      })
+    }
+
+    for (const relation of data.relations) {
+      const sourceEntryId = entryIds.get(relation.sourceKey)
+      const targetEntryId = entryIds.get(relation.targetKey)
+      if (!sourceEntryId || !targetEntryId) throw new Error('sample relation card missing')
+      await createRelation(run, actor, {
+        workId: work.id,
+        sourceEntryId,
+        targetEntryId,
+        kind: relation.kind,
+        description: relation.description,
+        directed: relation.directed,
+        startPosition: relation.startPosition,
+        endPosition: relation.endPosition,
       })
     }
 
