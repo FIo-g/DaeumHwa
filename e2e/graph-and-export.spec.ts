@@ -16,10 +16,17 @@ test('relation graph renders and the backup downloads', async ({ page }) => {
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('heading', { name: '관계 추가', exact: true })).toBeVisible()
 
-  await dialog.getByRole('combobox', { name: '첫 번째 카드', exact: true }).click()
-  await page.getByRole('option', { name: '서윤', exact: true }).click()
-  await dialog.getByRole('combobox', { name: '두 번째 카드', exact: true }).click()
-  await page.getByRole('option', { name: '도현', exact: true }).click()
+  for (const [label, name] of [
+    ['첫 번째 카드', '서윤'],
+    ['두 번째 카드', '도현'],
+  ]) {
+    const picker = dialog.getByRole('combobox', { name: label, exact: true })
+    await picker.click()
+    await expect(picker).toHaveAttribute('aria-controls', /.+/)
+    const listId = await picker.getAttribute('aria-controls')
+    await page.locator(`[id="${listId}"]`).getByRole('option', { name, exact: true }).click()
+    await expect(picker.locator('[data-slot=select-value]')).toHaveText(name)
+  }
   await dialog.getByLabel('관계 종류', { exact: true }).fill('가족')
   await dialog.getByRole('button', { name: '관계 추가', exact: true }).click()
   await expect(dialog).toBeHidden()

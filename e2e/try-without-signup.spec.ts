@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { PASSWORD, uniqueEmail } from './helpers'
 
 test.use({ viewport: { width: 1440, height: 1000 } })
@@ -23,9 +23,12 @@ async function capture(page: Page, filename: string) {
   })
 }
 
-async function signUpFromTrial(page: Page) {
-  await page.getByRole('link', { name: '가입 후 작품 이어가기' }).click()
-  await expect(page.getByText('체험 작품은 이 계정으로 옮겨집니다.')).toBeVisible()
+async function signUpFromTrial(
+  page: Page,
+  signupLink: Locator = page.getByRole('link', { name: '가입 후 작품 이어가기' }),
+) {
+  await signupLink.click()
+  await expect(page.getByText('체험 작품은 이 계정으로 옮겨 드려요.')).toBeVisible()
   await page.getByLabel('이름', { exact: true }).fill('심사위원')
   await page.getByLabel('이메일', { exact: true }).fill(uniqueEmail('trial'))
   await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD)
@@ -46,6 +49,8 @@ test('checks chapter three without signup and keeps the same work after signup',
       checkCalls += 1
     }
   })
+  page.setDefaultTimeout(15_000)
+  await page.setViewportSize({ width: 390, height: 844 })
   for (const path of ['/login', '/signup']) {
     await page.goto(path)
     await expect(page.getByRole('button', { name: TRIAL_BUTTON })).toBeVisible()
@@ -58,29 +63,55 @@ test('checks chapter three without signup and keeps the same work after signup',
   await tryButton.click()
 
   await expect(page).toHaveURL(/\/works\/[^/]+\/chapters\/[^/]+/, { timeout: 60_000 })
-  await expect(page.getByRole('heading', { name: /^3화(?:\s|$)/ })).toBeVisible()
-  await expect(page.getByText(TRIAL_STATUS, { exact: true })).toBeVisible()
-  await expect(page.getByRole('tab', { name: '점검', selected: true })).toBeVisible()
-  const checkPanel = page.getByRole('region', { name: '회차 점검' })
+  const sheet = page.getByRole('dialog', { name: '작업 패널' })
+  const tabs = sheet.getByRole('tablist', { name: '작업 패널 탭' })
+  await expect(sheet).toBeVisible()
+  await expect(tabs.getByRole('tab', { name: '점검', selected: true })).toBeVisible()
+  const checkPanel = sheet.getByRole('region', { name: '회차 점검' })
   await expect(checkPanel.getByText(MANUSCRIPT_QUOTE)).toBeVisible({ timeout: 60_000 })
   await expect(checkPanel.getByText(WIKI_EVIDENCE)).toBeVisible()
   await expect(checkPanel.getByRole('button', { name: '제안대로 고치기' }).first()).toBeVisible()
   const chapterPath = new URL(page.url()).pathname
   const workPath = chapterPath.split('/chapters/')[0]
 
+  // The auto check refreshes the chapter after showing its result and can recreate the sheet.
+  await page.waitForLoadState('networkidle')
+  await expect(checkPanel.getByText(WIKI_EVIDENCE)).toBeVisible()
   await capture(page, '02-trial-check.png')
-  for (const path of ['/advice', '/reader-sim', '/import', '/interview']) {
-    await page.goto(`${workPath}${path}`)
-    await expect(page.getByText('가입 후 이용할 수 있습니다.', { exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+  await expect(page.getByRole('heading', { name: /^3화(?:\s|$)/ })).toBeVisible()
+  await expect(page.getByText(TRIAL_STATUS, { exact: true })).toBeVisible()
+  const restrictedTools = [
+    { path: 'advice', label: '방향 조언' },
+    { path: 'reader-sim', label: '독자 시뮬레이션' },
+    { path: 'import', label: '가져오기' },
+    { path: 'interview', label: '인터뷰' },
+  ]
+  const signupLink = page.getByRole('main').getByRole('link', { name: '가입 후 작품 이어가기' })
+  for (const { path, label } of restrictedTools) {
+    await page.getByRole('button', { name: '작품 메뉴 열기', exact: true }).click()
+    const menu = page.getByRole('dialog', { name: SAMPLE_TITLE, exact: true })
+    await expect(menu).toBeVisible()
+    await menu.getByRole('link', { name: `${label} 가입 필요`, exact: true }).click()
+    await expect(page).toHaveURL(`${workPath}/${path}`)
+    await expect(page.getByText('가입 후 이용할 수 있어요.', { exact: true })).toBeVisible()
+    await expect(signupLink).toBeVisible()
+    await expect(signupLink).toHaveAttribute('href', '/signup')
   }
-  await signUpFromTrial(page)
+  await signUpFromTrial(page, signupLink)
   const work = page.locator(`a[href="${workPath}"]`).filter({ hasText: SAMPLE_TITLE })
   await expect(work).toBeVisible()
   await expect(work).toContainText('소유자')
   await capture(page, '03-after-signup.png')
 
   await page.goto(chapterPath)
-  await page.getByRole('tab', { name: '점검', exact: true }).click()
+  await expect(sheet).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+  await page.getByRole('button', { name: '패널 열기', exact: true }).click()
+  await expect(sheet).toBeVisible()
+  await tabs.getByRole('tab', { name: '점검', exact: true }).click()
   await expect(checkPanel.getByText(WIKI_EVIDENCE)).toBeVisible()
   await expect(checkPanel.getByRole('button', { name: '제안대로 고치기' }).first()).toBeVisible()
   expect(checkCalls).toBe(1)
@@ -120,7 +151,7 @@ test('resolves a finding and approves an edited proposal before signup', async (
   await proposal.getByRole('button', { name: '수정', exact: true }).click()
   await proposal.getByRole('textbox', { name: '요약', exact: true }).fill(APPROVED_SUMMARY)
   await approve.click()
-  await expect(page.getByText('승인 대기 중인 제안이 없습니다.')).toBeVisible()
+  await expect(page.getByText('승인 대기 중인 제안이 없어요.')).toBeVisible()
 
   await signUpFromTrial(page)
   await expect(

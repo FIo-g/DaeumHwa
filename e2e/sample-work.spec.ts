@@ -19,7 +19,7 @@ test('one click builds the sample work and auto-runs the chapter check once', as
   await expect(page).toHaveURL(/\/works\/[^/]+\/chapters\/[^/]+/)
   await expect(page.getByText('샘플 작품', { exact: true })).toBeVisible()
   await expect(page.getByRole('tab', { name: '점검', selected: true })).toBeVisible()
-  await expect(page.getByText('설정 오류 3곳을 심어 두었습니다')).toBeVisible()
+  await expect(page.getByText('설정 오류를 세 군데 숨겨 뒀어요.')).toBeVisible()
   await expect(page.getByRole('link', { name: '2화 점검하기' })).toBeVisible()
   await expect(page.getByRole('link', { name: '설정 보드 보기' })).toBeVisible()
 
@@ -38,5 +38,5 @@ test('one click builds the sample work and auto-runs the chapter check once', as
   expect(checkCalls).toBe(1)
   await expect(page.getByRole('tab', { name: '점검', selected: true })).toBeVisible()
   await expect(checkPanel.getByText(MANUSCRIPT_QUOTE)).toHaveCount(1)
-  await expect(page.getByText('점검을 마쳤습니다.')).toHaveCount(0)
+  await expect(page.getByText('점검을 마쳤어요.')).toHaveCount(0)
 })

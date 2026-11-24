@@ -60,8 +60,8 @@ test('write, check against the wiki, approve, and read history', async ({ page }
   await expect(approval.getByRole('heading', { name: /이 회차에서 찾은 위키 후보/ })).toBeVisible({
     timeout: 30_000,
   })
-  await approval.getByRole('button', { name: '모두 승인 (AI 태그 그대로)' }).click()
-  await expect(approval.getByText('승인 대기 중인 후보가 없습니다.')).toBeVisible({
+  await approval.getByRole('button', { name: 'AI 태그로 모두 승인' }).click()
+  await expect(approval.getByText('승인 대기 중인 후보가 없어요.')).toBeVisible({
     timeout: 30_000,
   })
   await page.keyboard.press('Escape')
@@ -78,7 +78,7 @@ test('write, check against the wiki, approve, and read history', async ({ page }
     .getByRole('link', { name: '승인 대기', exact: false })
     .click()
   await expect(page).toHaveURL(new RegExp(`/works/${workId}/approvals`))
-  await expect(page.getByText('승인 대기 중인 제안이 없습니다.', { exact: true })).toBeVisible()
+  await expect(page.getByText('승인 대기 중인 제안이 없어요.', { exact: true })).toBeVisible()
 
   // History lists the card creation.
   await page
