@@ -7,6 +7,7 @@ import { MenuSheet } from '@/components/motion/menu-sheet'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { flushPendingSaves } from '@/lib/client/use-autosave'
+import { cn } from '@/lib/utils'
 import type { SessionUser } from '@/server/session'
 
 /** Top bar for signed-in pages: logo, user name and sign-out. */
@@ -37,16 +38,21 @@ export function TopBar({ user }: { user: SessionUser }) {
   return (
     <header className="b-top">
       <div className="b-wrap b-nav-inner">
-        <Link href="/works" className="b-brand b-link">
+        <Link href="/works" className="b-brand b-link max-[359px]:text-xl">
           <span>다음화</span>
         </Link>
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-2 max-[359px]:gap-1 sm:gap-3">
           {user.isAnonymous ? (
             <>
-              <span className="b-label whitespace-nowrap text-muted-ink">체험 중</span>
+              <span className="b-label whitespace-nowrap text-muted-ink max-[359px]:text-xs">
+                체험 중
+              </span>
               <Link
                 href="/signup"
-                className={buttonVariants({ variant: 'outline', className: 'px-2 sm:px-4' })}
+                className={cn(
+                  buttonVariants({ variant: 'outline', className: 'px-2 sm:px-4' }),
+                  'max-[359px]:px-1.5 max-[359px]:text-xs',
+                )}
                 onNavigate={(event) => {
                   event.preventDefault()
                   void continueToSignup()
