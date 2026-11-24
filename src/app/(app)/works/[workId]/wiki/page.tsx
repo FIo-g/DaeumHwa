@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react'
-import { PageHeader } from '@/components/app/page-header'
 import { ChapterSummaries } from '@/components/wiki/chapter-summaries'
 import { DirectiveList } from '@/components/wiki/directive-list'
 import { EntryList, type EntryListItem } from '@/components/wiki/entry-list'
 import { NamingRules } from '@/components/wiki/naming-rules'
 import { StyleCards } from '@/components/wiki/style-cards'
-import { WikiTabs } from '@/components/wiki/wiki-tabs'
+import { SettingsBoardHeader } from '@/components/wiki/wiki-tabs'
 import { ENTRY_KINDS, type EntryKind } from '@/db/types'
 import { hasRole } from '@/server/access'
 import { listChapters } from '@/server/chapters'
@@ -120,11 +119,7 @@ export default async function WikiPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="설정 보드"
-        description="인물, 세계관, 표기, 회차 요약, 문체 카드를 한곳에서 관리합니다."
-      />
-      <WikiTabs workId={workId} active={tab} />
+      <SettingsBoardHeader workId={workId} active={tab} />
       {content}
     </div>
   )

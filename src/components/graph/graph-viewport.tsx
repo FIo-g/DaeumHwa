@@ -164,7 +164,7 @@ export const GraphViewport = memo(function GraphViewport({
       ref={containerRef}
       role="region"
       aria-label="관계 그래프"
-      className="h-[clamp(20rem,60vh,44rem)] w-full min-w-0 overflow-hidden rounded-xl border bg-background text-foreground"
+      className="h-[clamp(20rem,60vh,44rem)] w-full min-w-0 overflow-hidden rounded-sm border border-rule bg-sheet text-foreground"
     >
       {content}
     </div>

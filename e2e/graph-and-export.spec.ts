@@ -44,6 +44,12 @@ test('relation graph renders and the backup downloads', async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/works/${workId}/wiki/graph`))
   await expect(page.getByRole('img', { name: '관계 그래프', exact: true })).toBeVisible()
   await expect(nodeLayer).toHaveCount(1)
+  // The graph page keeps the settings board tab bar, with its own tab marked.
+  await expect(
+    page
+      .getByRole('navigation', { name: '설정 보드 탭' })
+      .getByRole('link', { name: '관계 그래프', exact: true }),
+  ).toHaveAttribute('aria-current', 'page')
 
   await page.goto(`/works/${workId}/history`)
   const downloadPromise = page.waitForEvent('download')

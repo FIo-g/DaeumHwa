@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
-import { ENTRY_KIND_COLOR, type GraphEdge, type GraphNode } from './graph-model'
+import type { GraphEdge, GraphNode } from './graph-model'
 import {
   linkCurvatures,
   nodeLabel,
@@ -10,6 +10,7 @@ import {
   relationLabel,
   type ForceGraphRendererProps,
 } from './force-graph-renderer'
+import { GRAPH_FONT, drawKindMark } from './graph-style'
 
 const NODE_RADIUS = 4
 
@@ -32,15 +33,15 @@ export default function Graph2D({
       backgroundColor={palette.background}
       nodeRelSize={NODE_RADIUS}
       nodeLabel={nodeLabel}
-      nodeColor={(node) => ENTRY_KIND_COLOR[node.kind]}
-      nodeCanvasObjectMode={() => 'after'}
+      nodeCanvasObjectMode={() => 'replace'}
       nodeCanvasObject={(node, context, scale) => {
         if (node.x === undefined || node.y === undefined) return
+        drawKindMark(context, node.kind, node.x, node.y, NODE_RADIUS, palette.background, 1.2)
         const fontSize = Math.min(9, 13 / scale)
         if (fontSize * scale < 8) return
 
-        const labelY = node.y + NODE_RADIUS + 2
-        context.font = `600 ${fontSize}px sans-serif`
+        const labelY = node.y + NODE_RADIUS + 2.5
+        context.font = `500 ${fontSize}px ${GRAPH_FONT}`
         context.textAlign = 'center'
         context.textBaseline = 'top'
         const labelWidth = context.measureText(node.name).width

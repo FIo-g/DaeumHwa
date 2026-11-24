@@ -123,7 +123,7 @@ export function EntryDetail({ workId, entry, canEdit, chapters, changes }: Entry
       {fieldRows.length > 0 && (
         <section aria-labelledby="entry-fields-heading" className="flex flex-col gap-2">
           <h2 id="entry-fields-heading" className="text-base font-semibold">
-            고정 필드
+            기본 정보
           </h2>
           <dl className="grid gap-2 sm:grid-cols-[8rem_1fr]">
             {fieldRows.map(([label, value], index) => (

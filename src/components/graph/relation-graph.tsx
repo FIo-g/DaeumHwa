@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Core, ElementDefinition, StylesheetStyle } from 'cytoscape'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import type { Core, ElementDefinition, LayoutOptions, StylesheetStyle } from 'cytoscape'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -14,19 +14,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { EntryKind, Role } from '@/db/types'
+import { ENTRY_KINDS, type EntryKind, type Role } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import { archiveRelationAction } from '@/server/actions/relations'
 import {
-  ENTRY_KIND_COLOR,
   type GraphEdge,
   type GraphNode,
   defaultPosition,
+  circleOrder,
   formatRelationRange,
   visibleGraph,
 } from './graph-model'
 import { GraphControls } from './graph-controls'
+import { ENTRY_KIND_MARK, GRAPH_FONT, GRAPH_INK, type KindShape, RELATION_INK } from './graph-style'
+import { KindIcon } from './kind-icon'
 import { RelationForm } from './relation-form'
 
 type RelationGraphProps = {
@@ -35,57 +37,130 @@ type RelationGraphProps = {
   nodes: GraphNode[]
   edges: GraphEdge[]
   latestPosition: number
+  /** Heading of the tab, shown left of the actions. */
+  intro?: ReactNode
+  /** Extra actions shown before 관계 추가. */
+  actions?: ReactNode
 }
 
 type Selection = { type: 'node' | 'edge'; id: string } | null
+
+const CY_SHAPE: Record<KindShape, string> = {
+  circle: 'ellipse',
+  square: 'rectangle',
+  diamond: 'diamond',
+  hexagon: 'hexagon',
+  triangle: 'triangle',
+}
+
+/** Fitting a small graph would blow the marks up to poster size; stop at a reading scale. */
+const MAX_FIT_ZOOM = 1.15
+
+/**
+ * A circle in linked order. cose collapsed linked cards into one spot (and fitting that spot made
+ * the marks huge); the circle is stable between visits and keeps every label readable.
+ */
+function circleLayout(nodes: GraphNode[], edges: GraphEdge[]): LayoutOptions {
+  const rank = new Map(circleOrder(nodes, edges).map((id, index) => [id, index]))
+  return {
+    name: 'circle',
+    animate: false,
+    fit: true,
+    padding: 48,
+    avoidOverlap: true,
+    radius: Math.max(110, nodes.length * 24),
+    sort: (a, b) => (rank.get(a.id()) ?? 0) - (rank.get(b.id()) ?? 0),
+    stop: (event) => {
+      const graph = event.cy
+      if (graph.zoom() > MAX_FIT_ZOOM) {
+        graph.zoom(MAX_FIT_ZOOM)
+        graph.center()
+      }
+    },
+  }
+}
 
 const GRAPH_STYLE: StylesheetStyle[] = [
   {
     selector: 'node',
     style: {
-      'background-color': 'data(color)',
-      width: 26,
-      height: 26,
+      shape: (node) => node.data('shape'),
+      width: 'data(size)',
+      height: 'data(size)',
+      'background-color': 'data(fill)',
+      'border-width': 'data(border)',
+      'border-color': 'data(ink)',
       label: 'data(name)',
-      'font-size': 11,
-      color: '#0f172a',
+      'font-family': GRAPH_FONT,
+      'font-size': 12,
+      'font-weight': 500,
+      color: GRAPH_INK.graphite,
       'text-valign': 'bottom',
-      'text-margin-y': 4,
-      'text-background-color': '#ffffff',
-      'text-background-opacity': 0.85,
-      'text-background-padding': '2px',
-      'border-width': 0,
+      'text-margin-y': 5,
+      'text-background-color': GRAPH_INK.sheet,
+      'text-background-opacity': 0.9,
+      'text-background-padding': '1px',
+      'overlay-color': GRAPH_INK.graphite,
+      'overlay-padding': 4,
     },
   },
   {
     selector: 'edge',
     style: {
       label: 'data(label)',
-      width: 2,
-      'line-color': '#94a3b8',
-      'target-arrow-color': '#94a3b8',
+      width: 1.25,
+      'line-color': RELATION_INK,
+      'target-arrow-color': RELATION_INK,
       'target-arrow-shape': 'none',
+      'arrow-scale': 0.8,
       'curve-style': 'bezier',
-      'font-size': 10,
-      color: '#334155',
-      'text-background-color': '#ffffff',
-      'text-background-opacity': 0.9,
+      'font-family': GRAPH_FONT,
+      'font-size': 11,
+      color: GRAPH_INK.muted,
+      'text-background-color': GRAPH_INK.sheet,
+      'text-background-opacity': 0.95,
       'text-background-padding': '2px',
+      'overlay-color': GRAPH_INK.graphite,
     },
   },
   {
     selector: 'edge[?directed]',
     style: { 'target-arrow-shape': 'triangle' },
   },
-  { selector: ':selected', style: { 'border-width': 3, 'border-color': '#0f172a' } },
+  // Blue pencil marks focus only: the card or relation the side panel is showing.
+  {
+    selector: 'node:selected',
+    style: { 'border-width': 2, 'border-color': GRAPH_INK.canon },
+  },
+  {
+    selector: 'edge:selected',
+    style: {
+      width: 2,
+      'line-color': GRAPH_INK.canon,
+      'target-arrow-color': GRAPH_INK.canon,
+      color: GRAPH_INK.canon,
+    },
+  },
   { selector: '.hidden', style: { display: 'none' } },
 ]
 
 function toElements(nodes: GraphNode[], edges: GraphEdge[]): ElementDefinition[] {
   return [
-    ...nodes.map((n) => ({
-      data: { id: n.id, name: n.name, color: ENTRY_KIND_COLOR[n.kind] },
-    })),
+    ...nodes.map((n) => {
+      const mark = ENTRY_KIND_MARK[n.kind]
+      return {
+        data: {
+          id: n.id,
+          name: n.name,
+          shape: CY_SHAPE[mark.shape],
+          // Pointed shapes look smaller than a circle of the same box.
+          size: mark.shape === 'circle' || mark.shape === 'square' ? 13 : 16,
+          fill: mark.filled ? mark.ink : GRAPH_INK.sheet,
+          ink: mark.ink,
+          border: mark.filled ? 0 : 1.5,
+        },
+      }
+    }),
     ...edges.map((e) => ({
       data: {
         id: e.id,
@@ -114,7 +189,15 @@ function applyVisibility(
 }
 
 /** Relationship graph of the work with a chapter slider. cytoscape is loaded only in the browser. */
-export function RelationGraph({ workId, role, nodes, edges, latestPosition }: RelationGraphProps) {
+export function RelationGraph({
+  workId,
+  role,
+  nodes,
+  edges,
+  latestPosition,
+  intro,
+  actions,
+}: RelationGraphProps) {
   const router = useRouter()
   const canEdit = role === 'owner' || role === 'editor'
   const [position, setPosition] = useState(() => defaultPosition(latestPosition))
@@ -127,7 +210,7 @@ export function RelationGraph({ workId, role, nodes, edges, latestPosition }: Re
 
   const kinds = useMemo(() => {
     const present = new Set(nodes.map((n) => n.kind))
-    return (Object.keys(ENTRY_KIND_COLOR) as EntryKind[]).filter((k) => present.has(k))
+    return ENTRY_KINDS.filter((k) => present.has(k))
   }, [nodes])
 
   const visible = useMemo(
@@ -154,7 +237,9 @@ export function RelationGraph({ workId, role, nodes, edges, latestPosition }: Re
         container,
         elements: toElements(nodes, edges),
         style: GRAPH_STYLE,
-        layout: { name: 'cose', animate: false, fit: true, padding: 24 },
+        minZoom: 0.3,
+        maxZoom: 3,
+        layout: circleLayout(nodes, edges),
       })
       cy.on('tap', 'node', (e) => setSelection({ type: 'node', id: e.target.id() }))
       cy.on('tap', 'edge', (e) => setSelection({ type: 'edge', id: e.target.id() }))
@@ -174,14 +259,13 @@ export function RelationGraph({ workId, role, nodes, edges, latestPosition }: Re
 
   if (nodes.length === 0) {
     return (
-      <EmptyState
-        title="카드를 먼저 만들면 관계 그래프가 그려집니다."
-        action={
-          <Link className={buttonVariants({ variant: 'outline' })} href={`/works/${workId}/wiki`}>
-            설정 보드로 가기
-          </Link>
-        }
-      />
+      <div className="flex flex-col gap-4">
+        {intro}
+        <EmptyState
+          title="카드를 먼저 만들면 관계 그래프가 그려집니다."
+          description="인물이나 세계관 탭에서 카드를 만드세요."
+        />
+      </div>
     )
   }
 
@@ -222,11 +306,15 @@ export function RelationGraph({ workId, role, nodes, edges, latestPosition }: Re
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-4">
-        {canEdit && (
-          <div className="flex justify-end">
-            <Button onClick={() => setDialog('create')}>관계 추가</Button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          {intro}
+          {(actions || canEdit) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {actions}
+              {canEdit && <Button onClick={() => setDialog('create')}>관계 추가</Button>}
+            </div>
+          )}
+        </div>
         <GraphControls
           latestPosition={latestPosition}
           position={position}
@@ -245,7 +333,7 @@ export function RelationGraph({ workId, role, nodes, edges, latestPosition }: Re
             ref={containerRef}
             role="img"
             aria-label="관계 그래프"
-            className="h-[60vh] min-h-72 w-full rounded-xl border bg-background"
+            className="h-[60vh] min-h-72 w-full rounded-sm border border-rule bg-sheet"
           />
           <p className="text-xs text-muted-foreground">
             카드를 누르면 카드 정보를, 선을 누르면 관계를 봅니다.
@@ -254,7 +342,7 @@ export function RelationGraph({ workId, role, nodes, edges, latestPosition }: Re
 
         <aside
           aria-label="선택한 항목"
-          className="flex flex-col gap-4 rounded-xl border p-4 text-sm"
+          className="flex flex-col gap-4 rounded-sm border border-rule bg-sheet p-4 text-sm"
         >
           {selectedNode && (
             <div className="flex flex-col gap-2">
@@ -309,33 +397,36 @@ export function RelationGraph({ workId, role, nodes, edges, latestPosition }: Re
             <p className="text-muted-foreground">그래프에서 카드나 관계를 고르세요.</p>
           )}
 
-          <div className="flex flex-col gap-2 border-t pt-4">
+          <div className="flex flex-col gap-2 border-t border-rule pt-4">
             <p className="font-medium">카드 {visibleNodes.length}개</p>
             <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
               {visibleNodes.map((n) => (
                 <li key={n.id}>
                   <button
                     type="button"
-                    className="w-full rounded-md px-2 py-1 text-left hover:bg-muted"
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left hover:bg-muted aria-pressed:bg-muted"
                     aria-pressed={selectedNode?.id === n.id}
                     onClick={() => setSelection({ type: 'node', id: n.id })}
                   >
-                    {n.name}
-                    <span className="text-muted-foreground"> · {ENTRY_KIND_LABEL[n.kind]}</span>
+                    <KindIcon kind={n.kind} inked />
+                    <span>
+                      {n.name}
+                      <span className="text-muted-foreground"> · {ENTRY_KIND_LABEL[n.kind]}</span>
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="flex flex-col gap-2 border-t pt-4">
+          <div className="flex flex-col gap-2 border-t border-rule pt-4">
             <p className="font-medium">관계 {visibleEdges.length}개</p>
             <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
               {visibleEdges.map((e) => (
                 <li key={e.id}>
                   <button
                     type="button"
-                    className="w-full rounded-md px-2 py-1 text-left hover:bg-muted"
+                    className="w-full rounded-sm px-2 py-1 text-left hover:bg-muted aria-pressed:bg-muted"
                     aria-pressed={selectedEdge?.id === e.id}
                     onClick={() => setSelection({ type: 'edge', id: e.id })}
                   >

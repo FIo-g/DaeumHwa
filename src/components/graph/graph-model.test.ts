@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   type GraphEdge,
   type GraphNode,
+  circleOrder,
   createForceGraphData,
   defaultPosition,
   formatRelationRange,
@@ -150,5 +151,32 @@ describe('formatRelationRange', () => {
     expect(formatRelationRange(3, null)).toBe('3화부터')
     expect(formatRelationRange(null, 8)).toBe('8화까지')
     expect(formatRelationRange(3, 8)).toBe('3화부터 8화까지')
+  })
+})
+
+describe('circleOrder', () => {
+  const card = (id: string, name: string): GraphNode => ({
+    id,
+    name,
+    kind: 'character',
+    firstAppearance: null,
+  })
+
+  it('walks a chain of linked cards end to end, with lone cards last', () => {
+    const nodes = [card('k', '은색 열쇠'), card('d', '도윤서'), card('h', '청해항')]
+    nodes.push(card('j', '잿빛 종루'), card('s', '한세린'))
+    const edges = [edge('e1', 's', 'd', 3, null), edge('e2', 'd', 'h', null, null)]
+    edges.push(edge('e3', 'j', 'h', null, null))
+
+    expect(circleOrder(nodes, edges)).toEqual(['j', 'h', 'd', 's', 'k'])
+  })
+
+  it('puts every card in once and ignores relations to cards it was not given', () => {
+    const nodes = [card('a', '가'), card('b', '나'), card('c', '다')]
+    const edges = [edge('e1', 'a', 'b', null, null), edge('e2', 'b', 'x', null, null)]
+
+    const order = circleOrder(nodes, edges)
+    expect([...order].sort()).toEqual(['a', 'b', 'c'])
+    expect(order.at(-1)).toBe('c')
   })
 })

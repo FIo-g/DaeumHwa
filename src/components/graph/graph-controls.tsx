@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import type { EntryKind } from '@/db/types'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
-import { ENTRY_KIND_COLOR } from './graph-model'
+import { KindIcon } from './kind-icon'
 
 type GraphControlsProps = {
   latestPosition: number
@@ -20,7 +20,11 @@ type GraphControlsProps = {
   onToggleKind: (kind: EntryKind) => void
 }
 
-/** Chapter slider, 전체 보기 switch, and kind chips (each chip doubles as a legend entry). */
+/**
+ * Chapter slider, 전체 보기 switch, and kind chips. Each chip doubles as a legend entry: it carries
+ * the kind's graph mark, and like the filter chips elsewhere a shown kind is solid, a hidden one is
+ * outlined.
+ */
 export function GraphControls({
   latestPosition,
   position,
@@ -65,7 +69,8 @@ export function GraphControls({
       </div>
 
       {kinds.length > 0 && (
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="카드 종류">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="카드 종류">
+          <span className="text-sm text-muted-foreground">카드 종류</span>
           {kinds.map((kind) => {
             const hidden = hiddenKinds.includes(kind)
             return (
@@ -73,16 +78,11 @@ export function GraphControls({
                 key={kind}
                 type="button"
                 size="sm"
-                variant={hidden ? 'outline' : 'secondary'}
+                variant={hidden ? 'outline' : 'default'}
                 aria-pressed={!hidden}
                 onClick={() => onToggleKind(kind)}
-                className={hidden ? 'opacity-50' : undefined}
               >
-                <span
-                  aria-hidden="true"
-                  className="inline-block size-2.5 rounded-full"
-                  style={{ backgroundColor: ENTRY_KIND_COLOR[kind] }}
-                />
+                <KindIcon kind={kind} className="size-2.5" />
                 {ENTRY_KIND_LABEL[kind]}
               </Button>
             )

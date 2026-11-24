@@ -4,13 +4,13 @@ import Link from 'next/link'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button, buttonVariants } from '@/components/ui/button'
-import type { EntryKind } from '@/db/types'
+import { ENTRY_KINDS, type EntryKind } from '@/db/types'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import type { GraphViewData } from '@/server/relations'
-import { relationKindColor } from './force-graph-renderer'
 import { GraphControls } from './graph-controls'
 import { createForceGraphData, defaultPosition, formatRelationRange } from './graph-model'
 import { GraphViewport } from './graph-viewport'
+import { KindIcon } from './kind-icon'
 
 type RelationGraphViewProps = GraphViewData & { workId: string }
 type Selection = { type: 'node' | 'edge'; id: string } | null
@@ -33,7 +33,10 @@ export function RelationGraphView({
   const renderMode = unavailable3D ? '2d' : mode
   const chapter = showAll ? null : Math.min(position, defaultPosition(latestPosition))
 
-  const kinds = useMemo(() => [...new Set(nodes.map((node) => node.kind))], [nodes])
+  const kinds = useMemo(() => {
+    const present = new Set(nodes.map((node) => node.kind))
+    return ENTRY_KINDS.filter((kind) => present.has(kind))
+  }, [nodes])
   const nodeNames = useMemo(() => new Map(nodes.map((node) => [node.id, node.name])), [nodes])
   const graph = useMemo(() => {
     // A different renderer needs fresh data because force-graph mutates nodes and links.
@@ -87,11 +90,7 @@ export function RelationGraphView({
     return (
       <EmptyState
         title="카드를 먼저 만들면 관계 그래프가 그려집니다."
-        action={
-          <Link href={`/works/${workId}/wiki`} className={buttonVariants({ variant: 'outline' })}>
-            설정 보드로 가기
-          </Link>
-        }
+        description="인물이나 세계관 탭에서 카드를 만드세요."
       />
     )
   }
@@ -156,7 +155,7 @@ export function RelationGraphView({
         <aside
           ref={detailsRef}
           aria-label="카드 및 관계"
-          className="flex min-w-0 scroll-mt-4 flex-col gap-4 rounded-xl border p-4 text-sm break-keep [overflow-wrap:anywhere]"
+          className="flex min-w-0 scroll-mt-4 flex-col gap-4 rounded-sm border border-rule bg-sheet p-4 text-sm break-keep [overflow-wrap:anywhere]"
         >
           <div aria-live="polite">
             {selectedNode && (
@@ -213,26 +212,38 @@ export function RelationGraphView({
             )}
           </div>
 
-          <section aria-label="표시된 카드" className="flex flex-col gap-2 border-t pt-4">
+          <section
+            aria-label="표시된 카드"
+            className="flex flex-col gap-2 border-t border-rule pt-4"
+          >
             <h2 className="font-medium">카드 {graph.visibleNodes.length}개</h2>
             <ul className="max-h-40 space-y-1 overflow-y-auto p-0.5">
               {graph.visibleNodes.map((node) => (
                 <li key={node.id}>
                   <button
                     type="button"
-                    className="w-full rounded-md px-2 py-1 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-muted"
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-muted"
                     aria-pressed={selectedNode?.id === node.id}
                     onClick={() => selectNode(node.id)}
                   >
-                    {node.name}
-                    <span className="text-muted-foreground"> · {ENTRY_KIND_LABEL[node.kind]}</span>
+                    <KindIcon kind={node.kind} inked />
+                    <span>
+                      {node.name}
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · {ENTRY_KIND_LABEL[node.kind]}
+                      </span>
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
           </section>
 
-          <section aria-label="표시된 관계" className="flex flex-col gap-2 border-t pt-4">
+          <section
+            aria-label="표시된 관계"
+            className="flex flex-col gap-2 border-t border-rule pt-4"
+          >
             <h2 className="font-medium">관계 {graph.visibleEdges.length}개</h2>
             {graph.visibleEdges.length === 0 ? (
               <p className="text-muted-foreground">표시할 관계가 없습니다.</p>
@@ -242,15 +253,10 @@ export function RelationGraphView({
                   <li key={edge.id}>
                     <button
                       type="button"
-                      className="w-full rounded-md px-2 py-1 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-muted"
+                      className="w-full rounded-sm px-2 py-1 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-muted"
                       aria-pressed={selectedEdge?.id === edge.id}
                       onClick={() => selectEdge(edge.id)}
                     >
-                      <span
-                        aria-hidden="true"
-                        className="mr-1.5 inline-block h-0.5 w-3 align-middle"
-                        style={{ backgroundColor: relationKindColor(edge.kind) }}
-                      />
                       {edgeTitle(edge)}
                       <span className="text-muted-foreground"> · {edge.kind}</span>
                     </button>

@@ -21,17 +21,6 @@ export type GraphEdge = {
   endPosition: number | null
 }
 
-export const ENTRY_KIND_COLOR: Record<EntryKind, string> = {
-  character: '#2563eb',
-  place: '#16a34a',
-  organization: '#9333ea',
-  item: '#ea580c',
-  rule: '#0891b2',
-  event: '#dc2626',
-  term: '#ca8a04',
-  other: '#6b7280',
-}
-
 export const RELATION_KIND_SUGGESTIONS = [
   '가족',
   '연인',
@@ -94,6 +83,47 @@ export function createForceGraphData(
     nodes: data.nodes.filter((node) => nodeIds.has(node.id)).map((node) => ({ ...node })),
     links: data.edges.filter((edge) => edgeIds.has(edge.id)).map((edge) => ({ ...edge })),
   }
+}
+
+/**
+ * Order of the cards around the circle layout: each group of linked cards walked depth first from
+ * its least-linked card, bigger groups first, lone cards last. Linked cards sit side by side, so
+ * most lines are short chords instead of crossing the circle.
+ */
+export function circleOrder(
+  nodes: Pick<GraphNode, 'id' | 'name'>[],
+  edges: Pick<GraphEdge, 'source' | 'target'>[],
+): string[] {
+  const ids = new Set(nodes.map((n) => n.id))
+  const name = new Map(nodes.map((n) => [n.id, n.name]))
+  const neighbours = new Map<string, Set<string>>(nodes.map((n) => [n.id, new Set()]))
+  for (const edge of edges) {
+    if (!ids.has(edge.source) || !ids.has(edge.target) || edge.source === edge.target) continue
+    neighbours.get(edge.source)?.add(edge.target)
+    neighbours.get(edge.target)?.add(edge.source)
+  }
+  const degree = (id: string) => neighbours.get(id)?.size ?? 0
+  const byDegreeThenName = (a: string, b: string) =>
+    degree(a) - degree(b) || (name.get(a) ?? '').localeCompare(name.get(b) ?? '', 'ko')
+
+  const seen = new Set<string>()
+  const groups: string[][] = []
+  for (const start of [...ids].sort(byDegreeThenName)) {
+    if (seen.has(start)) continue
+    const group: string[] = []
+    const stack = [start]
+    while (stack.length > 0) {
+      const id = stack.pop() as string
+      if (seen.has(id)) continue
+      seen.add(id)
+      group.push(id)
+      // Push in reverse so the least-linked neighbour is walked first.
+      const next = [...(neighbours.get(id) ?? [])].filter((n) => !seen.has(n))
+      stack.push(...next.sort(byDegreeThenName).reverse())
+    }
+    groups.push(group)
+  }
+  return groups.sort((a, b) => b.length - a.length).flat()
 }
 
 /** Human-readable range such as "3화부터 8화까지". Null ends mean open. */

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { WikiTabs } from './wiki-tabs'
+import { SettingsBoardHeader, WikiTabs } from './wiki-tabs'
 
 afterEach(() => {
   cleanup()
@@ -28,5 +28,13 @@ describe('WikiTabs', () => {
       'href',
       '/works/w1/wiki/graph',
     )
+  })
+
+  it('puts the same title and tab bar on the ledger and graph pages, with their tab marked', () => {
+    render(<SettingsBoardHeader workId="w1" active="threads" />)
+    expect(screen.getByRole('heading', { level: 1, name: '설정 보드' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: '설정 보드 탭' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '떡밥 장부' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: '관계 그래프' })).not.toHaveAttribute('aria-current')
   })
 })

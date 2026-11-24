@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { PageHeader } from '@/components/app/page-header'
 import { cn } from '@/lib/utils'
 
 export type WikiTab =
@@ -38,5 +39,18 @@ export function WikiTabs({ workId, active }: { workId: string; active: WikiTab }
         )
       })}
     </nav>
+  )
+}
+
+/**
+ * Head of every settings board tab, including the threads ledger and the relation graphs that live
+ * on their own pages: one title, one description, and the tab bar with the current tab marked.
+ */
+export function SettingsBoardHeader({ workId, active }: { workId: string; active: WikiTab }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader title="설정 보드" description="작품 설정을 모아 두는 곳입니다." />
+      <WikiTabs workId={workId} active={active} />
+    </div>
   )
 }

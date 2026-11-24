@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import { CanvasTexture, Sprite, SpriteMaterial, SRGBColorSpace } from 'three'
-import { ENTRY_KIND_COLOR, type GraphEdge, type GraphNode } from './graph-model'
+import type { GraphEdge, GraphNode } from './graph-model'
 import {
   linkCurvatures,
   nodeLabel,
@@ -11,31 +11,30 @@ import {
   relationLabel,
   type ForceGraphRendererProps,
 } from './force-graph-renderer'
+import { ENTRY_KIND_MARK, GRAPH_FONT, drawKindMark } from './graph-style'
 
 const SPRITE_HEIGHT = 46
 const DOT_CENTER_X = 18
 const LABEL_LEFT = 34
 const MAX_TEXT_WIDTH = 380
-const LABEL_FONT = '600 26px sans-serif'
+const LABEL_FONT = `500 26px ${GRAPH_FONT}`
 
 function makeNodeSprite(node: GraphNode, foreground: string, background: string): Sprite {
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  if (!context) return new Sprite(new SpriteMaterial({ color: ENTRY_KIND_COLOR[node.kind] }))
+  if (!context) return new Sprite(new SpriteMaterial({ color: ENTRY_KIND_MARK[node.kind].ink }))
 
   context.font = LABEL_FONT
   const textWidth = Math.min(MAX_TEXT_WIDTH, Math.ceil(context.measureText(node.name).width))
   canvas.width = LABEL_LEFT + textWidth + 10
   canvas.height = SPRITE_HEIGHT
 
+  // A label slip of paper (nearly square corners), then the kind's mark.
   context.fillStyle = background
   context.beginPath()
-  context.roundRect(1, 1, canvas.width - 2, SPRITE_HEIGHT - 2, 8)
+  context.roundRect(1, 1, canvas.width - 2, SPRITE_HEIGHT - 2, 3)
   context.fill()
-  context.fillStyle = ENTRY_KIND_COLOR[node.kind]
-  context.beginPath()
-  context.arc(DOT_CENTER_X, SPRITE_HEIGHT / 2, 9, 0, Math.PI * 2)
-  context.fill()
+  drawKindMark(context, node.kind, DOT_CENTER_X, SPRITE_HEIGHT / 2, 9, background, 3)
 
   context.font = LABEL_FONT
   context.textBaseline = 'middle'
