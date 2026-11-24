@@ -1,0 +1,469 @@
+@layer components {
+  .wg-landing-hero-nav .b-nav-inner {
+    min-block-size: 65px;
+  }
+
+  .wg-landing-hero-logo {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-block-size: 44px;
+    font: 900 1.375rem/1 var(--b-font-title);
+  }
+
+  .wg-landing-hero-logo span {
+    display: grid;
+    place-items: center;
+    inline-size: 34px;
+    block-size: 33px;
+    border-block: var(--b-line) solid var(--b-grid);
+    border-inline-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-logo span:last-child {
+    border-inline-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-logo:is(:hover, :focus-visible) span {
+    color: var(--b-paper);
+    background: var(--b-ink);
+  }
+
+  .wg-landing-hero-nav-link {
+    display: flex;
+    align-items: center;
+    min-block-size: 44px;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .wg-landing-hero-nav-link:is(:hover, :focus-visible) {
+    text-decoration: underline;
+    text-underline-offset: 0.28em;
+  }
+
+  .wg-landing-hero-intro {
+    display: grid;
+    grid-template-areas: 'title' 'copy' 'proof';
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--b-s5);
+    padding-block: clamp(var(--b-s5), 3vw, var(--b-s7)) clamp(var(--b-s7), 5.9vw, var(--b-s9));
+    --b-cell-hero: clamp(2.5rem, 12vw, 5.75rem);
+  }
+
+  .wg-landing-hero-title {
+    grid-area: title;
+    min-inline-size: 0;
+  }
+
+  .wg-landing-hero-title .wg-title-grid {
+    row-gap: clamp(6px, 0.85vw, 12px);
+  }
+
+  .wg-landing-hero-copy {
+    grid-area: copy;
+  }
+
+  .wg-landing-hero-copy .b-lede {
+    margin-block-end: var(--b-s5);
+    word-break: keep-all;
+  }
+
+  .wg-landing-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--b-s2) clamp(var(--b-s3), 1.55vw, var(--b-s5));
+    font-weight: 500;
+  }
+
+  .wg-landing-hero-actions > a {
+    padding-block: var(--b-s2);
+  }
+
+  .wg-landing-hero-edge,
+  .wg-landing-hero-page {
+    font: 400 0.8125rem/1.35 var(--b-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wg-landing-hero-edge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-block-end: var(--b-s2);
+  }
+
+  .wg-landing-hero-edge::after,
+  .wg-landing-hero-boundary::before,
+  .wg-landing-hero-boundary::after {
+    content: '';
+    inline-size: 11px;
+    block-size: 7px;
+    border-block: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-proof {
+    --wg-landing-hero-title-time: calc(15 * var(--b-cell));
+    --wg-landing-hero-pair-time: calc(var(--b-draw) + 2 * var(--b-quick));
+    grid-area: proof;
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  .wg-landing-hero-proof[data-replayed='true'] {
+    --wg-landing-hero-title-time: 0ms;
+  }
+
+  .wg-landing-hero-proof > h2 {
+    position: relative;
+    padding-block: clamp(var(--b-s3), 1.5vw, var(--b-s5));
+    border-block-end: var(--b-line) solid var(--b-grid);
+    font: 900 clamp(1.625rem, 3.2vw, 2.9375rem)/1.24 var(--b-font-title);
+  }
+
+  .wg-landing-hero-proof > h2::before,
+  .wg-landing-hero-closing-rule {
+    content: '';
+    display: block;
+    border-block-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-proof > h2::before {
+    position: absolute;
+    inset: 0 0 auto;
+  }
+
+  .wg-landing-hero-row {
+    --wg-landing-hero-pen-start: calc(
+      var(--wg-landing-hero-title-time) + var(--wg-landing-hero-order) *
+        var(--wg-landing-hero-pair-time)
+    );
+    --wg-landing-hero-leader-start: calc(var(--wg-landing-hero-pen-start) + var(--b-draw));
+    --wg-landing-hero-note-start: calc(var(--wg-landing-hero-leader-start) + var(--b-quick));
+    position: relative;
+    isolation: isolate;
+  }
+
+  .wg-landing-hero-rules {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    display: grid;
+    grid-template-rows: repeat(4, 1fr);
+    opacity: 0.24;
+    pointer-events: none;
+  }
+
+  .wg-landing-hero-rules > span {
+    align-self: end;
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-line-no {
+    position: absolute;
+    inset-block-start: 1.22rem;
+    inset-inline-end: calc(100% + var(--b-s1));
+    opacity: 0;
+    font: 400 0.625rem/1 var(--b-font-mono);
+    pointer-events: none;
+  }
+
+  .wg-landing-hero-row:is(:hover, :focus-within) .wg-landing-hero-rules {
+    opacity: 0.66;
+  }
+
+  .wg-landing-hero-row:is(:hover, :focus-within) .wg-landing-hero-line-no {
+    opacity: 1;
+  }
+
+  .wg-landing-hero-proof .wg-landing-hero-pair {
+    grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+  }
+
+  .wg-landing-hero-pair .wg-proof-pair-manuscript,
+  .wg-landing-hero-pair .wg-proof-pair-note {
+    padding-block: clamp(var(--b-s3), 1.05vw, var(--b-s4)) clamp(var(--b-s3), 1.55vw, var(--b-s5));
+  }
+
+  .wg-landing-hero-pair .wg-proof-pair-manuscript {
+    padding-inline-end: var(--b-s4);
+  }
+
+  .wg-landing-hero-pair .wg-proof-pair-note {
+    padding-inline-start: clamp(var(--b-s3), 1.4vw, var(--b-s5));
+  }
+
+  .wg-landing-hero-manuscript-label {
+    margin-block-end: var(--b-s1);
+    font: 500 0.8125rem/1.5 var(--b-font-body);
+  }
+
+  .wg-landing-hero-sentence {
+    font: 700 clamp(1.0625rem, 1.47vw, 1.375rem)/1.77 var(--b-font-title);
+    word-break: keep-all;
+  }
+
+  .wg-landing-hero-sentence .wg-proof-mark {
+    white-space: nowrap;
+  }
+
+  .wg-landing-hero-sentence-corrected {
+    line-height: 2.5;
+  }
+
+  .wg-landing-hero-correction-anchor {
+    position: relative;
+    white-space: nowrap;
+  }
+
+  .wg-landing-hero-correction {
+    position: absolute;
+    inset-block-start: calc(100% + 2px);
+    inset-inline-start: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--b-s1);
+    color: var(--b-proof);
+    font: 400 0.875rem/1.2 var(--b-font-title);
+    pointer-events: none;
+  }
+
+  .wg-landing-hero-correction::after {
+    content: attr(data-correction) / '';
+  }
+
+  .wg-landing-hero-correction svg {
+    inline-size: 0.9375rem;
+    block-size: 0.75rem;
+    transform: scaleY(-1);
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .wg-landing-hero-caption,
+  .wg-landing-hero-closing-edge {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--b-s2);
+    padding-block-start: var(--b-s2);
+    font-size: 0.8125rem;
+  }
+
+  .wg-landing-hero-replay .wg-pop-text:empty {
+    display: none;
+  }
+
+  .wg-landing-hero-replay .wg-pop-text:empty + .wg-pop-arrow {
+    border-inline-start: 0;
+  }
+
+  .wg-landing-hero-boundary {
+    position: relative;
+    border-block-start: var(--b-rule) solid var(--b-grid);
+  }
+
+  .wg-landing-hero-boundary + #b-sample {
+    border-block-start-width: 0;
+  }
+
+  .wg-landing-hero-boundary::before,
+  .wg-landing-hero-boundary::after {
+    position: absolute;
+    inset-block-start: var(--b-s1);
+  }
+
+  .wg-landing-hero-boundary::before {
+    inset-inline-start: var(--b-edge);
+  }
+
+  .wg-landing-hero-boundary::after {
+    inset-inline-end: var(--b-edge);
+  }
+
+  .wg-landing-hero-closing {
+    display: grid;
+    align-items: center;
+    column-gap: var(--b-s6);
+    row-gap: var(--b-s4);
+    padding-block: clamp(var(--b-s6), 3vw, var(--b-s7)) var(--b-s4);
+  }
+
+  .wg-landing-hero-closing-edge {
+    position: relative;
+    grid-column: 1 / -1;
+  }
+
+  .wg-landing-hero-closing-rule {
+    position: absolute;
+    inset: 0 0 auto;
+  }
+
+  .wg-landing-hero-footer {
+    border-block-start: var(--b-line) solid var(--b-grid);
+    font-size: 0.8125rem;
+  }
+
+  @media (min-width: 1024px) {
+    .wg-landing-hero-intro {
+      --b-cell-hero: clamp(2.5rem, 6.4vw, 5.75rem);
+      grid-template-areas: 'title proof' 'copy proof';
+      grid-template-columns: minmax(0, 8fr) minmax(0, 5.8fr);
+      grid-template-rows: auto 1fr;
+      column-gap: clamp(var(--b-s5), 3vw, var(--b-s7));
+      row-gap: clamp(var(--b-s5), 5vw, 4.5rem);
+    }
+
+    .wg-landing-hero-closing {
+      grid-template-columns: minmax(0, 1fr) max-content;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .wg-landing-hero-lede-detail {
+      display: none;
+    }
+
+    .wg-landing-hero-copy .b-lede {
+      margin-block-end: var(--b-s3);
+    }
+
+    .wg-landing-hero-actions {
+      column-gap: var(--b-s2);
+      font-size: 0.875rem;
+    }
+
+    .wg-landing-hero-proof .wg-landing-hero-pair {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .wg-landing-hero-pair .wg-proof-pair-manuscript {
+      padding: var(--b-s3) 0 var(--b-s1);
+    }
+
+    .wg-landing-hero-pair .wg-proof-pair-note {
+      padding: var(--b-s1) 0 var(--b-s3) var(--b-s5);
+    }
+
+    .wg-landing-hero-closing .wg-title-cells {
+      max-inline-size: calc(9 * var(--b-cell-section));
+    }
+  }
+
+  @media (max-width: 639px) {
+    .wg-landing-hero-nav {
+      min-block-size: 54px;
+    }
+
+    .wg-landing-hero-nav .b-nav-inner {
+      min-block-size: 53px;
+    }
+
+    .wg-landing-hero-logo {
+      font-size: 1rem;
+    }
+
+    .wg-landing-hero-logo span {
+      inline-size: 23px;
+      block-size: 26px;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-landing-hero-rules,
+    .wg-landing-hero-line-no {
+      transition: opacity var(--b-quick) var(--b-out);
+    }
+
+    .wg-landing-hero-proof .wg-landing-hero-pair[data-revealed] .wg-proof-pen path,
+    .wg-landing-hero-proof .wg-landing-hero-pair[data-revealed] .wg-proof-pair-leader path,
+    .wg-landing-hero-proof
+      .wg-landing-hero-pair[data-revealed]
+      .wg-margin-note
+      .wg-margin-note-quote {
+      animation: none;
+    }
+
+    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
+      .wg-landing-hero-pair[data-revealed]
+      .wg-proof-pen
+      path {
+      animation: wg-landing-hero-pen var(--b-draw) var(--b-out) var(--wg-landing-hero-pen-start)
+        both;
+    }
+
+    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
+      .wg-landing-hero-pair[data-revealed]
+      .wg-proof-pair-leader
+      path {
+      animation: wg-landing-hero-leader var(--b-quick) var(--b-out)
+        var(--wg-landing-hero-leader-start) both;
+    }
+
+    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
+      .wg-landing-hero-pair[data-revealed]
+      .wg-margin-note
+      .wg-margin-note-quote,
+    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
+      .wg-landing-hero-correction::after {
+      animation: wg-landing-hero-write var(--b-quick) steps(8, end)
+        var(--wg-landing-hero-note-start) both;
+    }
+
+    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
+      .wg-landing-hero-correction
+      path {
+      stroke-dasharray: 1;
+      animation: wg-landing-hero-insert var(--b-draw) var(--b-out) var(--wg-landing-hero-pen-start)
+        both;
+    }
+
+    .wg-landing-hero-proof[data-landed='true'] > h2::before,
+    .wg-landing-hero-closing[data-landed='true'] .wg-landing-hero-closing-rule {
+      animation: wg-landing-hero-write var(--b-draw) var(--b-out) both;
+    }
+  }
+
+  @keyframes wg-landing-hero-insert {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes wg-landing-hero-pen {
+    from {
+      stroke-dashoffset: 100;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes wg-landing-hero-leader {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes wg-landing-hero-write {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+}

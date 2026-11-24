@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authClient } from '@/lib/auth-client'
 import { useAuthEmail } from './auth-email'
+import { AuthProgress } from './auth-progress'
 import { type AuthMode, authErrorMessage } from './auth-utils'
 
 type AuthFormProps = {
@@ -44,6 +45,7 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
   const [error, setError] = useState<{ text: string; fields: readonly Field[] } | null>(null)
   const [invalid, setInvalid] = useState<Partial<Record<Field, string>>>({})
   const isSignup = mode === 'signup'
+  const submitLabel = isSignup ? '가입하기' : '로그인'
   const fields = isSignup ? signupFields : loginFields
   const nextQuery = next ? `?next=${encodeURIComponent(next)}` : ''
 
@@ -99,15 +101,11 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
 
   return (
     <div className="flex flex-col gap-5">
-      <nav className="grid grid-cols-2 gap-2" aria-label="계정 메뉴">
+      <nav className="wg-auth-menu" aria-label="계정 메뉴">
         {(['login', 'signup'] as const).map((destination) => {
           const label = destination === 'signup' ? '가입' : '로그인'
           return destination === mode ? (
-            <span
-              key={destination}
-              className="b-chip min-h-11 justify-center bg-kraft font-bold underline decoration-2"
-              aria-current="page"
-            >
+            <span key={destination} className="wg-auth-menu-item" aria-current="page">
               {label}
             </span>
           ) : (
@@ -120,15 +118,22 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
               aria-label={
                 destination === 'signup' ? '계정이 없나요? 가입하기' : '이미 계정이 있나요? 로그인'
               }
-              className="b-chip b-link min-h-11 justify-center font-bold hover:bg-sand focus-visible:bg-sand"
+              className="wg-auth-menu-item"
             >
               <span>{label}</span>
             </Link>
           )
         })}
       </nav>
-      {trial && <p className="b-label b-muted">체험 작품은 이 계정으로 옮겨 드려요.</p>}
-      <form method="post" noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
+      {trial && (
+        <p className="b-label b-muted wg-auth-written-line">체험 작품은 이 계정으로 옮겨 드려요.</p>
+      )}
+      <form
+        method="post"
+        noValidate
+        onSubmit={onSubmit}
+        className="flex flex-col items-start gap-4"
+      >
         {fields.map((field) => {
           const hint = field === 'password' && isSignup
           const localError = invalid[field]
@@ -142,39 +147,38 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
             .join(' ')
 
           return (
-            <div key={field} className="flex min-w-0 flex-col gap-2">
-              <Label
-                htmlFor={field}
-                className={field === 'name' ? 'b-landing-name-label' : undefined}
-              >
+            <div key={field} className="wg-auth-field flex w-full min-w-0 flex-col gap-1">
+              <Label htmlFor={field} className="wg-auth-written-line">
                 {labels[field]}
               </Label>
-              <Input
-                ref={field === 'email' ? emailInput : undefined}
-                id={field}
-                name={field}
-                type={field === 'name' ? 'text' : field}
-                autoComplete={
-                  field === 'password' ? (isSignup ? 'new-password' : 'current-password') : field
-                }
-                value={field === 'email' ? email : undefined}
-                onChange={(event) => {
-                  if (field === 'email') setEmail(event.currentTarget.value)
-                  if (localError) setInvalid((previous) => ({ ...previous, [field]: undefined }))
-                  if (error) setError(null)
-                }}
-                minLength={hint ? 8 : undefined}
-                aria-invalid={Boolean(localError || linked) || undefined}
-                aria-describedby={description || undefined}
-                required
-              />
+              <div className="wg-auth-input-rule">
+                <Input
+                  ref={field === 'email' ? emailInput : undefined}
+                  id={field}
+                  name={field}
+                  type={field === 'name' ? 'text' : field}
+                  autoComplete={
+                    field === 'password' ? (isSignup ? 'new-password' : 'current-password') : field
+                  }
+                  value={field === 'email' ? email : undefined}
+                  onChange={(event) => {
+                    if (field === 'email') setEmail(event.currentTarget.value)
+                    if (localError) setInvalid((previous) => ({ ...previous, [field]: undefined }))
+                    if (error) setError(null)
+                  }}
+                  minLength={hint ? 8 : undefined}
+                  aria-invalid={Boolean(localError || linked) || undefined}
+                  aria-describedby={description || undefined}
+                  required
+                />
+              </div>
               {hint && !localError && (
-                <p className="b-label b-muted" id="password-hint">
+                <p className="b-label b-muted wg-auth-written-line" id="password-hint">
                   {passwordHint}
                 </p>
               )}
               {localError && (
-                <p className="b-label font-bold text-ink" id={`${field}-error`}>
+                <p className="b-label wg-auth-error" id={`${field}-error`}>
                   {localError}
                 </p>
               )}
@@ -182,15 +186,22 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
           )
         })}
         {error && (
-          <p role="alert" id="auth-error" className="b-label font-bold text-ink">
+          <p role="alert" id="auth-error" className="b-label wg-auth-error">
             {error.text}
           </p>
         )}
-        <PopButton type="submit" pending={pending} size="large" className="b-landing-wide-button">
-          {isSignup ? '가입하기' : '로그인'}
+        <PopButton
+          type="submit"
+          pending={pending}
+          pendingLabel={submitLabel}
+          size="large"
+          className="wg-auth-action"
+          arrow={pending ? <AuthProgress /> : undefined}
+        >
+          {submitLabel}
         </PopButton>
       </form>
-      {!trial && <TrialButton variant="outline" className="b-landing-wide-button" />}
+      {!trial && <TrialButton className="self-start" />}
     </div>
   )
 }

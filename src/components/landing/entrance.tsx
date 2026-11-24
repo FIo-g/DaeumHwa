@@ -1,7 +1,7 @@
 'use client'
 
-import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { usePrefersReducedMotion } from '@/components/motion'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { GridTitle, usePrefersReducedMotion } from '@/components/motion'
 
 export function useLandingEntrance<Element extends HTMLElement>() {
   const ref = useRef<Element>(null)
@@ -28,7 +28,7 @@ export function useLandingEntrance<Element extends HTMLElement>() {
 }
 
 export function landingOrder(index: number): CSSProperties {
-  return { '--b-landing-order': index } as CSSProperties
+  return { '--wg-landing-hero-order': index } as CSSProperties
 }
 
 export function LandingTitle({
@@ -40,29 +40,18 @@ export function LandingTitle({
   children: string
   hero?: boolean
 }) {
-  const entrance = useLandingEntrance<HTMLHeadingElement>()
-  const Heading = hero ? 'h1' : 'h2'
-  const className = hero ? 'b-display b-landing-hero-title' : 'b-title b-landing-section-title'
-
   return (
-    <Heading {...entrance} id={id} className={className}>
-      {children.split(' ').map((word, index) => (
-        <Fragment key={index}>
-          {index > 0 && ' '}
-          <span className="b-landing-heading-word" style={landingOrder(index)}>
-            {word}
-          </span>
-        </Fragment>
-      ))}
-    </Heading>
+    <GridTitle
+      id={id}
+      as={hero ? 'h1' : 'h2'}
+      size={hero ? 'hero' : 'section'}
+      columns={hero ? 8 : undefined}
+    >
+      {children}
+    </GridTitle>
   )
 }
 
 export function PaperBoundary() {
-  return (
-    <div className="b-landing-boundary b-decor" aria-hidden="true">
-      <span className="b-landing-boundary-sheet b-parallax" />
-      <span className="b-landing-boundary-sheet b-parallax" />
-    </div>
-  )
+  return <div className="wg-landing-hero-boundary" aria-hidden="true" />
 }

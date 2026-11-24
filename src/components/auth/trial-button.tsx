@@ -6,7 +6,9 @@ import { toast } from 'sonner'
 import { PopButton } from '@/components/motion'
 import { authClient } from '@/lib/auth-client'
 import { runAction } from '@/lib/client/run-action'
+import { cn } from '@/lib/utils'
 import { createSampleWorkAction } from '@/server/actions/sample-work'
+import { AuthProgress } from './auth-progress'
 import { authErrorMessage } from './auth-utils'
 
 type TrialButtonProps = {
@@ -51,11 +53,12 @@ export function TrialButton({ variant, className, large }: TrialButtonProps) {
 
   return (
     <PopButton
-      variant={variant === 'outline' ? 'flat' : 'primary'}
+      variant={variant === 'outline' ? 'paper' : 'primary'}
       size={large ? 'large' : undefined}
-      className={className}
+      className={cn('wg-auth-action wg-auth-trial', className)}
       pending={pending}
       pendingLabel="체험 준비 중…"
+      arrow={pending ? <AuthProgress /> : undefined}
       onClick={startTrial}
     >
       가입 없이 체험하기

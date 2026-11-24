@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { AuthProgress } from '@/components/auth/auth-progress'
 import { PopButton } from '@/components/motion'
 import type { Role } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
@@ -37,11 +38,17 @@ export function AcceptInvite({ token, inviterName, workTitle, role }: AcceptInvi
 
   return (
     <div className="flex flex-col items-start gap-5">
-      <p className="b-lede wrap-anywhere">
+      <p className="b-lede wg-auth-written-line wrap-anywhere break-keep">
         {`${inviterName}님이 '${workTitle}' 작품에 `}
         <span className="whitespace-nowrap">{`${roleLabel}${particle} 초대했어요.`}</span>
       </p>
-      <PopButton onClick={join} pending={pending}>
+      <PopButton
+        onClick={join}
+        pending={pending}
+        pendingLabel={<span>참여하기</span>}
+        className="wg-auth-action"
+        arrow={pending ? <AuthProgress /> : undefined}
+      >
         참여하기
       </PopButton>
     </div>
