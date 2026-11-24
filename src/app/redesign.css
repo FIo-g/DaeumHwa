@@ -2,9 +2,12 @@
   :root {
     --b-ink: #171814;
     --b-paper: #fffcf3;
-    --b-mustard: #f3cd52;
-    --b-leaf: #b9dd83;
-    --b-apricot: #f1bb88;
+    /* One theme: paper. Three stocks from kraft to off-white sit on the paper ground. */
+    --b-mustard: #e2d3b3;
+    --b-leaf: #ece3cd;
+    --b-apricot: #f5efe0;
+    /* Paper grain: fine fibres drawn with SVG turbulence, laid over the whole page. */
+    --b-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9 0.55' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.29 0 0 0 0 0.18 0 0 0 0.62 -0.08'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
     --b-muted: #44473a;
     /* Proof red is for manuscript errors only. */
     --b-proof: #991b2c;
@@ -71,6 +74,23 @@
   body {
     margin: 0;
     background: var(--b-paper);
+  }
+  /* The grain sits above every surface so paper, stock bands and cards share one texture. */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    pointer-events: none;
+    background-image: var(--b-grain);
+    background-size: 280px 280px;
+    mix-blend-mode: multiply;
+    opacity: 0.4;
+  }
+  @media print {
+    body::after {
+      display: none;
+    }
   }
   .b-root,
   .b-root *,

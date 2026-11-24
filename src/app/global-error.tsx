@@ -14,7 +14,7 @@ export default function GlobalError({ error, retry }: { error: unknown; retry: (
         <style>{`
           body {
             display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 16px;
-            box-sizing: border-box; background: #f1bb88; color: #171814; color-scheme: light;
+            box-sizing: border-box; background: #e2d3b3; color: #171814; color-scheme: light;
             font: 400 1rem/1.6 "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
           }
           section { background: #fffcf3; border: 2px solid; border-radius: 16px; padding: 32px; }
