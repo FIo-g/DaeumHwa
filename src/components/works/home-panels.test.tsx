@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HomePanels, type HomePanelsProps } from './home-panels'
 
@@ -67,11 +67,9 @@ describe('HomePanels', () => {
 
   it('writes the periodic check messages in Korean', () => {
     render(<HomePanels {...props} />)
-    expect(
-      screen.getByText('‘금빛 반지’ 회수 목표 5화가 지났습니다 (현재 8화).'),
-    ).toBeInTheDocument()
-    expect(screen.getByText('‘서윤’이(가) 6화째 등장하지 않았습니다.')).toBeInTheDocument()
-    expect(screen.getByText('7일 넘게 기다리는 제안이 2건 있습니다.')).toBeInTheDocument()
+    expect(screen.getByText('‘금빛 반지’ 회수 목표 5화가 지났어요 (현재 8화).')).toBeInTheDocument()
+    expect(screen.getByText('‘서윤’이(가) 6화째 등장하지 않았어요.')).toBeInTheDocument()
+    expect(screen.getByText('7일 넘게 기다리는 제안이 2건 있어요.')).toBeInTheDocument()
     expect(screen.getByText('비축분이 목표보다 적습니다.')).toBeInTheDocument()
   })
 
@@ -79,6 +77,8 @@ describe('HomePanels', () => {
     render(
       <HomePanels
         {...props}
+        pendingCount={0}
+        openThreads={[]}
         alerts={{
           overdueThreads: [],
           absentCharacters: [],
@@ -88,7 +88,40 @@ describe('HomePanels', () => {
         }}
       />,
     )
-    expect(screen.getByText('지금 확인할 항목이 없습니다.')).toBeInTheDocument()
+    expect(screen.getByText('지금 확인할 항목이 없어요.')).toBeInTheDocument()
+    expect(screen.getByText('열린 떡밥이 없어요.')).toBeInTheDocument()
+    for (const name of ['승인 대기', '주기 점검']) {
+      expect(within(screen.getByRole('region', { name })).getByText('0건')).toBeInTheDocument()
+    }
+  })
+
+  it('keeps five alerts and the existing thread preview limit for a dense work', () => {
+    const openThreads = Array.from({ length: 12 }, (_, index) => ({
+      ...props.openThreads[0],
+      id: `t${index + 1}`,
+      title: `떡밥 ${index + 1}`,
+    }))
+    render(
+      <HomePanels
+        {...props}
+        openThreads={openThreads}
+        alerts={{
+          ...props.alerts,
+          absentCharacters: [
+            ...props.alerts.absentCharacters,
+            { id: 'e2', name: '수빈', lastPosition: 3, chaptersSince: 5 },
+          ],
+          total: 5,
+        }}
+      />,
+    )
+
+    const alerts = within(screen.getByRole('region', { name: '주기 점검' }))
+    expect(alerts.getByText('5건')).toBeInTheDocument()
+    expect(alerts.getAllByRole('listitem')).toHaveLength(5)
+    const threads = within(screen.getByRole('region', { name: '열린 떡밥' }))
+    expect(threads.getAllByRole('article')).toHaveLength(5)
+    expect(threads.getByRole('link', { name: '떡밥 장부 보기' })).toBeInTheDocument()
   })
 
   it('shows the recent change with its author', () => {

@@ -1,3 +1,4 @@
+import '@/app/styles/b-works.css'
 import { FilterLinks, type FilterOption } from '@/components/history/filter-links'
 import { PageHeader } from '@/components/app/page-header'
 import type { ProposalChapterOption } from '@/components/proposals/proposal-card'
@@ -80,13 +81,14 @@ export default async function ApprovalsPage({
   ]
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="b-works-approval-page">
       <PageHeader
         title="승인 대기"
-        description="AI와 가져오기가 만든 제안을 확인하고 위키에 반영합니다."
+        band="leaf"
+        description="AI가 찾은 설정 후보와 가져온 원고에서 나온 제안이에요. 승인한 것만 위키에 들어가요."
       />
 
-      <div className="flex flex-col gap-3">
+      <div className="b-works-filter-panel">
         <FilterLinks label="출처" options={sourceOptions} />
         <FilterLinks label="묶음" options={groupOptions} />
       </div>

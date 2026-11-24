@@ -1,6 +1,7 @@
+import { ArrowUpRightIcon, CalendarDaysIcon, FileCheck2Icon } from 'lucide-react'
 import Link from 'next/link'
-import type { ReactNode } from 'react'
-import { Badge } from '@/components/ui/badge'
+import type { CSSProperties, ReactNode } from 'react'
+import { CardRail, HandNote, PopLink, Reveal } from '@/components/motion'
 import type { PeriodicAlerts } from '@/server/alerts'
 import type { WorkHome } from '@/server/dashboard'
 import { formatKoreanDate, formatKoreanDateTime } from '@/lib/dates'
@@ -15,10 +16,6 @@ export type HomePanelsProps = {
   recentChanges: { id: string; summary: string; createdAt: Date }[]
 }
 
-/**
- * The work home as a proof sheet: what needs the author (approvals, threads, checks) in the text
- * column, and the schedule and recent changes in the margin after a rule.
- */
 export function HomePanels({
   workId,
   pendingCount,
@@ -28,61 +25,75 @@ export function HomePanels({
   recentChanges,
 }: HomePanelsProps) {
   const base = `/works/${workId}`
+  const threads = openThreads.slice(0, 5)
+  const positions = threads.flatMap((thread) => [thread.plantedPosition, thread.targetPosition])
+  const lastPosition = Math.max(1, ...positions.filter((position) => position !== null))
+
   return (
-    <div className="grid gap-x-12 lg:grid-cols-[minmax(0,1fr)_18rem]">
-      <div className="flex flex-col">
-        <Panel id="home-approvals" title="승인 대기">
-          <p className="text-sm">
-            승인을 기다리는 제안{' '}
-            <span className="font-semibold tabular-nums">{pendingCount}건</span>
+    <div className="b-works-home-panels">
+      <Panel name="approvals" number={1} title="승인 대기">
+        <div className="b-works-approval-total">
+          <p>
+            <PanelCount count={pendingCount} unit="건" />
+            <span className="b-label block">승인을 기다리는 제안</span>
           </p>
-          <LinkButton href={`${base}/approvals`} label="승인 대기 보기" />
-        </Panel>
+          <span className="b-works-approval-paper b-piece" aria-hidden="true">
+            <FileCheck2Icon size={48} strokeWidth={1.3} />
+          </span>
+        </div>
+        <div>
+          <PopLink href={`${base}/approvals`} variant="flat">
+            승인 대기 보기
+          </PopLink>
+        </div>
+      </Panel>
 
-        <Panel id="home-threads" title="열린 떡밥">
-          {openThreads.length === 0 ? (
-            <p className="text-sm text-muted-foreground">열린 떡밥이 없습니다.</p>
-          ) : (
-            <ul className="flex flex-col gap-2 text-sm">
-              {openThreads.slice(0, 5).map((thread) => (
-                <li key={thread.id} className="flex flex-col gap-0.5">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-serif font-medium">{thread.title}</span>
-                    <Badge variant="outline">{THREAD_STATUS_LABEL[thread.status]}</Badge>
-                    {thread.overdue && <span className="text-mark">회수 목표 지남</span>}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {thread.plantedPosition !== null && `${thread.plantedPosition}화 심음`}
-                    {thread.targetPosition !== null && ` · 회수 목표 ${thread.targetPosition}화`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <LinkButton href={`${base}/wiki/threads`} label="떡밥 장부 보기" />
-        </Panel>
+      <Panel name="threads" number={2} title="열린 떡밥">
+        {threads.length === 0 ? (
+          <p className="b-label text-muted-ink">열린 떡밥이 없어요.</p>
+        ) : threads.length === 1 ? (
+          <ThreadPreview thread={threads[0]} lastPosition={lastPosition} />
+        ) : (
+          <CardRail label="열린 떡밥 미리 보기" className="b-works-thread-rail">
+            {threads.map((thread) => (
+              <ThreadPreview key={thread.id} thread={thread} lastPosition={lastPosition} />
+            ))}
+          </CardRail>
+        )}
+        <PanelLink href={`${base}/wiki/threads`}>떡밥 장부 보기</PanelLink>
+      </Panel>
 
-        <Panel id="home-alerts" title="주기 점검">
+      <Panel name="alerts" number={3} title="주기 점검">
+        <div className="b-works-alert-body">
+          <PanelCount count={alerts.total} unit="건" />
           <AlertList alerts={alerts} />
-        </Panel>
-      </div>
+        </div>
+      </Panel>
 
-      <div className="flex flex-col lg:border-l lg:border-rule lg:pl-8">
-        <Panel id="home-schedule" title="일정">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            <dt className="text-muted-foreground">비축</dt>
-            <dd>{schedule.bufferCount}화</dd>
-            <dt className="text-muted-foreground">다음 연재일</dt>
+      <Panel name="schedule" number={4} title="일정">
+        <dl className="b-works-schedule">
+          <div>
+            <dt>비축</dt>
+            <dd>
+              <PanelCount count={schedule.bufferCount} unit="화" compact />
+            </dd>
+          </div>
+          <div>
+            <dt>다음 연재일</dt>
             <dd>
               {schedule.nextPublishDate
                 ? formatKoreanDate(schedule.nextPublishDate)
                 : '정해지지 않음'}
             </dd>
-            <dt className="text-muted-foreground">소진 예상일</dt>
+          </div>
+          <div>
+            <dt>소진 예상일</dt>
             <dd>
               {schedule.bufferRunsOutOn ? formatKoreanDate(schedule.bufferRunsOutOn) : '없음'}
             </dd>
-            <dt className="text-muted-foreground">다음 마감</dt>
+          </div>
+          <div>
+            <dt>다음 마감</dt>
             <dd>
               {schedule.nextDeadline
                 ? `${schedule.nextDeadline.title} · ${formatKoreanDate(schedule.nextDeadline.date)} (${
@@ -92,78 +103,197 @@ export function HomePanels({
                   })`
                 : '없음'}
             </dd>
-          </dl>
-          <LinkButton href={`${base}/schedule`} label="일정 보기" />
-        </Panel>
+          </div>
+        </dl>
+        {schedule.nextPublishDate && (
+          <div className="b-works-schedule-track" aria-hidden="true">
+            <span className="b-works-axis-fill" />
+            <CalendarDaysIcon size={24} />
+          </div>
+        )}
+        <PanelLink href={`${base}/schedule`}>일정 보기</PanelLink>
+      </Panel>
 
-        <Panel id="home-changes" title="최근 변경">
-          {recentChanges.length === 0 ? (
-            <p className="text-sm text-muted-foreground">아직 변경 이력이 없습니다.</p>
-          ) : (
-            <ul className="flex flex-col gap-2 text-sm">
-              {recentChanges.map((change) => (
-                <li key={change.id} className="flex flex-col gap-0.5">
-                  <span>{change.summary}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatKoreanDateTime(change.createdAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <LinkButton href={`${base}/history`} label="이력 보기" />
-        </Panel>
-      </div>
+      <Panel name="changes" number={5} title="최근 변경">
+        {recentChanges.length === 0 ? (
+          <p className="b-label text-muted-ink">아직 변경 이력이 없어요.</p>
+        ) : (
+          <ul className="b-works-recent">
+            {recentChanges.map((change, index) => (
+              <li key={change.id}>
+                <Reveal
+                  className="b-works-recent-row"
+                  direction="right"
+                  style={{ '--b-reveal-x': '-8px' } as CSSProperties}
+                  delay={70 * Math.min(index, 5)}
+                  range="entry 0% cover 30%"
+                >
+                  <span className="b-dot" aria-hidden="true" />
+                  <div>
+                    <p>{change.summary}</p>
+                    <time
+                      className="b-label text-muted-ink"
+                      dateTime={change.createdAt.toISOString()}
+                    >
+                      {formatKoreanDateTime(change.createdAt)}
+                    </time>
+                  </div>
+                </Reveal>
+              </li>
+            ))}
+          </ul>
+        )}
+        <PanelLink href={`${base}/history`}>이력 보기</PanelLink>
+      </Panel>
     </div>
   )
 }
 
+function ThreadPreview({
+  thread,
+  lastPosition,
+}: {
+  thread: WorkHome['openThreads'][number]
+  lastPosition: number
+}) {
+  const planted = thread.plantedPosition
+  const target = thread.targetPosition
+  const x = (position: number) => ((position - 1) / Math.max(1, lastPosition - 1)) * 100
+  const plotted = [planted, target].filter((position) => position !== null)
+
+  return (
+    <article className="b-works-thread">
+      <header className="grid gap-2">
+        <h3 className="b-row__title wrap-anywhere">{thread.title}</h3>
+        <div className="flex flex-wrap gap-2">
+          <span className="b-works-tag">{THREAD_STATUS_LABEL[thread.status]}</span>
+          {thread.overdue && <span className="b-works-tag bg-apricot">회수 목표 지남</span>}
+        </div>
+      </header>
+      {plotted.length > 0 && (
+        <>
+          <div className="b-works-thread-axis" aria-hidden="true">
+            <span
+              className="b-works-axis-fill"
+              style={{
+                insetInlineStart: `${x(Math.min(...plotted))}%`,
+                insetInlineEnd: `${100 - x(Math.max(...plotted))}%`,
+              }}
+            />
+            {planted !== null && (
+              <span
+                className="b-works-thread-dot b-works-planted"
+                style={{ left: `${x(planted)}%` }}
+              />
+            )}
+            {target !== null && (
+              <span
+                className="b-works-thread-dot b-works-target"
+                style={{ left: `${x(target)}%` }}
+              />
+            )}
+          </div>
+          <p className="b-label flex flex-wrap justify-between gap-2">
+            {planted !== null && <span>{planted}화 심음</span>}
+            {target !== null && <span>회수 목표 {target}화</span>}
+          </p>
+        </>
+      )}
+    </article>
+  )
+}
+
 function AlertList({ alerts }: { alerts: PeriodicAlerts }) {
-  const messages: string[] = [
+  const messages = [
     ...alerts.overdueThreads.map(
       (t) =>
-        `‘${t.title}’ 회수 목표 ${t.targetPosition}화가 지났습니다 (현재 ${t.latestPosition}화).`,
+        `‘${t.title}’ 회수 목표 ${t.targetPosition}화가 지났어요 (현재 ${t.latestPosition}화).`,
     ),
     ...alerts.absentCharacters.map(
-      (c) => `‘${c.name}’이(가) ${c.chaptersSince}화째 등장하지 않았습니다.`,
+      (c) => `‘${c.name}’이(가) ${c.chaptersSince}화째 등장하지 않았어요.`,
     ),
     ...(alerts.stalePendingCount > 0
-      ? [`7일 넘게 기다리는 제안이 ${alerts.stalePendingCount}건 있습니다.`]
+      ? [`7일 넘게 기다리는 제안이 ${alerts.stalePendingCount}건 있어요.`]
       : []),
     ...(alerts.bufferWarning ? [alerts.bufferWarning] : []),
   ]
   if (messages.length === 0) {
-    return <p className="text-sm text-muted-foreground">지금 확인할 항목이 없습니다.</p>
+    return <HandNote>지금 확인할 항목이 없어요.</HandNote>
   }
   return (
-    <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm">
-      {messages.map((message) => (
-        <li key={message}>{message}</li>
+    <ul className="b-works-notes">
+      {messages.map((message, index) => (
+        <li key={message}>
+          <HandNote delay={70 * Math.min(index, 5)}>{message}</HandNote>
+        </li>
       ))}
     </ul>
   )
 }
 
-function Panel({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+function Panel({
+  name,
+  number,
+  title,
+  children,
+}: {
+  name: string
+  number: number
+  title: string
+  children: ReactNode
+}) {
+  const id = `home-${name}`
   return (
     <section
       aria-labelledby={id}
-      className="flex flex-col gap-3 border-t border-rule py-6 first:border-t-0 first:pt-0"
+      className="b-works-panel"
+      data-panel={name}
+      style={{ '--b-i': number - 1 } as CSSProperties}
     >
-      <h2 id={id} className="font-serif text-lg font-semibold">
-        {title}
-      </h2>
+      <header className="b-works-panel-head">
+        <span className="b-number" aria-hidden="true">
+          {number}
+        </span>
+        <h2 id={id} className="b-heading">
+          {title}
+        </h2>
+      </header>
       {children}
     </section>
   )
 }
 
-function LinkButton({ href, label }: { href: string; label: string }) {
+function PanelCount({
+  count,
+  unit,
+  compact = false,
+}: {
+  count: number
+  unit: string
+  compact?: boolean
+}) {
   return (
-    <div>
-      <Link href={href} className="text-sm underline decoration-rule hover:decoration-current">
-        {label}
-      </Link>
-    </div>
+    <span
+      className="b-works-panel-count"
+      data-compact={compact}
+      style={{ '--b-works-count-target': count } as CSSProperties}
+    >
+      <span className="b-works-panel-count-value">
+        {count}
+        {unit}
+      </span>
+      <span className="b-works-panel-count-ink" aria-hidden="true">
+        {unit}
+      </span>
+    </span>
+  )
+}
+
+function PanelLink({ href, children }: { href: string; children: string }) {
+  return (
+    <Link href={href} className="b-link b-works-panel-link">
+      <span>{children}</span>
+      <ArrowUpRightIcon size={18} aria-hidden="true" />
+    </Link>
   )
 }

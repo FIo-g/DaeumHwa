@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { getTextWorker } from '@/lib/client/worker-client'
 import { seoulToday } from '@/lib/dates'
 
-const FALLBACK_MESSAGE = '백업 파일을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'
+const FALLBACK_MESSAGE = '백업 파일을 만들지 못했어요. 잠시 후 다시 시도해 주세요.'
 
 type ExportButtonProps = {
   workId: string

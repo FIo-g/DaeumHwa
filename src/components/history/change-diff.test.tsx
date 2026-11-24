@@ -52,6 +52,6 @@ describe('ChangeDiff', () => {
     render(
       <ChangeDiff targetTable="threads" before={{ title: '열쇠' }} after={{ title: '열쇠' }} />,
     )
-    expect(screen.getByText('바뀐 내용이 없습니다.')).toBeInTheDocument()
+    expect(screen.getByText('바뀐 내용이 없어요.')).toBeInTheDocument()
   })
 })

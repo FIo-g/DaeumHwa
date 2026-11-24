@@ -1,3 +1,4 @@
+import '@/app/styles/b-works.css'
 import { ChangeList } from '@/components/history/change-list'
 import {
   CHANGE_TARGET_LABEL,
@@ -74,13 +75,14 @@ export default async function HistoryPage({
   ]
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="b-works-history-page">
       <PageHeader
         title="변경 이력"
+        band="mustard"
         actions={isOwner ? <ExportButton workId={workId} title={work.title} /> : undefined}
       />
 
-      <div className="flex flex-col gap-3">
+      <div className="b-works-filter-panel">
         <FilterLinks label="대상" options={targetOptions} />
         <FilterLinks label="제안자" options={proposerOptions} />
       </div>

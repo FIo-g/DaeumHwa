@@ -28,10 +28,19 @@ describe('WorkCard', () => {
     expect(link).toHaveTextContent('12화')
   })
 
+  it('retains the full work title and the card information for assistive technology', () => {
+    const title = '쉬지않고이어지는긴제목'.repeat(4)
+    render(<WorkCard {...base} title={title} />)
+
+    const link = screen.getByRole('link', { name: title })
+    expect(link).toHaveAttribute('title', title)
+    expect(link).toHaveAccessibleDescription(/현대 판타지.*승인 대기.*최근 수정/)
+  })
+
   it('shows the pending and open thread counts', () => {
     render(<WorkCard {...base} />)
-    expect(screen.getByText('승인 대기 3')).toBeInTheDocument()
-    expect(screen.getByText('열린 떡밥 4')).toBeInTheDocument()
+    expect(screen.getByText('승인 대기').closest('li')).toHaveTextContent(/승인 대기\s*3/)
+    expect(screen.getByText('열린 떡밥').closest('li')).toHaveTextContent(/열린 떡밥\s*4/)
   })
 
   it('shows the warning badge only when there are warnings', () => {

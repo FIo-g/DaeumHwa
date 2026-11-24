@@ -147,7 +147,7 @@ export function ChangeDiff({ targetTable, before, after }: ChangeDiffProps) {
   const changed = keys.filter((k) => JSON.stringify(b[k] ?? null) !== JSON.stringify(a[k] ?? null))
 
   if (changed.length === 0) {
-    return <p className="text-sm text-muted-foreground">바뀐 내용이 없습니다.</p>
+    return <p className="text-sm text-muted-foreground">바뀐 내용이 없어요.</p>
   }
 
   return (
@@ -155,7 +155,7 @@ export function ChangeDiff({ targetTable, before, after }: ChangeDiffProps) {
       {changed.map((key) => (
         <div key={key} className="contents">
           <dt className="text-muted-foreground">{fieldLabel(key, targetTable)}</dt>
-          <dd className="flex min-w-0 flex-wrap items-center gap-2 break-words">
+          <dd className="flex min-w-0 flex-wrap items-center gap-2 wrap-anywhere">
             <span className="text-muted-foreground line-through">
               {formatValue(key, targetTable, b[key])}
             </span>

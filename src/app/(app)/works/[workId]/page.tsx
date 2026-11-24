@@ -1,9 +1,10 @@
+import '@/app/styles/b-works.css'
 import Link from 'next/link'
-import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
 import { NextChapterButton } from '@/components/chapters/next-chapter-button'
 import { buttonVariants } from '@/components/ui/button'
 import { HomePanels } from '@/components/works/home-panels'
+import { StartChoices } from '@/components/works/start-choices'
 import { hasRole } from '@/server/access'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getWorkHome } from '@/server/dashboard'
@@ -19,18 +20,24 @@ export default async function WorkHomePage({ params }: { params: Promise<{ workI
   const isEmpty = home.chapterCount === 0 && home.entryCount === 0
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="b-works-home">
       <PageHeader
         title={home.work.title}
         description={subtitle || undefined}
+        band="apricot"
         actions={
           canEdit ? (
             <>
-              <NextChapterButton workId={workId} />
+              <div className="b-works-next-chapter">
+                <NextChapterButton workId={workId} />
+              </div>
               {home.latestDraft && (
                 <Link
                   href={`${base}/chapters/${home.latestDraft.chapterId}`}
-                  className={buttonVariants({ variant: 'outline' })}
+                  className={buttonVariants({
+                    variant: 'outline',
+                    className: 'h-auto min-h-11 whitespace-normal wrap-anywhere',
+                  })}
                 >
                   이어 쓰기: {chapterLabel(home.latestDraft.position, home.latestDraft.title)}
                 </Link>
@@ -41,29 +48,15 @@ export default async function WorkHomePage({ params }: { params: Promise<{ workI
       />
 
       {isEmpty ? (
-        <EmptyState
-          title="아직 원고와 설정이 없습니다"
-          description={
-            canEdit
-              ? '인터뷰로 설정을 정리하거나, 기존 원고를 가져오거나, 바로 쓸 수 있습니다.'
-              : '작품 설정과 원고가 아직 없습니다.'
-          }
-          action={
-            canEdit ? (
-              <div className="flex flex-wrap justify-center gap-2">
-                <Link href={`${base}/interview`} className={buttonVariants({ variant: 'outline' })}>
-                  인터뷰
-                </Link>
-                <Link href={`${base}/import`} className={buttonVariants({ variant: 'outline' })}>
-                  가져오기
-                </Link>
-                <Link href={`${base}/write`} className={buttonVariants({ variant: 'outline' })}>
-                  바로 쓰기
-                </Link>
-              </div>
-            ) : undefined
-          }
-        />
+        <section className="b-works-created" aria-labelledby="works-start">
+          <h2 id="works-start" className="b-heading">
+            아직 원고와 설정이 없어요
+          </h2>
+          <p className="b-lede">
+            {canEdit ? '어디서 시작할지 골라 보세요.' : '작품 설정과 원고가 아직 없어요.'}
+          </p>
+          {canEdit && <StartChoices workId={workId} />}
+        </section>
       ) : (
         <HomePanels
           workId={workId}

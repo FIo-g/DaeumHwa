@@ -72,6 +72,24 @@ describe('ChangeList', () => {
     expect(screen.getByText('확정')).toBeInTheDocument()
   })
 
+  it('groups changes at Seoul midnight and closes details without moving focus', () => {
+    const afterMidnight = { ...aiRow, createdAt: new Date('2026-10-16T15:00:00Z') }
+    render(<ChangeList workId="work-1" initialRows={[afterMidnight, authorRow]} canEdit={false} />)
+    const day = screen.getByRole('region', { name: '2026년 10월 17일' })
+    expect(within(day).getByText('새 사실 추가')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: '2026년 10월 16일' })).getByText('문체 카드 수정'),
+    ).toBeInTheDocument()
+    const trigger = within(day).getByRole('button', { name: '자세히 보기' })
+    trigger.focus()
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveFocus()
+    expect(document.getElementById(trigger.getAttribute('aria-controls')!)).toHaveAttribute('inert')
+  })
+
   it('hides the revert button from roles below editor', () => {
     render(<ChangeList workId="work-1" initialRows={[authorRow]} canEdit={false} />)
     expect(screen.queryByRole('button', { name: '되돌리기' })).not.toBeInTheDocument()
@@ -84,7 +102,7 @@ describe('ChangeList', () => {
     const items = screen.getAllByRole('listitem')
     expect(within(items[0]).getByRole('button', { name: '되돌리기' })).toBeEnabled()
     expect(within(items[1]).getByRole('button', { name: '되돌리기' })).toBeDisabled()
-    expect(screen.getByText('이후 변경이 있어 되돌릴 수 없습니다.')).toBeInTheDocument()
+    expect(screen.getByText('이후 변경이 있어 되돌릴 수 없어요.')).toBeInTheDocument()
   })
 
   it('reverts after confirmation and reloads the first page', async () => {
@@ -134,6 +152,6 @@ describe('ChangeList', () => {
 
   it('shows the empty message when there are no changes', () => {
     render(<ChangeList workId="work-1" initialRows={[]} canEdit={false} />)
-    expect(screen.getByText('변경 이력이 없습니다.')).toBeInTheDocument()
+    expect(screen.getByText('변경 이력이 없어요.')).toBeInTheDocument()
   })
 })

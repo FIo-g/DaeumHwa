@@ -20,21 +20,18 @@ export function ImportBatchBanner({ workId, sourceRef, count }: ImportBatchBanne
   async function approveAll() {
     const data = await runAction(bulkApproveAction({ workId, sourceRef }))
     if (data) {
-      if (data.approved > 0) toast.success(`${data.approved}건을 승인했습니다.`)
-      if (data.failed.length > 0) toast.error(`${data.failed.length}건은 승인하지 못했습니다.`)
+      if (data.approved > 0) toast.success(`${data.approved}건을 승인했어요.`)
+      if (data.failed.length > 0) toast.error(`${data.failed.length}건을 승인하지 못했어요.`)
     }
     router.refresh()
   }
 
   return (
-    <section
-      aria-label="원고 가져오기 제안"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-4"
-    >
+    <section aria-label="원고 가져오기 제안" className="b-works-import-batch">
       <p className="font-medium">원고 가져오기 제안 {count}건</p>
       <ConfirmButton
         title={`제안 ${count}건을 모두 승인할까요?`}
-        description="기본 태그가 붙고 위키에 바로 반영됩니다."
+        description="기본 태그가 붙어 위키에 바로 반영돼요."
         confirmLabel="승인"
         onConfirm={approveAll}
       >
