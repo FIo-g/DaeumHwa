@@ -2,9 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import type { CSSProperties } from 'react'
-import { MenuSheet } from '@/components/motion/menu-sheet'
-import { cn } from '@/lib/utils'
+import { CountCell, MenuSheet } from '@/components/motion'
 
 type WorkSidebarProps = {
   workId: string
@@ -64,14 +62,7 @@ function isActive(pathname: string, href: string, homeHref: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-function NavList({
-  workId,
-  pendingCount,
-  trial,
-  mobile = false,
-}: Omit<WorkSidebarProps, 'workTitle'> & {
-  mobile?: boolean
-}) {
+function NavList({ workId, pendingCount, trial }: Omit<WorkSidebarProps, 'workTitle'>) {
   const pathname = usePathname()
   const base = `/works/${workId}`
 
@@ -80,53 +71,35 @@ function NavList({
     const active = isActive(pathname, href, base)
     const signupRequired = trial && item.requiresSignup
     return (
-      <li
-        key={item.key}
-        className={mobile ? 'b-nav-step' : undefined}
-        style={mobile ? ({ '--b-i': Math.min(index, 5) } as CSSProperties) : undefined}
-      >
+      <li key={item.key}>
         <Link
           href={href}
           aria-label={signupRequired ? `${item.label} ${SIGNUP_REQUIRED}` : undefined}
           aria-current={active ? 'page' : undefined}
-          className={cn(
-            'b-control b-link flex min-h-11 items-center justify-between gap-2 rounded-button px-3 text-sm active:translate-y-px',
-            active
-              ? 'bg-ink font-bold text-paper underline decoration-2'
-              : 'text-muted-ink hover:bg-sand hover:text-ink',
-          )}
+          className="wg-shell-menu-link"
         >
-          <span>{item.label}</span>
+          <span className="wg-shell-line-number" aria-hidden="true">
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <span className="wg-shell-menu-label">{item.label}</span>
           {item.badge === 'pending' && pendingCount > 0 && (
-            <span
-              data-slot="pending-count"
-              className="min-w-5 rounded-field bg-primary px-1.5 py-0.5 text-center text-xs text-primary-foreground tabular-nums"
-            >
-              {pendingCount}
+            <span data-slot="pending-count" className="wg-shell-pending-count">
+              <CountCell value={pendingCount} />
             </span>
           )}
-          {signupRequired && (
-            <span
-              className={cn(
-                'b-chip min-h-0 shrink-0 cursor-inherit px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
-                active && 'border-paper bg-ink text-paper',
-              )}
-            >
-              {SIGNUP_REQUIRED}
-            </span>
-          )}
+          {signupRequired && <span className="wg-shell-cell-label">{SIGNUP_REQUIRED}</span>}
         </Link>
       </li>
     )
   }
 
   return (
-    <nav aria-label="작품 메뉴" className="flex flex-col gap-5">
-      <ul className="flex flex-col gap-0.5">{renderItem(HOME_ITEM)}</ul>
+    <nav aria-label="작품 메뉴" className="wg-shell-menu">
+      <ul>{renderItem(HOME_ITEM)}</ul>
       {GROUPS.map((group, groupIndex) => (
-        <div key={group.label} className="flex flex-col gap-1">
-          <p className="px-3 text-xs text-muted-foreground">{group.label}</p>
-          <ul className="flex flex-col gap-0.5">
+        <div key={group.label} className="wg-shell-menu-group">
+          <p className="wg-shell-menu-heading">{group.label}</p>
+          <ul>
             {group.items.map((item, index) =>
               renderItem(
                 item,
@@ -152,14 +125,20 @@ function NavList({
 export function WorkSidebar({ workId, workTitle, pendingCount, trial }: WorkSidebarProps) {
   return (
     <>
-      <div className="flex min-w-0 items-center justify-between gap-3 border-b border-rule bg-paper px-edge py-2 md:hidden">
-        <span className="truncate font-heading text-lg">{workTitle}</span>
-        <MenuSheet title={workTitle} label="작품 메뉴 열기" triggerText="작품 메뉴 열기">
-          <NavList workId={workId} pendingCount={pendingCount} trial={trial} mobile />
+      <div className="wg-shell-mobile-menu md:hidden">
+        <span className="wg-shell-work-name">{workTitle}</span>
+        <MenuSheet
+          title={workTitle}
+          label="작품 메뉴 열기"
+          triggerText="작품 메뉴 열기"
+          className="wg-shell-menu-sheet"
+          triggerClassName="wg-shell-work-trigger"
+        >
+          <NavList workId={workId} pendingCount={pendingCount} trial={trial} />
         </MenuSheet>
       </div>
-      <aside className="hidden w-56 shrink-0 flex-col gap-6 border-r border-rule bg-paper px-3 py-8 md:flex">
-        <p className="wrap-anywhere px-3 font-heading text-xl break-keep">{workTitle}</p>
+      <aside className="wg-shell-sidebar hidden md:block">
+        <p className="wg-shell-work-name">{workTitle}</p>
         <NavList workId={workId} pendingCount={pendingCount} trial={trial} />
       </aside>
     </>

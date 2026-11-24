@@ -14,11 +14,11 @@ export function SourceLabel({ workId, sourceType, chapter }: SourceLabelProps) {
     return (
       <Link
         href={`/works/${workId}/chapters/${chapter.id}`}
-        className="b-control text-ink underline hover:decoration-2"
+        className="wg-shell-source wg-shell-source-link"
       >
         {chapterLabel(chapter.position, chapter.title)}
       </Link>
     )
   }
-  return <span className="b-label text-muted-ink">{SOURCE_TYPE_LABEL[sourceType]}</span>
+  return <span className="wg-shell-source">{SOURCE_TYPE_LABEL[sourceType]}</span>
 }

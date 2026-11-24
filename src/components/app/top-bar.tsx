@@ -3,11 +3,10 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { MenuSheet } from '@/components/motion/menu-sheet'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { MenuSheet, PopLink } from '@/components/motion'
+import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { flushPendingSaves } from '@/lib/client/use-autosave'
-import { cn } from '@/lib/utils'
 import type { SessionUser } from '@/server/session'
 
 /** Top bar for signed-in pages: logo, user name and sign-out. */
@@ -36,46 +35,45 @@ export function TopBar({ user }: { user: SessionUser }) {
   }
 
   return (
-    <header className="b-top">
+    <header className="b-top wg-shell-top">
       <div className="b-wrap b-nav-inner">
-        <Link href="/works" className="b-brand b-link max-[359px]:text-xl">
-          <span>다음화</span>
+        <Link href="/works" className="wg-shell-logo" aria-label="다음화">
+          <span aria-hidden="true">다</span>
+          <span aria-hidden="true">음</span>
+          <span aria-hidden="true">화</span>
         </Link>
-        <div className="flex min-w-0 items-center gap-2 max-[359px]:gap-1 sm:gap-3">
+        <div className="wg-shell-account">
           {user.isAnonymous ? (
             <>
-              <span className="b-label whitespace-nowrap text-muted-ink max-[359px]:text-xs">
-                체험 중
-              </span>
-              <Link
+              <span className="wg-shell-trial-label">체험 중</span>
+              <PopLink
                 href="/signup"
-                className={cn(
-                  buttonVariants({ variant: 'outline', className: 'px-2 sm:px-4' }),
-                  'max-[359px]:px-1.5 max-[359px]:text-xs',
-                )}
+                arrow={false}
+                className="wg-shell-signup"
                 onNavigate={(event) => {
                   event.preventDefault()
                   void continueToSignup()
                 }}
               >
                 가입 후 작품 이어가기
-              </Link>
+              </PopLink>
             </>
           ) : (
-            <span className="b-label hidden truncate text-muted-ink sm:block">{user.name}</span>
+            <span className="wg-shell-user hidden truncate sm:block">{user.name}</span>
           )}
-          <Button variant="ghost" onClick={signOut} className="hidden sm:inline-flex">
+          <Button variant="link" size="sm" onClick={signOut} className="hidden sm:inline-flex">
             로그아웃
           </Button>
           <MenuSheet
             title={user.isAnonymous ? '체험 중' : user.name}
             label="계정 메뉴 열기"
-            triggerClassName="sm:hidden"
+            className="wg-shell-menu-sheet"
+            triggerClassName="shrink-0 sm:hidden"
           >
-            <Link className="b-row b-link flex items-center rounded-button border-0" href="/works">
+            <Link className="wg-shell-account-link" href="/works">
               <span>내 작품</span>
             </Link>
-            <Button variant="outline" onClick={signOut}>
+            <Button variant="link" onClick={signOut}>
               로그아웃
             </Button>
           </MenuSheet>

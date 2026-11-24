@@ -1,27 +1,26 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { GridTitle } from '@/components/motion'
 
 type PageHeaderProps = {
   title: string
   description?: string
   actions?: ReactNode
-  band?: 'kraft' | 'sand' | 'cream' | 'paper'
 }
 
-export function PageHeader({ title, description, actions, band = 'paper' }: PageHeaderProps) {
+export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <header
-      className={cn(
-        'b-page-header flex min-w-0 flex-wrap items-start justify-between gap-4 pb-6',
-        band !== 'paper' &&
-          `b-band b-band--${band} b-band--app mb-6 rounded-card border-2 border-ink px-app`,
-      )}
-    >
-      <div className="b-route-heading flex min-w-0 flex-1 basis-64 flex-col gap-2">
-        <h1 className="b-title min-w-0">{title}</h1>
-        {description && <p className="b-lede text-muted-ink">{description}</p>}
+    <header className="b-page-header wg-shell-page-header">
+      <div className="wg-shell-edge" aria-hidden="true">
+        <span>20×10</span>
+        <span className="wg-shell-page-mark" />
       </div>
-      {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
+      <div className="wg-shell-heading">
+        <GridTitle as="h1" size="page" className="wg-shell-title">
+          {title}
+        </GridTitle>
+        {description && <p className="wg-shell-description">{description}</p>}
+      </div>
+      {actions && <div className="wg-shell-actions">{actions}</div>}
     </header>
   )
 }

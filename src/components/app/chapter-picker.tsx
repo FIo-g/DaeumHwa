@@ -43,7 +43,7 @@ export function ChapterPicker({
         else onChange(next)
       }}
     >
-      <SelectTrigger id={id} aria-label={ariaLabel} className="w-40 max-w-full font-bold">
+      <SelectTrigger id={id} aria-label={ariaLabel} className="wg-shell-picker w-40 max-w-full">
         <SelectValue>
           {(selected: string | null) => {
             if (selected === NONE) return '없음'
@@ -52,7 +52,7 @@ export function ChapterPicker({
           }}
         </SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="wg-shell-count">
         {allowNone && <SelectItem value={NONE}>없음</SelectItem>}
         {chapters.map((c) => (
           <SelectItem key={c.id} value={c.id}>

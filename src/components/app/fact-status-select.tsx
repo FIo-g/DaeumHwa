@@ -26,9 +26,11 @@ export function FactStatusSelect({ value, onChange, name }: FactStatusSelectProp
         aria-label="사실 상태"
         size="sm"
         variant="outline"
+        spacing={0}
       >
         {FACT_STATUSES.map((status) => (
           <ToggleGroupItem key={status} value={status} className="min-w-0 px-2.5">
+            <span className="wg-shell-fact-mark" data-status={status} aria-hidden="true" />
             {FACT_STATUS_LABEL[status]}
           </ToggleGroupItem>
         ))}

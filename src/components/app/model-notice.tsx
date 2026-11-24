@@ -12,10 +12,7 @@ export function ModelNotice() {
   )
   if (!model) return null
   return (
-    <div
-      role="status"
-      className="border-b border-ink bg-cream px-edge py-3 text-center text-sm text-ink"
-    >
+    <div role="status" className="wg-shell-notice">
       현재 AI 모델(<code className="wrap-anywhere">{model}</code>)에 보낸 원고와 설정은 모델 학습에
       쓰일 수 있어요. 공개 전 원고에는 다른 모델을 쓰세요.
     </div>
