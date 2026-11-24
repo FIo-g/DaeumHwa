@@ -65,7 +65,6 @@
     --b-pop: cubic-bezier(0.22, 1.55, 0.36, 1);
     --b-in-out: cubic-bezier(0.65, 0, 0.35, 1);
     --b-linear: linear;
-    --b-reveal-range: entry 0% cover 30%;
     accent-color: var(--b-ink);
     color-scheme: light;
     scroll-behavior: smooth;
@@ -866,28 +865,18 @@
   }
 
   @supports (animation-timeline: view()) {
-    .b-reveal {
-      animation: b-scroll-text linear both;
-      animation-duration: auto;
-      animation-timeline: view();
-      animation-range: var(--b-reveal-range);
-    }
-    .b-reveal--decor {
-      animation-name: b-enter;
-    }
     .b-parallax {
       animation: b-parallax var(--b-in-out) both;
       animation-duration: auto;
       animation-timeline: view();
       animation-range: cover 0% cover 100%;
     }
-    .b-dot {
-      animation: b-dot-fill linear both;
-      animation-duration: auto;
-      animation-timeline: view();
-      animation-range: entry 0% exit 100%;
-    }
   }
+
+  :is([data-revealed='true'], [data-landed='true']) .b-dot:not(.b-meter-dot) {
+    animation: b-dot-fill var(--b-draw) var(--b-out) both;
+  }
+
   @supports (animation-timeline: scroll(nearest block)) {
     .b-progress__fill {
       animation: b-progress linear both;
@@ -1019,13 +1008,8 @@
     }
   }
   @keyframes b-dot-fill {
-    0%,
-    100% {
+    from {
       background-color: var(--b-paper);
-    }
-    34%,
-    90% {
-      background-color: var(--b-ink);
     }
   }
   @keyframes b-parallax {
@@ -1277,17 +1261,12 @@
     animation: b-word-in var(--b-draw) var(--b-out) calc(var(--b-i, 0) * var(--b-stagger)) both;
   }
 
-  @supports not (animation-timeline: view()) {
-    .b-reveal[data-revealed='true'] {
-      animation: b-scroll-text var(--b-scene) var(--b-out) var(--b-delay, 0ms) both;
-    }
-    .b-reveal--decor[data-revealed='true'] {
-      animation-name: b-enter;
-    }
+  .b-reveal[data-revealed='true'] {
+    animation: b-scroll-text var(--b-scene) var(--b-out) var(--b-delay, 0ms) both;
   }
 
-  .b-reveal {
-    animation-delay: var(--b-delay, 0ms);
+  .b-reveal--decor[data-revealed='true'] {
+    animation-name: b-enter;
   }
 
   .b-card:active {
@@ -1323,6 +1302,28 @@
 
   .b-proof-word {
     position: relative;
+    display: inline-block;
+    max-inline-size: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .b-proof-rule {
+    --b-proof-rule-position: 100%;
+    background: linear-gradient(var(--b-proof), var(--b-proof)) no-repeat left
+      var(--b-proof-rule-position) / 100% 2px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    animation: b-proof-rule-draw var(--b-draw) var(--b-out) var(--b-delay, 0ms) both;
+  }
+
+  .b-proof-rule--strike {
+    --b-proof-rule-position: 55%;
+  }
+
+  @keyframes b-proof-rule-draw {
+    from {
+      background-size: 0% 2px;
+    }
   }
 
   .b-proof-ink {
@@ -1333,6 +1334,7 @@
     height: 3px;
     overflow: visible;
     pointer-events: none;
+    animation: b-proof-ink-draw var(--b-draw) var(--b-out) var(--b-delay, 0ms) both;
   }
 
   .b-proof-ink--strike {
@@ -1345,9 +1347,16 @@
     stroke: var(--b-proof);
     stroke-width: 2px;
     stroke-linecap: round;
-    stroke-dasharray: 100;
     vector-effect: non-scaling-stroke;
-    animation: b-ink-path var(--b-draw) var(--b-out) var(--b-delay, 0ms) both;
+  }
+
+  @keyframes b-proof-ink-draw {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
   }
 
   .b-scan-line {

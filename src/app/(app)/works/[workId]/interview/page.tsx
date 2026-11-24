@@ -1,7 +1,7 @@
 import { MessagesSquareIcon } from 'lucide-react'
 import { PageHeader } from '@/components/app/page-header'
 import { InterviewSession } from '@/components/interview/interview-session'
-import { TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
+import { TrialToolGate } from '@/components/app/trial-tool-gate'
 import { hasRole } from '@/server/access'
 import { getInterviewState } from '@/server/interview'
 import { guardPage, pageContext } from '@/server/page-helpers'
@@ -16,7 +16,13 @@ export default async function InterviewPage({ params }: { params: Promise<{ work
   const { db, actor, user } = await pageContext(`/works/${workId}/interview`)
   const work = await guardPage(() => getWork(db, actor, workId))
   if (user.isAnonymous)
-    return <PageHeader title="인터뷰" band="sand" description={TRIAL_SIGNUP_MESSAGE} />
+    return (
+      <TrialToolGate
+        title="인터뷰"
+        band="sand"
+        description="AI가 작품에 대해 물어요. 답에서 설정 카드와 떡밥 후보를 찾아요."
+      />
+    )
   const state = await guardPage(() => getInterviewState(db, actor, workId))
   const canEdit = hasRole(work.role, 'editor')
   const lastAnswer =

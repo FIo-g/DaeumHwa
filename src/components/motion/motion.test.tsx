@@ -53,7 +53,7 @@ describe('entrances and surfaces', () => {
     matchMotion(false)
     vi.stubGlobal('CSS', { supports: () => false })
     const view = (
-      <Reveal direction="left" delay={70} range="entry 0% cover 50%">
+      <Reveal direction="left" delay={70}>
         설정 보드
       </Reveal>
     )
@@ -74,7 +74,6 @@ describe('entrances and surfaces', () => {
     render(view)
     const heading = screen.getByText('설정 보드')
     expect(heading).toHaveAttribute('data-revealed', 'false')
-    expect(heading.style.getPropertyValue('--b-reveal-range')).toBe('entry 0% cover 50%')
     expect(heading.style.getPropertyValue('--b-reveal-x')).toBe('32px')
     expect(heading.style.getPropertyValue('--b-delay')).toBe('70ms')
     expect(watch).toHaveBeenCalledWith(heading)
@@ -250,19 +249,38 @@ describe('actions', () => {
 })
 
 describe('proof and scroll', () => {
-  it.each([ProofRing, ProofUnderline, ProofStrike])(
-    'replays only the decorative SVG for %p',
+  it('replays the ring without replacing the marked word', () => {
+    const { rerender } = render(<ProofRing replayKey={0}>열한 층</ProofRing>)
+    const phrase = screen.getByText('열한 층')
+    const first = phrase.querySelector('svg')
+    expect(first).toHaveAttribute('aria-hidden', 'true')
+    expect(first?.querySelector('path')).toHaveAttribute('pathLength', '100')
+    rerender(<ProofRing replayKey={1}>열한 층</ProofRing>)
+    expect(screen.getByText('열한 층')).toBe(phrase)
+    expect(phrase.querySelector('svg')).not.toBe(first)
+  })
+
+  it.each([ProofUnderline, ProofStrike])(
+    'marks flowing text with a per-line rule for %p',
     (Mark) => {
-      const { rerender } = render(<Mark replayKey={0}>열한 층</Mark>)
-      const phrase = screen.getByText('열한 층')
-      const first = phrase.querySelector('svg')
-      expect(first).toHaveAttribute('aria-hidden', 'true')
-      expect(first?.querySelector('path')).toHaveAttribute('pathLength', '100')
-      rerender(<Mark replayKey={1}>열한 층</Mark>)
-      expect(screen.getByText('열한 층')).toBe(phrase)
-      expect(phrase.querySelector('svg')).not.toBe(first)
+      const text = '종루지기가 열한 층 꼭대기에서 손을 흔들었다.'
+      const { rerender } = render(<Mark replayKey={0}>{text}</Mark>)
+      const rule = screen.getByText(text)
+      const phrase = rule.parentElement
+      expect(phrase).toHaveClass('b-proof-word')
+      expect(rule).toHaveClass('b-proof-rule')
+      expect(phrase?.querySelector('svg')).toBeNull()
+      rerender(<Mark replayKey={1}>{text}</Mark>)
+      expect(screen.getByText(text)).not.toBe(rule)
+      expect(screen.getByText(text).parentElement).toBe(phrase)
     },
   )
+
+  it('keeps the SVG for an externally positioned manuscript mark', () => {
+    const { container } = render(<ProofUnderline style={{ width: 64, height: 18 }} />)
+    expect(container.querySelector('svg')).toHaveClass('b-proof-ink')
+    expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+  })
 
   it('replays the handwriting and scan while leaving note text readable on the server', () => {
     expect(renderToString(<HandNote>다시 확인</HandNote>)).toContain('다시 확인')

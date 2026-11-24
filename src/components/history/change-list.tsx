@@ -81,7 +81,7 @@ export function ChangeList({
 
   return (
     <div className="grid gap-4">
-      <div className="b-works-timeline">
+      <Reveal effectOnly className="b-works-timeline">
         {[...groups].map(([day, entries]) => {
           const [year, month, date] = day.split('-').map(Number)
           return (
@@ -93,21 +93,21 @@ export function ChangeList({
               </h2>
               <ul className="b-works-history-entries">
                 {entries.map((row, index) => (
-                  <li
+                  <Reveal
+                    as="li"
+                    delay={70 * Math.min(index, 5)}
                     key={row.id}
                     className="b-works-history-row"
                     style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
                   >
-                    <Reveal delay={70 * Math.min(index, 5)}>
-                      <ChangeEntry row={row} canEdit={canEdit} onRevert={revert} />
-                    </Reveal>
-                  </li>
+                    <ChangeEntry row={row} canEdit={canEdit} onRevert={revert} />
+                  </Reveal>
                 ))}
               </ul>
             </section>
           )
         })}
-      </div>
+      </Reveal>
       {hasMore && (
         <div>
           <Button variant="outline" onClick={loadMore} disabled={busy}>

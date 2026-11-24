@@ -848,24 +848,9 @@
 
   @media (min-width: 1024px) {
     .b-wiki-index-list {
-      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-      grid-template-rows: repeat(var(--b-wiki-count), max-content) 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
       column-gap: var(--b-s5);
-    }
-
-    .b-wiki-index-item {
-      display: contents;
-    }
-
-    .b-wiki-index-row {
-      grid-column: 1;
-      grid-row: var(--b-wiki-row);
-    }
-
-    .b-wiki-preview {
-      grid-column: 2;
-      grid-row: 1 / -1;
-      margin-block-start: 0;
     }
   }
 

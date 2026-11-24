@@ -251,11 +251,7 @@ export function EntryList({
           }
         />
       ) : (
-        <ol
-          className="b-wiki-index-list"
-          role="list"
-          style={{ '--b-wiki-count': visible.length } as CSSProperties}
-        >
+        <ol className="b-wiki-index-list" role="list">
           {visible.map(({ entry, number }, index) => {
             const matches = selected?.entry.id === entry.id
             const expanded = matches && Boolean(selection?.open)
@@ -266,7 +262,7 @@ export function EntryList({
                 key={entry.id}
                 role="listitem"
                 className="b-wiki-index-item"
-                style={{ '--b-wiki-row': index + 1, '--b-i': Math.min(index, 5) } as CSSProperties}
+                style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
               >
                 <div className="b-wiki-index-row b-row b-sequence" data-expanded={expanded}>
                   <span className="b-number" aria-hidden="true">

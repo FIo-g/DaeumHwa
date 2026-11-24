@@ -65,6 +65,31 @@ describe('HomePanels', () => {
     expect(screen.getByText('회수 목표 지남')).toBeInTheDocument()
   })
 
+  it('connects planted and planned threads and separates marks at one chapter', () => {
+    const [planted] = props.openThreads
+    render(
+      <HomePanels
+        {...props}
+        openThreads={[
+          planted,
+          { ...planted, id: 't2', title: '같은 화', targetPosition: planted.plantedPosition },
+          { ...planted, id: 't3', title: '계획', status: 'planned', plantedPosition: null },
+        ]}
+      />,
+    )
+    const [first, sharedChapter, planned] = screen.getAllByRole('article')
+    expect(first.querySelector('.b-works-axis-fill')).toHaveAttribute('data-planned', 'false')
+    expect(first.querySelector('.b-works-planted')).not.toBeNull()
+    expect(first.querySelector('.b-works-target')).not.toBeNull()
+    const dot = sharedChapter.querySelector<HTMLElement>('.b-works-planted')
+    const diamond = sharedChapter.querySelector<HTMLElement>('.b-works-target')
+    expect(dot?.style.insetInlineStart).toMatch(/ - 8px\)$/)
+    expect(diamond?.style.insetInlineStart).toMatch(/ \+ 8px\)$/)
+    expect(planned.querySelector('.b-works-axis-fill')).toHaveAttribute('data-planned', 'true')
+    expect(planned.querySelector('.b-works-planted')).toBeNull()
+    expect(planned.querySelector('.b-works-target')).not.toBeNull()
+  })
+
   it('writes the periodic check messages in Korean', () => {
     render(<HomePanels {...props} />)
     expect(screen.getByText('‘금빛 반지’ 회수 목표 5화가 지났어요 (현재 8화).')).toBeInTheDocument()

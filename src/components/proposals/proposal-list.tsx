@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { usePrefersReducedMotion } from '@/components/motion'
+import { Reveal, usePrefersReducedMotion } from '@/components/motion'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -230,7 +230,7 @@ export function ProposalList({
 
       {shown.map((group) => (
         <section key={group.key} className="b-works-proposal-group" aria-label={group.label}>
-          <div className="b-works-group-head">
+          <Reveal effectOnly className="b-works-group-head">
             <h2 className="font-semibold">
               {group.label}{' '}
               <span className="text-sm font-normal text-muted-foreground">
@@ -245,7 +245,7 @@ export function ProposalList({
             >
               이 묶음 승인
             </Button>
-          </div>
+          </Reveal>
           {group.items.map((item) => (
             <div
               key={item.id}

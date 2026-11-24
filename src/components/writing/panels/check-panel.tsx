@@ -6,7 +6,13 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
-import { Disclosure, HandNote, PopButton, usePrefersReducedMotion } from '@/components/motion'
+import {
+  Disclosure,
+  HandNote,
+  ProofUnderline,
+  PopButton,
+  usePrefersReducedMotion,
+} from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import type { IssueRow } from '@/db/types'
 import { cancelAutoCheck, useAutoCheck } from '@/lib/client/auto-check'
@@ -407,9 +413,9 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
                     <button
                       type="button"
                       onClick={() => focusIssue(issue)}
-                      className="b-writing-quote rounded-field px-2 py-1 text-left underline decoration-mark decoration-2 underline-offset-4"
+                      className="b-writing-quote rounded-field px-2 py-1 text-left wrap-anywhere"
                     >
-                      {issue.quote}
+                      <ProofUnderline>{issue.quote}</ProofUnderline>
                     </button>
                   </div>
                   <div className="b-writing-evidence grid gap-1" data-step="wiki">

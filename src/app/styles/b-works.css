@@ -553,7 +553,6 @@
 .b-works-panel[data-panel='threads'] {
   grid-column: span 7;
   grid-template-rows: auto 1fr auto;
-  view-timeline-name: --b-works-thread-view;
 }
 
 .b-works-panel[data-panel='threads'] > p {
@@ -700,7 +699,7 @@
 .b-works-schedule-track {
   position: relative;
   height: 3px;
-  margin: var(--b-s3) var(--b-s2);
+  margin: var(--b-s3) var(--b-s4);
   background: color-mix(in srgb, var(--b-ink) 25%, transparent);
 }
 
@@ -713,15 +712,11 @@
 
 .b-works-thread-axis .b-works-axis-fill {
   background: none;
+  border-block-start: 2px solid var(--b-ink);
 }
 
-.b-works-thread-axis .b-works-axis-fill::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-block-start: 2px dashed var(--b-ink);
-  transform-origin: left;
-  animation: b-works-draw var(--b-arrival) var(--b-out) calc(var(--b-i) * var(--b-stagger)) both;
+.b-works-thread-axis .b-works-axis-fill[data-planned='true'] {
+  border-block-start-style: dashed;
 }
 
 .b-works-thread-dot {
@@ -794,22 +789,30 @@
 }
 
 @supports (animation-timeline: view()) {
-  .b-works-shelf-item .b-works-book,
   .b-works-new-layout > .b-works-paper-stack {
     animation: b-works-scroll-arrive var(--b-linear) both;
     animation-timeline: view();
     animation-range: entry 0% cover 30%;
   }
+}
 
-  .b-works-axis-fill {
-    animation: b-works-draw var(--b-linear) both;
-    animation-timeline: view();
-    animation-range: entry 0% cover 36%;
-  }
+.b-works-shelf-item[data-revealed='true'] .b-works-book {
+  animation: b-works-scroll-arrive var(--b-arrival) var(--b-out) both;
+}
 
-  .b-works-thread-axis .b-works-axis-fill {
-    animation-timeline: --b-works-thread-view;
-    animation-range: entry 0% cover 52%;
+:is(.b-works-schedule-track, .b-works-thread)[data-revealed='true'] .b-works-axis-fill {
+  animation: b-works-draw var(--b-arrival) var(--b-out) calc(var(--b-i) * var(--b-stagger)) both;
+}
+
+.b-works-thread[data-revealed='true'] .b-works-thread-dot {
+  animation: b-works-thread-mark var(--b-draw) var(--b-out)
+    calc(var(--b-step) + var(--b-i) * var(--b-stagger)) both;
+}
+
+@keyframes b-works-thread-mark {
+  from {
+    opacity: 0;
+    scale: 0.6;
   }
 }
 
@@ -1051,28 +1054,23 @@
 
 .b-works-group-head {
   position: relative;
-  view-timeline-name: --b-works-group-view;
   animation: b-works-arrive var(--b-scene) var(--b-out) calc(2 * var(--b-stagger)) both;
   border-block-end: 1px solid var(--b-ink);
   padding-block-end: var(--b-s2);
 }
 
-@supports (animation-timeline: view()) {
-  .b-works-group-head {
-    border-block-end-color: transparent;
-  }
+.b-works-group-head[data-revealed='true'] {
+  border-block-end-color: transparent;
+}
 
-  .b-works-group-head::after {
-    content: '';
-    position: absolute;
-    inset: auto 0 -1px;
-    height: 1px;
-    background: var(--b-ink);
-    transform-origin: left;
-    animation: b-works-draw var(--b-linear) both;
-    animation-timeline: --b-works-group-view;
-    animation-range: entry 0% cover 30%;
-  }
+.b-works-group-head[data-revealed='true']::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 1px;
+  background: var(--b-ink);
+  transform-origin: left;
+  animation: b-works-draw var(--b-draw) var(--b-out) both;
 }
 
 .b-works-group-head h2 {
@@ -1209,7 +1207,6 @@
   display: grid;
   gap: var(--b-s6);
   padding-inline-start: clamp(1rem, 3.4vw, 3rem);
-  view-timeline-name: --b-works-timeline;
 }
 
 .b-works-timeline::before {
@@ -1245,8 +1242,6 @@
 
 .b-works-history-row {
   position: relative;
-  animation: b-works-arrive var(--b-scene) var(--b-out) calc(var(--b-i) * var(--b-stagger)) both;
-  view-timeline-name: --b-works-history-row;
 }
 
 .b-works-history-row::before {
@@ -1282,19 +1277,13 @@
   border-radius: var(--b-r-field);
 }
 
-@supports (animation-timeline: view()) {
-  .b-works-timeline::before {
-    --b-works-draw-from: 1 0;
-    animation: b-works-draw var(--b-linear) both;
-    animation-timeline: --b-works-timeline;
-    animation-range: entry 0% exit 0%;
-  }
+.b-works-timeline[data-revealed='true']::before {
+  --b-works-draw-from: 1 0;
+  animation: b-works-draw var(--b-arrival) var(--b-out) both;
+}
 
-  .b-works-history-row::before {
-    animation: b-works-dot var(--b-linear) both;
-    animation-timeline: --b-works-history-row;
-    animation-range: entry 0% cover 36%;
-  }
+.b-works-history-row[data-revealed='true']::before {
+  animation: b-works-dot var(--b-draw) var(--b-out) var(--b-delay) both;
 }
 
 @keyframes b-works-dot {
@@ -1324,7 +1313,7 @@
   .b-works-group-head,
   .b-works-group-head::after,
   .b-works-history-row,
-  .b-works-thread-axis .b-works-axis-fill::before,
+  .b-works-thread-dot,
   .b-works-axis-fill,
   .b-works-demo-slip,
   .b-works-demo-lines,

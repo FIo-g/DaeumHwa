@@ -1,12 +1,6 @@
 'use client'
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ComponentPropsWithoutRef,
-  type CSSProperties,
-} from 'react'
+import { useEffect, useRef, useState, type HTMLAttributes, type CSSProperties } from 'react'
 import { cn } from '@/lib/utils'
 import { usePrefersReducedMotion } from './hooks'
 
@@ -18,34 +12,30 @@ const OFFSETS = {
   none: ['0px', '0px'],
 } as const
 
-type RevealProps = ComponentPropsWithoutRef<'div'> & {
+type RevealProps = HTMLAttributes<HTMLElement> & {
+  as?: 'div' | 'li' | 'article'
   direction?: keyof typeof OFFSETS
   delay?: number
-  range?: string
   decorative?: boolean
+  effectOnly?: boolean
 }
 
 export function Reveal({
+  as: Element = 'div',
   direction = 'up',
   delay = 0,
-  range,
   decorative = false,
+  effectOnly = false,
   className,
   style,
   ...props
 }: RevealProps) {
-  const node = useRef<HTMLDivElement>(null)
+  const node = useRef<HTMLElement>(null)
   const [revealed, setRevealed] = useState(false)
   const reduced = usePrefersReducedMotion()
 
   useEffect(() => {
-    if (
-      reduced ||
-      !node.current ||
-      window.CSS?.supports('animation-timeline', 'view()') ||
-      typeof IntersectionObserver === 'undefined'
-    )
-      return
+    if (reduced || !node.current || typeof IntersectionObserver === 'undefined') return
 
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry?.isIntersecting) return
@@ -58,17 +48,18 @@ export function Reveal({
 
   const [x, y] = OFFSETS[direction]
   return (
-    <div
+    <Element
       {...props}
-      ref={node}
-      className={cn('b-reveal', decorative && 'b-reveal--decor', className)}
+      ref={(element: HTMLElement | null) => {
+        node.current = element
+      }}
+      className={cn(!effectOnly && 'b-reveal', decorative && 'b-reveal--decor', className)}
       data-revealed={revealed}
       style={
         {
           '--b-reveal-x': x,
           '--b-reveal-y': y,
           '--b-delay': `${delay}ms`,
-          '--b-reveal-range': range,
           ...style,
         } as CSSProperties
       }

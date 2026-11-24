@@ -1,7 +1,7 @@
 import { FolderInputIcon } from 'lucide-react'
 import { PageHeader } from '@/components/app/page-header'
 import { ImportWizard } from '@/components/import/import-wizard'
-import { TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
+import { TrialToolGate } from '@/components/app/trial-tool-gate'
 import { hasRole } from '@/server/access'
 import { listImportJobs } from '@/server/imports'
 import { guardPage, pageContext } from '@/server/page-helpers'
@@ -15,7 +15,13 @@ export default async function ImportPage({ params }: { params: Promise<{ workId:
   const { db, actor, user } = await pageContext(`/works/${workId}/import`)
   const work = await guardPage(() => getWork(db, actor, workId))
   if (user.isAnonymous)
-    return <PageHeader title="원고 가져오기" band="cream" description={TRIAL_SIGNUP_MESSAGE} />
+    return (
+      <TrialToolGate
+        title="원고 가져오기"
+        band="cream"
+        description="txt, md, docx 파일을 올릴 수 있어요."
+      />
+    )
   const jobs = await guardPage(() => listImportJobs(db, actor, workId))
 
   return (

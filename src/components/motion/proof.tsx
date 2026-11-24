@@ -32,28 +32,39 @@ function ProofMark({
 }: NoteProps & { kind: 'ring' | 'underline' | 'strike' }) {
   return (
     <span {...props} className={cn('b-proof-word b-scene-run', className)}>
-      {children}
-      <svg
-        key={replayKey}
-        className={
-          kind === 'ring'
-            ? 'b-mark-ring'
-            : cn('b-proof-ink', kind === 'strike' && 'b-proof-ink--strike')
-        }
-        viewBox={kind === 'ring' ? '0 0 100 46' : '0 0 100 4'}
-        preserveAspectRatio="none"
-        aria-hidden="true"
-        style={{ '--b-delay': `${delay}ms` } as CSSProperties}
-      >
-        <path
-          pathLength={100}
-          d={
+      {children != null && kind !== 'ring' && (
+        <span
+          key={replayKey}
+          className={cn('b-proof-rule', kind === 'strike' && 'b-proof-rule--strike')}
+          style={{ '--b-delay': `${delay}ms` } as CSSProperties}
+        >
+          {children}
+        </span>
+      )}
+      {kind === 'ring' && children}
+      {(kind === 'ring' || children == null) && (
+        <svg
+          key={replayKey}
+          className={
             kind === 'ring'
-              ? 'M14 11 C36 1 78 2 92 16 C103 28 83 41 52 42 C25 44 6 38 7 26 C8 19 14 15 23 12'
-              : 'M1 2 L99 2'
+              ? 'b-mark-ring'
+              : cn('b-proof-ink', kind === 'strike' && 'b-proof-ink--strike')
           }
-        />
-      </svg>
+          viewBox={kind === 'ring' ? '0 0 100 46' : '0 0 100 4'}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          style={{ '--b-delay': `${delay}ms` } as CSSProperties}
+        >
+          <path
+            pathLength={100}
+            d={
+              kind === 'ring'
+                ? 'M14 11 C36 1 78 2 92 16 C103 28 83 41 52 42 C25 44 6 38 7 26 C8 19 14 15 23 12'
+                : 'M1 2 L99 2'
+            }
+          />
+        </svg>
+      )}
     </span>
   )
 }

@@ -106,10 +106,10 @@ export function HomePanels({
           </div>
         </dl>
         {schedule.nextPublishDate && (
-          <div className="b-works-schedule-track" aria-hidden="true">
+          <Reveal effectOnly className="b-works-schedule-track" aria-hidden="true">
             <span className="b-works-axis-fill" />
             <CalendarDaysIcon size={24} />
-          </div>
+          </Reveal>
         )}
         <PanelLink href={`${base}/schedule`}>일정 보기</PanelLink>
       </Panel>
@@ -126,7 +126,6 @@ export function HomePanels({
                   direction="right"
                   style={{ '--b-reveal-x': '-8px' } as CSSProperties}
                   delay={70 * Math.min(index, 5)}
-                  range="entry 0% cover 30%"
                 >
                   <span className="b-dot" aria-hidden="true" />
                   <div>
@@ -159,10 +158,19 @@ function ThreadPreview({
   const planted = thread.plantedPosition
   const target = thread.targetPosition
   const x = (position: number) => ((position - 1) / Math.max(1, lastPosition - 1)) * 100
-  const plotted = [planted, target].filter((position) => position !== null)
+  const sameChapter = planted !== null && planted === target
+  const plantedX = planted === null ? '0%' : `${x(planted)}%`
+  const targetX = target === null ? plantedX : `${x(target)}%`
+  const start = sameChapter
+    ? `calc(${plantedX} - 8px)`
+    : planted === null && target === 1
+      ? '-12px'
+      : plantedX
+  const end = sameChapter ? `calc(${targetX} + 8px)` : targetX
+  const reverse = planted !== null && target !== null && planted > target
 
   return (
-    <article className="b-works-thread">
+    <Reveal as="article" effectOnly className="b-works-thread">
       <header className="grid gap-2">
         <h3 className="b-row__title wrap-anywhere">{thread.title}</h3>
         <div className="flex flex-wrap gap-2">
@@ -170,26 +178,27 @@ function ThreadPreview({
           {thread.overdue && <span className="b-works-tag bg-cream">회수 목표 지남</span>}
         </div>
       </header>
-      {plotted.length > 0 && (
+      {(planted !== null || target !== null) && (
         <>
           <div className="b-works-thread-axis" aria-hidden="true">
             <span
               className="b-works-axis-fill"
+              data-planned={planted === null}
               style={{
-                insetInlineStart: `${x(Math.min(...plotted))}%`,
-                insetInlineEnd: `${100 - x(Math.max(...plotted))}%`,
+                insetInlineStart: reverse ? end : start,
+                insetInlineEnd: `calc(100% - ${reverse ? start : end})`,
               }}
             />
             {planted !== null && (
               <span
                 className="b-works-thread-dot b-works-planted"
-                style={{ left: `${x(planted)}%` }}
+                style={{ insetInlineStart: start }}
               />
             )}
             {target !== null && (
               <span
                 className="b-works-thread-dot b-works-target"
-                style={{ left: `${x(target)}%` }}
+                style={{ insetInlineStart: end }}
               />
             )}
           </div>
@@ -199,7 +208,7 @@ function ThreadPreview({
           </p>
         </>
       )}
-    </article>
+    </Reveal>
   )
 }
 

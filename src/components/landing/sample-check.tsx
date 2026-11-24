@@ -49,8 +49,11 @@ const steps = [
 
 function CheckProcess() {
   const { replayKey, replay } = useReplay()
+  const entrance = useLandingEntrance<HTMLElement>()
+  const running = entrance['data-landed'] || replayKey > 0
+
   return (
-    <aside className="b-paper b-landing-process bg-paper" aria-label="점검 과정">
+    <aside {...entrance} className="b-paper b-landing-process bg-paper" aria-label="점검 과정">
       <div className="b-landing-panel-head">
         <h3 className="b-subhead">점검 과정</h3>
         <ReplayButton onClick={replay} aria-label="점검 과정 다시 보기" />
@@ -62,7 +65,7 @@ function CheckProcess() {
             <span className="b-landing-process-track" aria-hidden="true">
               <span
                 key={replayKey}
-                className={replayKey ? 'b-pass' : 'b-landing-scroll-fill'}
+                className={running ? 'b-pass' : undefined}
                 style={{ width, '--b-i': index } as CSSProperties}
               />
             </span>

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { PageHeader } from '@/components/app/page-header'
 import { TrialButton } from '@/components/auth/trial-button'
-import { Disclosure, PopLink } from '@/components/motion'
+import { Disclosure, Reveal, PopLink } from '@/components/motion'
 import { PaperStack } from '@/components/works/paper-stack'
 import { ResumeBanner } from '@/components/works/resume-banner'
 import { SampleWorkButton } from '@/components/works/sample-work-button'
@@ -76,7 +76,9 @@ function WorkShelf({ cards }: { cards: WorkStats[] }) {
   return (
     <ul className="b-works-shelf-cards">
       {cards.map(({ work, role, ...stats }, index) => (
-        <li
+        <Reveal
+          as="li"
+          effectOnly
           key={work.id}
           className="b-works-shelf-item"
           style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
@@ -92,7 +94,7 @@ function WorkShelf({ cards }: { cards: WorkStats[] }) {
             alertCount={stats.alertCount}
             lastEditedAt={stats.lastEditedAt ?? work.updatedAt}
           />
-        </li>
+        </Reveal>
       ))}
     </ul>
   )

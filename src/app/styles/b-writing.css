@@ -165,7 +165,7 @@
   inset-block-end: 0;
 }
 
-.b-writing-proof[data-existing='true'] .b-proof-ink path {
+.b-writing-proof[data-existing='true'] .b-proof-ink {
   animation-duration: var(--b-quick);
 }
 
