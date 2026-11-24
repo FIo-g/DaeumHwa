@@ -77,7 +77,10 @@ function FactItem({
   return (
     <li
       id={`fact-${fact.id}`}
-      className={cn('flex flex-col gap-2 rounded-lg border p-3', superseded && 'opacity-60')}
+      className={cn(
+        'flex flex-col gap-2 rounded-sm border border-rule bg-sheet p-3',
+        superseded && 'opacity-60',
+      )}
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <FactStatusBadge status={fact.status} />
@@ -91,12 +94,21 @@ function FactItem({
           </span>
         )}
       </div>
-      <p className="text-sm">{fact.content}</p>
+      {/* Set like the wiki original on a check finding: a canon quote in blue pencil. An
+          undecided fact is not canon yet, so it keeps the serif but not the blue. */}
+      <p
+        className={cn(
+          'font-serif text-[15px] leading-7',
+          fact.status === 'undecided' ? 'text-muted-foreground' : 'text-canon',
+        )}
+      >
+        {fact.content}
+      </p>
       <div className="text-xs text-muted-foreground">
         <SourceLabel workId={workId} sourceType={fact.sourceType} chapter={fact.sourceChapter} />
       </div>
       {fact.evidence && (
-        <blockquote className="border-l-2 pl-3 text-sm text-muted-foreground">
+        <blockquote className="border-l border-rule pl-3 font-serif text-sm leading-relaxed text-foreground/80">
           {fact.evidence}
         </blockquote>
       )}

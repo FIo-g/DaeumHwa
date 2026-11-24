@@ -73,12 +73,13 @@ export function EntryList({
       </div>
 
       {filterKinds && (
-        <div className="flex flex-wrap gap-2" aria-label="분류 필터">
+        // Same chips as the other filter rows (FilterLinks): the chosen one solid, the rest outlined.
+        <nav className="flex flex-wrap gap-2" aria-label="분류 필터">
           <Link
             href={`${base}?tab=${tab}`}
             aria-current={kindFilter === null ? 'page' : undefined}
             className={buttonVariants({
-              variant: kindFilter === null ? 'secondary' : 'ghost',
+              variant: kindFilter === null ? 'default' : 'outline',
               size: 'sm',
             })}
           >
@@ -90,32 +91,47 @@ export function EntryList({
               href={`${base}?tab=${tab}&kind=${kind}`}
               aria-current={kindFilter === kind ? 'page' : undefined}
               className={buttonVariants({
-                variant: kindFilter === kind ? 'secondary' : 'ghost',
+                variant: kindFilter === kind ? 'default' : 'outline',
                 size: 'sm',
               })}
             >
               {ENTRY_KIND_LABEL[kind]}
             </Link>
           ))}
-        </div>
+        </nav>
       )}
 
       {entries.length === 0 ? (
-        <EmptyState
-          title={isCharacters ? '아직 인물이 없습니다.' : '아직 항목이 없습니다.'}
-          description={query ? '검색 결과가 없습니다.' : '카드를 만들면 여기에 모여 보입니다.'}
-        />
+        query ? (
+          <EmptyState
+            title="검색 결과가 없습니다."
+            description="다른 이름이나 별칭으로 찾아 보세요."
+            action={
+              <Link
+                href={kindFilter ? `${base}?tab=${tab}&kind=${kindFilter}` : `${base}?tab=${tab}`}
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                검색 지우기
+              </Link>
+            }
+          />
+        ) : (
+          <EmptyState
+            title={isCharacters ? '아직 인물이 없습니다.' : '아직 항목이 없습니다.'}
+            description="카드를 만들면 여기에 모여 보입니다."
+          />
+        )
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {entries.map((entry) => (
             <li key={entry.id}>
               <Link
                 href={`${base}/entries/${entry.id}`}
-                className="flex h-full flex-col gap-2 rounded-xl border p-4 transition-colors hover:bg-muted/50"
+                className="flex h-full flex-col gap-2 rounded-sm border border-rule bg-sheet p-4 outline-none transition-colors hover:border-input focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-medium">{entry.name}</span>
-                  <Badge variant="secondary">{ENTRY_KIND_LABEL[entry.kind]}</Badge>
+                  <Badge variant="outline">{ENTRY_KIND_LABEL[entry.kind]}</Badge>
                 </span>
                 {entry.aliases.length > 0 && (
                   <span className="flex flex-wrap gap-1 text-xs text-muted-foreground">

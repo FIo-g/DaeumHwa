@@ -61,8 +61,59 @@ describe('EntryList', () => {
     expect(screen.queryByRole('button', { name: '새 인물' })).not.toBeInTheDocument()
   })
 
-  it('shows an empty state when nothing matches', () => {
+  it('shows an empty state when there are no cards yet', () => {
     render(<EntryList {...base} entries={[]} canEdit={false} />)
     expect(screen.getByText('아직 인물이 없습니다.')).toBeInTheDocument()
+  })
+
+  it('says the search found nothing, and offers to clear it, when a search matches no card', () => {
+    render(<EntryList {...base} query="민준" entries={[]} canEdit={false} />)
+    expect(screen.getByText('검색 결과가 없습니다.')).toBeInTheDocument()
+    expect(screen.queryByText('아직 인물이 없습니다.')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '검색 지우기' })).toHaveAttribute(
+      'href',
+      '/works/w1/wiki?tab=characters',
+    )
+  })
+
+  it('keeps the kind filter when clearing a search on the world tab', () => {
+    render(
+      <EntryList
+        {...base}
+        tab="world"
+        kinds={['place']}
+        defaultKind="place"
+        filterKinds={['place', 'item']}
+        kindFilter="place"
+        query="성"
+        entries={[]}
+        canEdit={false}
+      />,
+    )
+    expect(screen.getByRole('link', { name: '검색 지우기' })).toHaveAttribute(
+      'href',
+      '/works/w1/wiki?tab=world&kind=place',
+    )
+  })
+
+  it('marks the chosen kind chip as current on the world tab', () => {
+    render(
+      <EntryList
+        {...base}
+        tab="world"
+        kinds={['place']}
+        defaultKind="place"
+        filterKinds={['place', 'item']}
+        kindFilter="place"
+        entries={[]}
+        canEdit={false}
+      />,
+    )
+    const filters = screen.getByRole('navigation', { name: '분류 필터' })
+    expect(within(filters).getByRole('link', { name: '장소' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(filters).getByRole('link', { name: '전체' })).not.toHaveAttribute('aria-current')
   })
 })
