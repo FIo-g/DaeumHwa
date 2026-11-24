@@ -3,6 +3,11 @@
 @import 'shadcn/tailwind.css';
 
 @import './redesign.css';
+@import './styles/b-landing.css';
+@import './styles/b-writing.css';
+@import './styles/b-wiki.css';
+@import './styles/b-works.css';
+@import './styles/b-tools.css';
 
 @custom-variant dark (&:is(.dark *));
 
