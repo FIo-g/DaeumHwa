@@ -39,7 +39,7 @@ export function TopBar({ user }: { user: SessionUser }) {
             <>
               <span className="whitespace-nowrap text-sm text-muted-foreground">체험 중</span>
               <Link href="/signup" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-                가입하고 작품 이어가기
+                가입 후 작품 이어가기
               </Link>
             </>
           ) : (

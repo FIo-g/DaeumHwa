@@ -50,7 +50,9 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {trial && <p className="text-sm text-muted-foreground">체험 작품을 계정으로 가져갑니다.</p>}
+      {trial && (
+        <p className="text-sm text-muted-foreground">체험 작품은 이 계정으로 옮겨집니다.</p>
+      )}
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         {isSignup && (
           <div className="flex flex-col gap-1.5">

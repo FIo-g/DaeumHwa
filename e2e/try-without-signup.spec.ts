@@ -56,8 +56,8 @@ test('checks chapter three without signup and keeps the same work after signup',
   const workPath = chapterPath.split('/chapters/')[0]
 
   await capture(page, '02-trial-check.png')
-  await page.getByRole('link', { name: '가입하고 작품 이어가기' }).click()
-  await expect(page.getByText('체험 작품을 계정으로 가져갑니다.')).toBeVisible()
+  await page.getByRole('link', { name: '가입 후 작품 이어가기' }).click()
+  await expect(page.getByText('체험 작품은 이 계정으로 옮겨집니다.')).toBeVisible()
   await page.getByLabel('이름', { exact: true }).fill('심사위원')
   await page.getByLabel('이메일', { exact: true }).fill(uniqueEmail('trial'))
   await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD)

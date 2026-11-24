@@ -31,7 +31,7 @@ function createAuth() {
     },
     plugins: [
       anonymous({
-        generateName: () => '체험 사용자',
+        generateName: () => '체험 계정',
         disableDeleteAnonymousUser: true,
         onLinkAccount: async ({ anonymousUser, newUser }) => {
           if (!newUser.user.isAnonymous) {
