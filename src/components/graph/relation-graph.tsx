@@ -23,6 +23,7 @@ import {
   type GraphNode,
   defaultPosition,
   circleOrder,
+  fitMinZoom,
   formatRelationRange,
   visibleGraph,
 } from './graph-model'
@@ -76,6 +77,8 @@ function circleLayout(nodes: GraphNode[], edges: GraphEdge[]): LayoutOptions {
         graph.zoom(MAX_FIT_ZOOM)
         graph.center()
       }
+      // Keep the full graph in reach after fitting.
+      graph.minZoom(fitMinZoom(graph.zoom()))
     },
   }
 }
@@ -237,7 +240,6 @@ export function RelationGraph({
         container,
         elements: toElements(nodes, edges),
         style: GRAPH_STYLE,
-        minZoom: 0.3,
         maxZoom: 3,
         layout: circleLayout(nodes, edges),
       })

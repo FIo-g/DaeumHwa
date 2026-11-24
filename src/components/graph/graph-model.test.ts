@@ -5,6 +5,7 @@ import {
   circleOrder,
   createForceGraphData,
   defaultPosition,
+  fitMinZoom,
   formatRelationRange,
   isEdgeVisible,
   isNodeVisible,
@@ -142,6 +143,20 @@ describe('defaultPosition', () => {
   it('starts at the latest chapter and never below 1', () => {
     expect(defaultPosition(12)).toBe(12)
     expect(defaultPosition(0)).toBe(1)
+  })
+})
+
+describe('fitMinZoom', () => {
+  it.each([
+    [1.2, 0.3],
+    [0.3, 0.3],
+    [0.12, 0.12],
+    [0, 0.3],
+    [-0.1, 0.3],
+    [NaN, 0.3],
+    [Infinity, 0.3],
+  ])('sets the lower zoom limit for a fit zoom of %s to %s', (fitZoom, minZoom) => {
+    expect(fitMinZoom(fitZoom)).toBe(minZoom)
   })
 })
 

@@ -36,6 +36,13 @@ export function defaultPosition(latestPosition: number): number {
   return Math.max(1, latestPosition)
 }
 
+const DEFAULT_MIN_ZOOM = 0.3
+
+export function fitMinZoom(fitZoom: number): number {
+  if (!Number.isFinite(fitZoom) || fitZoom <= 0) return DEFAULT_MIN_ZOOM
+  return Math.min(DEFAULT_MIN_ZOOM, fitZoom)
+}
+
 /** A card shows when its first appearance is at or before the position (no record: always). */
 export function isNodeVisible(
   node: GraphNode,
