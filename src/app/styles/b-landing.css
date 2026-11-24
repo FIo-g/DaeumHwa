@@ -73,19 +73,6 @@
     overflow-x: clip;
   }
 
-  .b-landing-root main :is(p, dd, blockquote),
-  .b-landing-account p,
-  .b-landing-invite p,
-  .b-landing-footer p {
-    text-wrap: pretty;
-  }
-
-  .b-landing-root :is(h1, h2, h3),
-  .b-landing-account h1,
-  .b-landing-invite h1 {
-    text-wrap: balance;
-  }
-
   .b-landing-root .b-landing-section-title {
     max-inline-size: 11em;
     font-size: clamp(2rem, 5.56vw, 5rem);
@@ -138,7 +125,7 @@
   .b-landing-boundary-sheet + .b-landing-boundary-sheet {
     inset-inline-end: 0;
     rotate: 11deg;
-    background: var(--b-kraft);
+    background: var(--b-sand);
     --b-parallax-from: -20px;
     --b-parallax-to: 34px;
   }
@@ -489,7 +476,7 @@
   .b-landing-process-slip:nth-child(2) {
     inset: 36% auto auto 22%;
     rotate: 6deg;
-    background: var(--b-kraft);
+    background: var(--b-sand);
   }
 
   .b-landing-process-slip:nth-child(3) {
@@ -995,7 +982,7 @@
   .b-landing-envelope-backdrop {
     position: absolute;
     inset: 26% 12% 17% 6%;
-    background: var(--b-kraft);
+    background: var(--b-sand);
     border: var(--b-rule) solid var(--b-ink);
     border-radius: var(--b-r-card);
     transition: transform var(--b-step) var(--b-out);

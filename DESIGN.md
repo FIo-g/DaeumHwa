@@ -23,6 +23,12 @@ typography:
     fontWeight: 400
     lineHeight: 1.08
     letterSpacing: '-0.04em'
+  work-title:
+    fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: 'clamp(2rem, 3.9vw, 3.5rem)'
+    fontWeight: 400
+    lineHeight: 1.08
+    letterSpacing: '-0.04em'
   heading:
     fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
     fontSize: 'clamp(1.75rem, 3.34vw, 3rem)'
@@ -139,8 +145,8 @@ components:
     height: '44px'
     padding: '0 12px'
   nav-item-active:
-    backgroundColor: '{colors.kraft}'
-    textColor: '{colors.ink}'
+    backgroundColor: '{colors.ink}'
+    textColor: '{colors.paper}'
 ---
 
 # Design System for 다음화
@@ -153,19 +159,22 @@ Use wide color bands and large ink headings to frame three parts of an editorial
 
 - Ink covers titles, buttons, outlines, focus rings, and ledger symbols. Use paper text and focus rings on an ink band.
 - Paper covers the navigation, manuscript, fields, quotes, and overlays. Muted ink covers secondary text, placeholders, and field outlines.
-- Kraft marks entry and the current chapter. Sand marks checks, evidence, and selected rows. Cream marks author decisions and chapter plans.
-- Proof red marks inconsistent phrases in the manuscript. Pair the mark with an ink finding number and the manuscript label. Wiki blue belongs to direct quotations and their rules. Pair the quote with a source label and a card link in ink.
+- Use one paper palette. Reserve kraft for one or two major surfaces per screen. Separate other surfaces with sand, cream, paper, and two-pixel ink outlines.
+- Multiply a fine SVG grain over the page at 40% opacity. Let it cover dialogs, sheets, tooltips, and toasts. Keep the texture clear of pointer events. Hide it in print.
+- Proof red and wiki blue are the only chromatic accents. Use red for manuscript proof marks and blue for direct wiki quotations. Pair each mark and quote with an ink label.
 - Use ink or muted ink for validation, destructive actions, links, and fact states. Set confirmed, assumed, and undecided fact badges in solid, dashed, and dotted outlines.
 
 ## Typography
 
 Use Black Han Sans 400 for the wordmark, display, title, and heading. Use IBM Plex Sans KR 400–700 for the UI, manuscript, and quotations. Use 400 for reading and input. Use 700 for buttons, tabs, and subheads. Limit Nanum Pen Script 400 to one or two short lines.
 
-Display text reaches 120px at 1440px. Page titles reach 80px and headings reach 48px. Break Korean headings at word boundaries. Allow a long unbroken title to wrap when needed. Limit manuscripts to 48rem and introduction paragraphs to 36rem. Match font face, line height, padding, and wrapping between an editor and its proof overlay.
+Display text reaches 120px at 1440px. Full page titles reach 80px and headings reach 48px. Balance heading and card title lines. Use pretty wrapping for body copy. Preserve Korean word boundaries and let long unbroken titles wrap when needed. Limit manuscripts to 48rem and introduction paragraphs to 36rem. Match font face, line height, padding, and wrapping between an editor and its proof overlay.
 
 ## Layout
 
 Limit the inner width to 1280px. Use 16–80px side gutters and 48–96px vertical padding on full-width bands. Use 24–48px on work pages and 16–32px inside cards. Use a twelve-column grid with 24px gaps at 1024px and above. Checks use seven columns for the manuscript and five for evidence. The wiki reverses those proportions. Stack those layouts at narrower widths. Let a 46rem ledger scroll inside its own wrapper.
+
+Inside the work layout, use a 32–56px title and 14–22px vertical padding in the header band. Keep paper decorations small. At 1440 × 900, target a header height of 170px or less. Allow up to 230px for the settings board header with tabs. Use full-size titles on the landing, login, signup, and My Works pages.
 
 Use a sticky 64px paper bar from 640px and a 56px bar below 640px. Move work navigation into a bottom sheet below 768px. In the existing manuscript workspace, keep the side panel at 320px from 1024px and at 380px from 1280px.
 
@@ -180,7 +189,7 @@ Use 8px field corners, 10px button corners, 16px card corners, and 24px sheet co
 ## Components
 
 - **Buttons.** Use ink and paper for primary actions. Use a paper fill and ink outline for secondary actions. A prominent call to action splits the label and arrow into two moving surfaces. Give the arrow a kraft fill on a primary action.
-- **Navigation.** Mark the active work link with a kraft chip, bold text, and an underline. Use an ink count badge for pending approvals. Let the line-tab indicator follow the selected tab.
+- **Navigation.** Mark the active work link with an ink fill, bold paper text, and an underline. Use an ink count badge for pending approvals. Let the line-tab indicator follow the selected tab.
 - **Fields.** Use paper, a muted-ink border, and an ink caret. Use a stronger ink outline and a written error for invalid input.
 - **Findings.** Place the marked manuscript phrase next to the direct wiki quote. Keep the source link and action labels in ink. Draw proof circles, underlines, and strike-throughs over short phrases. Replay each stroke through its own SVG.
 - **Ledger.** Use an ink circle for the planted chapter, an open ink diamond for the target, and a dotted line for the plan. Add text names for the symbols.

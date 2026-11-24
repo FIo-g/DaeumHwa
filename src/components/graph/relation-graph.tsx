@@ -450,7 +450,7 @@ export function RelationGraph({
                 <li key={n.id}>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left b-wiki-graph-option hover:bg-sand focus-visible:bg-sand aria-pressed:bg-cream"
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left b-wiki-graph-option hover:bg-sand focus-visible:bg-sand aria-pressed:bg-ink aria-pressed:font-bold aria-pressed:text-paper"
                     aria-pressed={selectedNode?.id === n.id}
                     onClick={() => setSelection({ type: 'node', id: n.id })}
                   >
@@ -472,7 +472,7 @@ export function RelationGraph({
                 <li key={e.id}>
                   <button
                     type="button"
-                    className="w-full rounded-sm px-2 py-1 text-left b-wiki-graph-option hover:bg-sand focus-visible:bg-sand aria-pressed:bg-cream"
+                    className="w-full rounded-sm px-2 py-1 text-left b-wiki-graph-option hover:bg-sand focus-visible:bg-sand aria-pressed:bg-ink aria-pressed:font-bold aria-pressed:text-paper"
                     aria-pressed={selectedEdge?.id === e.id}
                     onClick={() => setSelection({ type: 'edge', id: e.id })}
                   >

@@ -2,7 +2,7 @@
   :root {
     --b-ink: #171814;
     --b-paper: #fffcf3;
-    /* One theme: paper. Three stocks from kraft to off-white sit on the paper ground. */
+    /* Kraft, sand and cream layer from darkest to lightest on the paper ground. */
     --b-kraft: #e2d3b3;
     --b-sand: #ece3cd;
     --b-cream: #f5efe0;
@@ -22,6 +22,7 @@
     --b-font-hand: var(--font-hand-ko, 'Nanum Pen Script'), var(--b-font-body);
     --b-t-display: clamp(2.5rem, 8.333333vw, 7.5rem);
     --b-t-title: clamp(2.25rem, 5.56vw, 5rem);
+    --b-t-work-title: clamp(2rem, 3.9vw, 3.5rem);
     --b-t-heading: clamp(1.75rem, 3.34vw, 3rem);
     --b-t-subhead: clamp(1.25rem, 2vw, 1.75rem);
     --b-t-lede: 1.125rem;
@@ -104,8 +105,6 @@
     background: var(--b-paper);
     font: 400 1rem/1.6 var(--b-font-body);
     letter-spacing: -0.01em;
-    word-break: keep-all;
-    overflow-wrap: anywhere;
   }
   .b-root button,
   .b-root input,
@@ -215,6 +214,13 @@
   }
   .b-band--app {
     padding-block: var(--b-app-pad);
+  }
+  .b-work-content :is(.b-page-header, .b-wiki-hero) .b-title {
+    font-size: var(--b-t-work-title);
+  }
+  .b-work-content .b-page-header.b-band--app {
+    padding-block: clamp(0.875rem, 1.5vw, 1.375rem);
+    padding-inline: clamp(1rem, 2.23vw, 2rem);
   }
   .b-wrap {
     inline-size: min(var(--b-wrap), calc(100% - 2 * var(--b-edge)));

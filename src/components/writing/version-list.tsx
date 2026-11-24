@@ -51,7 +51,7 @@ export function VersionList({ versions, currentVersion, selectedId, onSelect }: 
               onClick={() => onSelect(v.id)}
               className={cn(
                 'flex w-full flex-col gap-0.5 rounded-field border-2 border-ink bg-paper px-3 py-2 text-left text-sm transition-colors hover:bg-sand focus-visible:bg-sand',
-                selected && 'bg-sand',
+                selected && 'bg-kraft underline decoration-2 hover:bg-kraft focus-visible:bg-kraft',
               )}
             >
               <span className="flex flex-wrap items-center gap-2 font-bold">

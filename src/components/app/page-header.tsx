@@ -18,10 +18,8 @@ export function PageHeader({ title, description, actions, band = 'paper' }: Page
       )}
     >
       <div className="b-route-heading flex min-w-0 flex-1 basis-64 flex-col gap-2">
-        <h1 className="b-title min-w-0 wrap-anywhere break-keep">{title}</h1>
-        {description && (
-          <p className="b-lede wrap-anywhere break-keep text-muted-ink">{description}</p>
-        )}
+        <h1 className="b-title min-w-0">{title}</h1>
+        {description && <p className="b-lede text-muted-ink">{description}</p>}
       </div>
       {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>

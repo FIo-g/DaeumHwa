@@ -50,7 +50,7 @@ export function LandingPage() {
         <AuthorChoice />
         <ThreadPreview />
         <ColorBand
-          color="kraft"
+          color="cream"
           className="b-landing-closing"
           innerClassName="b-landing-closing-grid"
           aria-labelledby="b-closing-title"

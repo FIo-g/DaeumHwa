@@ -3,8 +3,6 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   overflow: clip;
-  padding: clamp(1rem, 4vw, 3rem);
-  min-block-size: clamp(8rem, 17vw, 14rem);
 }
 
 .b-tools-header-art {
@@ -12,7 +10,7 @@
   display: grid;
   place-items: center;
   isolation: isolate;
-  inline-size: clamp(3.5rem, 15vw, 11rem);
+  inline-size: clamp(3.25rem, 8vw, 6rem);
   aspect-ratio: 1.18;
   margin-inline-end: var(--b-s2);
   pointer-events: none;
@@ -456,16 +454,19 @@
   transition: background-color var(--b-quick) var(--b-out);
 }
 
-.b-tools-persona-chip:has(:checked) {
-  background: var(--b-kraft);
-}
-
 .b-tools-persona-chip:is(:hover, :focus-within) {
   background: var(--b-sand);
 }
 
-.b-tools-persona-chip input {
-  accent-color: var(--b-ink);
+.b-tools-persona-chip:has(:checked) {
+  background: var(--b-ink);
+  color: var(--b-paper);
+  font-weight: 700;
+}
+
+.b-tools-persona-chip input:checked {
+  accent-color: var(--b-paper);
+  --b-focus: var(--b-paper);
 }
 
 .b-tools-stages {
@@ -558,7 +559,7 @@
   z-index: 1;
   inset: 48% 12% 6%;
   overflow: clip;
-  background: var(--b-kraft);
+  background: var(--b-sand);
 }
 
 .b-tools-process-envelope::before {
@@ -600,7 +601,7 @@
   --b-tools-fragment-x: 12%;
   --b-tools-fragment-angle: 11deg;
   --b-tools-fragment-n: 2;
-  background: var(--b-kraft);
+  background: var(--b-sand);
 }
 
 .b-tools-stage-art:not([data-stage='1']) :is(.b-tools-process-sheet, .b-tools-process-envelope) {

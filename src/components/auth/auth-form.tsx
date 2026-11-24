@@ -105,7 +105,7 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
           return destination === mode ? (
             <span
               key={destination}
-              className="b-chip min-h-11 justify-center bg-kraft font-bold"
+              className="b-chip min-h-11 justify-center bg-kraft font-bold underline decoration-2"
               aria-current="page"
             >
               {label}
