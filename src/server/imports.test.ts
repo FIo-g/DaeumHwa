@@ -226,12 +226,12 @@ describe('import jobs', () => {
       await expectAppError(
         createImportJob(db, actor, { workId, fileName: 'a.txt', totalChapters: 0 }),
         'VALIDATION',
-        '회차 수가 올바르지 않습니다.',
+        '회차 수가 올바르지 않아요.',
       )
       await expectAppError(
         createImportJob(db, actor, { workId, fileName: 'a.txt', totalChapters: 2001 }),
         'VALIDATION',
-        '회차 수가 올바르지 않습니다.',
+        '회차 수가 올바르지 않아요.',
       )
     })
 
@@ -287,7 +287,7 @@ describe('import jobs', () => {
       await expectAppError(
         appendImportChapters(db, actor, { jobId: job.id, chapters: many }),
         'VALIDATION',
-        '한 번에 50화까지 올릴 수 있습니다.',
+        '한 번에 50화까지 올릴 수 있어요.',
       )
     })
 
@@ -300,7 +300,7 @@ describe('import jobs', () => {
       await expectAppError(
         appendImportChapters(db, actor, { jobId: job.id, chapters: CHAPTERS }),
         'VALIDATION',
-        '올린 회차가 전체 회차 수를 넘습니다.',
+        '올린 회차가 전체 회차 수를 넘어요.',
       )
     })
 
@@ -342,7 +342,7 @@ describe('import jobs', () => {
           publishedOn: '2026-13-40',
         }),
         'VALIDATION',
-        '연재일 형식이 올바르지 않습니다.',
+        '연재일 형식이 올바르지 않아요.',
       )
     })
   })
@@ -490,7 +490,7 @@ describe('import jobs', () => {
       const jobId = await uploadedJob()
       await startImportJob(db, actor, jobId)
       const failing = new ScriptedClient(() => {
-        throw new AppError('AI_ERROR', 'AI 호출에 실패했습니다: timeout')
+        throw new AppError('AI_ERROR', 'AI 호출에 실패했어요: timeout')
       })
       await advanceImportJob(db, jobId, { client: failing })
       const failed = await getImportJob(db, actor, jobId)
@@ -515,7 +515,7 @@ describe('import jobs', () => {
         processed: 0,
         total: 3,
         done: false,
-        message: '다른 AI 작업이 끝나면 이어서 진행합니다.',
+        message: '다른 AI 작업이 끝난 뒤 이어서 진행해요.',
       })
       expect(client.prompts).toHaveLength(0)
       const job = await getImportJob(db, actor, jobId)
@@ -596,14 +596,14 @@ describe('import jobs', () => {
       const jobId = await uploadedJob()
       await startImportJob(db, actor, jobId)
       const limited = new ScriptedClient(() => {
-        throw new AppError('AI_LIMIT', '오늘 AI 사용량 한도를 넘었습니다. 내일 다시 시도해 주세요.')
+        throw new AppError('AI_LIMIT', '오늘 AI 사용량 한도를 넘었어요. 내일 다시 시도해 주세요.')
       })
 
       const result = await advanceImportJob(db, jobId, { client: limited })
       expect(result.status).toBe('paused')
       expect(result.done).toBe(false)
       expect(result.message).toBe(
-        '오늘 AI 사용량 한도에 도달해 일시정지했습니다. 내일 이어서 진행하세요.',
+        '오늘 AI 사용량 한도에 도달해 일시정지했어요. 내일 이어서 진행하세요.',
       )
       const paused = await getImportJob(db, actor, jobId)
       expect(paused.status).toBe('paused')
@@ -634,11 +634,11 @@ describe('import jobs', () => {
       const jobId = await uploadedJob()
       await startImportJob(db, actor, jobId)
       const failing = new ScriptedClient(() => {
-        throw new AppError('AI_ERROR', 'AI 호출에 실패했습니다: timeout')
+        throw new AppError('AI_ERROR', 'AI 호출에 실패했어요: timeout')
       })
       const result = await advanceImportJob(db, jobId, { client: failing })
       expect(result.status).toBe('error')
-      expect(result.message).toBe('1화에서 멈췄습니다: AI 호출에 실패했습니다: timeout')
+      expect(result.message).toBe('1화에서 멈췄어요: AI 호출에 실패했어요: timeout')
       const job = await getImportJob(db, actor, jobId)
       expect(job.status).toBe('error')
       expect(job.cursor).toBe(0)
@@ -806,7 +806,7 @@ describe('import jobs', () => {
     }
 
     it('moves past the chapter that stopped the job and pauses it for a resume', async () => {
-      const { jobId, client } = await stoppedAtSecond('AI 호출에 실패했습니다: refusal')
+      const { jobId, client } = await stoppedAtSecond('AI 호출에 실패했어요: refusal')
       const skipped = await skipImportChapter(db, actor, jobId)
       expect(skipped).toMatchObject({
         status: 'paused',
@@ -822,7 +822,7 @@ describe('import jobs', () => {
           chapterId: skipped.chapterIds[1],
           position: 2,
           title: '',
-          reason: '2화에서 멈췄습니다: AI 호출에 실패했습니다: refusal',
+          reason: '2화에서 멈췄어요: AI 호출에 실패했어요: refusal',
         },
       ])
 
@@ -844,7 +844,7 @@ describe('import jobs', () => {
       await startImportJob(db, actor, jobId)
       const client = new ScriptedClient((prompt) => {
         if (positionOf(prompt) === 3)
-          throw new AppError('AI_ERROR', 'AI 호출에 실패했습니다: max_tokens')
+          throw new AppError('AI_ERROR', 'AI 호출에 실패했어요: max_tokens')
         return basicRespond(prompt)
       })
       await advanceImportJob(db, jobId, { client })
@@ -863,14 +863,14 @@ describe('import jobs', () => {
       await expectAppError(
         skipImportChapter(db, actor, jobId),
         'BAD_STATE',
-        '오류로 멈춘 작업에서만 이 화를 건너뛸 수 있습니다.',
+        '오류로 멈춘 작업에서만 이 화를 건너뛸 수 있어요.',
       )
       await pauseImportJob(db, actor, jobId)
       await expectAppError(skipImportChapter(db, actor, jobId), 'BAD_STATE')
     })
 
     it('forbids a viewer and hides the work from a non-member', async () => {
-      const { jobId } = await stoppedAtSecond('AI 호출에 실패했습니다: refusal')
+      const { jobId } = await stoppedAtSecond('AI 호출에 실패했어요: refusal')
       const viewer = await createTestUser(db)
       await addTestMember(db, workId, viewer.id, 'viewer')
       await expectAppError(skipImportChapter(db, { userId: viewer.id }, jobId), 'FORBIDDEN')
@@ -879,7 +879,7 @@ describe('import jobs', () => {
     })
 
     it('skips exactly one chapter when two skips run at the same time', async () => {
-      const { jobId } = await stoppedAtSecond('AI 호출에 실패했습니다: refusal')
+      const { jobId } = await stoppedAtSecond('AI 호출에 실패했어요: refusal')
       const results = await Promise.allSettled([
         skipImportChapter(db, actor, jobId),
         skipImportChapter(db, actor, jobId),

@@ -382,7 +382,7 @@ describe('runProofread', () => {
         quote: '되요',
         replacement: '돼요',
         kind: 'spelling',
-        reason: "'되어요'의 준말은 '돼요'입니다.",
+        reason: "'되어요'의 준말은 '돼요'예요.",
         start: 2,
         end: 4,
       },

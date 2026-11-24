@@ -25,8 +25,8 @@ export async function toActionResult<T>(fn: () => Promise<T>): Promise<ActionRes
   } catch (e) {
     unstable_rethrow(e)
     if (isAppError(e)) return fail(e.code, e.message, e.details)
-    if (e instanceof ZodError) return fail('VALIDATION', '입력값이 올바르지 않습니다.')
+    if (e instanceof ZodError) return fail('VALIDATION', '입력값이 올바르지 않아요.')
     console.error(e)
-    return fail('BAD_STATE', '알 수 없는 오류가 발생했습니다.')
+    return fail('BAD_STATE', '알 수 없는 오류가 발생했어요.')
   }
 }

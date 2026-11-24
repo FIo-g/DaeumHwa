@@ -82,7 +82,7 @@ describe('requireUser', () => {
     const error = await requireUser().catch((e: unknown) => e)
     expect(error).toBeInstanceOf(AppError)
     expect((error as AppError).code).toBe('UNAUTHENTICATED')
-    expect((error as AppError).message).toBe('로그인이 필요합니다.')
+    expect((error as AppError).message).toBe('로그인이 필요해요.')
   })
 })
 

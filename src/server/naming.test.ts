@@ -40,7 +40,7 @@ describe('createNamingRule', () => {
       }),
       'VALIDATION',
     )
-    expect(err.message).toBe('올바른 표기는 잘못된 표기 목록에 넣을 수 없습니다.')
+    expect(err.message).toBe('올바른 표기는 잘못된 표기 목록에 넣을 수 없어요.')
   })
 
   it('trims variants, drops empty and duplicate ones, and records a change', async () => {

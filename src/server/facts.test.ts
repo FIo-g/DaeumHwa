@@ -241,7 +241,7 @@ describe('supersedeFact', () => {
       }),
       'VALIDATION',
     )
-    expect(err.message).toBe('바뀌는 회차는 기존 사실이 유효해진 회차 이후여야 합니다.')
+    expect(err.message).toBe('바뀌는 회차는 기존 사실이 유효해진 회차 이후여야 해요.')
   })
 })
 

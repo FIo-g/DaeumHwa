@@ -54,7 +54,7 @@ export async function describeCheckContext(
 ): Promise<CheckContextView> {
   const workId = await requireRowWork(db, 'chapters', input.chapterId).catch((error: unknown) => {
     if (error instanceof AppError && error.code === 'NOT_FOUND') {
-      throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+      throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
     }
     throw error
   })
@@ -65,7 +65,7 @@ export async function describeCheckContext(
     .where(eq(chapters.id, input.chapterId))
     .limit(1)
   if (!chapter || chapter.archivedAt !== null) {
-    throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
   }
 
   const pack = await buildCheckPack(db, workId, chapter)

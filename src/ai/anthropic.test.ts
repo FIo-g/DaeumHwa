@@ -191,7 +191,7 @@ describe('AnthropicAiClient.generateObject', () => {
     expect(error).toBeInstanceOf(AppError)
     expect(error).toMatchObject({
       code: 'AI_ERROR',
-      message: 'AI가 이 요청을 처리하지 않았습니다.',
+      message: 'AI가 이 요청을 처리하지 않았어요.',
     })
   })
 
@@ -209,8 +209,7 @@ describe('AnthropicAiClient.generateObject', () => {
   it('reports unparseable output in Korean and attaches the billed usage', async () => {
     const sdk = new Anthropic({
       apiKey: 'stub',
-      fetch: async () =>
-        Response.json({ ...okResponse(), content: [{ type: 'text', text: '{' }] }),
+      fetch: async () => Response.json({ ...okResponse(), content: [{ type: 'text', text: '{' }] }),
     })
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
@@ -245,7 +244,7 @@ describe('AnthropicAiClient.generateObject', () => {
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
       code: 'AI_ERROR',
-      message: expect.stringContaining('AI 호출에 실패했습니다: '),
+      message: expect.stringContaining('AI 호출에 실패했어요: '),
     })
   })
 
@@ -313,7 +312,7 @@ describe('AnthropicAiClient.streamText', () => {
     })
     await expect(final).rejects.toMatchObject({
       code: 'AI_ERROR',
-      message: 'AI가 이 요청을 처리하지 않았습니다.',
+      message: 'AI가 이 요청을 처리하지 않았어요.',
     })
   })
 
@@ -426,7 +425,7 @@ describe('AnthropicAiClient.streamText', () => {
       timeoutMs: 60_000,
     })
     setTimeout(() => controller.abort(), 10)
-    await expect(final).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+    await expect(final).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했어요.' })
   })
 
   it('rejects final with CANCELLED when the stream request is aborted', async () => {
@@ -439,7 +438,7 @@ describe('AnthropicAiClient.streamText', () => {
       maxTokens: 100,
       task: { name: 'proofread' as const, input: {} },
     })
-    await expect(final).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+    await expect(final).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했어요.' })
   })
 })
 
@@ -482,7 +481,7 @@ describe('AnthropicAiClient cancel and timeout', () => {
     const client = new AnthropicAiClient(sdk, 'claude-haiku-5-5')
     await expect(client.generateObject(baseArgs)).rejects.toMatchObject({
       code: 'CANCELLED',
-      message: '취소했습니다.',
+      message: '취소했어요.',
     })
   })
 

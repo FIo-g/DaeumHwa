@@ -44,7 +44,7 @@ export async function buildExportPayload(
   return db.transaction(
     async (tx) => {
       const [work] = await tx.select().from(works).where(eq(works.id, workId)).limit(1)
-      if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+      if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
 
       const chapterRows = await tx
         .select()

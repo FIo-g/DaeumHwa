@@ -194,7 +194,7 @@ describe('style card suggestion', () => {
     expect(error).toBeInstanceOf(AppError)
     expect(error).toMatchObject({
       code: 'BAD_STATE',
-      message: '이 인물의 대사를 원고에서 3줄 이상 찾지 못했습니다.',
+      message: '이 인물의 대사를 원고에서 3줄 이상 찾지 못했어요.',
     })
 
     const rows = await db.select().from(proposals).where(eq(proposals.workId, workId))

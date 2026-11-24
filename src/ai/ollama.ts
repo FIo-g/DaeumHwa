@@ -133,7 +133,7 @@ type ChatResult = { content: string; usage: AiUsage; model: string; doneReason?:
 
 const NO_USAGE: AiUsage = { inputTokens: 0, outputTokens: 0 }
 const THINK_OPEN = '<think>'
-const STREAM_INCOMPLETE_MESSAGE = 'AI 응답이 중간에 끊겼습니다. 다시 시도해 주세요.'
+const STREAM_INCOMPLETE_MESSAGE = 'AI 응답이 중간에 끊겼어요. 다시 시도해 주세요.'
 const LEADING_THINK = /^\s*<think>[\s\S]*?<\/think>\s*/
 
 /** Removes a think block at the start of a model answer. Text without one is returned unchanged. */
@@ -372,7 +372,7 @@ export class OllamaAiClient implements AiClient {
       if (!line.trim()) return
       const chunk = JSON.parse(line) as ChatResponse
       if (chunk.error !== undefined) {
-        throw streamFailure(`AI 호출에 실패했습니다: ${chunk.error.slice(0, 120)}`, args.billed)
+        throw streamFailure(`AI 호출에 실패했어요: ${chunk.error.slice(0, 120)}`, args.billed)
       }
       if (chunk.model) resultModel = chunk.model
       raw += chunk.message?.content ?? ''
@@ -641,7 +641,7 @@ function toAiError(error: unknown, billed: AiUsage, call: CallLimits): AppError 
       : new AppError('CANCELLED', AI_CANCELLED_MESSAGE, details)
   }
   const reason = error instanceof Error ? error.message : String(error)
-  return new AppError('AI_ERROR', `AI 호출에 실패했습니다: ${reason.slice(0, 120)}`, details)
+  return new AppError('AI_ERROR', `AI 호출에 실패했어요: ${reason.slice(0, 120)}`, details)
 }
 
 function isAbortError(error: unknown): boolean {

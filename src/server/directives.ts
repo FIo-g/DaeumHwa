@@ -62,7 +62,7 @@ async function checkDirective(db: Db, input: DirectiveInput): Promise<Checked> {
   const text = input.text.trim()
   if (!text) throw new AppError('VALIDATION', '요청 내용을 적어 주세요.')
   if (text.length > MAX_TEXT_CHARS) {
-    throw new AppError('VALIDATION', '요청은 300자까지 적을 수 있습니다.')
+    throw new AppError('VALIDATION', '요청은 300자까지 적을 수 있어요.')
   }
 
   let entryId: string | null = null
@@ -88,7 +88,7 @@ async function checkDirective(db: Db, input: DirectiveInput): Promise<Checked> {
 
   const speechLevel = input.speechLevel ?? null
   if (speechLevel && input.scope !== 'character') {
-    throw new AppError('VALIDATION', '말투는 인물 요청에만 정할 수 있습니다.')
+    throw new AppError('VALIDATION', '말투는 인물 요청에만 정할 수 있어요.')
   }
 
   let pattern: string | null = null
@@ -97,7 +97,7 @@ async function checkDirective(db: Db, input: DirectiveInput): Promise<Checked> {
     pattern = input.pattern == null ? banPatternFor(text) : input.pattern.trim()
     if (!pattern) throw new AppError('VALIDATION', '쓰지 않을 말을 적어 주세요.')
     if (pattern.length > MAX_PATTERN_CHARS) {
-      throw new AppError('VALIDATION', '찾을 말은 100자까지 적을 수 있습니다.')
+      throw new AppError('VALIDATION', '찾을 말은 100자까지 적을 수 있어요.')
     }
   }
 
@@ -124,7 +124,7 @@ async function loadDirective(db: Db, directiveId: string): Promise<AuthorDirecti
     .from(authorDirectives)
     .where(eq(authorDirectives.id, directiveId))
     .limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
@@ -212,7 +212,7 @@ export async function updateDirective(
   const workId = await requireRowWork(db, 'author_directives', directiveId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadDirective(db, directiveId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 요청은 수정할 수 없습니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 요청은 수정할 수 없어요.')
 
   const scope = patch.scope ?? current.scope
   // Leaving the character scope drops the speech level unless the patch sets one.
@@ -289,7 +289,7 @@ export async function archiveDirective(
   const workId = await requireRowWork(db, 'author_directives', directiveId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadDirective(db, directiveId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 요청입니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 요청이에요.')
 
   return db.transaction(async (tx) => {
     const now = new Date()

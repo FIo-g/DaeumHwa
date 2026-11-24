@@ -28,7 +28,7 @@ export interface TextWorkerApi {
 const READY_TIMEOUT_MS = 10_000
 /** A worker call that runs longer than this rejects, so the UI shows an error instead of spinning. */
 const CALL_TIMEOUT_MS = 20_000
-const CALL_TIMEOUT_MESSAGE = '작업 시간이 너무 오래 걸려 중단했습니다. 다시 시도해 주세요.'
+const CALL_TIMEOUT_MESSAGE = '작업 시간이 너무 오래 걸려 중단했어요. 다시 시도해 주세요.'
 
 export interface TextWorkerClientOptions {
   /** Starts the dedicated worker. Returns null when Workers are unavailable. */

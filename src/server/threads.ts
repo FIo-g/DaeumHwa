@@ -62,7 +62,7 @@ export type ThreadPatch = {
 }
 
 const IMPORTANCE_RANK: Record<Importance, number> = { high: 0, medium: 1, low: 2 }
-const NOT_FOUND_MESSAGE = '항목을 찾을 수 없습니다.'
+const NOT_FOUND_MESSAGE = '항목을 찾을 수 없어요.'
 
 function requireTitle(title: string): string {
   const trimmed = title.trim()
@@ -77,7 +77,7 @@ async function chapterPositionInWork(db: Db, workId: string, chapterId: string):
     .from(chapters)
     .where(and(eq(chapters.id, chapterId), eq(chapters.workId, workId)))
     .limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
   return row.position
 }
 
@@ -311,7 +311,7 @@ export async function updateThread(
 
   return db.transaction(async (tx) => {
     const before = await threadSnapshot(tx, threadId)
-    if (before.archivedAt) throw new AppError('BAD_STATE', '보관된 떡밥입니다.')
+    if (before.archivedAt) throw new AppError('BAD_STATE', '보관된 떡밥이에요.')
 
     const values: Partial<typeof threads.$inferInsert> = { updatedAt: new Date() }
     if (patch.title !== undefined) values.title = requireTitle(patch.title)
@@ -366,19 +366,19 @@ export async function addThreadEvent(
 
   return db.transaction(async (tx) => {
     const before = await threadSnapshot(tx, input.threadId)
-    if (before.archivedAt) throw new AppError('BAD_STATE', '보관된 떡밥입니다.')
+    if (before.archivedAt) throw new AppError('BAD_STATE', '보관된 떡밥이에요.')
     if (kind !== 'note' && (before.status === 'resolved' || before.status === 'discarded')) {
-      throw new AppError('BAD_STATE', '이미 회수되었거나 폐기된 떡밥입니다.')
+      throw new AppError('BAD_STATE', '이미 회수됐거나 폐기된 떡밥이에요.')
     }
     if (kind === 'planted' && before.plantedChapterId) {
-      throw new AppError('BAD_STATE', '이미 심은 떡밥입니다.')
+      throw new AppError('BAD_STATE', '이미 심은 떡밥이에요.')
     }
 
     const plantedPosition = before.plantedChapterId
       ? await chapterPositionInWork(tx, workId, before.plantedChapterId)
       : null
     if ((kind === 'developed' || kind === 'resolved') && plantedPosition === null) {
-      throw new AppError('VALIDATION', '아직 심지 않은 떡밥입니다. 먼저 심은 회차를 기록하세요.')
+      throw new AppError('VALIDATION', '아직 심지 않은 떡밥이에요. 먼저 심은 회차를 기록하세요.')
     }
     const needsChapter = kind === 'planted' || kind === 'developed' || kind === 'resolved'
     if (needsChapter && !input.chapterId) throw new AppError('VALIDATION', '회차를 선택하세요.')
@@ -389,7 +389,7 @@ export async function addThreadEvent(
       if (position < plantedPosition) {
         throw new AppError(
           'VALIDATION',
-          `발전 기록은 떡밥을 심은 회차(${plantedPosition}화) 이후여야 합니다.`,
+          `발전 기록은 떡밥을 심은 회차(${plantedPosition}화) 이후여야 해요.`,
         )
       }
     }
@@ -397,7 +397,7 @@ export async function addThreadEvent(
       if (position <= plantedPosition) {
         throw new AppError(
           'VALIDATION',
-          `회수는 떡밥을 심은 회차(${plantedPosition}화) 이후에만 기록할 수 있습니다.`,
+          `회수는 떡밥을 심은 회차(${plantedPosition}화) 이후에만 기록할 수 있어요.`,
         )
       }
     }
@@ -478,7 +478,7 @@ export async function archiveThread(
   await requireWorkRole(db, workId, actor.userId, 'editor')
   return db.transaction(async (tx) => {
     const before = await threadSnapshot(tx, threadId)
-    if (before.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 떡밥입니다.')
+    if (before.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 떡밥이에요.')
     const now = new Date()
     const [updated] = await tx
       .update(threads)
@@ -520,7 +520,7 @@ export async function archiveThreadEvent(
       .where(eq(threadEvents.id, eventId))
       .limit(1)
     if (!before) throw new AppError('NOT_FOUND', NOT_FOUND_MESSAGE)
-    if (before.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 기록입니다.')
+    if (before.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 기록이에요.')
     const [updated] = await tx
       .update(threadEvents)
       .set({ archivedAt: new Date() })

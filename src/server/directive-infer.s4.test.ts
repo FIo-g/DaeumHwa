@@ -256,7 +256,7 @@ describe('directive inference (stage 4, task 2)', () => {
         index: 0,
         decision: 'ignore',
       }),
-    ).rejects.toMatchObject({ code: 'BAD_STATE', message: '이미 정한 제안입니다.' })
+    ).rejects.toMatchObject({ code: 'BAD_STATE', message: '이미 정한 제안이에요.' })
   })
 
   it('gives a non-member NOT_FOUND', async () => {

@@ -28,14 +28,14 @@ function normalizeSpelling(
   if (!canonical) throw new AppError('VALIDATION', '올바른 표기를 입력하세요.')
   const variants = [...new Set(variantsRaw.map((v) => v.trim()).filter((v) => v !== ''))]
   if (variants.includes(canonical)) {
-    throw new AppError('VALIDATION', '올바른 표기는 잘못된 표기 목록에 넣을 수 없습니다.')
+    throw new AppError('VALIDATION', '올바른 표기는 잘못된 표기 목록에 넣을 수 없어요.')
   }
   return { canonical, variants }
 }
 
 async function loadRule(db: Db, ruleId: string): Promise<NamingRuleRow> {
   const [row] = await db.select().from(namingRules).where(eq(namingRules.id, ruleId)).limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
@@ -102,7 +102,7 @@ export async function updateNamingRule(
   const workId = await requireRowWork(db, 'naming_rules', ruleId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadRule(db, ruleId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 표기 규칙은 수정할 수 없습니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 표기 규칙은 수정할 수 없어요.')
 
   const { canonical, variants } = normalizeSpelling(
     patch.canonical ?? current.canonical,
@@ -145,7 +145,7 @@ export async function archiveNamingRule(
   const workId = await requireRowWork(db, 'naming_rules', ruleId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadRule(db, ruleId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 표기 규칙입니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 표기 규칙이에요.')
 
   return db.transaction(async (tx) => {
     const now = new Date()

@@ -41,7 +41,7 @@ export async function createSampleWork(
         .where(eq(works.ownerId, actor.userId))
         .limit(1)
       if (existing) {
-        if (!existing.chapterId) throw new AppError('BAD_STATE', '샘플 회차를 찾을 수 없습니다.')
+        if (!existing.chapterId) throw new AppError('BAD_STATE', '샘플 회차를 찾을 수 없어요.')
         return { workId: existing.workId, chapterId: existing.chapterId }
       }
     }
@@ -115,7 +115,7 @@ export async function createSampleWork(
     }
 
     const landingId = chapterByPosition.get(data.landingChapter)
-    if (!landingId) throw new AppError('BAD_STATE', '샘플 회차를 찾을 수 없습니다.')
+    if (!landingId) throw new AppError('BAD_STATE', '샘플 회차를 찾을 수 없어요.')
     return { workId: work.id, chapterId: landingId }
   })
 }

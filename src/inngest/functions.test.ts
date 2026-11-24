@@ -11,10 +11,11 @@ vi.mock('@/inngest/client', () => ({
 vi.mock('@/db/client', () => ({ getDb: () => ({}) }))
 vi.mock('@/server/imports', () => ({
   advanceImportJob: mocks.advance,
-  BUSY_MESSAGE: '다른 AI 작업이 끝나면 이어서 진행합니다.',
+  BUSY_MESSAGE: '다른 AI 작업이 끝난 뒤 이어서 진행해요.',
 }))
 
 import { MAX_STEPS_PER_RUN, importRun } from '@/inngest/functions'
+import { BUSY_MESSAGE } from '@/server/imports'
 
 type Handler = (ctx: unknown) => Promise<unknown>
 const handler = (importRun as unknown as { handler: Handler }).handler
@@ -22,6 +23,7 @@ const handler = (importRun as unknown as { handler: Handler }).handler
 function fakeStep() {
   return {
     run: vi.fn(async (_id: string, fn: () => Promise<unknown>) => fn()),
+    sleep: vi.fn(async () => {}),
     sendEvent: vi.fn(async () => ({ ids: ['next'] })),
   }
 }
@@ -57,6 +59,21 @@ describe('importRun', () => {
     expect(mocks.advance).toHaveBeenCalledTimes(1)
     expect(step.sendEvent).not.toHaveBeenCalled()
   })
+
+  it.each([BUSY_MESSAGE, '다른 AI 작업이 끝나면 이어서 진행합니다.'])(
+    'waits before the next advance for the busy result %s',
+    async (message) => {
+      mocks.advance
+        .mockResolvedValueOnce({ ...result('running'), message })
+        .mockResolvedValueOnce(result('done', true))
+      const step = fakeStep()
+
+      const out = await handler({ event: { data: { jobId: 'job-1' } }, step })
+
+      expect(step.sleep).toHaveBeenCalledExactlyOnceWith('busy-0', '2s')
+      expect(out).toEqual(result('done', true))
+    },
+  )
 
   it('hands a long import over to a new run instead of exceeding the step cap', async () => {
     mocks.advance.mockResolvedValue(result('running'))

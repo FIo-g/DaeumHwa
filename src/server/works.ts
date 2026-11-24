@@ -86,7 +86,7 @@ export async function getWork(
 ): Promise<WorkRow & { role: Role }> {
   const { role } = await requireWorkRole(db, workId, actor.userId, 'viewer')
   const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1)
-  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
   return { ...work, role }
 }
 
@@ -100,7 +100,7 @@ export async function updateWork(
   await requireWorkRole(db, workId, actor.userId, 'owner')
   return db.transaction(async (tx) => {
     const [current] = await tx.select().from(works).where(eq(works.id, workId)).limit(1)
-    if (!current) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+    if (!current) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
     const values: Partial<typeof works.$inferInsert> = { updatedAt: new Date() }
     if (patch.title !== undefined) values.title = requireTitle(patch.title)
     if (patch.genre !== undefined) values.genre = patch.genre
@@ -127,6 +127,6 @@ export async function setWorkArchived(
     .set({ status: archived ? 'archived' : 'active', updatedAt: new Date() })
     .where(eq(works.id, workId))
     .returning()
-  if (!updated) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  if (!updated) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
   return updated
 }

@@ -214,7 +214,7 @@ describe('previewDraftRefinement', () => {
     await createStyleCard(s.db, s.actor, { workId: s.workId, name: '작품 문체', examples: SAMPLE })
     const { runId, client } = await draftOf(s, `${SHORT}\n\n${SAMPLE}`, {
       'draft-repair': () => {
-        throw new AppError('AI_LIMIT', '오늘 AI 사용량 한도를 넘었습니다. 내일 다시 시도해 주세요.')
+        throw new AppError('AI_LIMIT', '오늘 AI 사용량 한도를 넘었어요. 내일 다시 시도해 주세요.')
       },
     })
 
@@ -287,7 +287,7 @@ describe('previewDraftRefinement', () => {
 
     expect(error).toMatchObject({
       code: 'BAD_STATE',
-      message: '초안 작성이 끝난 뒤에 다듬을 수 있습니다.',
+      message: '초안 작성이 끝난 뒤에 다듬을 수 있어요.',
     })
   })
 
@@ -390,7 +390,7 @@ describe('applyDraftRefinement', () => {
 
     expect(second).toMatchObject({
       code: 'BAD_STATE',
-      message: '적용할 다듬기 결과가 없습니다. 다시 다듬어 주세요.',
+      message: '적용할 다듬기 결과가 없어요. 다시 다듬어 주세요.',
     })
     const none = await draftOf(s, SHORT)
     const missing = await captureError(
@@ -398,7 +398,7 @@ describe('applyDraftRefinement', () => {
     )
     expect(missing).toMatchObject({
       code: 'BAD_STATE',
-      message: '적용할 다듬기 결과가 없습니다. 다시 다듬어 주세요.',
+      message: '적용할 다듬기 결과가 없어요. 다시 다듬어 주세요.',
     })
   })
 
@@ -415,7 +415,7 @@ describe('applyDraftRefinement', () => {
 
     expect(error).toMatchObject({
       code: 'BAD_STATE',
-      message: '초안이 바뀌어 적용할 수 없습니다. 다시 다듬어 주세요.',
+      message: '초안이 바뀌어 적용할 수 없어요. 다시 다듬어 주세요.',
     })
     expect(await outputOf(s.db, runId)).toEqual(changed)
   })
@@ -482,7 +482,7 @@ describe('overlapping previews', () => {
     expect(late).toBeInstanceOf(AppError)
     expect(late).toMatchObject({
       code: 'BAD_STATE',
-      message: '초안이 바뀌어 다듬기 결과를 버렸습니다. 다시 다듬어 주세요.',
+      message: '초안이 바뀌어 다듬기 결과를 버렸어요. 다시 다듬어 주세요.',
     })
   })
 
@@ -550,7 +550,7 @@ describe('overlapping previews', () => {
 
     expect(error).toMatchObject({
       code: 'BAD_STATE',
-      message: '다듬기 결과가 바뀌었습니다. 다시 다듬어 주세요.',
+      message: '다듬기 결과가 바뀌었어요. 다시 다듬어 주세요.',
     })
     expect((await outputOf(s.db, runId)).text).toBe(original)
     const applied = await applyDraftRefinement(s.db, s.actor, {
@@ -572,7 +572,7 @@ describe('overlapping previews', () => {
 
     expect(error).toMatchObject({
       code: 'BAD_STATE',
-      message: '다듬기 결과가 바뀌었습니다. 다시 다듬어 주세요.',
+      message: '다듬기 결과가 바뀌었어요. 다시 다듬어 주세요.',
     })
     expect(await outputOf(s.db, runId)).toEqual(before)
   })

@@ -45,22 +45,22 @@ const MAX_KNOWN_FACTS = 200
 const MAX_OPEN_THREADS = 100
 const IMPORT_EVENT = 'import/run'
 
-const TOTAL_MESSAGE = '회차 수가 올바르지 않습니다.'
-const BATCH_MESSAGE = '한 번에 50화까지 올릴 수 있습니다.'
-const OVER_TOTAL_MESSAGE = '올린 회차가 전체 회차 수를 넘습니다.'
-const UPLOADING_ONLY_MESSAGE = '업로드 중인 작업에만 회차를 올릴 수 있습니다.'
-const START_EARLY_MESSAGE = '모든 회차를 올린 뒤에 시작할 수 있습니다.'
-const START_STATE_MESSAGE = '이 상태에서는 시작할 수 없습니다.'
-const RACE_MESSAGE = '작업 상태가 바뀌었습니다. 다시 시도해 주세요.'
-const SKIP_STATE_MESSAGE = '오류로 멈춘 작업에서만 이 화를 건너뛸 수 있습니다.'
-const PUBLISHED_ON_MESSAGE = '연재일 형식이 올바르지 않습니다.'
-const PAUSE_MESSAGE = '진행 중인 작업만 일시정지할 수 있습니다.'
-const CANCEL_MESSAGE = '이미 끝났거나 취소된 작업입니다.'
-const LIMIT_PAUSE_MESSAGE = '오늘 AI 사용량 한도에 도달해 일시정지했습니다. 내일 이어서 진행하세요.'
-const GENERIC_ERROR_MESSAGE = '가져오기 중 오류가 발생했습니다. 다시 시작해 주세요.'
-const MISSING_CHAPTER_MESSAGE = '회차를 찾을 수 없습니다. 작업을 취소하고 다시 올려 주세요.'
+const TOTAL_MESSAGE = '회차 수가 올바르지 않아요.'
+const BATCH_MESSAGE = '한 번에 50화까지 올릴 수 있어요.'
+const OVER_TOTAL_MESSAGE = '올린 회차가 전체 회차 수를 넘어요.'
+const UPLOADING_ONLY_MESSAGE = '업로드 중인 작업에만 회차를 올릴 수 있어요.'
+const START_EARLY_MESSAGE = '모든 회차를 올린 뒤에 시작할 수 있어요.'
+const START_STATE_MESSAGE = '이 상태에서는 시작할 수 없어요.'
+const RACE_MESSAGE = '작업 상태가 바뀌었어요. 다시 시도해 주세요.'
+const SKIP_STATE_MESSAGE = '오류로 멈춘 작업에서만 이 화를 건너뛸 수 있어요.'
+const PUBLISHED_ON_MESSAGE = '연재일 형식이 올바르지 않아요.'
+const PAUSE_MESSAGE = '진행 중인 작업만 일시정지할 수 있어요.'
+const CANCEL_MESSAGE = '이미 끝났거나 취소된 작업이에요.'
+const LIMIT_PAUSE_MESSAGE = '오늘 AI 사용량 한도에 도달해 일시정지했어요. 내일 이어서 진행하세요.'
+const GENERIC_ERROR_MESSAGE = '가져오기 중 오류가 발생했어요. 다시 시작해 주세요.'
+const MISSING_CHAPTER_MESSAGE = '회차를 찾을 수 없어요. 작업을 취소하고 다시 올려 주세요.'
 /** Shown while another call holds the chapter or the author's AI runs fill the cap. */
-export const BUSY_MESSAGE = '다른 AI 작업이 끝나면 이어서 진행합니다.'
+export const BUSY_MESSAGE = '다른 AI 작업이 끝난 뒤 이어서 진행해요.'
 /** A chapter claim older than this belongs to a call that died, and may be taken over. */
 const CLAIM_TTL_MS = 10 * 60 * 1000
 
@@ -568,7 +568,7 @@ function toResult(job: ImportJobRow): AdvanceResult {
 
 async function loadJob(db: Db, jobId: string): Promise<ImportJobRow> {
   const [row] = await db.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
@@ -580,7 +580,7 @@ async function lockJob(db: Db, jobId: string): Promise<ImportJobRow> {
     .where(eq(importJobs.id, jobId))
     .limit(1)
     .for('update')
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
@@ -660,7 +660,7 @@ async function loadKnownFacts(db: Db, workId: string) {
 
 /** Error message for a job that stopped at a chapter, so the author sees where it stopped. */
 function stoppedAt(position: number, message: string): string {
-  return `${position}화에서 멈췄습니다: ${message}`
+  return `${position}화에서 멈췄어요: ${message}`
 }
 
 function skippedOf(state: ImportState): NonNullable<ImportState['skipped']> {

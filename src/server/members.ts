@@ -24,7 +24,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 function assertInvitableRole(role: string): asserts role is InvitableRole {
   if (!(INVITABLE_ROLES as string[]).includes(role)) {
-    throw new AppError('VALIDATION', '초대할 수 없는 역할입니다.')
+    throw new AppError('VALIDATION', '초대할 수 없는 역할이에요.')
   }
 }
 
@@ -64,7 +64,7 @@ export async function createInvite(
   assertInvitableRole(input.role)
   const days = input.expiresInDays ?? DEFAULT_INVITE_DAYS
   if (!Number.isInteger(days) || days < 1 || days > MAX_INVITE_DAYS) {
-    throw new AppError('VALIDATION', '만료 기간은 1일부터 30일까지 정할 수 있습니다.')
+    throw new AppError('VALIDATION', '만료 기간은 1일부터 30일까지 정할 수 있어요.')
   }
   const now = new Date()
   const [invite] = await db
@@ -102,8 +102,8 @@ export async function revokeInvite(db: Db, actor: Actor, inviteId: string): Prom
   const workId = await requireRowWork(db, 'work_invites', inviteId)
   await requireWorkRole(db, workId, actor.userId, 'owner')
   const [invite] = await db.select().from(workInvites).where(eq(workInvites.id, inviteId)).limit(1)
-  if (!invite) throw new AppError('NOT_FOUND', '초대를 찾을 수 없습니다.')
-  if (invite.acceptedAt) throw new AppError('BAD_STATE', '이미 사용된 초대입니다.')
+  if (!invite) throw new AppError('NOT_FOUND', '초대를 찾을 수 없어요.')
+  if (invite.acceptedAt) throw new AppError('BAD_STATE', '이미 사용된 초대예요.')
   if (invite.revokedAt) return
   await db.update(workInvites).set({ revokedAt: new Date() }).where(eq(workInvites.id, inviteId))
 }
@@ -147,7 +147,7 @@ export async function acceptInvite(
       .from(workInvites)
       .where(eq(workInvites.token, token))
       .limit(1)
-    if (!invite) throw new AppError('NOT_FOUND', '초대를 찾을 수 없습니다.')
+    if (!invite) throw new AppError('NOT_FOUND', '초대를 찾을 수 없어요.')
     await requireRegisteredUser(tx, actor.userId)
 
     const now = new Date()
@@ -164,7 +164,7 @@ export async function acceptInvite(
       )
       .returning({ id: workInvites.id })
     if (!claimed) {
-      throw new AppError('BAD_STATE', '만료되었거나 사용할 수 없는 초대입니다.')
+      throw new AppError('BAD_STATE', '만료됐거나 사용할 수 없는 초대예요.')
     }
 
     const existing = await getMembership(tx, invite.workId, actor.userId)
@@ -190,9 +190,9 @@ export async function changeMemberRole(
 ): Promise<void> {
   await requireWorkRole(db, input.workId, actor.userId, 'owner')
   const target = await getMembership(db, input.workId, input.userId)
-  if (!target) throw new AppError('NOT_FOUND', '구성원을 찾을 수 없습니다.')
+  if (!target) throw new AppError('NOT_FOUND', '구성원을 찾을 수 없어요.')
   if (target.role === 'owner') {
-    throw new AppError('BAD_STATE', '소유자의 역할은 바꿀 수 없습니다.')
+    throw new AppError('BAD_STATE', '소유자의 역할은 바꿀 수 없어요.')
   }
   assertInvitableRole(input.role)
   await db
@@ -212,12 +212,12 @@ export async function removeMember(
 ): Promise<void> {
   const { role: actorRole } = await requireWorkRole(db, input.workId, actor.userId, 'viewer')
   const target = await getMembership(db, input.workId, input.userId)
-  if (!target) throw new AppError('NOT_FOUND', '구성원을 찾을 수 없습니다.')
+  if (!target) throw new AppError('NOT_FOUND', '구성원을 찾을 수 없어요.')
   if (target.role === 'owner') {
-    throw new AppError('BAD_STATE', '소유자는 작품에서 나갈 수 없습니다.')
+    throw new AppError('BAD_STATE', '소유자는 작품에서 나갈 수 없어요.')
   }
   if (input.userId !== actor.userId && actorRole !== 'owner') {
-    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없습니다.')
+    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없어요.')
   }
   await requireRegisteredUser(db, actor.userId)
   await db

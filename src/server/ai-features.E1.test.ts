@@ -52,7 +52,7 @@ describe('createChapterFromDraft with an explicit body (track E1)', () => {
   it('rejects a blank body with VALIDATION', async () => {
     await expect(
       createChapterFromDraft(db, actor, { workId, runId, body: '   \n ' }),
-    ).rejects.toMatchObject({ code: 'VALIDATION', message: '본문이 비어 있습니다.' })
+    ).rejects.toMatchObject({ code: 'VALIDATION', message: '본문이 비어 있어요.' })
     await expect(
       createChapterFromDraft(db, actor, { workId, runId, body: '' }),
     ).rejects.toMatchObject({ code: 'VALIDATION' })

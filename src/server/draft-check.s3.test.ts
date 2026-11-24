@@ -145,7 +145,7 @@ describe('checkAndFixDraft', () => {
 
     const result = await checkAndFixDraft(s.db, s.actor, { workId: s.workId, runId }, client)
 
-    expect(result.notice).toBe('AI 점검을 하지 못했습니다. 코드 점검 결과만 보여 드립니다.')
+    expect(result.notice).toBe('AI 점검을 하지 못했어요. 코드 점검 결과만 보여 드려요.')
     expect(Array.isArray(result.findings)).toBe(true)
   })
 
@@ -254,7 +254,7 @@ describe('applySceneFix and discardSceneFix', () => {
       applySceneFix(s.db, s.actor, { workId: s.workId, runId, token: checked.fix?.token ?? '' }),
     )
 
-    expect(error).toMatchObject({ code: 'BAD_STATE', message: '초안이 바뀌어 적용할 수 없습니다.' })
+    expect(error).toMatchObject({ code: 'BAD_STATE', message: '초안이 바뀌어 적용할 수 없어요.' })
     expect(await outputOf(s.db, runId)).toEqual({
       ...before,
       text: '다듬기로 바뀐 초안이다. 충분히 길게 적는다.',

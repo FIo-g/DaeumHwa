@@ -59,7 +59,7 @@ const READER_LIMIT = 3
 // Known facts sent to the extraction prompt; pending facts come first, so they are kept.
 const PROMPT_FACT_LIMIT = 100
 const READER_DIGEST_CHARS = 200
-const ENDED_MESSAGE = '이미 끝난 인터뷰입니다.'
+const ENDED_MESSAGE = '이미 끝난 인터뷰예요.'
 
 export type InterviewState = {
   session: InterviewSessionRow | null
@@ -289,7 +289,7 @@ export async function answerTurn(
         ),
       )
       .returning()
-    if (!updated) throw new AppError('CONFLICT', '이미 답한 질문입니다.')
+    if (!updated) throw new AppError('CONFLICT', '이미 답한 질문이에요.')
     const proposals = await insertProposals(tx, workId, items)
     return { turn: updated, proposals }
   })
@@ -313,7 +313,7 @@ export async function skipTurn(db: Db, actor: Actor, turnId: string): Promise<In
       ),
     )
     .returning()
-  if (!updated) throw new AppError('CONFLICT', '이미 답하거나 건너뛴 질문입니다.')
+  if (!updated) throw new AppError('CONFLICT', '이미 답하거나 건너뛴 질문이에요.')
   return updated
 }
 
@@ -357,13 +357,13 @@ async function loadSession(db: Db, sessionId: string): Promise<InterviewSessionR
     .from(interviewSessions)
     .where(eq(interviewSessions.id, sessionId))
     .limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
 async function loadTurn(db: Db, turnId: string): Promise<InterviewTurnRow> {
   const [row] = await db.select().from(interviewTurns).where(eq(interviewTurns.id, turnId)).limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
@@ -371,8 +371,8 @@ async function loadTurn(db: Db, turnId: string): Promise<InterviewTurnRow> {
 async function assertTurnOpen(db: Db, turn: InterviewTurnRow): Promise<void> {
   const session = await loadSession(db, turn.sessionId)
   if (session.status !== 'active') throw new AppError('BAD_STATE', ENDED_MESSAGE)
-  if (turn.answer !== null) throw new AppError('CONFLICT', '이미 답한 질문입니다.')
-  if (turn.skipped) throw new AppError('CONFLICT', '이미 건너뛴 질문입니다.')
+  if (turn.answer !== null) throw new AppError('CONFLICT', '이미 답한 질문이에요.')
+  if (turn.skipped) throw new AppError('CONFLICT', '이미 건너뛴 질문이에요.')
 }
 
 /** The last turn with no answer that was not skipped. */
@@ -453,7 +453,7 @@ async function buildQuestionInput(
   sessionId: string,
 ): Promise<Omit<InterviewQuestionInput, 'rejected'>> {
   const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1)
-  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  if (!work) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
 
   const speech = isSpeechStyleEnabled()
   const entries = await db

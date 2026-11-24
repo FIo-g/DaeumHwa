@@ -97,7 +97,7 @@ export function startAutoCheck(input: AutoCheckInput): boolean {
   notify()
   startTimer()
 
-  toast(`${position}화를 완료로 바꿨습니다. 회차 점검을 시작합니다.`)
+  toast(`${position}화를 완료로 바꿨어요. 회차 점검을 시작해요.`)
 
   void postAction<ChapterCheckResult>(
     `/api/works/${workId}/chapters/${chapterId}/check`,
@@ -118,7 +118,7 @@ export function startAutoCheck(input: AutoCheckInput): boolean {
 
     if (result.ok) {
       const { issues, proposals } = result.data
-      toast.success(`${position}화 점검을 마쳤습니다.`, {
+      toast.success(`${position}화 점검을 마쳤어요.`, {
         description: `지적 ${issues.length}건, 승인 대기 후보 ${proposals.length}건`,
         duration: 10_000,
         ...(proposals.length > 0
@@ -132,7 +132,7 @@ export function startAutoCheck(input: AutoCheckInput): boolean {
       })
       onDone?.()
     } else if (result.error.code !== 'CANCELLED') {
-      toast.error(`${position}화 자동 점검을 하지 못했습니다.`, {
+      toast.error(`${position}화 자동 점검을 하지 못했어요.`, {
         description: result.error.message,
       })
     }
@@ -151,7 +151,7 @@ export function cancelAutoCheck(chapterId: string): void {
   if (runs.size === 0) stopTimer()
   notify()
   run.controller.abort()
-  toast('취소했습니다.')
+  toast('취소했어요.')
 }
 
 /** Running state and the last successful result for one chapter. elapsedSec counts whole seconds since the start, updated every second. */

@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/server/session', () => ({
   getSessionUser: async () => state.user,
   requireUser: async () => {
-    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return state.user
   },
 }))
@@ -98,7 +98,7 @@ describe('applyDraftRefinementAction', () => {
     const result = await applyDraftRefinementAction({ workId, runId, token: 'not-the-token' })
     expect(result).toMatchObject({
       ok: false,
-      error: { code: 'BAD_STATE', message: '다듬기 결과가 바뀌었습니다. 다시 다듬어 주세요.' },
+      error: { code: 'BAD_STATE', message: '다듬기 결과가 바뀌었어요. 다시 다듬어 주세요.' },
     })
   })
 
@@ -130,7 +130,7 @@ describe('applyDraftRefinementAction', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: { code: 'BAD_STATE', message: '적용할 다듬기 결과가 없습니다. 다시 다듬어 주세요.' },
+      error: { code: 'BAD_STATE', message: '적용할 다듬기 결과가 없어요. 다시 다듬어 주세요.' },
     })
   })
 })

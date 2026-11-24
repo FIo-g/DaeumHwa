@@ -87,10 +87,10 @@ export async function requireWorkRole(
   min: Role,
 ): Promise<{ role: Role }> {
   const membership = await getMembership(db, workId, userId)
-  if (!membership) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
+  if (!membership) throw new AppError('NOT_FOUND', '작품을 찾을 수 없어요.')
   if (!hasRole(membership.role, min)) {
     await requireRegisteredUser(db, userId)
-    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없습니다.')
+    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없어요.')
   }
   return membership
 }
@@ -252,6 +252,6 @@ async function findWorkId(db: Db, table: RowTable, id: string): Promise<string |
  */
 export async function requireRowWork(db: Db, table: RowTable, id: string): Promise<string> {
   const workId = UUID_RE.test(id) ? await findWorkId(db, table, id) : undefined
-  if (!workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return workId
 }

@@ -33,17 +33,16 @@ export function refineSummary(p: DraftRefinePreview): string {
   const pieces: string[] = []
   if (fixed > 0) pieces.push(`긴 문단 ${fixed}곳`)
   if (p.repaired > 0) pieces.push(`문장 ${p.repaired}곳`)
-  let line = pieces.length > 0 ? `${pieces.join(', ')}을 고쳤습니다.` : '글을 다듬었습니다.'
+  let line = pieces.length > 0 ? `${pieces.join(', ')}을 고쳤어요.` : '글을 다듬었어요.'
   if (p.paragraphsAfter > 0) {
-    line += ` 문장이 많은 문단 ${p.paragraphsAfter}곳은 그대로 뒀습니다.`
+    line += ` 문장이 많은 문단 ${p.paragraphsAfter}곳은 안 고쳤어요.`
   }
   return line
 }
 
 /** A note about the sentence repair, or null when there is nothing to say. */
 export function refineRepairNote(p: DraftRefinePreview): string | null {
-  if (p.repairState === 'failed')
-    return '문장 고치기는 하지 못했습니다. 문단 다듬기 결과만 보입니다.'
-  if (p.repairState === 'skipped') return '시간이 모자라 문장 고치기는 건너뛰었습니다.'
+  if (p.repairState === 'failed') return '문장 고치기는 못했어요. 문단 다듬기 결과만 보여요.'
+  if (p.repairState === 'skipped') return '시간이 모자라 문장 고치기는 건너뛰었어요.'
   return null
 }

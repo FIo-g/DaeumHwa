@@ -60,7 +60,7 @@ export type GraphViewData = {
   latestPosition: number
 }
 
-const NOT_FOUND_MESSAGE = '항목을 찾을 수 없습니다.'
+const NOT_FOUND_MESSAGE = '항목을 찾을 수 없어요.'
 
 function requireKind(kind: string): string {
   const trimmed = kind.trim()
@@ -76,10 +76,10 @@ function validateShape(
   endPosition: number | null,
 ): void {
   if (sourceEntryId === targetEntryId) {
-    throw new AppError('VALIDATION', '같은 카드끼리는 연결할 수 없습니다.')
+    throw new AppError('VALIDATION', '같은 카드끼리는 연결할 수 없어요.')
   }
   if (startPosition !== null && endPosition !== null && startPosition > endPosition) {
-    throw new AppError('VALIDATION', '시작 회차가 끝 회차보다 늦습니다.')
+    throw new AppError('VALIDATION', '시작 회차가 끝 회차보다 늦어요.')
   }
 }
 
@@ -198,7 +198,7 @@ export async function updateRelation(
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(relations).where(eq(relations.id, relationId)).limit(1)
     if (!before) throw new AppError('NOT_FOUND', NOT_FOUND_MESSAGE)
-    if (before.archivedAt) throw new AppError('BAD_STATE', '보관된 관계입니다.')
+    if (before.archivedAt) throw new AppError('BAD_STATE', '보관된 관계예요.')
 
     const sourceEntryId = patch.sourceEntryId ?? before.sourceEntryId
     const targetEntryId = patch.targetEntryId ?? before.targetEntryId
@@ -253,7 +253,7 @@ export async function archiveRelation(
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(relations).where(eq(relations.id, relationId)).limit(1)
     if (!before) throw new AppError('NOT_FOUND', NOT_FOUND_MESSAGE)
-    if (before.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 관계입니다.')
+    if (before.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 관계예요.')
 
     const now = new Date()
     const [updated] = await tx

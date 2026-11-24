@@ -239,7 +239,7 @@ async function loadEditableChapter(
   if (!allowTrialCheck) await requireRegisteredUser(db, actor.userId)
   const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1)
   if (!chapter || chapter.archivedAt !== null) {
-    throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
   }
   if (
     allowTrialCheck &&
@@ -559,7 +559,7 @@ export async function runProofread(
   if (input.useAi && text.length > MAX_PROOFREAD_AI_CHARS) {
     throw new AppError(
       'VALIDATION',
-      `교정할 원고가 너무 깁니다. ${MAX_PROOFREAD_AI_CHARS / 10_000}만 자 이하로 나누어 교정해 주세요.`,
+      `교정할 원고가 너무 길어요. ${MAX_PROOFREAD_AI_CHARS / 10_000}만 자 이하로 나누어 교정해 주세요.`,
     )
   }
 

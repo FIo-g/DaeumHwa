@@ -393,7 +393,7 @@ describe('revertChange', () => {
     await expectAppError(
       revertChange(db, { userId: owner.id }, first.id),
       'CONFLICT',
-      '이후 변경이 있어 먼저 그 변경을 되돌려야 합니다.',
+      '이후 변경이 있어요. 그 변경부터 되돌려야 해요.',
     )
     expect((await currentEntry(entry.id)).name).toBe('이서윤')
   })
@@ -491,7 +491,7 @@ describe('revertChange keeps derived wiki data in line', () => {
     await expectAppError(
       revertChange(db, actor, archive.id),
       'CONFLICT',
-      '같은 이름의 카드가 이미 있습니다.',
+      '같은 이름의 카드가 이미 있어요.',
     )
     expect((await currentEntry(entry.id)).archivedAt).not.toBeNull()
     const history = await listChanges(db, actor, work.id, { targetId: entry.id })
@@ -507,7 +507,7 @@ describe('revertChange keeps derived wiki data in line', () => {
     await expectAppError(
       revertChange(db, actor, rename.id),
       'CONFLICT',
-      '같은 이름의 카드가 이미 있습니다.',
+      '같은 이름의 카드가 이미 있어요.',
     )
     expect((await currentEntry(entry.id)).name).toBe('이서윤')
   })
@@ -565,7 +565,7 @@ describe('revertChange keeps replaced-fact chains consistent', () => {
     await expectAppError(
       revertChange(db, actor, earlier.id),
       'CONFLICT',
-      '이 사실을 대체한 새 사실이 있어 먼저 새 사실의 추가를 되돌려야 합니다.',
+      '이 사실을 대체한 새 사실이 있어요. 먼저 그 추가를 되돌려야 해요.',
     )
     expect((await factRow(old.id)).supersededByFactId).toBe(newFact.id)
   })
@@ -698,7 +698,7 @@ describe('revertChange on changes that share a timestamp', () => {
     await expectAppError(
       revertChange(db, { userId: owner.id }, low),
       'CONFLICT',
-      '이후 변경이 있어 먼저 그 변경을 되돌려야 합니다.',
+      '이후 변경이 있어요. 그 변경부터 되돌려야 해요.',
     )
   })
 })

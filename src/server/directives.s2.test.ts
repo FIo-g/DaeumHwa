@@ -137,7 +137,7 @@ describe('author directives', () => {
     await expectAppError(
       updateDirective(db, actor, row.id, { text: '길게' }),
       'BAD_STATE',
-      '보관된 요청은 수정할 수 없습니다.',
+      '보관된 요청은 수정할 수 없어요.',
     )
   })
 
@@ -174,7 +174,7 @@ describe('author directives', () => {
     await expectAppError(
       createDirective(db, actor, { ...base, text: 'a'.repeat(301), scope: 'work', kind: 'style' }),
       'VALIDATION',
-      '요청은 300자까지 적을 수 있습니다.',
+      '요청은 300자까지 적을 수 있어요.',
     )
     await expectAppError(
       createDirective(db, actor, { ...base, scope: 'character', kind: 'style' }),
@@ -214,7 +214,7 @@ describe('author directives', () => {
         speechLevel: 'banmal',
       }),
       'VALIDATION',
-      '말투는 인물 요청에만 정할 수 있습니다.',
+      '말투는 인물 요청에만 정할 수 있어요.',
     )
     for (const targetChars of [null, 499, 20001]) {
       await expectAppError(

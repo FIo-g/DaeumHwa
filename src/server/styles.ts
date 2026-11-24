@@ -25,7 +25,7 @@ function normalizeName(name: string): string {
 
 async function loadCard(db: Db, cardId: string): Promise<StyleCardRow> {
   const [row] = await db.select().from(styleCards).where(eq(styleCards.id, cardId)).limit(1)
-  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!row) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   return row
 }
 
@@ -96,7 +96,7 @@ export async function updateStyleCard(
   const workId = await requireRowWork(db, 'style_cards', cardId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadCard(db, cardId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 문체 카드는 수정할 수 없습니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '보관된 문체 카드는 수정할 수 없어요.')
 
   const name = patch.name !== undefined ? normalizeName(patch.name) : current.name
   const entryId = patch.entryId !== undefined ? patch.entryId : current.entryId
@@ -137,7 +137,7 @@ export async function archiveStyleCard(
   const workId = await requireRowWork(db, 'style_cards', cardId)
   await requireWorkRole(db, workId, actor.userId, 'editor')
   const current = await loadCard(db, cardId)
-  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 문체 카드입니다.')
+  if (current.archivedAt) throw new AppError('BAD_STATE', '이미 보관된 문체 카드예요.')
 
   return db.transaction(async (tx) => {
     const now = new Date()

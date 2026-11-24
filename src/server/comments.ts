@@ -70,7 +70,7 @@ export async function addComment(
   const body = input.body.trim()
   if (!body) throw new AppError('VALIDATION', '코멘트 내용을 입력하세요.')
   if (input.quoteStart != null && input.quoteEnd != null && input.quoteEnd < input.quoteStart) {
-    throw new AppError('VALIDATION', '코멘트 위치가 올바르지 않습니다.')
+    throw new AppError('VALIDATION', '코멘트 위치가 올바르지 않아요.')
   }
 
   let parentId: string | null = null
@@ -85,7 +85,7 @@ export async function addComment(
       .where(eq(comments.id, input.parentId))
       .limit(1)
     if (!parent || parent.chapterId !== input.chapterId) {
-      throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+      throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
     }
     parentId = parent.parentId ?? parent.id
   }
@@ -122,9 +122,9 @@ export async function setCommentResolved(
     .from(comments)
     .where(eq(comments.id, input.commentId))
     .limit(1)
-  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   if (current.authorId !== actor.userId && !hasRole(role, 'editor')) {
-    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없습니다.')
+    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없어요.')
   }
   const now = new Date()
   const [updated] = await db
@@ -151,11 +151,11 @@ export async function deleteComment(db: Db, actor: Actor, commentId: string): Pr
     .from(comments)
     .where(eq(comments.id, commentId))
     .limit(1)
-  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!current) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
 
   const isAuthor = current.authorId === actor.userId
   if (isAuthor ? !hasRole(role, 'commenter') : role !== 'owner') {
-    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없습니다.')
+    throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없어요.')
   }
 
   await db.transaction(async (tx) => {

@@ -171,7 +171,7 @@ export async function runReaderSimulation(
   await requireWorkRole(db, chapterRow.workId, actor.userId, 'editor')
   await requireRegisteredUser(db, actor.userId)
   if (chapterRow.body.trim() === '') {
-    throw new AppError('VALIDATION', '원고가 비어 있어 독자 시뮬레이션을 할 수 없습니다.')
+    throw new AppError('VALIDATION', '원고가 비어 있어 독자 시뮬레이션을 할 수 없어요.')
   }
   const work = await getWork(db, actor, chapterRow.workId)
   const all = await listChapters(db, actor, chapterRow.workId)
@@ -331,7 +331,7 @@ export async function suggestStyleCard(
   const names = [entry.name, ...entry.aliases].filter((name) => name.trim() !== '')
   const samples = await collectDialogueSamples(db, workId, names)
   if (samples.length < MIN_DIALOGUE_SAMPLES) {
-    throw new AppError('BAD_STATE', '이 인물의 대사를 원고에서 3줄 이상 찾지 못했습니다.')
+    throw new AppError('BAD_STATE', '이 인물의 대사를 원고에서 3줄 이상 찾지 못했어요.')
   }
   const { output } = await runAiTask(
     db,
@@ -433,7 +433,7 @@ export async function buildDraftContext(
   let previous: ChapterListItem | undefined
   if (input.chapterId) {
     const chapter = await getChapter(db, actor, input.chapterId)
-    if (chapter.workId !== workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    if (chapter.workId !== workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
     position = chapter.position
     chapterId = chapter.id
     promptLabel = chapterLabel(chapter.position, chapter.title)
@@ -736,7 +736,7 @@ export async function startDraft(
       )
     : null
   if (beatsRun && beatsRun.output.scenes.length === 0) {
-    throw new AppError('AI_ERROR', '장면 목록을 만들지 못했습니다. 다시 시도해 주세요.')
+    throw new AppError('AI_ERROR', '장면 목록을 만들지 못했어요. 다시 시도해 주세요.')
   }
   const finalInput: DraftPromptInput = beatsRun
     ? {
@@ -1514,15 +1514,15 @@ export async function createChapterFromDraft(
     run.userId !== actor.userId ||
     run.task !== 'draft-chapter'
   ) {
-    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   }
   if (run.status !== 'done') {
-    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 회차로 만들 수 있습니다.')
+    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 회차로 만들 수 있어요.')
   }
   const text = draftText(run.output)
-  if (text === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없습니다.')
+  if (text === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없어요.')
   if (input.body !== undefined && input.body.trim() === '') {
-    throw new AppError('VALIDATION', '본문이 비어 있습니다.')
+    throw new AppError('VALIDATION', '본문이 비어 있어요.')
   }
   const chapter = await createChapter(db, actor, {
     workId: input.workId,
@@ -1570,13 +1570,13 @@ export async function repairDraft(
     run.userId !== actor.userId ||
     run.task !== 'draft-chapter'
   ) {
-    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   }
   if (run.status !== 'done') {
-    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 다듬을 수 있습니다.')
+    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 다듬을 수 있어요.')
   }
   const stored = draftText(run.output)
-  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없습니다.')
+  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없어요.')
 
   // Idempotent: a repaired run keeps its result, so a second call makes no AI call.
   const output = run.output as Record<string, unknown>
@@ -1643,13 +1643,13 @@ export async function repairDraftForeignScript(
     run.userId !== actor.userId ||
     run.task !== 'draft-chapter'
   ) {
-    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   }
   if (run.status !== 'done') {
-    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 고칠 수 있습니다.')
+    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 고칠 수 있어요.')
   }
   const stored = draftText(run.output)
-  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없습니다.')
+  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없어요.')
   const output = run.output as Record<string, unknown>
   // A repaired run keeps the draft it had before the first repair.
   const storedRaw = typeof output.rawText === 'string' ? output.rawText : null

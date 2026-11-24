@@ -351,7 +351,7 @@ describe('approveProposal', () => {
     await expectAppError(
       approveProposal(db, actor, { proposalId: p.id }),
       'BAD_STATE',
-      '관계에 필요한 카드(없는사람)가 위키에 없습니다. 카드 제안을 먼저 승인하세요.',
+      '관계에 필요한 카드(없는사람)가 위키에 없어요. 카드 제안을 먼저 승인하세요.',
     )
     const [still] = await db.select().from(proposals).where(eq(proposals.id, p.id))
     expect(still.status).toBe('pending')
@@ -480,7 +480,7 @@ describe('approveProposal', () => {
     await expectAppError(
       approveProposal(db, actor, { proposalId: p.id }),
       'BAD_STATE',
-      '이미 처리된 제안입니다.',
+      '이미 처리된 제안이에요.',
     )
   })
 
@@ -696,7 +696,7 @@ describe('bulkApprove', () => {
     })
 
     expect(result.approved).toBe(1)
-    expect(result.failed).toEqual([{ proposalId: foreign.id, message: '항목을 찾을 수 없습니다.' }])
+    expect(result.failed).toEqual([{ proposalId: foreign.id, message: '항목을 찾을 수 없어요.' }])
   })
 
   it('refuses to run without ids or a sourceRef', async () => {

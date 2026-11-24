@@ -18,7 +18,7 @@ export async function recomputeAppearances(db: Db, chapterId: string): Promise<v
     .from(chapters)
     .where(eq(chapters.id, chapterId))
     .limit(1)
-  if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+  if (!chapter) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
 
   const entries = await db
     .select({ id: wikiEntries.id, name: wikiEntries.name, aliases: wikiEntries.aliases })
@@ -52,7 +52,7 @@ export async function recomputeAppearancesForEntry(db: Db, entryId: string): Pro
     .from(wikiEntries)
     .where(eq(wikiEntries.id, entryId))
     .limit(1)
-  if (!entry) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (!entry) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
 
   const names = namesOf(entry)
     .map((name) => name.trim())

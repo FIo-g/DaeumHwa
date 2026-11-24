@@ -44,7 +44,7 @@ export const CHECK_BUDGET_MS = 280_000
 /** A fix call is not started with less time than this left. */
 export const MIN_FIX_MS = 20_000
 
-export const CHECK_FAILED_NOTICE = 'AI 점검을 하지 못했습니다. 코드 점검 결과만 보여 드립니다.'
+export const CHECK_FAILED_NOTICE = 'AI 점검을 하지 못했어요. 코드 점검 결과만 보여 드려요.'
 
 export type DraftCheckResult = {
   findings: SceneFinding[]
@@ -237,7 +237,7 @@ export async function checkAndFixDraft(
       sql`jsonb_set(jsonb_set(${aiRuns.output}, '{check}', ${JSON.stringify(check)}::jsonb), '{sceneFix}', ${JSON.stringify(sceneFix)}::jsonb)`,
     )
     if (!written) {
-      throw new AppError('BAD_STATE', '초안이 바뀌어 점검 결과를 버렸습니다. 다시 점검해 주세요.')
+      throw new AppError('BAD_STATE', '초안이 바뀌어 점검 결과를 버렸어요. 다시 점검해 주세요.')
     }
     return {
       findings,
@@ -254,7 +254,7 @@ export async function checkAndFixDraft(
     sql`jsonb_set(${aiRuns.output}, '{check}', ${JSON.stringify(check)}::jsonb)`,
   )
   if (!written) {
-    throw new AppError('BAD_STATE', '초안이 바뀌어 점검 결과를 버렸습니다. 다시 점검해 주세요.')
+    throw new AppError('BAD_STATE', '초안이 바뀌어 점검 결과를 버렸어요. 다시 점검해 주세요.')
   }
   return { findings, fix: null, notice }
 }
@@ -271,10 +271,10 @@ export async function applySceneFix(
 
   const candidate = readSceneFix(output.sceneFix)
   if (candidate === null) {
-    throw new AppError('BAD_STATE', '고친 안이 없습니다.')
+    throw new AppError('BAD_STATE', '고친 안이 없어요.')
   }
   if (candidate.token !== input.token || candidate.base !== stored) {
-    throw new AppError('BAD_STATE', '초안이 바뀌어 적용할 수 없습니다.')
+    throw new AppError('BAD_STATE', '초안이 바뀌어 적용할 수 없어요.')
   }
 
   const updated = await db
@@ -295,7 +295,7 @@ export async function applySceneFix(
     )
     .returning({ id: aiRuns.id })
   if (updated.length === 0) {
-    throw new AppError('BAD_STATE', '초안이 바뀌어 적용할 수 없습니다.')
+    throw new AppError('BAD_STATE', '초안이 바뀌어 적용할 수 없어요.')
   }
 
   try {
@@ -325,7 +325,7 @@ export async function discardSceneFix(
   const candidate = readSceneFix(output.sceneFix)
   if (candidate === null) return { runId }
   if (candidate.token !== input.token) {
-    throw new AppError('BAD_STATE', '초안이 바뀌어 적용할 수 없습니다.')
+    throw new AppError('BAD_STATE', '초안이 바뀌어 적용할 수 없어요.')
   }
 
   await db
@@ -358,13 +358,13 @@ async function loadDraftRun(db: Db, actor: Actor, workId: string, runId: string)
     run.userId !== actor.userId ||
     run.task !== 'draft-chapter'
   ) {
-    throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
   }
   if (run.status !== 'done') {
-    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 점검할 수 있습니다.')
+    throw new AppError('BAD_STATE', '초안 작성이 끝난 뒤에 점검할 수 있어요.')
   }
   const stored = draftText(run.output)
-  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없습니다.')
+  if (stored === null) throw new AppError('BAD_STATE', '저장된 초안을 읽을 수 없어요.')
   return { run, output: run.output as Record<string, unknown>, stored }
 }
 

@@ -64,7 +64,7 @@ describe('postAction', () => {
     expect(fetchMock.mock.calls[0][1]?.signal).toBe(controller.signal)
     expect(result).toEqual({
       ok: false,
-      error: { code: 'CANCELLED', message: '취소했습니다.' },
+      error: { code: 'CANCELLED', message: '취소했어요.' },
     })
   })
 
@@ -78,7 +78,7 @@ describe('postAction', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json({ error: '로그인이 필요합니다.' })),
+      vi.fn(async () => Response.json({ error: '로그인이 필요해요.' })),
     )
     const foreign = await postAction('/api/x', {})
     expect(foreign.ok).toBe(false)

@@ -134,13 +134,13 @@ export function planWarnings(card: DraftPlanCard): string[] {
     if (next && next.role === scene.role) {
       const label = SCENE_ROLE_LABELS[scene.role]
       warnings.push(
-        `${i + 1}번째와 ${i + 2}번째 장면이 둘 다 '${label}'입니다. 같은 박자가 이어질 수 있어요.`,
+        `${i + 1}번째와 ${i + 2}번째 장면은 '${label}' 역할이에요. 같은 박자가 이어질 수 있어요.`,
       )
     }
   })
   const last = card.scenes[card.scenes.length - 1]
   if (last && last.role !== 'ending') {
-    warnings.push("마지막 장면이 '회차 끝'이 아닙니다.")
+    warnings.push("마지막 장면이 '회차 끝'이 아니에요.")
   }
   return warnings
 }

@@ -37,7 +37,7 @@ export async function insertProposals(
       .from(chapters)
       .where(and(eq(chapters.workId, workId), inArray(chapters.id, chapterIds)))
     if (found.length !== chapterIds.length) {
-      throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+      throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
     }
   }
 

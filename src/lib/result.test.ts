@@ -65,7 +65,7 @@ describe('result helpers', () => {
     })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'BAD_STATE', message: '알 수 없는 오류가 발생했습니다.' },
+      error: { code: 'BAD_STATE', message: '알 수 없는 오류가 발생했어요.' },
     })
     expect(spy).toHaveBeenCalled()
   })
@@ -74,7 +74,7 @@ describe('result helpers', () => {
     const result = await toActionResult(async () => z.object({ a: z.string() }).parse({ a: 1 }))
     expect(result).toEqual({
       ok: false,
-      error: { code: 'VALIDATION', message: '입력값이 올바르지 않습니다.' },
+      error: { code: 'VALIDATION', message: '입력값이 올바르지 않아요.' },
     })
   })
 
@@ -85,7 +85,7 @@ describe('result helpers', () => {
     })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'BAD_STATE', message: '알 수 없는 오류가 발생했습니다.' },
+      error: { code: 'BAD_STATE', message: '알 수 없는 오류가 발생했어요.' },
     })
     expect(spy).toHaveBeenCalled()
   })

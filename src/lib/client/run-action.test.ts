@@ -32,7 +32,7 @@ describe('runAction', () => {
 
   it('returns null without an error toast when the call was cancelled', async () => {
     const data = await runAction(
-      Promise.resolve({ ok: false, error: { code: 'CANCELLED', message: '취소했습니다.' } }),
+      Promise.resolve({ ok: false, error: { code: 'CANCELLED', message: '취소했어요.' } }),
     )
     expect(data).toBeNull()
     expect(toast.error).not.toHaveBeenCalled()

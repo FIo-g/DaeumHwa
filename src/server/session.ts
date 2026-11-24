@@ -16,7 +16,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 /** For server actions and route handlers: throws when signed out. */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser()
-  if (!user) throw new AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+  if (!user) throw new AppError('UNAUTHENTICATED', '로그인이 필요해요.')
   return user
 }
 

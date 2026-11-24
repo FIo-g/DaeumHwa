@@ -166,7 +166,7 @@ describe('runAiTask', () => {
     }
     expect(caught).toBeInstanceOf(AppError)
     expect((caught as AppError).code).toBe('AI_ERROR')
-    expect((caught as AppError).message).toContain('AI 호출에 실패했습니다')
+    expect((caught as AppError).message).toContain('AI 호출에 실패했어요')
 
     const rows = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
     expect(rows).toHaveLength(1)
@@ -557,7 +557,7 @@ describe('cancel and timeout', () => {
     expect(spy).not.toHaveBeenCalled()
     const [row] = await db.select().from(aiRuns).where(eq(aiRuns.userId, userId))
     expect(row.status).toBe('error')
-    expect(row.error).toBe('취소했습니다.')
+    expect(row.error).toBe('취소했어요.')
   })
 
   it('records the timeout message when the client gives up on time', async () => {
@@ -588,7 +588,7 @@ describe('cancel and timeout', () => {
     }
     await expect(
       runAiTask(db, { userId, workId, signal: controller.signal }, task, { q: '안녕' }, client),
-    ).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했습니다.' })
+    ).rejects.toMatchObject({ code: 'CANCELLED', message: '취소했어요.' })
     const [row] = await db.select().from(aiRuns).where(eq(aiRuns.workId, workId))
     expect(row.status).toBe('error')
     expect(row.inputTokens).toBe(usage.inputTokens)

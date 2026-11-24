@@ -11,7 +11,7 @@ export async function parseManuscriptFile(
   const ext = name.split('.').pop()?.toLowerCase() ?? ''
 
   if (ext === 'hwp' || ext === 'hwpx') {
-    throw new Error('HWP 파일은 지원하지 않습니다. 한글에서 DOCX 또는 TXT로 저장한 뒤 올려 주세요.')
+    throw new Error('HWP 파일은 지원하지 않아요. 한글에서 DOCX 또는 TXT로 저장한 뒤 올려 주세요.')
   }
   if (ext === 'txt' || ext === 'md') {
     const { text, encoding } = decodeTextFile(new Uint8Array(bytes))
@@ -23,8 +23,8 @@ export async function parseManuscriptFile(
       return { text, encoding: 'utf-8', format: 'docx' }
     } catch {
       // Keep the library's English error out of the UI.
-      throw new Error('DOCX 파일을 읽지 못했습니다. 파일이 손상되지 않았는지 확인해 주세요.')
+      throw new Error('DOCX 파일을 읽지 못했어요. 파일이 손상되지 않았는지 확인해 주세요.')
     }
   }
-  throw new Error('지원하지 않는 파일 형식입니다. TXT, MD, DOCX 파일을 올려 주세요.')
+  throw new Error('지원하지 않는 형식이에요. TXT, MD, DOCX 파일을 올려 주세요.')
 }

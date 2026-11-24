@@ -11,7 +11,7 @@ export const DRAFT_ERROR_MARK = '\u001e'
 export const DRAFT_REPLACE_MARK = '\u001d'
 
 /** Shown when the draft failed and the server message is not known to be safe to show. */
-export const DRAFT_FAILED_MESSAGE = '초안 작성이 중간에 끊겼습니다. 다시 시도해 주세요.'
+export const DRAFT_FAILED_MESSAGE = '초안 작성이 중간에 끊겼어요. 다시 시도해 주세요.'
 
 /** The record appended after the text when a draft fails mid-way: MARK followed by {"error": "..."}. */
 export function draftErrorRecord(message: string): string {

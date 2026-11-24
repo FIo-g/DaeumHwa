@@ -6,7 +6,7 @@ import { createTestEntry, createTestFact, createTestUser, createTestWork } from 
 import { createFact, updateFact } from './facts'
 
 const RANGE_START_MESSAGE = '유효 회차는 1 이상으로 적어 주세요.'
-const RANGE_ORDER_MESSAGE = '끝 회차는 시작 회차보다 앞설 수 없습니다.'
+const RANGE_ORDER_MESSAGE = '끝 회차는 시작 회차보다 앞설 수 없어요.'
 
 let db: Db
 

@@ -15,7 +15,7 @@ vi.mock('@/db/client', () => ({ getDb: () => mocks.db }))
 vi.mock('@/server/session', () => ({
   requireUser: async () => {
     if (!mocks.userId)
-      throw new (await import('@/lib/errors')).AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+      throw new (await import('@/lib/errors')).AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return { id: mocks.userId, name: '작가', email: 'a@test.local' }
   },
 }))
@@ -61,7 +61,7 @@ describe('proposal actions', () => {
     })
     expect(result).toEqual({
       ok: false,
-      error: { code: 'UNAUTHENTICATED', message: '로그인이 필요합니다.' },
+      error: { code: 'UNAUTHENTICATED', message: '로그인이 필요해요.' },
     })
   })
 

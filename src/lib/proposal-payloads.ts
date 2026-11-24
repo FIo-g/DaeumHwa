@@ -134,7 +134,7 @@ export function parseProposalPayload<K extends ProposalType>(
   const schema: z.ZodType = PROPOSAL_PAYLOAD_SCHEMAS[type]
   const parsed = schema.safeParse(payload)
   if (!parsed.success) {
-    throw new AppError('VALIDATION', '제안 내용 형식이 올바르지 않습니다.', parsed.error.issues)
+    throw new AppError('VALIDATION', '제안 내용 형식이 올바르지 않아요.', parsed.error.issues)
   }
   // The schema for K is selected by `type`, so the parsed output matches ProposalPayloadMap[K].
   return parsed.data as ProposalPayloadMap[K]

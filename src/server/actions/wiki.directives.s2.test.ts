@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/server/session', () => ({
   getSessionUser: async () => state.user,
   requireUser: async () => {
-    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return state.user
   },
 }))
@@ -48,7 +48,7 @@ describe('createDirectiveAction limits', () => {
       source: 'instruction',
     })
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error.message).toBe('요청은 300자까지 적을 수 있습니다.')
+    if (!result.ok) expect(result.error.message).toBe('요청은 300자까지 적을 수 있어요.')
   })
 
   it('reports the 100-character pattern limit for a longer ban pattern', async () => {
@@ -61,6 +61,6 @@ describe('createDirectiveAction limits', () => {
       source: 'author',
     })
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error.message).toBe('찾을 말은 100자까지 적을 수 있습니다.')
+    if (!result.ok) expect(result.error.message).toBe('찾을 말은 100자까지 적을 수 있어요.')
   })
 })

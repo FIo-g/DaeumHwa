@@ -162,7 +162,7 @@ describe('startDraft with twoStep (track D)', () => {
       ),
     ).rejects.toMatchObject({
       code: 'AI_ERROR',
-      message: '장면 목록을 만들지 못했습니다. 다시 시도해 주세요.',
+      message: '장면 목록을 만들지 못했어요. 다시 시도해 주세요.',
     })
 
     expect(stream).not.toHaveBeenCalled()

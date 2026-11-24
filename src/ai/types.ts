@@ -14,8 +14,8 @@ export type AiUsage = {
   cacheWriteTokens?: number
 }
 
-export const AI_CANCELLED_MESSAGE = '취소했습니다.'
-export const AI_TIMEOUT_MESSAGE = 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.'
+export const AI_CANCELLED_MESSAGE = '취소했어요.'
+export const AI_TIMEOUT_MESSAGE = 'AI 응답이 너무 오래 걸려 멈췄어요. 다시 시도해 주세요.'
 
 /** Which task a call serves, and its input. Test clients use it to pick a fixed output; real clients ignore it. */
 export type AiTaskRef = { name: AiTaskName; input: unknown }
