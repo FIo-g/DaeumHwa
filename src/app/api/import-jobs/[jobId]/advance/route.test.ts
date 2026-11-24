@@ -63,7 +63,7 @@ describe('POST /api/import-jobs/[jobId]/advance', () => {
     state.user = null
     const res = await POST(new Request('http://localhost/x', { method: 'POST' }), context(jobId))
     expect(res.status).toBe(401)
-    expect(await res.json()).toEqual({ error: '로그인이 필요합니다.' })
+    expect(await res.json()).toEqual({ error: '로그인이 필요해요.' })
   })
 
   it('returns 404 JSON for a job of a work the user is not a member of', async () => {
@@ -71,7 +71,7 @@ describe('POST /api/import-jobs/[jobId]/advance', () => {
     state.user = { id: stranger.id, name: stranger.name, email: stranger.email }
     const res = await POST(new Request('http://localhost/x', { method: 'POST' }), context(jobId))
     expect(res.status).toBe(404)
-    expect(await res.json()).toEqual({ error: '작품을 찾을 수 없습니다.' })
+    expect(await res.json()).toEqual({ error: '작품을 찾을 수 없어요.' })
   })
 
   it('returns 403 JSON for a viewer', async () => {
@@ -80,7 +80,7 @@ describe('POST /api/import-jobs/[jobId]/advance', () => {
     state.user = { id: viewer.id, name: viewer.name, email: viewer.email }
     const res = await POST(new Request('http://localhost/x', { method: 'POST' }), context(jobId))
     expect(res.status).toBe(403)
-    expect(await res.json()).toEqual({ error: '이 작업을 할 권한이 없습니다.' })
+    expect(await res.json()).toEqual({ error: '이 작업을 할 권한이 없어요.' })
   })
 
   it('answers with the waiting message and status running while the author has too many AI runs', async () => {
@@ -100,7 +100,7 @@ describe('POST /api/import-jobs/[jobId]/advance', () => {
       processed: 0,
       total: 1,
       done: false,
-      message: '다른 AI 작업이 끝나면 이어서 진행합니다.',
+      message: '다른 AI 작업이 끝난 뒤 이어서 진행해요.',
     })
   }, 10_000)
 

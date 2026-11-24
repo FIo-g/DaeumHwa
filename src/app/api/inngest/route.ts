@@ -12,7 +12,7 @@ export const maxDuration = 300
 const handler = serve({ client: inngest, functions: [importRun] })
 
 function inactive(): Response {
-  return Response.json({ error: 'Inngest가 설정되어 있지 않습니다.' }, { status: 404 })
+  return Response.json({ error: 'Inngest가 설정되어 있지 않아요.' }, { status: 404 })
 }
 
 export async function GET(request: NextRequest): Promise<Response> {

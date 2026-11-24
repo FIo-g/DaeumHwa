@@ -32,7 +32,7 @@ const props: HomePanelsProps = {
     ],
     absentCharacters: [{ id: 'e1', name: '서윤', lastPosition: 2, chaptersSince: 6 }],
     stalePendingCount: 2,
-    bufferWarning: '비축분이 목표보다 적습니다.',
+    bufferWarning: '비축분이 목표보다 적어요.',
     total: 4,
   },
   schedule: {
@@ -70,7 +70,7 @@ describe('HomePanels', () => {
     expect(screen.getByText('‘금빛 반지’ 회수 목표 5화가 지났어요 (현재 8화).')).toBeInTheDocument()
     expect(screen.getByText('‘서윤’이(가) 6화째 등장하지 않았어요.')).toBeInTheDocument()
     expect(screen.getByText('7일 넘게 기다리는 제안이 2건 있어요.')).toBeInTheDocument()
-    expect(screen.getByText('비축분이 목표보다 적습니다.')).toBeInTheDocument()
+    expect(screen.getByText('비축분이 목표보다 적어요.')).toBeInTheDocument()
   })
 
   it('shows the empty message when no periodic check fires', () => {

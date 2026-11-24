@@ -43,7 +43,7 @@ describe('SampleWorkButton', () => {
   it('lets the author retry after a failed action', async () => {
     createAction.mockResolvedValue({
       ok: false,
-      error: { code: 'BAD_STATE', message: '샘플 작품을 만들지 못했습니다.' },
+      error: { code: 'BAD_STATE', message: '샘플 작품을 만들지 못했어요.' },
     })
     render(<SampleWorkButton />)
 

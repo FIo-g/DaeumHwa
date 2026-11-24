@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/server/session', () => ({
   getSessionUser: async () => state.user,
   requireUser: async () => {
-    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return state.user
   },
 }))
@@ -104,7 +104,7 @@ describe('POST /api/works/[workId]/chapters/[chapterId]/proofread', () => {
     )
     expect(await res.json()).toEqual({
       ok: false,
-      error: { code: 'VALIDATION', message: '입력값이 올바르지 않습니다.' },
+      error: { code: 'VALIDATION', message: '입력값이 올바르지 않아요.' },
     })
   })
 
@@ -115,7 +115,7 @@ describe('POST /api/works/[workId]/chapters/[chapterId]/proofread', () => {
     )
     expect(await res.json()).toMatchObject({
       ok: false,
-      error: { code: 'VALIDATION', message: expect.stringContaining('너무 깁니다') },
+      error: { code: 'VALIDATION', message: expect.stringContaining('너무 길어요') },
     })
   })
 })

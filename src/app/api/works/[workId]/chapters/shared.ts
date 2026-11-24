@@ -37,7 +37,7 @@ export async function runChapterRoute<I, T>(
   const result = await withAction(async (db, actor) => {
     const input = schema.parse(await request.json().catch(() => null))
     const rowWork = await requireRowWork(db, 'chapters', chapterId)
-    if (rowWork !== workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+    if (rowWork !== workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
     const out = await fn(db, actor, input, request.signal)
     revalidateWork(workId)
     return out

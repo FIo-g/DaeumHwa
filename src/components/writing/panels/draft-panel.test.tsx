@@ -170,7 +170,7 @@ describe('DraftPanel stream results', () => {
   })
 
   it('shows the error the stream ends with, drops the record from the draft, and marks it stopped', async () => {
-    const message = 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.'
+    const message = 'AI 응답이 너무 오래 걸려 멈췄어요. 다시 시도해 주세요.'
     vi.mocked(fetch).mockResolvedValue(
       draftResponse(
         new ReadableStream<Uint8Array>({

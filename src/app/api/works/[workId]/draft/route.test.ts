@@ -66,7 +66,7 @@ describe('POST /api/works/[workId]/draft', () => {
       context(workId),
     )
     expect(res.status).toBe(401)
-    expect(await res.json()).toEqual({ error: '로그인이 필요합니다.' })
+    expect(await res.json()).toEqual({ error: '로그인이 필요해요.' })
   })
 
   it('returns 400 JSON for empty instructions', async () => {
@@ -83,7 +83,7 @@ describe('POST /api/works/[workId]/draft', () => {
       context(workId),
     )
     expect(res.status).toBe(404)
-    expect(await res.json()).toEqual({ error: '작품을 찾을 수 없습니다.' })
+    expect(await res.json()).toEqual({ error: '작품을 찾을 수 없어요.' })
   })
 
   it('streams plain text with the run id header', async () => {
@@ -137,7 +137,7 @@ describe('POST /api/works/[workId]/draft', () => {
   })
 
   it('appends the Korean error record after the text when the draft fails midway', async () => {
-    const timeout = 'AI 응답이 너무 오래 걸려 멈췄습니다. 다시 시도해 주세요.'
+    const timeout = 'AI 응답이 너무 오래 걸려 멈췄어요. 다시 시도해 주세요.'
     class FailingMidwayClient extends FakeAiClient {
       override streamText() {
         const final = Promise.reject(new AppError('AI_ERROR', timeout))

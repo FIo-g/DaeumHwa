@@ -66,7 +66,7 @@ describe('POST /api/works/[workId]/draft with a plan card', () => {
       context(workId),
     )
     expect(res.status).toBe(400)
-    expect(await res.json()).toEqual({ error: '입력값이 올바르지 않습니다.' })
+    expect(await res.json()).toEqual({ error: '입력값이 올바르지 않아요.' })
   })
 
   it('returns 400 JSON for a card with a summary over 400 characters', async () => {
@@ -77,7 +77,7 @@ describe('POST /api/works/[workId]/draft with a plan card', () => {
       context(workId),
     )
     expect(res.status).toBe(400)
-    expect(await res.json()).toEqual({ error: '입력값이 올바르지 않습니다.' })
+    expect(await res.json()).toEqual({ error: '입력값이 올바르지 않아요.' })
   })
 
   it('starts a draft from a valid card and stores the plan in the run', async () => {

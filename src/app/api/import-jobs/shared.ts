@@ -21,5 +21,5 @@ export function serviceError(error: unknown): Response {
     return jsonError(STATUS_BY_CODE[error.code] ?? 400, error.message)
   }
   console.error(error)
-  return jsonError(500, '알 수 없는 오류가 발생했습니다.')
+  return jsonError(500, '알 수 없는 오류가 발생했어요.')
 }

@@ -17,7 +17,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/server/session', () => ({
   getSessionUser: async () => state.user,
   requireUser: async () => {
-    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요합니다.')
+    if (!state.user) throw new AppError('UNAUTHENTICATED', '로그인이 필요해요.')
     return state.user
   },
 }))

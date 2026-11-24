@@ -308,7 +308,7 @@ describe('DraftPanel plan edits', () => {
       .mockResolvedValueOnce(planResponse(makeCard()) as never)
       .mockResolvedValueOnce({
         ok: false,
-        error: { code: 'AI_FAILED', message: '다시 계획하지 못했습니다.' },
+        error: { code: 'AI_FAILED', message: '다시 계획하지 못했어요.' },
       } as never)
     renderPanel()
 

@@ -181,13 +181,11 @@ describe('DraftCheck', () => {
     renderCheck({
       findings: [{ scene: 1, reason: 'request', note: "'입꼬리'" }],
       fix: null,
-      notice: 'AI 점검을 하지 못했습니다. 코드 점검 결과만 보여 드립니다.',
+      notice: 'AI 점검을 하지 못했어요. 코드 점검 결과만 보여 드려요.',
     })
 
     expect(await screen.findByText('점검 결과')).toBeTruthy()
-    expect(
-      screen.getByText('AI 점검을 하지 못했습니다. 코드 점검 결과만 보여 드립니다.'),
-    ).toBeTruthy()
+    expect(screen.getByText('AI 점검을 하지 못했어요. 코드 점검 결과만 보여 드려요.')).toBeTruthy()
   })
 
   it('says nothing needed fixing when there are no findings', async () => {

@@ -22,5 +22,5 @@ export async function assertRowInWork(
   workId: string,
 ): Promise<void> {
   const rowWork = await requireRowWork(db, table, id)
-  if (rowWork !== workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없습니다.')
+  if (rowWork !== workId) throw new AppError('NOT_FOUND', '항목을 찾을 수 없어요.')
 }

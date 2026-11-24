@@ -129,7 +129,7 @@ describe('DraftRefine', () => {
   })
 
   it('keeps the preview and shows the message when apply fails', async () => {
-    const message = '초안이 바뀌어 적용할 수 없습니다. 다시 다듬어 주세요.'
+    const message = '초안이 바뀌어 적용할 수 없어요. 다시 다듬어 주세요.'
     vi.mocked(applyDraftRefinementAction).mockResolvedValue({
       ok: false,
       error: { code: 'BAD_STATE', message },

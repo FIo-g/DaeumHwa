@@ -11,13 +11,17 @@ describe('ConfirmButton', () => {
   it('opens a confirmation dialog without running the action', () => {
     const onConfirm = vi.fn()
     render(
-      <ConfirmButton title="회차를 보관할까요?" description="나중에 되돌릴 수 있습니다." onConfirm={onConfirm}>
+      <ConfirmButton
+        title="회차를 보관할까요?"
+        description="나중에 되돌릴 수 있어요."
+        onConfirm={onConfirm}
+      >
         보관
       </ConfirmButton>,
     )
     fireEvent.click(screen.getByRole('button', { name: '보관' }))
     expect(screen.getByRole('alertdialog')).toHaveTextContent('회차를 보관할까요?')
-    expect(screen.getByText('나중에 되돌릴 수 있습니다.')).toBeInTheDocument()
+    expect(screen.getByText('나중에 되돌릴 수 있어요.')).toBeInTheDocument()
     expect(onConfirm).not.toHaveBeenCalled()
   })
 

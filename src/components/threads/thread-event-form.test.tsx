@@ -77,14 +77,14 @@ describe('ThreadEventForm', () => {
       ok: false,
       error: {
         code: 'VALIDATION',
-        message: '발전 기록은 떡밥을 심은 회차(3화) 이후여야 합니다.',
+        message: '발전 기록은 떡밥을 심은 회차(3화) 이후여야 해요.',
       },
     })
     render(<ThreadEventForm thread={thread({})} chapters={chapters} />)
     fireEvent.click(screen.getByRole('button', { name: '기록 추가' }))
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('발전 기록은 떡밥을 심은 회차(3화) 이후여야 합니다.')
+    expect(alert).toHaveTextContent('발전 기록은 떡밥을 심은 회차(3화) 이후여야 해요.')
     expect(action).toHaveBeenCalledWith({
       threadId: 't1',
       kind: 'developed',

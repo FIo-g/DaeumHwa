@@ -344,7 +344,7 @@ describe('ChapterTable', () => {
     it('puts the saved date back when the save fails', async () => {
       mocks.setChapterPublishedOnAction.mockResolvedValue({
         ok: false,
-        error: { code: 'VALIDATION', message: '연재일 형식이 올바르지 않습니다.' },
+        error: { code: 'VALIDATION', message: '연재일 형식이 올바르지 않아요.' },
       })
       render(<ChapterTable workId="w1" chapters={rows} targetChars={5500} canEdit />)
       const input = dateInput()

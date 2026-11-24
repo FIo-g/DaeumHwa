@@ -158,7 +158,7 @@ describe('CheckContext', () => {
   it('shows an error line when loading fails', async () => {
     action.mockResolvedValue({
       ok: false,
-      error: { code: 'NOT_FOUND', message: '회차를 찾을 수 없습니다.' },
+      error: { code: 'NOT_FOUND', message: '회차를 찾을 수 없어요.' },
     })
     render(<CheckContext workId="w1" chapterId="c3" position={3} refreshKey={0} />)
 
