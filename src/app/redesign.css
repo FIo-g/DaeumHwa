@@ -21,6 +21,9 @@
     --b-t-subhead: clamp(1.125rem, 2vw, 1.5rem);
     --b-t-lede: clamp(0.9375rem, 1.25vw, 1.125rem);
     --b-t-manuscript: clamp(1rem, 1.32vw, 1.1875rem);
+    --b-manuscript-line: round(down, calc(var(--b-t-manuscript) * 2.4), 1px);
+    --b-t-edge: 0.75rem;
+    --b-edge-line: 1.25;
     --b-t-quote: clamp(0.875rem, 1.32vw, 1.1875rem);
     --b-t-body: 1rem;
     --b-t-label: 0.8125rem;
@@ -38,7 +41,10 @@
     --b-app-pad: clamp(1rem, 2.45vw, 2.25rem);
     --b-wrap: 90rem;
     --b-nav: 4rem;
+    --b-action-height: 2.75rem;
+    --b-tab-height: var(--b-action-height);
     --b-line: 1px;
+    --b-pen-stroke: 1.6px;
     --b-rule: 2px;
     --b-quick: 170ms;
     --b-cell: 52ms;
@@ -54,6 +60,7 @@
     --b-linear: linear;
     accent-color: var(--b-ink);
     color-scheme: light;
+    scrollbar-gutter: stable;
     scroll-behavior: smooth;
     scroll-padding-block-start: calc(var(--b-nav) + 1rem);
   }
@@ -104,7 +111,7 @@
   .b-heading {
     margin: 0;
     font-family: var(--b-font-title);
-    font-weight: 900;
+    font-weight: 700;
     line-height: 1.23;
     letter-spacing: -0.025em;
   }
@@ -122,23 +129,28 @@
     line-height: 1.8;
     letter-spacing: 0;
   }
+  .b-manuscript,
+  .b-root textarea.b-manuscript {
+    font: 400 var(--b-t-manuscript) / var(--b-manuscript-line) var(--b-font-title);
+    letter-spacing: 0;
+  }
   .b-manuscript {
     max-inline-size: 48rem;
-    font: 400 var(--b-t-manuscript)/2.4 var(--b-font-title);
-    letter-spacing: 0;
   }
-  .b-root textarea.b-manuscript {
-    font: 400 var(--b-t-manuscript)/2.4 var(--b-font-title);
-    letter-spacing: 0;
+  :where(.b-ruled) {
+    line-height: var(--b-manuscript-line);
   }
   .b-ruled,
-  .b-manuscript {
+  .b-manuscript,
+  .wg-ui-textarea,
+  .wg-sheet[data-ruled='true'] > :where(p, blockquote, pre) {
     background-image: repeating-linear-gradient(
       to bottom,
       transparent 0 calc(1lh - var(--b-line)),
       color-mix(in srgb, var(--b-grid) 25%, transparent) calc(1lh - var(--b-line)) 1lh
     );
     background-origin: content-box;
+    background-clip: content-box;
     background-attachment: local;
   }
   .b-quote {
@@ -181,8 +193,9 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--b-s2);
-    font-size: 0.8125rem;
-    line-height: 1.4;
+    color: var(--b-muted);
+    font-size: var(--b-t-edge);
+    line-height: var(--b-edge-line);
   }
   .b-cells {
     display: grid;
@@ -272,19 +285,15 @@
       inset: auto 0 0.08em;
       border-block-end: var(--b-line) solid currentColor;
       pointer-events: none;
-      animation: b-link-draw var(--b-quick) var(--b-out) both;
+      animation: b-link-draw var(--b-quick) var(--b-out);
     }
   }
   @keyframes b-link-draw {
     from {
       clip-path: inset(0 100% 0 0);
     }
-    75% {
-      clip-path: inset(0);
-      opacity: 1;
-    }
     to {
-      opacity: 0;
+      clip-path: inset(0);
     }
   }
   .b-icon {
@@ -325,17 +334,11 @@
   :where(:is(ol, ul) > li) > .b-row {
     counter-increment: none;
   }
-  .b-row::before,
   .b-row::after {
     position: absolute;
     opacity: 0;
     pointer-events: none;
     transition: opacity var(--b-quick) var(--b-out);
-  }
-  .b-row::before {
-    content: '';
-    inset: 0 0 auto;
-    border-block-start: var(--b-line) solid var(--b-grid);
   }
   .b-row::after {
     content: counter(b-line-number, decimal-leading-zero) / '';
@@ -343,9 +346,11 @@
     inset-inline-start: var(--b-s1);
     font: 400 0.6875rem/1 var(--b-font-mono);
   }
-  .b-row:not(:has(> .b-number)):is(:hover, :focus-within)::after,
-  .b-row:is(:hover, :focus-within, [aria-expanded='true'], [aria-current='true'])::before {
+  .b-row:not(:has(> .b-number)):is(:hover, :focus-within)::after {
     opacity: 1;
+  }
+  .b-row:is(:hover, :focus-within, [aria-expanded='true'], [aria-current='true']) {
+    border-block-start-color: var(--b-ink);
   }
   .b-row__title {
     font-family: var(--b-font-title);
@@ -361,7 +366,7 @@
     font-variant-numeric: tabular-nums;
   }
   .b-chip {
-    min-block-size: 44px;
+    min-block-size: var(--b-tab-height);
     padding: var(--b-s2) var(--b-s3);
     border: var(--b-line) solid var(--b-grid);
     border-radius: var(--radius);
@@ -373,9 +378,73 @@
   .b-chip:is(:hover, :focus-visible) {
     text-decoration: underline;
   }
-  .b-chip:is([aria-pressed='true'], :has(:checked)) {
+  :is(.b-chip, .b-cell-choice, .wg-ui-cell):is(
+    [aria-current]:not([aria-current=''], [aria-current='false']),
+    [aria-selected='true'],
+    [aria-pressed='true'],
+    [data-active],
+    [data-state='active'],
+    [data-state='on'],
+    [data-state='checked'],
+    [data-state='selected'],
+    :has(:checked)
+  ) {
     color: var(--b-paper);
     background: var(--b-ink);
+  }
+
+  :root :is(.wg-ui-cell, .wg-threads-tick, .wg-threads-filter):focus-visible,
+  :is(.b-chip, .b-cell-choice, .wg-wiki-cell)[aria-current='page']:focus-visible,
+  :is(.b-chip, .b-cell-choice)[aria-pressed='true']:focus-visible {
+    outline: var(--b-rule) solid var(--b-paper);
+    outline-offset: calc(-1 * var(--b-rule));
+  }
+
+  .wg-wiki-cell:is([aria-current='page'], :has(:checked)):is(
+      :focus-visible,
+      :has(:checked:focus-visible)
+    )
+    > .wg-wiki-cell-fill {
+    outline: var(--b-rule) solid var(--b-paper);
+    outline-offset: calc(-1 * var(--b-rule));
+  }
+
+  .b-tab-scroll {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow-x: auto;
+    scroll-padding-inline: var(--b-rule);
+  }
+  .b-tab-scroll :is(a, button, [role='tab']):focus-visible {
+    outline-offset: calc(-1 * var(--b-rule));
+  }
+
+  span[data-thread-coincident] {
+    --wg-thread-paper-gap: 1.5px;
+    --wg-thread-ring-clearance: calc(2 * (var(--b-line) + var(--wg-thread-paper-gap)));
+    --wg-thread-ring-size: max(
+      var(--wg-thread-target-size),
+      var(--wg-thread-ring-clearance) + var(--wg-thread-seed-size) / 2
+    );
+  }
+  span[data-thread-coincident='target'] {
+    inline-size: var(--wg-thread-ring-size);
+    block-size: var(--wg-thread-ring-size);
+    border: var(--b-line) solid var(--b-ink);
+    outline: none;
+  }
+  span[data-thread-coincident='target']::before,
+  span[data-thread-coincident='target']::after {
+    content: none;
+  }
+  span[data-thread-coincident='seed'] {
+    --wg-thread-dot-size: min(
+      var(--wg-thread-seed-size),
+      var(--wg-thread-ring-size) - var(--wg-thread-ring-clearance)
+    );
+    z-index: 1;
+    inline-size: var(--wg-thread-dot-size);
+    block-size: var(--wg-thread-dot-size);
   }
   .b-tooltip {
     border: var(--b-line) solid var(--b-grid);
@@ -394,32 +463,23 @@
     min-block-size: 44px;
     color: var(--b-ink);
   }
-  .b-write {
+  :is(.b-write, .b-fade, .b-sequence > *) {
     animation: b-step-in var(--b-step) var(--b-out)
-      clamp(0ms, calc(var(--b-i, 0) * var(--b-stagger)), calc(var(--b-arrival) - var(--b-step)))
+      clamp(
+        0ms,
+        var(--b-delay, calc(var(--b-i, 0) * var(--b-stagger))),
+        calc(var(--b-arrival) - var(--b-step))
+      )
       both;
   }
   @keyframes b-step-in {
     from {
-      opacity: 0;
-      transform: translateY(4px);
+      clip-path: inset(0 100% 0 0);
     }
     to {
-      opacity: 1;
-      transform: none;
+      clip-path: inset(0);
     }
   }
-  @keyframes b-word-in {
-    from {
-      opacity: 0.55;
-      transform: translateY(0.24em);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
-
   @media (max-width: 1023px) {
     .b-grid {
       grid-template-columns: minmax(0, 1fr);
@@ -454,7 +514,7 @@
   }
 
   .b-stagger > * {
-    animation: b-word-in var(--b-draw) var(--b-out) calc(var(--b-i, 0) * var(--b-stagger)) both;
+    animation: b-step-in var(--b-step) var(--b-out) calc(var(--b-i, 0) * var(--b-stagger)) both;
   }
 
   .b-route-frame {

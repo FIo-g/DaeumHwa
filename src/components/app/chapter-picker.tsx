@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { chapterLabel } from '@/lib/labels'
+import { ChapterCaption } from './chapter-caption'
 
 type ChapterPickerProps = {
   chapters: { id: string; position: number; title: string }[]
@@ -34,7 +34,7 @@ export function ChapterPicker({
   id,
   ariaLabel,
 }: ChapterPickerProps) {
-  const labels = new Map(chapters.map((c) => [c.id, chapterLabel(c.position, c.title)]))
+  const current = chapters.find((chapter) => chapter.id === value)
   return (
     <Select
       value={value ?? (allowNone ? NONE : null)}
@@ -45,18 +45,20 @@ export function ChapterPicker({
     >
       <SelectTrigger id={id} aria-label={ariaLabel} className="wg-shell-picker w-40 max-w-full">
         <SelectValue>
-          {(selected: string | null) => {
-            if (selected === NONE) return '없음'
-            if (selected === null) return placeholder
-            return labels.get(selected) ?? placeholder
-          }}
+          {value == null && allowNone ? (
+            '없음'
+          ) : current ? (
+            <ChapterCaption {...current} />
+          ) : (
+            placeholder
+          )}
         </SelectValue>
       </SelectTrigger>
-      <SelectContent className="wg-shell-count">
+      <SelectContent>
         {allowNone && <SelectItem value={NONE}>없음</SelectItem>}
         {chapters.map((c) => (
           <SelectItem key={c.id} value={c.id}>
-            {chapterLabel(c.position, c.title)}
+            <ChapterCaption {...c} />
           </SelectItem>
         ))}
       </SelectContent>

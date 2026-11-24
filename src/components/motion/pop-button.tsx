@@ -32,8 +32,11 @@ function PopFace({ children, arrow }: { children: ReactNode; arrow?: ReactNode }
 
   return (
     <>
-      <span className="wg-pop-text" data-caption={caption}>
+      <span className="wg-pop-text">
         {children}
+        {caption !== undefined && (
+          <span className="wg-pop-text-fill" aria-hidden="true" data-caption={caption} />
+        )}
       </span>
       {arrow !== false && (
         <span className="wg-pop-arrow" aria-hidden="true" data-default-arrow={arrow == null}>

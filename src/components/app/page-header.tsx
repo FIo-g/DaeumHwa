@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { GridTitle } from '@/components/motion'
+import { cn } from '@/lib/utils'
 
 type PageHeaderProps = {
   title: string
@@ -7,13 +8,33 @@ type PageHeaderProps = {
   actions?: ReactNode
 }
 
+export function PageEdge({
+  className,
+  showPageMark = true,
+}: {
+  className?: string
+  showPageMark?: boolean
+}) {
+  return (
+    <div className={cn('b-edge wg-shell-edge', className)} aria-hidden="true">
+      <span>20×10</span>
+      {showPageMark && <span className="wg-shell-page-mark" />}
+    </div>
+  )
+}
+
+export function PageHeaderFrame({ className, children, ...props }: ComponentProps<'header'>) {
+  return (
+    <header {...props} className={cn('b-page-header wg-shell-page-header', className)}>
+      {children}
+    </header>
+  )
+}
+
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <header className="b-page-header wg-shell-page-header">
-      <div className="wg-shell-edge" aria-hidden="true">
-        <span>20×10</span>
-        <span className="wg-shell-page-mark" />
-      </div>
+    <PageHeaderFrame>
+      <PageEdge />
       <div className="wg-shell-heading">
         <GridTitle as="h1" size="page" className="wg-shell-title">
           {title}
@@ -21,6 +42,6 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
         {description && <p className="wg-shell-description">{description}</p>}
       </div>
       {actions && <div className="wg-shell-actions">{actions}</div>}
-    </header>
+    </PageHeaderFrame>
   )
 }

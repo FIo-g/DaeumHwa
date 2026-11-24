@@ -16,7 +16,9 @@ export function AiRunStatus({
   return (
     <div className="wg-shell-ai-run flex flex-wrap items-center gap-3 text-sm">
       <ScanLine className="wg-shell-scan" />
-      <span className="wg-shell-count">{`${label}… ${elapsedSec}초`}</span>
+      <span>
+        {label}… <span className="wg-shell-count">{elapsedSec}초</span>
+      </span>
       <Button variant="outline" size="sm" onClick={onCancel}>
         취소
       </Button>

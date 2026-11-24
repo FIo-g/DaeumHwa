@@ -16,7 +16,7 @@ function Tabs({ className, orientation = 'horizontal', ...props }: TabsPrimitive
 }
 
 const tabsListVariants = cva(
-  'wg-ui-tabs-list group/tabs-list relative inline-flex w-fit max-w-full flex-wrap items-stretch group-data-vertical/tabs:flex-col',
+  'wg-ui-tabs-list group/tabs-list relative inline-flex w-fit max-w-full items-stretch group-data-vertical/tabs:flex-col',
   {
     variants: {
       variant: {
@@ -34,6 +34,7 @@ function TabsList({
   className,
   children,
   variant = 'default',
+  onFocus,
   ...props
 }: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
   return (
@@ -41,6 +42,13 @@ function TabsList({
       data-slot="tabs-list"
       data-variant={variant}
       className={cn(tabsListVariants({ variant }), className)}
+      onFocus={(event) => {
+        onFocus?.(event)
+        const target = event.target.closest<HTMLElement>('[data-slot="tabs-trigger"]')
+        if (target?.matches(':focus-visible')) {
+          target.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+        }
+      }}
       {...props}
     >
       {children}
@@ -54,7 +62,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "wg-ui-tab wg-ui-cell relative inline-flex min-h-11 flex-1 items-center justify-center gap-2 px-3 py-1 text-sm font-medium whitespace-nowrap group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "wg-ui-tab wg-ui-cell relative inline-flex shrink-0 flex-1 items-center justify-center gap-2 px-3 py-1 text-sm font-medium whitespace-nowrap group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}

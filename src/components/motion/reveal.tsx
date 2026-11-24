@@ -4,17 +4,9 @@ import { useRef, type HTMLAttributes, type CSSProperties } from 'react'
 import { cn } from '@/lib/utils'
 import { useEntered } from './hooks'
 
-const OFFSETS = {
-  up: ['0px', '4px'],
-  down: ['0px', '-4px'],
-  left: ['4px', '0px'],
-  right: ['-4px', '0px'],
-  none: ['0px', '0px'],
-} as const
-
 type RevealProps = HTMLAttributes<HTMLElement> & {
   as?: 'div' | 'li' | 'article'
-  direction?: keyof typeof OFFSETS
+  direction?: 'up' | 'down' | 'left' | 'right' | 'none'
   delay?: number
   decorative?: boolean
   effectOnly?: boolean
@@ -22,7 +14,7 @@ type RevealProps = HTMLAttributes<HTMLElement> & {
 
 export function Reveal({
   as: Element = 'div',
-  direction = 'up',
+  direction,
   delay = 0,
   decorative = false,
   effectOnly = false,
@@ -33,7 +25,6 @@ export function Reveal({
   const node = useRef<HTMLElement>(null)
   const revealed = useEntered(node)
 
-  const [x, y] = OFFSETS[direction]
   return (
     <Element
       {...props}
@@ -42,10 +33,9 @@ export function Reveal({
       }}
       className={cn(!effectOnly && 'wg-reveal', decorative && 'wg-reveal-decorative', className)}
       data-revealed={revealed}
+      data-direction={direction}
       style={
         {
-          '--wg-reveal-x': x,
-          '--wg-reveal-y': y,
           '--wg-delay': `${delay}ms`,
           ...style,
         } as CSSProperties

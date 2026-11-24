@@ -12,8 +12,12 @@
 
   .wg-title {
     --wg-cell-size: var(--b-cell-section, clamp(1.625rem, 2.6vw, 2.5rem));
-    --wg-cell-track: min(var(--wg-cell-size), calc(100cqi / var(--wg-columns, 1)));
-    --wg-cell-time: min(var(--b-cell, 52ms), calc(900ms / var(--wg-letter-count, 1)));
+    --wg-cell-track: round(
+      down,
+      min(var(--wg-cell-size), calc(100cqi / var(--wg-columns, 1))),
+      1px
+    );
+    --wg-cell-time: min(var(--b-cell, 52ms), calc(var(--b-arrival) / var(--wg-letter-count, 1)));
     inline-size: 100%;
     min-inline-size: 0;
     max-inline-size: 100%;
@@ -39,7 +43,7 @@
 
   .wg-title-probe {
     position: absolute;
-    inline-size: var(--wg-cell-size);
+    inline-size: round(down, var(--wg-cell-size), 1px);
     block-size: 0;
     visibility: hidden;
   }
@@ -68,34 +72,49 @@
     position: relative;
     display: grid;
     place-items: center;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
     flex: none;
     box-sizing: border-box;
     inline-size: var(--wg-cell-track);
     block-size: var(--wg-cell-track);
-    border-block: var(--wg-title-line);
-    border-inline-end: var(--wg-title-line);
     font-size: calc(var(--wg-cell-track) * 0.72);
   }
 
-  .wg-title-cell[data-first],
-  .wg-title-flow .wg-title-cell {
+  .wg-title-cell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-block: var(--wg-title-line);
+    border-inline-end: var(--wg-title-line);
+    pointer-events: none;
+  }
+
+  .wg-title-cell[data-first]::after,
+  .wg-title-flow .wg-title-cell::after {
     border-inline-start: var(--wg-title-line);
   }
 
-  .wg-title-flow .wg-title-cell {
+  .wg-title-flow .wg-title-cell::after {
     border-inline-end: 0;
   }
 
-  .wg-title-flow .wg-title-cell::after {
+  .wg-title-flow .wg-title-cell::before {
     content: '';
     position: absolute;
     inset-block: 0;
     inset-inline-start: 100%;
-    border-inline-end: var(--wg-title-line);
+    border-inline-start: var(--wg-title-line);
   }
 
   .wg-title-flow {
     padding-inline-end: var(--b-line, 1px);
+  }
+
+  .wg-title-glyph {
+    justify-self: center;
+    inline-size: max-content;
+    white-space: nowrap;
+    scale: var(--wg-glyph-fit, 1);
   }
 
   .wg-title-glyph::before {
@@ -109,7 +128,9 @@
   }
 
   .wg-cell-meter {
-    display: flex;
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(var(--wg-cell-meter-count), minmax(0, 1fr));
     min-inline-size: 0;
     --wg-cell-meter-height: 0.75rem;
     --wg-cell-meter-step: min(var(--b-cell), calc(var(--b-arrival) / var(--wg-cell-meter-count)));
@@ -117,19 +138,26 @@
 
   .wg-cell-meter-cell {
     position: relative;
-    flex: var(--wg-cell-meter-flex, 1 1 0);
     min-inline-size: 0;
     block-size: var(--wg-cell-meter-height);
-    border: var(--b-line) solid var(--b-grid);
   }
 
-  .wg-cell-meter-cell + .wg-cell-meter-cell {
-    border-inline-start-width: var(--wg-cell-meter-divider, 0px);
+  .wg-cell-meter-cell::after {
+    position: absolute;
+    inset: 0;
+    border-block: var(--b-line) solid var(--b-grid);
+    border-inline-end: var(--b-line) solid var(--b-grid);
+    pointer-events: none;
+    content: '';
+  }
+
+  .wg-cell-meter-cell:first-child::after {
+    border-inline-start: var(--b-line) solid var(--b-grid);
   }
 
   .wg-cell-meter-cell::before {
     position: absolute;
-    inset-block: 0;
+    inset-block: var(--b-line);
     inset-inline-start: 0;
     inline-size: var(--wg-cell-meter-fill);
     background: var(--b-ink);
@@ -163,24 +191,12 @@
     padding-block: 0.75rem;
   }
 
-  .wg-sheet[data-ruled='true'] {
-    background-image: repeating-linear-gradient(
-      to bottom,
-      transparent 0 calc(1lh - var(--b-line, 1px)),
-      color-mix(in srgb, var(--b-grid, #3f8f6b) 18%, transparent) calc(1lh - var(--b-line, 1px)) 1lh
-    );
-    background-origin: content-box;
-    background-clip: content-box;
+  .wg-sheet[data-ruled='true'] > :where(p, blockquote, pre) {
+    line-height: var(--b-manuscript-line);
   }
 
   .wg-sheet-edge {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-block-end: 0.625rem;
-    color: var(--b-ink, #1c1b19);
-    font: 400 13px/1.35 var(--b-font-mono, 'Nanum Gothic Coding', monospace);
-    font-variant-numeric: tabular-nums;
+    margin-block-end: var(--b-s2);
   }
 
   .wg-margin-note {
@@ -191,8 +207,8 @@
 
   :is(.wg-margin-note-label, .wg-margin-note-source) {
     margin: 0;
-    color: var(--b-ink, #1c1b19);
-    font: 400 13px/1.5 var(--b-font-body, 'IBM Plex Sans KR', sans-serif);
+    color: var(--b-muted);
+    font: 400 var(--b-t-label)/1.5 var(--b-font-body, 'IBM Plex Sans KR', sans-serif);
   }
 
   .wg-margin-note-label {
@@ -251,12 +267,7 @@
     stroke-width: var(--b-line, 1px);
     stroke-linejoin: round;
     stroke-dasharray: 1;
-    opacity: 0.65;
-    transition: opacity var(--b-quick, 170ms) var(--b-out, ease-out);
-  }
-
-  .wg-proof-pair:is(:hover, :focus-within) .wg-proof-pair-leader path {
-    opacity: 1;
+    stroke-linecap: round;
   }
 
   @media (max-width: 767px) {
@@ -311,7 +322,7 @@
     --wg-pop-divider: var(--b-paper, #fbfaf5);
     display: inline-flex;
     align-items: stretch;
-    min-block-size: 44px;
+    min-block-size: var(--b-action-height);
     max-inline-size: 100%;
     padding: 0;
     border: 0;
@@ -342,11 +353,12 @@
     --wg-pop-background: transparent;
     --wg-pop-divider: transparent;
     text-decoration: underline;
+    text-decoration-thickness: var(--b-line);
     text-underline-offset: 0.28em;
   }
 
   .wg-pop[data-size='large'] {
-    min-block-size: 52px;
+    min-block-size: calc(var(--b-action-height) + var(--b-s2));
   }
 
   .wg-pop-text,
@@ -390,7 +402,7 @@
     cursor: default;
   }
 
-  .wg-pop:not([data-variant='flat']) .wg-pop-text[data-caption]::after,
+  .wg-pop:not([data-variant='flat']) .wg-pop-text-fill,
   .wg-pop:not([data-variant='flat']) .wg-pop-arrow-fill {
     position: absolute;
     inset: 0;
@@ -403,18 +415,22 @@
     transition: clip-path var(--b-quick, 170ms) var(--b-out, ease-out);
   }
 
-  .wg-pop:not(:disabled, [aria-disabled='true'], [data-variant='flat'])
-    .wg-pop-text[data-caption]::after {
-    content: attr(data-caption) / '';
+  .wg-pop-text-fill {
     padding: inherit;
   }
 
+  .wg-pop-text-fill::before {
+    content: attr(data-caption);
+  }
+
+  :is(.wg-pop[data-variant='flat'], .wg-pop:disabled, .wg-pop[aria-disabled='true'])
+    .wg-pop-text-fill,
   .wg-pop[data-variant='flat'] .wg-pop-arrow-fill {
     display: none;
   }
 
   .wg-pop:not(:disabled, [aria-disabled='true'], [data-variant='flat']):is(:hover, :focus-visible)
-    .wg-pop-text[data-caption]::after,
+    .wg-pop-text-fill,
   .wg-pop:not(:disabled, [aria-disabled='true'], [data-variant='flat']):is(:hover, :focus-visible)
     .wg-pop-arrow-fill {
     clip-path: inset(0);
@@ -426,13 +442,21 @@
   }
 
   .wg-pop:not(:disabled, [aria-disabled='true'], [data-variant='flat']):is(:hover, :focus-visible)
-    :is(.wg-pop-text:not([data-caption]), .wg-pop-arrow[data-default-arrow='false']) {
+    :is(.wg-pop-text:not(:has(.wg-pop-text-fill)), .wg-pop-arrow[data-default-arrow='false']) {
     color: var(--wg-pop-background);
     background: var(--wg-pop-foreground);
   }
 
-  .wg-pop[data-variant='flat']:not(:disabled, [aria-disabled='true']):is(:hover, :focus-visible) {
-    text-decoration-thickness: var(--b-rule, 2px);
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-pop[data-variant='flat']:not(:disabled, [aria-disabled='true']):is(:hover, :focus-visible)
+      .wg-pop-text::after {
+      content: '';
+      position: absolute;
+      inset: auto 0 0.38em;
+      border-block-end: var(--b-line) solid currentColor;
+      pointer-events: none;
+      animation: b-link-draw var(--b-quick) var(--b-out) both;
+    }
   }
 
   :is(.wg-pop, .wg-menu-button, .wg-rail-control):not(:disabled, [aria-disabled='true']):active {
@@ -464,7 +488,7 @@
     justify-content: space-between;
     gap: 0.75rem;
     inline-size: 100%;
-    min-block-size: 44px;
+    min-block-size: var(--b-action-height);
     border-block-start: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
     padding-block: 0.5rem;
     color: var(--b-ink, #1c1b19);
@@ -557,7 +581,7 @@
     justify-content: center;
     gap: 0.5rem;
     min-inline-size: 44px;
-    min-block-size: 44px;
+    min-block-size: var(--b-action-height);
     padding-inline: 0.5rem;
     border: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
     color: var(--b-ink, #1c1b19);
@@ -659,12 +683,20 @@
   }
 
   .wg-proof-mark[data-measured='false'][data-wg-proof='underline'] .wg-proof-text {
-    text-decoration: underline var(--b-proof, #d6311f) 1.6px;
+    text-decoration: underline var(--b-proof, #d6311f) var(--b-pen-stroke);
     text-underline-offset: 0.14em;
   }
 
   .wg-proof-mark[data-measured='false'][data-wg-proof='strike'] .wg-proof-text {
-    text-decoration: line-through var(--b-proof, #d6311f) 1.6px;
+    text-decoration: line-through var(--b-proof, #d6311f) var(--b-pen-stroke);
+  }
+
+  .wg-proof-origin {
+    position: absolute;
+    inset: 0 auto auto 0;
+    inline-size: 1px;
+    block-size: 1px;
+    pointer-events: none;
   }
 
   .wg-proof-pen {
@@ -685,7 +717,7 @@
   .wg-proof-pen path {
     fill: none;
     stroke: var(--b-proof, #d6311f);
-    stroke-width: 1.6px;
+    stroke-width: var(--b-pen-stroke);
     stroke-linecap: round;
     stroke-linejoin: round;
   }
@@ -811,6 +843,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .wg-pop-text::after,
+    .wg-pop-text-fill,
     :is(
       .wg-proof-pair-leader path,
       .wg-pop-arrow-fill,
@@ -847,12 +880,10 @@
 
   @keyframes wg-line-write {
     from {
-      opacity: 0;
-      transform: translate(var(--wg-reveal-x, 0px), var(--wg-reveal-y, 4px));
+      clip-path: inset(0 100% 0 0);
     }
     to {
-      opacity: 1;
-      transform: none;
+      clip-path: inset(0);
     }
   }
 

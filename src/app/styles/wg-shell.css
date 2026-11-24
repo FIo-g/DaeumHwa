@@ -23,7 +23,7 @@
     display: inline-flex;
     flex: none;
     align-items: center;
-    min-block-size: 44px;
+    min-block-size: var(--b-action-height);
     font: 900 1.25rem/1 var(--b-font-title, serif);
     text-decoration: none;
   }
@@ -50,7 +50,7 @@
 
   .wg-shell-trial-label,
   .wg-shell-user {
-    color: var(--b-muted, #57544d);
+    color: var(--b-muted);
     font: 500 0.8125rem/1.4 var(--b-font-body, sans-serif);
   }
 
@@ -70,7 +70,7 @@
   .wg-shell-account-link {
     display: flex;
     align-items: center;
-    min-block-size: 44px;
+    min-block-size: var(--b-action-height);
     border-block-end: var(--b-line, 1px) solid var(--b-grid, #3f8f6b);
     text-decoration: underline;
   }
@@ -180,7 +180,7 @@
     position: absolute;
     inset-inline-end: calc(100% + 3px);
     white-space: nowrap;
-    color: var(--b-muted, #57544d);
+    color: var(--b-muted);
     font: 400 0.625rem/1 var(--b-font-mono, monospace);
     opacity: 0;
     transition: opacity var(--b-quick, 170ms) var(--b-out, ease-out);
@@ -200,7 +200,7 @@
   }
 
   .wg-shell-menu-sheet .wg-shell-menu-link {
-    min-block-size: 44px;
+    min-block-size: var(--b-action-height);
   }
 
   .wg-shell-menu-sheet {
@@ -212,8 +212,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 0.5rem 1rem;
-    padding-block-end: 0.875rem;
+    gap: var(--b-s2) var(--b-s4);
+    padding-block-end: calc(var(--b-s3) + var(--b-rule));
   }
 
   .wg-shell-page-header::after {
@@ -227,12 +227,7 @@
   }
 
   .wg-shell-edge {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     flex-basis: 100%;
-    color: var(--b-muted, #57544d);
-    font: 400 0.75rem/1.25 var(--b-font-mono, monospace);
   }
 
   .wg-shell-page-mark {
@@ -251,7 +246,7 @@
 
   .wg-shell-description {
     max-inline-size: 68ch;
-    color: var(--b-muted, #57544d);
+    color: var(--b-muted);
     font: 400 0.875rem/1.5 var(--b-font-body, sans-serif);
     overflow-wrap: anywhere;
     word-break: keep-all;
@@ -272,28 +267,19 @@
   }
 
   .wg-shell-route-frame .wg-shell-page-header .wg-shell-description {
-    animation: wg-shell-line-in var(--b-step, 260ms) var(--b-out, ease-out) var(--b-step, 260ms)
-      both;
+    animation: b-step-in var(--b-step) var(--b-out) var(--b-step) both;
   }
 
   .wg-shell-route-frame
     .wg-shell-actions:where(
       :not(:has(input, textarea, select, [contenteditable], [role='combobox']))
     ) {
-    animation: wg-shell-line-in var(--b-step, 260ms) var(--b-out, ease-out)
-      calc(var(--b-step, 260ms) + var(--b-stagger, 70ms)) both;
+    animation: b-step-in var(--b-step) var(--b-out) calc(var(--b-step) + var(--b-stagger)) both;
   }
 
   @keyframes wg-shell-rule-in {
     from {
       transform: scaleX(0);
-    }
-  }
-
-  @keyframes wg-shell-line-in {
-    from {
-      opacity: 0.7;
-      transform: translateY(4px);
     }
   }
 
@@ -355,12 +341,10 @@
   }
 
   .wg-shell-ai-run {
-    color: var(--b-muted, #57544d);
+    color: var(--b-muted);
   }
 
-  .wg-shell-count,
-  .wg-shell-source,
-  .wg-shell-app .wg-shell-picker {
+  .wg-shell-count {
     font-family: var(--b-font-mono, monospace);
     font-variant-numeric: tabular-nums;
   }

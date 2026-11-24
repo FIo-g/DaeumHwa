@@ -11,6 +11,8 @@ import {
 } from 'react'
 import { cn } from '@/lib/utils'
 import { useEntered, usePrefersReducedMotion } from './hooks'
+import { leaderPoints, matrixPoint } from './proof-geometry'
+import { inverseScreenMatrix, observeProofLayout } from './proof-layout'
 
 /**
  * Manuscript-paper (원고지) primitives. Every screen imports these names, so the names and props
@@ -35,7 +37,7 @@ type TitleCell = { glyph: string; index: number }
 
 const graphemes = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter('ko') : null
 const space = /^\s+$/u
-const punctuation = /^\p{P}+$/u
+const punctuation = /^[.,。、，]$/u
 const durationPattern = /^([\d.]+)(ms|s)$/
 
 function timeInMilliseconds(value: string, fallback: number) {
@@ -136,6 +138,27 @@ export function GridTitle({
     }
   }, [fixed])
 
+  useLayoutEffect(() => {
+    const area = cells.current
+    if (!area) return
+
+    const measure = () => {
+      for (const glyph of area.querySelectorAll<HTMLElement>('.wg-title-glyph')) {
+        const width = glyph.offsetWidth
+        const cellWidth = glyph.parentElement?.clientWidth ?? 0
+        const inset = Number.parseFloat(getComputedStyle(glyph).getPropertyValue('--b-line')) || 1
+        const available = cellWidth - 2 * inset
+        if (available > 0 && width > available) {
+          glyph.style.setProperty('--wg-glyph-fit', String(available / width))
+        } else {
+          glyph.style.removeProperty('--wg-glyph-fit')
+        }
+      }
+    }
+
+    return observeProofLayout(area, [area], measure)
+  }, [children, rowWidth, usedColumns])
+
   return (
     <Tag
       ref={heading}
@@ -184,7 +207,7 @@ export function GridTitle({
 type SheetProps = {
   children: ReactNode
   as?: ElementType
-  /** Small edge mark at the top left, such as `20×10`. */
+  /** Sheet name at the top left. */
   label?: ReactNode
   /** Page number at the top right. */
   page?: ReactNode
@@ -209,7 +232,7 @@ export function Sheet({
   return (
     <Tag className={cn('wg-sheet', className)} data-ruled={ruled} {...rest}>
       {(label != null || page != null) && (
-        <div className="wg-sheet-edge" aria-hidden="true">
+        <div className="b-edge wg-sheet-edge" aria-hidden="true">
           <span>{label}</span>
           <span>{page}</span>
         </div>
@@ -243,77 +266,116 @@ export function MarginNote({ children, source, label = '위키 원문', classNam
 }
 
 type ProofPairProps = {
-  /** The manuscript side: the sentence with its proof mark. */
   manuscript: ReactNode
-  /** The margin side: normally a `MarginNote`. */
   note: ReactNode
   className?: string
+  replayKey?: string | number
 }
 
-function leaderPath(area: HTMLElement, manuscript: HTMLElement, note: HTMLElement) {
-  const mark = manuscript.querySelector<HTMLElement>('[data-wg-proof]')
-  if (!mark) return ''
+function textBelow(element: HTMLElement, bottom: number) {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+  const range = document.createRange()
+  const rects: DOMRect[] = []
+  for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+    if (!text.textContent?.trim() || text.parentElement?.closest('.sr-only, [aria-hidden="true"]'))
+      continue
+    range.selectNodeContents(text)
+    for (const rect of range.getClientRects()) {
+      if (rect.width && rect.top >= bottom) rects.push(rect)
+    }
+  }
+  return rects
+}
 
-  const bounds = area.getBoundingClientRect()
-  const fragments = Array.from(mark.getClientRects()).filter((rect) => rect.width && rect.height)
-  const last = fragments.at(-1)
-  if (!bounds.width || !last) return ''
+function leaderPath(svg: SVGSVGElement, manuscript: HTMLElement, note: HTMLElement) {
+  const inverse = inverseScreenMatrix(svg)
+  const mark = manuscript.querySelector<HTMLElement>('[data-wg-proof]')
+  const pen = Array.from(mark?.querySelectorAll<SVGPathElement>('[data-pen-x]') ?? []).at(-1)
+  const penMatrix = pen?.getScreenCTM?.()
+  const line = Array.from(mark?.getClientRects() ?? [])
+    .filter((rect) => rect.width && rect.height)
+    .at(-1)
+  if (!inverse || !mark || !pen || !penMatrix || !line) return ''
 
   const quote = note.querySelector('.wg-margin-note-quote') ?? note
+  const range = document.createRange()
+  range.selectNodeContents(quote)
   const target = quote.getBoundingClientRect()
-  const destination = note.getBoundingClientRect()
-  const originX = Math.min(last.right - bounds.left + 2, bounds.width - 1)
-  const kind = mark.dataset.wgProof
-  const penY = kind === 'strike' ? last.top + last.height / 2 : last.bottom
-  const originY = penY - bounds.top
-  const endX = Math.max(1, target.left - bounds.left - 3)
-  const endY = target.top - bounds.top + Math.min(9, target.height / 2)
+  const text = Array.from(range.getClientRects()).find((rect) => rect.width && rect.height)
+  if (!target.width || !target.height) return ''
 
-  if (destination.top >= manuscript.getBoundingClientRect().bottom - 1) {
-    return `M${originX} ${originY}H${endX}V${endY}`
-  }
-  const elbow = Math.max(originX, endX - 12)
-  return `M${originX} ${originY}H${elbow}L${endX} ${endY}`
+  const viewportStart = matrixPoint(penMatrix, {
+    x: Number(pen.dataset.penX),
+    y: Number(pen.dataset.penY),
+  })
+  const draft = manuscript.getBoundingClientRect()
+  const margin = note.getBoundingClientRect()
+  const stacked = margin.top >= draft.bottom
+  const stroke = Number.parseFloat(getComputedStyle(svg).getPropertyValue('--b-line')) || 1
+  const local = (x: number, y: number) => matrixPoint(inverse, { x, y })
+  const start = local(viewportStart.x, viewportStart.y)
+  const end = local(target.left, text ? text.top + text.height / 2 : target.top + target.height / 2)
+  const right = local(draft.right, line.bottom)
+  const lowerText = stacked ? textBelow(manuscript, line.bottom) : []
+  const lowerEdge = Math.max(draft.bottom, ...lowerText.map((rect) => rect.bottom))
+  const points = leaderPoints({
+    start,
+    end,
+    lineBottom: right.y,
+    gutter: stacked ? right.x - stroke : Math.min(end.x, (right.x + end.x) / 2),
+    stacked,
+    seam: local(draft.right, lowerEdge).y,
+    stroke,
+    textBelow: lowerText.map((rect) => {
+      const left = local(rect.left, rect.top).x
+      return { left, width: local(rect.right, rect.top).x - left }
+    }),
+  })
+  return points.map(({ x, y }, index) => `${index === 0 ? 'M' : 'L'}${x} ${y}`).join('')
 }
 
 /** A manuscript sentence and its wiki margin note on one row, joined by a thin leader line. */
-export function ProofPair({ manuscript, note, className }: ProofPairProps) {
+export function ProofPair({ manuscript, note, className, replayKey }: ProofPairProps) {
   const row = useRef<HTMLDivElement>(null)
   const draft = useRef<HTMLDivElement>(null)
   const margin = useRef<HTMLDivElement>(null)
+  const leader = useRef<SVGSVGElement>(null)
   const [path, setPath] = useState('')
+  const [markReplay, setMarkReplay] = useState('')
   const entered = useEntered(row)
+  const replay = replayKey ?? markReplay
+  const previousReplay = useRef(replay)
 
   useLayoutEffect(() => {
     const area = row.current
     const left = draft.current
     const right = margin.current
-    if (!area || !left || !right) return
-    let active = true
-    function measure() {
-      if (active && area && left && right) setPath(leaderPath(area, left, right))
-    }
+    const svg = leader.current
+    if (!area || !left || !right || !svg) return
 
-    measure()
-    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
-    resize?.observe(area)
-    resize?.observe(left)
-    resize?.observe(right)
-    const content = new MutationObserver(measure)
-    content.observe(left, { childList: true, characterData: true, subtree: true })
-    content.observe(right, { childList: true, characterData: true, subtree: true })
-    const fonts = document.fonts
-    void fonts?.ready.then(measure)
-    fonts?.addEventListener('loadingdone', measure)
-    window.addEventListener('resize', measure)
-    return () => {
-      active = false
-      resize?.disconnect()
-      content.disconnect()
-      fonts?.removeEventListener('loadingdone', measure)
-      window.removeEventListener('resize', measure)
+    return observeProofLayout(
+      area,
+      [area, left, right],
+      () => {
+        setPath(leaderPath(svg, left, right))
+        setMarkReplay(
+          left.querySelector<HTMLElement>('[data-wg-proof]')?.dataset.wgProofReplay ?? '',
+        )
+      },
+      ['data-pen-x', 'data-pen-y', 'data-wg-proof-replay'],
+    )
+  }, [manuscript, note, replayKey])
+
+  useLayoutEffect(() => {
+    if (previousReplay.current === replay) return
+    previousReplay.current = replay
+    for (const animation of margin.current?.getAnimations?.({ subtree: true }) ?? []) {
+      if ('animationName' in animation && animation.animationName === 'wg-note-write') {
+        animation.currentTime = 0
+        animation.play()
+      }
     }
-  }, [manuscript, note])
+  }, [replay])
 
   return (
     <div
@@ -328,11 +390,9 @@ export function ProofPair({ manuscript, note, className }: ProofPairProps) {
       <div ref={margin} className="wg-proof-pair-note">
         {note}
       </div>
-      {path && (
-        <svg className="wg-proof-pair-leader" aria-hidden="true">
-          <path d={path} pathLength={1} />
-        </svg>
-      )}
+      <svg ref={leader} className="wg-proof-pair-leader" aria-hidden="true">
+        {path && <path key={replay} d={path} pathLength={1} />}
+      </svg>
     </div>
   )
 }

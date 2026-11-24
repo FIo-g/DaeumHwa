@@ -76,7 +76,7 @@ describe('entrances and surfaces', () => {
     render(view)
     const heading = screen.getByText('설정 보드')
     expect(heading).toHaveAttribute('data-revealed', 'false')
-    expect(heading.style.getPropertyValue('--wg-reveal-x')).toBe('4px')
+    expect(heading.style.getPropertyValue('--wg-reveal-x')).toBe('')
     expect(heading.style.getPropertyValue('--wg-delay')).toBe('70ms')
     expect(watch).toHaveBeenCalledWith(heading)
     act(() =>
@@ -128,7 +128,9 @@ describe('actions', () => {
     await user.tab()
     await user.keyboard('{Enter}')
     expect(onClick).toHaveBeenCalledOnce()
-    expect(screen.getByRole('button')).toHaveAttribute('data-variant', 'primary')
+    const button = screen.getByRole('button', { name: '점검하기' })
+    expect(button).toHaveAttribute('data-variant', 'primary')
+    expect(button.querySelector('.wg-pop-text-fill')).toHaveAttribute('aria-hidden', 'true')
     expect(screen.getByRole('button')).toHaveAttribute('data-size', 'large')
     rerender(
       <PopButton onClick={onClick} pending pendingLabel="점검 중">
@@ -233,7 +235,7 @@ describe('proof and scroll', () => {
       const phrase = rule.parentElement
       expect(phrase).toHaveClass('wg-proof-mark')
       expect(rule).toHaveClass('wg-proof-text')
-      expect(phrase?.querySelector('svg')).toBeNull()
+      expect(phrase?.querySelector('.wg-proof-pen')).toBeNull()
       rerender(<Mark replayKey={1}>{text}</Mark>)
       expect(screen.getByText(text)).not.toBe(rule)
       expect(screen.getByText(text).parentElement).toBe(phrase)
@@ -390,12 +392,12 @@ describe('manuscript paper', () => {
 
   it('renders Sheet edge marks outside the accessibility tree', () => {
     render(
-      <Sheet label="20×10" page={0} ruled aria-label="초고">
+      <Sheet label="원고" page={0} ruled aria-label="초고">
         본문
       </Sheet>,
     )
     const sheet = screen.getByRole('region', { name: '초고' })
-    const edge = within(sheet).getByText('20×10').parentElement
+    const edge = within(sheet).getByText('원고').parentElement
     expect(edge).toHaveAttribute('aria-hidden', 'true')
     expect(within(sheet).getByText('0')).toBeInTheDocument()
     expect(within(sheet).getByText('본문')).toBeVisible()
@@ -409,10 +411,23 @@ describe('manuscript paper', () => {
     expect(screen.getByText('도윤서 카드')).toBeVisible()
   })
 
-  it('keeps both ProofPair columns and connects the first proof mark only', () => {
+  it('connects the first proof mark and removes the leader when that mark disappears', async () => {
+    const matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, inverse: () => matrix }
+    Object.defineProperty(SVGElement.prototype, 'getScreenCTM', {
+      configurable: true,
+      value(this: SVGElement) {
+        const { left, top } = this.parentElement?.style ?? {}
+        return { ...matrix, e: parseFloat(left ?? '') || 0, f: parseFloat(top ?? '') || 0 }
+      },
+    })
+    const createRange = document.createRange.bind(document)
+    vi.spyOn(document, 'createRange').mockImplementation(() =>
+      Object.assign(createRange(), { getClientRects: () => [new DOMRect(195, 34, 100, 22)] }),
+    )
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement,
     ) {
+      if (this.classList.contains('wg-proof-pair-manuscript')) return new DOMRect(0, 0, 180, 80)
       if (this.classList.contains('wg-proof-pair-note')) return new DOMRect(180, 0, 120, 80)
       if (this.classList.contains('wg-margin-note-quote')) return new DOMRect(195, 34, 100, 22)
       return new DOMRect(0, 0, 300, 80)
@@ -427,28 +442,40 @@ describe('manuscript paper', () => {
       return rects as unknown as DOMRectList
     })
     const note = <MarginNote>도윤서는 단검을 오른손에 쥔다.</MarginNote>
-    const { container, rerender } = render(
-      <ProofPair
-        manuscript={
-          <p>
-            윤서는 <ProofUnderline>왼손</ProofUnderline>에 <ProofRing>단검</ProofRing>을 쥐었다.
-          </p>
-        }
-        note={note}
-      />,
-    )
-    expect(
-      within(container.querySelector<HTMLElement>('.wg-proof-pair-manuscript')!).getByText('왼손'),
-    ).toBeVisible()
-    expect(
-      within(container.querySelector<HTMLElement>('.wg-proof-pair-note')!).getByRole('blockquote'),
-    ).toBeVisible()
-    const leader = container.querySelector('.wg-proof-pair-leader')
-    expect(leader).toHaveAttribute('aria-hidden', 'true')
-    expect(leader?.querySelector('path')).toHaveAttribute('d', 'M68 37H180L192 43')
-    rerender(<ProofPair manuscript="원고만" note={note} />)
-    expect(container.querySelector('.wg-proof-pair-leader')).toBeNull()
-    expect(screen.getByText('원고만')).toBeVisible()
+    try {
+      const { container, rerender } = render(
+        <ProofPair
+          manuscript={
+            <p>
+              윤서는 <ProofUnderline>왼손</ProofUnderline>에 <ProofRing>단검</ProofRing>을 쥐었다.
+            </p>
+          }
+          note={note}
+        />,
+      )
+      expect(
+        within(container.querySelector<HTMLElement>('.wg-proof-pair-manuscript')!).getByText(
+          '왼손',
+        ),
+      ).toBeVisible()
+      expect(
+        within(container.querySelector<HTMLElement>('.wg-proof-pair-note')!).getByRole(
+          'blockquote',
+        ),
+      ).toBeVisible()
+      const leader = container.querySelector('.wg-proof-pair-leader')
+      expect(leader).toHaveAttribute('aria-hidden', 'true')
+      await waitFor(() => {
+        const path = leader?.querySelector('path')?.getAttribute('d')
+        expect(path).toMatch(/^M65\.2 /)
+        expect(path).toMatch(/L195 45$/)
+      })
+      rerender(<ProofPair manuscript="원고만" note={note} />)
+      expect(container.querySelector('.wg-proof-pair-leader path')).toBeNull()
+      expect(screen.getByText('원고만')).toBeVisible()
+    } finally {
+      Reflect.deleteProperty(SVGElement.prototype, 'getScreenCTM')
+    }
   })
 
   it('exposes only the final CountCell value and unit with reduced motion', () => {
