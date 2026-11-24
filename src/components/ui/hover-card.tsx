@@ -32,7 +32,7 @@ function HoverCardContent({
         <PreviewCardPrimitive.Popup
           data-slot="hover-card-content"
           className={cn(
-            'z-50 w-64 origin-(--transform-origin) b-popup-motion rounded-card border-2 border-ink bg-popover p-2.5 text-sm text-popover-foreground outline-hidden',
+            'wg-ui-popup wg-ui-float z-50 w-64 max-w-[calc(100dvw-1rem)] p-2.5 text-sm',
             className,
           )}
           {...props}

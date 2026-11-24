@@ -11,7 +11,7 @@ function CollapsibleTrigger({ className, ...props }: CollapsiblePrimitive.Trigge
   return (
     <CollapsiblePrimitive.Trigger
       data-slot="collapsible-trigger"
-      className={cn('b-control', className)}
+      className={cn('wg-ui-disclosure-trigger', className)}
       {...props}
     />
   )
@@ -21,7 +21,7 @@ function CollapsibleContent({ className, ...props }: CollapsiblePrimitive.Panel.
   return (
     <CollapsiblePrimitive.Panel
       data-slot="collapsible-content"
-      className={cn('b-collapse-panel', className)}
+      className={cn('wg-ui-lines', className)}
       {...props}
     />
   )

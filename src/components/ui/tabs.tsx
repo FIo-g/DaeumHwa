@@ -16,12 +16,12 @@ function Tabs({ className, orientation = 'horizontal', ...props }: TabsPrimitive
 }
 
 const tabsListVariants = cva(
-  'group/tabs-list relative inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-button text-muted-ink group-data-vertical/tabs:flex-col group-data-vertical/tabs:items-stretch',
+  'wg-ui-tabs-list group/tabs-list relative inline-flex w-fit max-w-full flex-wrap items-stretch group-data-vertical/tabs:flex-col',
   {
     variants: {
       variant: {
-        default: 'bg-muted p-1',
-        line: 'rounded-none border-b border-ink bg-transparent',
+        default: 'wg-ui-tabs-boxed',
+        line: 'wg-ui-tabs-line',
       },
     },
     defaultVariants: {
@@ -44,7 +44,7 @@ function TabsList({
       {...props}
     >
       {children}
-      {variant === 'line' && <TabsPrimitive.Indicator className="b-tab-indicator" />}
+      {variant === 'line' && <TabsPrimitive.Indicator className="wg-ui-tab-indicator" />}
     </TabsPrimitive.List>
   )
 }
@@ -54,7 +54,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "b-control relative inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-field px-3 py-1 text-sm font-bold whitespace-nowrap text-muted-ink group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start enabled:hover:bg-sand enabled:active:translate-y-px data-active:text-ink group-data-[variant=default]/tabs-list:data-active:bg-ink group-data-[variant=default]/tabs-list:data-active:text-paper disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "wg-ui-tab wg-ui-cell relative inline-flex min-h-11 flex-1 items-center justify-center gap-2 px-3 py-1 text-sm font-medium whitespace-nowrap group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
@@ -66,7 +66,7 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn('min-w-0 flex-1 text-sm', className)}
+      className={cn('wg-ui-lines min-w-0 flex-1 text-sm', className)}
       {...props}
     />
   )

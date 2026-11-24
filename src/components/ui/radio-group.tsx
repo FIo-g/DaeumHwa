@@ -19,16 +19,16 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
     <RadioPrimitive.Root
       data-slot="radio-group-item"
       className={cn(
-        'b-check-control b-control group/radio-group-item peer relative inline-grid size-11 shrink-0 cursor-pointer place-items-center rounded-full text-paper disabled:cursor-not-allowed data-disabled:cursor-not-allowed',
+        'wg-ui-check peer relative inline-grid size-11 shrink-0 cursor-pointer place-items-center disabled:cursor-not-allowed data-disabled:cursor-not-allowed',
         className,
       )}
       {...props}
     >
       <RadioPrimitive.Indicator
         data-slot="radio-group-indicator"
-        className="flex size-4 items-center justify-center"
+        className="wg-ui-radio-mark relative flex size-2"
       >
-        <span className="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-foreground" />
+        <span className="size-full" />
       </RadioPrimitive.Indicator>
     </RadioPrimitive.Root>
   )

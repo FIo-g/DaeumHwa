@@ -27,10 +27,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
-      className={cn(
-        'fixed inset-0 isolate z-50 bg-[rgb(23_24_20_/_52%)] b-overlay-motion',
-        className,
-      )}
+      className={cn('wg-ui-overlay fixed inset-0 isolate z-50', className)}
       {...props}
     />
   )
@@ -50,7 +47,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 b-popup-motion max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-sheet border-2 border-ink bg-popover p-4 text-sm text-popover-foreground outline-none sm:max-w-sm',
+          'wg-ui-popup wg-ui-dialog fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 max-h-[calc(100dvh-2rem)] overflow-y-auto px-4 pb-4 text-sm sm:max-w-sm',
           className,
         )}
         {...props}
@@ -59,7 +56,13 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            render={<Button variant="ghost" className="absolute top-2 right-2" size="icon-sm" />}
+            render={
+              <Button
+                variant="ghost"
+                className="wg-ui-icon-close absolute top-2 right-2"
+                size="icon-sm"
+              />
+            }
           >
             <XIcon />
             <span className="sr-only">닫기</span>
@@ -88,7 +91,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        '-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-sheet border-t bg-paper p-4 sm:flex-row sm:justify-end',
+        'wg-ui-footer-rule -mx-4 -mb-4 flex flex-col-reverse gap-2 p-4 sm:flex-row sm:justify-end',
         className,
       )}
       {...props}
@@ -105,7 +108,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('font-heading text-subhead font-normal', className)}
+      className={cn('font-heading text-subhead font-bold', className)}
       {...props}
     />
   )
@@ -116,7 +119,7 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        'text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground',
+        'text-sm text-muted-ink *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-ink',
         className,
       )}
       {...props}

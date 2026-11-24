@@ -11,7 +11,7 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
     <SelectPrimitive.Group
       data-slot="select-group"
-      className={cn('scroll-my-1 p-1', className)}
+      className={cn('scroll-my-1', className)}
       {...props}
     />
   )
@@ -40,14 +40,14 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "b-field-control flex w-fit max-w-full min-w-0 items-center justify-between gap-2 rounded-field border border-input bg-paper px-3 py-2 text-sm whitespace-nowrap select-none hover:border-ink disabled:cursor-not-allowed disabled:bg-muted aria-invalid:border-ink data-placeholder:text-muted-foreground data-[size=default]:min-h-11 data-[size=sm]:min-h-9 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "wg-ui-select-trigger flex w-fit max-w-full min-w-0 items-center justify-between gap-2 px-3 py-2 text-sm whitespace-nowrap select-none disabled:cursor-not-allowed data-[size=default]:min-h-11 data-[size=sm]:min-h-9 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
     >
       {children}
       <SelectPrimitive.Icon
-        render={<ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />}
+        render={<ChevronDownIcon className="pointer-events-none size-4 text-muted-ink" />}
       />
     </SelectPrimitive.Trigger>
   )
@@ -81,7 +81,7 @@ function SelectContent({
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
           className={cn(
-            'relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto b-popup-motion rounded-card border-2 border-ink bg-popover text-popover-foreground',
+            'wg-ui-popup wg-ui-float relative isolate z-50 max-h-(--available-height) w-max min-w-[max(9rem,var(--anchor-width))] max-w-[calc(100dvw-1rem)] overflow-x-hidden overflow-y-auto',
             className,
           )}
           {...props}
@@ -99,7 +99,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.GroupLabel.Props) 
   return (
     <SelectPrimitive.GroupLabel
       data-slot="select-label"
-      className={cn('px-1.5 py-1 text-xs text-muted-foreground', className)}
+      className={cn('px-1.5 py-1 text-xs text-muted-ink', className)}
       {...props}
     />
   )
@@ -110,12 +110,12 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full b-control min-h-11 cursor-default items-center gap-2 rounded-field py-2 pr-8 pl-1.5 text-sm select-none data-highlighted:bg-sand focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:text-muted-ink [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        "wg-ui-picker-row relative flex w-full min-h-11 cursor-default items-center gap-2 py-2 pr-8 pl-2 text-sm select-none data-disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className,
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
+      <SelectPrimitive.ItemText className="flex min-w-0 flex-1 gap-2 wrap-anywhere">
         {children}
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator
@@ -133,7 +133,7 @@ function SelectSeparator({ className, ...props }: SelectPrimitive.Separator.Prop
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
-      className={cn('pointer-events-none -mx-1 my-1 h-px bg-border', className)}
+      className={cn('wg-ui-separator pointer-events-none h-px', className)}
       {...props}
     />
   )
@@ -147,7 +147,7 @@ function SelectScrollUpButton({
     <SelectPrimitive.ScrollUpArrow
       data-slot="select-scroll-up-button"
       className={cn(
-        "top-0 z-10 flex w-full cursor-default min-h-11 items-center justify-center bg-popover py-1 [&_svg:not([class*='size-'])]:size-4",
+        "top-0 z-10 flex w-full cursor-default min-h-11 items-center justify-center bg-paper py-1 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
@@ -165,7 +165,7 @@ function SelectScrollDownButton({
     <SelectPrimitive.ScrollDownArrow
       data-slot="select-scroll-down-button"
       className={cn(
-        "bottom-0 z-10 flex w-full cursor-default min-h-11 items-center justify-center bg-popover py-1 [&_svg:not([class*='size-'])]:size-4",
+        "bottom-0 z-10 flex w-full cursor-default min-h-11 items-center justify-center bg-paper py-1 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
