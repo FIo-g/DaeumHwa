@@ -33,16 +33,16 @@ afterEach(() => {
 describe('AcceptInvite', () => {
   it('names the inviter, work and role in the invitation sentence', () => {
     render(<AcceptInvite token="tok-1" inviterName="김작가" workTitle="별빛 계약" role="editor" />)
-    expect(
-      screen.getByText("김작가님이 '별빛 계약' 작품에 편집자로 초대했습니다."),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('paragraph')).toHaveTextContent(
+      "김작가님이 '별빛 계약' 작품에 편집자로 초대했어요.",
+    )
   })
 
   it('uses the 으로 particle when the role label ends in a final consonant', () => {
     render(<AcceptInvite token="tok-1" inviterName="김작가" workTitle="별빛 계약" role="viewer" />)
-    expect(
-      screen.getByText("김작가님이 '별빛 계약' 작품에 보기 전용으로 초대했습니다."),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('paragraph')).toHaveTextContent(
+      "김작가님이 '별빛 계약' 작품에 보기 전용으로 초대했어요.",
+    )
   })
 
   it('joins the work and opens its home page', async () => {

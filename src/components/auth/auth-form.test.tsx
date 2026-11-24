@@ -63,7 +63,7 @@ describe('AuthForm login mode', () => {
     } as never)
     render(<AuthForm mode="login" next={undefined} />)
     await fillAndSubmit('로그인', { email: 'a@test.local', password: 'password123' })
-    expect(await screen.findByText('이메일 또는 비밀번호가 맞지 않습니다.')).toBeInTheDocument()
+    expect(await screen.findByText('이메일 또는 비밀번호가 맞지 않아요.')).toBeInTheDocument()
     expect(routerMock.replace).not.toHaveBeenCalled()
   })
 
@@ -112,7 +112,7 @@ describe('AuthForm signup mode', () => {
       email: 'a@test.local',
       password: 'password123',
     })
-    expect(await screen.findByText('이미 가입된 이메일입니다.')).toBeInTheDocument()
+    expect(await screen.findByText('이미 가입된 이메일이에요.')).toBeInTheDocument()
     expect(routerMock.replace).not.toHaveBeenCalled()
   })
 
@@ -131,4 +131,22 @@ describe('AuthForm signup mode', () => {
       password: 'password123',
     })
   })
+})
+
+it('links signup validation to the fields and focuses the first invalid input', async () => {
+  render(<AuthForm mode="signup" next="/invite/example" />)
+  await fillAndSubmit('가입하기', { name: '', email: 'bad-email', password: 'short' })
+
+  expect(screen.getByLabelText('이름')).toHaveFocus()
+  expect(screen.getByLabelText('이름')).toHaveAccessibleDescription('이름을 입력해 주세요.')
+  expect(screen.getByLabelText('이메일')).toHaveAttribute('aria-invalid', 'true')
+  expect(screen.getByLabelText('이메일')).toHaveAccessibleDescription(
+    '이메일 주소를 확인해 주세요.',
+  )
+  expect(screen.getByLabelText('비밀번호')).toHaveAccessibleDescription('8자 이상 입력해 주세요.')
+  expect(screen.getByRole('link', { name: '이미 계정이 있나요? 로그인' })).toHaveAttribute(
+    'href',
+    '/login?next=%2Finvite%2Fexample',
+  )
+  expect(signUp).not.toHaveBeenCalled()
 })
