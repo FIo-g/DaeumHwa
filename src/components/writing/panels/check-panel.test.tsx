@@ -226,6 +226,32 @@ describe('CheckPanel', () => {
     expect(screen.getByRole('button', { name: '취소' })).toBeTruthy()
   })
 
+  it('hides the empty state while a check runs and brings it back after a cancel', async () => {
+    fetchMock.mockImplementation(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          )
+        }),
+    )
+    render(<CheckPanel data={makeData({ issues: [] })} api={makeApi()} text="본문" />)
+    expect(screen.getByText('열린 지적이 없습니다.')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '회차 점검' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '취소' })).toBeTruthy())
+    expect(screen.getByRole('status').textContent).toBe(
+      '설정과 어긋나는 문장을 찾고 있습니다. 보통 15~25초 걸립니다.',
+    )
+    expect(screen.queryByText('열린 지적이 없습니다.')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(await screen.findByText('열린 지적이 없습니다.')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('cancels a running check, aborts its request and brings back the check button', async () => {
     // Like the browser, the fetch rejects with an AbortError once its signal aborts.
     fetchMock.mockImplementation(

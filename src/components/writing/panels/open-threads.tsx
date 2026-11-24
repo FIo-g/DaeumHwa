@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { ThreadEventKind } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
@@ -59,14 +58,14 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
           href={`/works/${data.workId}/wiki/threads`}
           className="text-xs underline underline-offset-4"
         >
-          떡밥 전체 보기
+          떡밥 장부 보기
         </Link>
       </div>
 
       {open.length === 0 && (
         <EmptyState
           title="열린 떡밥이 없습니다."
-          description="떡밥은 위키의 떡밥 목록에서 만듭니다."
+          description="떡밥은 설정 보드의 떡밥 장부에서 만듭니다."
         />
       )}
 
@@ -83,7 +82,7 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
             <li key={thread.id} className="grid gap-2 rounded-lg border p-3">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="font-medium">{thread.title}</span>
-                {thread.overdue && <Badge variant="destructive">기한 지남</Badge>}
+                {thread.overdue && <span className="text-xs text-mark">회수 목표 지남</span>}
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
                 <span>{THREAD_STATUS_LABEL[thread.status]}</span>

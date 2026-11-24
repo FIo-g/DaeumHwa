@@ -168,6 +168,9 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     api.refresh()
   }
 
+  // While a check runs, "no open issues" would read as "the check found nothing".
+  const checking = ai.running || auto.running
+
   return (
     <section aria-label="회차 점검" className="grid gap-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -191,6 +194,12 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
         )}
       </div>
 
+      {checking && (
+        <p role="status" className="text-sm text-muted-foreground">
+          설정과 어긋나는 문장을 찾고 있습니다. 보통 15~25초 걸립니다.
+        </p>
+      )}
+
       {data.chapter.archivedAt === null && (
         <CheckContext
           workId={data.workId}
@@ -200,7 +209,7 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
         />
       )}
 
-      {issues.length === 0 && (
+      {issues.length === 0 && !checking && (
         <EmptyState
           title="열린 지적이 없습니다."
           description="회차 점검을 누르거나 회차를 완료로 바꾸면 설정과 어긋나는 문장을 찾아 줍니다."

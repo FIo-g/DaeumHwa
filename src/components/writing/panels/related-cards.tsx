@@ -88,14 +88,14 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
   if (data.entries.length === 0) {
     return (
       <EmptyState
-        title="아직 위키 카드가 없습니다."
-        description="인물과 장소를 카드로 만들면 원고에 나올 때 여기에 보입니다."
+        title="아직 카드가 없습니다."
+        description="원고에 나오는 인물과 장소 카드가 여기에 뜹니다. 카드는 설정 보드에서 만듭니다."
         action={
           <Link
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
             href={`/works/${data.workId}/wiki`}
           >
-            위키 열기
+            설정 보드 열기
           </Link>
         }
       />
@@ -151,7 +151,7 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
       </ul>
 
       <p className="text-xs text-muted-foreground">
-        위키 전체 {data.entries.length}개 중 {cards.length}개
+        전체 카드 {data.entries.length}개 중 {cards.length}개
       </p>
     </section>
   )
