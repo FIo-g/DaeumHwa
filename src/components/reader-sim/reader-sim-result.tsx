@@ -1,3 +1,4 @@
+import { StarIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import { cn } from '@/lib/utils'
@@ -14,11 +15,11 @@ const REACTION_LABEL: Record<ReaderSimMoment['reaction'], string> = {
 }
 
 const REACTION_STYLE: Record<ReaderSimMoment['reaction'], string> = {
-  confused: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
-  bored: 'bg-muted text-muted-foreground',
-  excited: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200',
-  dropoff: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
-  moved: 'bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200',
+  confused: 'bg-mustard',
+  bored: 'bg-muted',
+  excited: 'bg-leaf',
+  dropoff: 'bg-paper border-dashed',
+  moved: 'bg-apricot',
 }
 
 const RISK_LABEL: Record<ReaderSimPersonaResult['dropOffRisk'], string> = {
@@ -43,13 +44,26 @@ export function ReaderSimResultCard({
 }) {
   const rating = Math.min(5, Math.max(0, Math.round(persona.rating)))
   return (
-    <article className="flex flex-col gap-3 rounded-xl border p-4">
+    <article className="b-tools-reader-note">
       <header className="flex flex-wrap items-center gap-2">
-        <h3 className="font-medium">{name}</h3>
-        <span role="img" className="text-amber-600" aria-label={`별점 ${rating}점 (5점 만점)`}>
-          {ratingStars(persona.rating)}
+        <h3 className="b-subhead">{name}</h3>
+        <span
+          role="img"
+          className="inline-flex gap-0.5 text-ink"
+          aria-label={`별점 ${rating}점 (5점 만점)`}
+        >
+          {Array.from({ length: 5 }, (_, index) => (
+            <StarIcon
+              key={index}
+              aria-hidden="true"
+              className={cn('size-4', index < rating && 'fill-ink')}
+            />
+          ))}
         </span>
-        <Badge variant="outline" className={cn(persona.dropOffRisk === 'high' && 'border-red-300')}>
+        <Badge
+          variant="outline"
+          className={cn(persona.dropOffRisk === 'high' && 'border-ink border-dashed')}
+        >
           {`이탈 위험 ${RISK_LABEL[persona.dropOffRisk]}`}
         </Badge>
       </header>
@@ -59,11 +73,14 @@ export function ReaderSimResultCard({
           {persona.moments.map((moment, index) => (
             <li key={`${index}-${moment.quote}`} className="flex flex-col gap-1 text-sm">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className={REACTION_STYLE[moment.reaction]}>
+                <Badge
+                  variant="outline"
+                  className={cn('text-ink', REACTION_STYLE[moment.reaction])}
+                >
                   {REACTION_LABEL[moment.reaction]}
                 </Badge>
               </div>
-              <blockquote className="border-l-2 pl-3 text-muted-foreground">
+              <blockquote className="border-y border-ink/25 py-2 text-muted-ink">
                 {moment.quote}
               </blockquote>
               <p>{moment.comment}</p>

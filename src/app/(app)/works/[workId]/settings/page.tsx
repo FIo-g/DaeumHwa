@@ -1,3 +1,9 @@
+import '@/app/styles/b-tools.css'
+import { SlidersHorizontalIcon } from 'lucide-react'
+import { getTodayUsage } from '@/ai/run'
+import { ExportButton } from '@/components/history/export-button'
+import { Disclosure } from '@/components/motion'
+import { TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { DangerZone } from '@/components/settings/danger-zone'
 import { type InviteView, InvitesPanel } from '@/components/settings/invites-panel'
 import { MembersPanel } from '@/components/settings/members-panel'
@@ -23,6 +29,7 @@ export default async function WorkSettingsPage({
   const isOwner = work.role === 'owner'
   const invites = isOwner ? await guardPage(() => listInvites(db, actor, workId)) : []
   const settings = resolveWorkSettings(work.settings)
+  const usage = user.isAnonymous ? null : await getTodayUsage(db, actor.userId)
 
   const initial: WorkSettingsValues = {
     title: work.title,
@@ -42,30 +49,93 @@ export default async function WorkSettingsPage({
 
   return (
     <div className="flex flex-col">
-      <PageHeader title="작품 설정" description={work.title} />
+      <PageHeader
+        title="작품 설정"
+        band="mustard"
+        description={work.title}
+        actions={
+          <span className="b-tools-header-art" data-tool="settings" aria-hidden="true">
+            <i />
+            <i />
+            <span>
+              <SlidersHorizontalIcon />
+            </span>
+          </span>
+        }
+      />
       <Tabs defaultValue="work">
-        <TabsList>
+        <TabsList variant="line">
           <TabsTrigger value="work">작품</TabsTrigger>
           <TabsTrigger value="team">팀</TabsTrigger>
         </TabsList>
-        <TabsContent value="work" className="flex flex-col gap-8 pt-4">
-          <WorkSettingsForm workId={workId} canEdit={isOwner} initial={initial} />
-          {isOwner && <DangerZone workId={workId} archived={work.status === 'archived'} />}
+        <TabsContent value="work" className="b-tools-settings-panel">
+          <Disclosure title="작품 정보" className="b-tools-disclosure" defaultOpen>
+            <div className="b-tools-disclosure-body">
+              <WorkSettingsForm workId={workId} canEdit={isOwner} initial={initial} />
+            </div>
+          </Disclosure>
+          <Disclosure title="AI 사용량" className="b-tools-disclosure" defaultOpen>
+            <div className="b-tools-disclosure-body">
+              {usage === null ? (
+                <p>{TRIAL_SIGNUP_MESSAGE}</p>
+              ) : (
+                <dl className="flex flex-wrap items-baseline gap-2">
+                  <dt>오늘 내 사용량</dt>
+                  <dd className="b-subhead tabular-nums">{usage.toLocaleString('ko-KR')} 토큰</dd>
+                </dl>
+              )}
+            </div>
+          </Disclosure>
+          {(isOwner || user.isAnonymous) && (
+            <Disclosure title="작품 백업" className="b-tools-disclosure" defaultOpen>
+              <div className="b-tools-disclosure-body grid gap-2">
+                {isOwner ? (
+                  <>
+                    <p className="text-muted-ink">원고와 작품 설정을 zip 파일로 받아요.</p>
+                    <ExportButton workId={workId} title={work.title} />
+                  </>
+                ) : (
+                  <p>{TRIAL_SIGNUP_MESSAGE}</p>
+                )}
+              </div>
+            </Disclosure>
+          )}
+          {isOwner && (
+            <Disclosure title="보관 관리" className="b-tools-disclosure" defaultOpen>
+              <div className="b-tools-disclosure-body">
+                <DangerZone workId={workId} archived={work.status === 'archived'} />
+              </div>
+            </Disclosure>
+          )}
         </TabsContent>
-        <TabsContent value="team" className="flex flex-col gap-8 pt-4">
-          <MembersPanel
-            workId={workId}
-            viewerRole={work.role}
-            currentUserId={actor.userId}
-            trial={user.isAnonymous}
-            members={members.map((m) => ({
-              userId: m.userId,
-              name: m.name,
-              email: user.isAnonymous ? '' : m.email,
-              role: m.role,
-            }))}
-          />
-          {isOwner && <InvitesPanel workId={workId} invites={inviteViews} />}
+        <TabsContent value="team" className="b-tools-settings-panel">
+          <Disclosure title="팀 관리" className="b-tools-disclosure" defaultOpen>
+            <div className="b-tools-disclosure-body">
+              <MembersPanel
+                workId={workId}
+                viewerRole={work.role}
+                currentUserId={actor.userId}
+                trial={user.isAnonymous}
+                members={members.map((m) => ({
+                  userId: m.userId,
+                  name: m.name,
+                  email: user.isAnonymous ? '' : m.email,
+                  role: m.role,
+                }))}
+              />
+            </div>
+          </Disclosure>
+          {(isOwner || user.isAnonymous) && (
+            <Disclosure title="초대 링크" className="b-tools-disclosure" defaultOpen>
+              <div className="b-tools-disclosure-body">
+                {isOwner ? (
+                  <InvitesPanel workId={workId} invites={inviteViews} />
+                ) : (
+                  <p>{TRIAL_SIGNUP_MESSAGE}</p>
+                )}
+              </div>
+            </Disclosure>
+          )}
         </TabsContent>
       </Tabs>
     </div>

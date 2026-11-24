@@ -1,11 +1,12 @@
 'use client'
 
+import { SignpostIcon } from 'lucide-react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AiBadge } from '@/components/app/ai-badge'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
-import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { CardStack, Disclosure, PopButton, Stagger } from '@/components/motion'
 import type { AdviceResult } from '@/ai/tasks/direction-advice'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
@@ -43,7 +44,7 @@ export function AdviceView({ workId, canRun, runs }: AdviceViewProps) {
           {},
           { signal },
         ),
-        { success: '새 조언을 받았습니다.' },
+        { success: '새 조언을 받았어요.' },
       ),
     )
     if (created) router.refresh()
@@ -51,55 +52,67 @@ export function AdviceView({ workId, canRun, runs }: AdviceViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          열린 떡밥, 인물 상태, 최근 회차 요약을 바탕으로 다음 전개 선택지를 제안합니다.
+      <div className="b-tools-paper b-tools-request">
+        <p className="text-sm text-muted-ink">
+          AI가 열린 떡밥과 인물 상태, 최근 회차 요약을 읽고 다음 전개를 제안해요. 결정은 작가님이
+          해요.
         </p>
         {canRun &&
           (ai.running ? (
-            <AiRunStatus label="조언 만드는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+            <div className="b-tools-running">
+              <span className="b-tools-working-papers" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              <AiRunStatus label="조언 만드는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
+            </div>
           ) : (
-            <Button onClick={() => void requestAdvice()}>다음 전개 조언 받기</Button>
+            <PopButton onClick={() => void requestAdvice()}>다음 전개 조언 받기</PopButton>
           ))}
       </div>
 
       {latest ? (
         <section aria-label="최근 조언" className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold">최근 조언</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="b-heading">최근 조언</h2>
             <AiBadge />
             <span className="text-xs text-muted-foreground">
               {formatKoreanDateTime(latest.createdAt)}
             </span>
           </div>
-          <AdviceResultBody result={latest.result} />
+          <AdviceResultBody key={latest.id} result={latest.result} />
         </section>
       ) : (
-        <EmptyState
-          title="아직 받은 조언이 없습니다."
-          description={
-            canRun ? '버튼을 누르면 다음 전개 선택지 3개를 받을 수 있습니다.' : undefined
-          }
-        />
+        <div className="b-tools-empty">
+          <SignpostIcon aria-hidden="true" />
+          <EmptyState title="아직 받은 조언이 없어요." />
+        </div>
       )}
-
-      <p className="text-sm text-muted-foreground">조언은 참고용입니다. 결정은 작가가 합니다.</p>
 
       {earlier.length > 0 && (
         <section aria-label="지난 조언" className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold">지난 조언</h2>
-          {earlier.map((run) => (
-            <Collapsible key={run.id} className="flex flex-col gap-3">
-              <CollapsibleTrigger
-                render={<Button variant="outline" className="w-full justify-start" />}
+          <h2 className="b-heading">지난 조언</h2>
+          <Stagger className="grid gap-2">
+            {earlier.map((run, index) => (
+              <Disclosure
+                key={run.id}
+                title={
+                  <span className="flex items-center gap-3">
+                    <span className="b-number" aria-hidden="true">
+                      {index + 2}
+                    </span>
+                    {formatKoreanDateTime(run.createdAt)}
+                  </span>
+                }
+                className="b-tools-disclosure"
               >
-                {formatKoreanDateTime(run.createdAt)}
-              </CollapsibleTrigger>
-              <CollapsibleContent className="flex flex-col gap-3 pt-1">
-                <AdviceResultBody result={run.result} />
-              </CollapsibleContent>
-            </Collapsible>
-          ))}
+                <div className="b-tools-disclosure-body">
+                  <AdviceResultBody result={run.result} />
+                </div>
+              </Disclosure>
+            ))}
+          </Stagger>
         </section>
       )}
     </div>
@@ -107,13 +120,12 @@ export function AdviceView({ workId, canRun, runs }: AdviceViewProps) {
 }
 
 function AdviceResultBody({ result }: { result: AdviceResult }) {
+  const [selected, setSelected] = useState<number | null>(null)
+
   return (
     <div className="flex flex-col gap-4">
       {result.warnings.length > 0 && (
-        <section
-          aria-label="확인할 점"
-          className="flex flex-col gap-1 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-        >
+        <section aria-label="확인할 점" className="b-tools-paper grid gap-1 bg-mustard/35 text-sm">
           <h3 className="font-medium">확인할 점</h3>
           <ul className="list-disc pl-5">
             {result.warnings.map((warning) => (
@@ -122,7 +134,7 @@ function AdviceResultBody({ result }: { result: AdviceResult }) {
           </ul>
         </section>
       )}
-      <div className="grid gap-4 md:grid-cols-3">
+      <CardStack className="b-tools-advice-stack">
         {result.options.map((option, index) => (
           <AdviceOption
             key={`${index}-${option.title}`}
@@ -130,9 +142,11 @@ function AdviceResultBody({ result }: { result: AdviceResult }) {
             index={index}
             recommended={index === result.recommendedIndex}
             recommendationReason={result.recommendationReason}
+            selected={selected === index}
+            onSelect={() => setSelected(selected === index ? null : index)}
           />
         ))}
-      </div>
+      </CardStack>
     </div>
   )
 }

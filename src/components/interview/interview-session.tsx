@@ -1,5 +1,6 @@
 'use client'
 
+import { MessagesSquareIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -10,7 +11,7 @@ import { EmptyState } from '@/components/app/empty-state'
 import { AnswerProposals } from '@/components/interview/answer-proposals'
 import { QuestionCard } from '@/components/interview/question-card'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Disclosure, PopButton } from '@/components/motion'
 import type { InterviewTurnRow, ProposalRow } from '@/db/types'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
@@ -28,6 +29,7 @@ type InterviewSessionProps = {
   sessionId: string | null
   turns: InterviewTurnRow[]
   current: InterviewTurnRow | null
+  resumeProposals?: ProposalView[]
 }
 
 type Answered = { turnId: string; proposals: ProposalView[] }
@@ -42,6 +44,7 @@ export function InterviewSession({
   sessionId: initialSessionId,
   turns: initialTurns,
   current: initialCurrent,
+  resumeProposals,
 }: InterviewSessionProps) {
   const [sessionId, setSessionId] = useState(initialSessionId)
   const [turns, setTurns] = useState(initialTurns)
@@ -177,7 +180,7 @@ export function InterviewSession({
     setBusy(true)
     try {
       const session = await runAction(completeInterviewAction({ sessionId }), {
-        success: '인터뷰를 끝냈습니다.',
+        success: '인터뷰를 끝냈어요.',
       })
       if (session) {
         setFinished(true)
@@ -191,17 +194,20 @@ export function InterviewSession({
 
   if (!sessionId && !finished) {
     return (
-      <EmptyState
-        title="진행 중인 인터뷰가 없습니다."
-        description="질문에 답하면 설정 카드 후보가 만들어집니다. 설정이 충분하면 다음 화와 스토리 방향을 함께 정합니다."
-        action={
-          canEdit ? (
-            <Button onClick={start} disabled={busy}>
-              인터뷰 시작
-            </Button>
-          ) : undefined
-        }
-      />
+      <div className="b-tools-empty">
+        <MessagesSquareIcon aria-hidden="true" />
+        <EmptyState
+          title="진행 중인 인터뷰가 없어요."
+          description="AI가 작품에 대해 물어요. 답에서 설정 카드와 떡밥 후보를 찾아요."
+          action={
+            canEdit ? (
+              <PopButton onClick={start} disabled={busy}>
+                인터뷰 시작
+              </PopButton>
+            ) : undefined
+          }
+        />
+      </div>
     )
   }
 
@@ -209,14 +215,23 @@ export function InterviewSession({
     (turn) => turn.id !== current?.id && (turn.answer !== null || turn.skipped),
   )
 
+  const latestAnswer = history.findLast((turn) => turn.answer !== null)
+  const resumed =
+    !current && !asking.running && latestAnswer && resumeProposals
+      ? {
+          turnId: latestAnswer.id,
+          proposals: resumeProposals.filter((proposal) => proposal.sourceRef === latestAnswer.id),
+        }
+      : null
+  const activeAnswer = answered ?? resumed
+  const answerTurn = history.find((turn) => turn.id === activeAnswer?.turnId)
+
   return (
-    <div className="grid gap-6">
+    <div className="grid min-w-0 gap-6">
       {finished ? (
-        <section className="grid gap-4 rounded-xl border p-5">
-          <p className="font-medium">인터뷰를 끝냈습니다.</p>
-          <p className="text-sm text-muted-foreground">
-            처리하지 않은 후보는 승인 대기에 남아 있습니다.
-          </p>
+        <section className="b-tools-paper grid gap-4">
+          <p className="font-medium">인터뷰를 끝냈어요.</p>
+          <p className="text-sm text-muted-foreground">처리하지 않은 후보는 승인 대기에 남아요.</p>
           <div className="flex flex-wrap gap-2">
             <Link className={buttonVariants()} href={`/works/${workId}/approvals`}>
               승인 대기 보기
@@ -254,13 +269,21 @@ export function InterviewSession({
             />
           )}
 
-          {!current && answered && (
-            <AnswerProposals key={answered.turnId} workId={workId} proposals={answered.proposals} />
+          {!current && activeAnswer && answerTurn && (
+            <section aria-label="최근 답변" className="grid min-w-0 gap-2">
+              <InterviewExchange turn={answerTurn} />
+              <AnswerProposals
+                key={activeAnswer.turnId}
+                workId={workId}
+                proposals={activeAnswer.proposals}
+                originalCount={answerTurn.proposalCount}
+              />
+            </section>
           )}
 
           {!current && askError && (
-            <section className="grid gap-3 rounded-xl border p-5">
-              <p className="font-medium">질문을 만들지 못했습니다.</p>
+            <section className="b-tools-paper grid gap-3">
+              <p className="font-medium">질문을 만들지 못했어요.</p>
               <p className="text-sm text-muted-foreground">{askError.message}</p>
               {canEdit && !NO_RETRY_CODES.includes(askError.code) && (
                 <div>
@@ -273,7 +296,7 @@ export function InterviewSession({
           )}
 
           {!current && !canEdit && (
-            <p className="text-sm text-muted-foreground">진행 중인 질문이 없습니다.</p>
+            <p className="text-sm text-muted-foreground">진행 중인 질문이 없어요.</p>
           )}
 
           {canEdit && (
@@ -281,19 +304,26 @@ export function InterviewSession({
               {!current &&
                 !askFailed &&
                 (asking.running ? (
-                  <AiRunStatus
-                    label="질문 만드는 중"
-                    elapsedSec={asking.elapsedSec}
-                    onCancel={asking.cancel}
-                  />
+                  <div className="b-tools-running">
+                    <span className="b-tools-working-papers" aria-hidden="true">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    <AiRunStatus
+                      label="질문 만드는 중"
+                      elapsedSec={asking.elapsedSec}
+                      onCancel={asking.cancel}
+                    />
+                  </div>
                 ) : (
-                  <Button onClick={nextQuestion} disabled={busy}>
+                  <PopButton onClick={nextQuestion} disabled={busy}>
                     다음 질문
-                  </Button>
+                  </PopButton>
                 ))}
               <ConfirmButton
                 title="인터뷰를 끝낼까요?"
-                description="지금까지 답한 내용은 남습니다. 처리하지 않은 후보는 승인 대기에 남습니다."
+                description="지금까지 답한 내용은 남아요. 처리하지 않은 후보는 승인 대기에 있어요."
                 confirmLabel="끝내기"
                 onConfirm={finish}
                 disabled={busy}
@@ -306,26 +336,29 @@ export function InterviewSession({
       )}
 
       {history.length > 0 && (
-        <Collapsible>
-          <CollapsibleTrigger className={buttonVariants({ variant: 'ghost' })}>
-            {`지난 질문 ${history.length}개 보기`}
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <ol className="mt-3 grid gap-3">
-              {history.map((turn) => (
-                <li key={turn.id} className="grid gap-1 rounded-lg border p-3 text-sm">
-                  <p className="font-medium">{turn.question}</p>
-                  {turn.skipped ? (
-                    <p className="text-muted-foreground">(건너뜀)</p>
-                  ) : (
-                    <p className="whitespace-pre-wrap">{turn.answer}</p>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </CollapsibleContent>
-        </Collapsible>
+        <Disclosure title={`지난 질문 ${history.length}개 보기`} className="b-tools-disclosure">
+          <ol className="b-tools-disclosure-body grid gap-3">
+            {history.map((turn) => (
+              <li key={turn.id}>
+                <InterviewExchange turn={turn} />
+              </li>
+            ))}
+          </ol>
+        </Disclosure>
       )}
+    </div>
+  )
+}
+
+function InterviewExchange({ turn }: { turn: InterviewTurnRow }) {
+  return (
+    <div className="grid min-w-0 gap-2">
+      <p className="b-tools-paper b-tools-exchange-question wrap-anywhere font-bold">
+        {turn.question}
+      </p>
+      <p className="b-tools-paper b-tools-exchange-answer whitespace-pre-wrap wrap-anywhere">
+        {turn.skipped ? '건너뛴 질문이에요.' : turn.answer}
+      </p>
     </div>
   )
 }

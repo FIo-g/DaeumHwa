@@ -74,3 +74,26 @@ describe('ImportProgress skip control', () => {
     expect(screen.getByText('건너뛴 회차: 2화')).toBeTruthy()
   })
 })
+
+it('marks the live process step and reports actual chapter progress', () => {
+  const { unmount } = render(<ImportProgress workId="w" initial={toSnapshot(job())} canEdit />)
+  expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('설정 추출')
+  expect(screen.getByRole('progressbar', { name: '처리 진행률' })).toHaveAttribute(
+    'aria-valuenow',
+    '33',
+  )
+  unmount()
+
+  render(
+    <ImportProgress
+      workId="w"
+      initial={toSnapshot(job({ status: 'done', processedChapters: 3, error: null }))}
+      canEdit
+    />,
+  )
+  expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('승인 대기')
+  expect(screen.getByRole('progressbar', { name: '처리 진행률' })).toHaveAttribute(
+    'aria-valuenow',
+    '100',
+  )
+})

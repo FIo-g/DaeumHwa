@@ -24,9 +24,7 @@ describe('SplitPreview', () => {
     // "첫 번째 회차" (7) + "본문 하나" (5), line break not counted
     expect(screen.getByText('12자')).toBeInTheDocument()
     expect(screen.getByText('첫 번째 회차')).toBeInTheDocument()
-    expect(
-      screen.getByText('3화를 가져옵니다. 회차마다 AI 호출이 1번씩 일어납니다.'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('3화를 가져와요. 회차마다 AI를 한 번 써요.')).toBeInTheDocument()
   })
 
   it('merges a chapter into the previous one with 앞 회차와 합치기', () => {
@@ -39,9 +37,7 @@ describe('SplitPreview', () => {
     expect(screen.getAllByRole('button', { name: '앞 회차와 합치기' })[0]).toBeDisabled()
     fireEvent.click(screen.getAllByRole('button', { name: '앞 회차와 합치기' })[1])
 
-    expect(
-      screen.getByText('2화를 가져옵니다. 회차마다 AI 호출이 1번씩 일어납니다.'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('2화를 가져와요. 회차마다 AI를 한 번 써요.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '이대로 가져오기' }))
 
     const chapters = onConfirm.mock.calls[0][0]

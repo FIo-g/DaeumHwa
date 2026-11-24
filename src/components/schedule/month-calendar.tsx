@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef, useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ScheduleKind } from '@/db/types'
@@ -56,6 +57,14 @@ export function monthGridDates(month: string): string[] {
 
 /** Hand-built month grid (Sunday first). Shows publish slots, hiatus days, and schedule items. */
 export function MonthCalendar({ month, today, slots, items, onMonthChange }: MonthCalendarProps) {
+  const [direction, setDirection] = useState<-1 | 1>(1)
+  const grid = useRef<HTMLDivElement>(null)
+  function turn(delta: -1 | 1) {
+    setDirection(delta)
+    grid.current?.scrollTo?.({ left: 0 })
+    onMonthChange(shiftMonth(month, delta))
+  }
+
   const dates = monthGridDates(month)
   const first = dates[0]
   const last = dates[dates.length - 1]
@@ -90,93 +99,97 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">{`${year}년 ${mon}월`}</h2>
+        <h2 className="b-heading" aria-live="polite">{`${year}년 ${mon}월`}</h2>
         <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="이전 달"
-            onClick={() => onMonthChange(shiftMonth(month, -1))}
-          >
+          <Button variant="outline" size="icon" aria-label="이전 달" onClick={() => turn(-1)}>
             <ChevronLeftIcon aria-hidden="true" />
           </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="다음 달"
-            onClick={() => onMonthChange(shiftMonth(month, 1))}
-          >
+          <Button variant="outline" size="icon" aria-label="다음 달" onClick={() => turn(1)}>
             <ChevronRightIcon aria-hidden="true" />
           </Button>
         </div>
       </div>
-      <div role="grid" aria-label={`${year}년 ${mon}월 연재 달력`} className="flex flex-col">
+      <div
+        ref={grid}
+        className="b-tools-calendar-scroll"
+        role="region"
+        aria-label="달력 가로로 보기"
+        tabIndex={0}
+      >
         <div
-          role="row"
-          className="grid grid-cols-7 border-b text-center text-xs text-muted-foreground"
+          key={month}
+          role="grid"
+          data-turn={direction}
+          aria-label={`${year}년 ${mon}월 연재 달력`}
+          className="b-tools-calendar-grid"
         >
-          {WEEKDAY_LABELS.map((label) => (
-            <div role="columnheader" key={label} className="py-1.5">
-              {label}
+          <div
+            role="row"
+            className="grid grid-cols-7 border-b border-ink bg-apricot text-center text-sm font-bold"
+          >
+            {WEEKDAY_LABELS.map((label) => (
+              <div role="columnheader" key={label} className="py-1.5">
+                {label}
+              </div>
+            ))}
+          </div>
+          {Array.from({ length: dates.length / 7 }, (_, week) => (
+            <div
+              role="row"
+              key={dates[week * 7]}
+              className="grid grid-cols-7 border-b border-ink/25 last:border-b-0"
+            >
+              {dates.slice(week * 7, week * 7 + 7).map((date) => {
+                const inMonth = date.startsWith(month)
+                const isToday = date === today
+                const daySlots = slotsByDate.get(date) ?? []
+                const dayItems = itemsByDate.get(date) ?? []
+                const isHiatus = hiatusDates.has(date)
+                return (
+                  <div
+                    role="gridcell"
+                    key={date}
+                    data-date={date}
+                    aria-current={isToday ? 'date' : undefined}
+                    className={cn(
+                      'b-tools-calendar-day flex min-w-0 flex-col items-start gap-0.5 border-r border-ink/25 p-1.5 text-xs last:border-r-0',
+                      !inMonth && 'bg-muted/40 text-muted-foreground',
+                      isToday && 'rounded-xs outline-3 -outline-offset-3 outline-ink',
+                    )}
+                  >
+                    <span className="font-bold tabular-nums">{Number(date.slice(8))}</span>
+                    {isHiatus && <span className="b-tools-calendar-chip bg-apricot">휴재</span>}
+                    {daySlots.map((slot, index) => (
+                      <span
+                        key={index}
+                        className={cn(
+                          'b-tools-calendar-chip bg-mustard',
+                          !slot.chapterTitle && 'border-dashed',
+                        )}
+                      >
+                        {slot.chapterTitle || '빈 연재일'}
+                      </span>
+                    ))}
+                    {dayItems.map((item) => (
+                      <span
+                        key={`${item.id}-${date}`}
+                        title={SCHEDULE_KIND_LABEL[item.kind]}
+                        className={cn(
+                          'b-tools-calendar-chip',
+                          item.kind === 'publish' && 'bg-mustard',
+                          item.kind === 'deadline' && 'border-ink',
+                          item.done && 'line-through',
+                        )}
+                      >
+                        {item.title}
+                      </span>
+                    ))}
+                  </div>
+                )
+              })}
             </div>
           ))}
         </div>
-        {Array.from({ length: dates.length / 7 }, (_, week) => (
-          <div role="row" key={dates[week * 7]} className="grid grid-cols-7">
-            {dates.slice(week * 7, week * 7 + 7).map((date) => {
-              const inMonth = date.startsWith(month)
-              const isToday = date === today
-              const daySlots = slotsByDate.get(date) ?? []
-              const dayItems = itemsByDate.get(date) ?? []
-              const isHiatus = hiatusDates.has(date)
-              return (
-                <div
-                  role="gridcell"
-                  key={date}
-                  data-date={date}
-                  aria-current={isToday ? 'date' : undefined}
-                  className={cn(
-                    'flex min-h-20 min-w-0 flex-col gap-0.5 border-b border-r p-1 text-xs',
-                    !inMonth && 'bg-muted/40 text-muted-foreground',
-                    isToday && 'outline outline-2 -outline-offset-2 outline-primary',
-                  )}
-                >
-                  <span className={cn('font-medium', isToday && 'text-primary')}>
-                    {Number(date.slice(8))}
-                  </span>
-                  {isHiatus && (
-                    <span className="truncate rounded bg-amber-100 px-1 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                      휴재
-                    </span>
-                  )}
-                  {daySlots.map((slot, index) =>
-                    slot.chapterTitle ? (
-                      <span key={`slot-${index}`} className="truncate">
-                        {slot.chapterTitle}
-                      </span>
-                    ) : (
-                      <span
-                        key={`slot-${index}`}
-                        className="truncate text-red-600 dark:text-red-400"
-                      >
-                        빈 연재일
-                      </span>
-                    ),
-                  )}
-                  {dayItems.map((item) => (
-                    <span
-                      key={`${item.id}-${date}`}
-                      title={SCHEDULE_KIND_LABEL[item.kind]}
-                      className={cn('truncate text-muted-foreground', item.done && 'line-through')}
-                    >
-                      {item.title}
-                    </span>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-        ))}
       </div>
     </div>
   )

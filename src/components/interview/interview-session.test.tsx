@@ -98,7 +98,7 @@ describe('InterviewSession question generation', () => {
     renderSession({})
 
     fireEvent.click(screen.getByRole('button', { name: '다음 질문' }))
-    expect(await screen.findByText('질문을 만들지 못했습니다.')).toBeInTheDocument()
+    expect(await screen.findByText('질문을 만들지 못했어요.')).toBeInTheDocument()
     expect(screen.getByText('AI 호출에 실패했습니다.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
@@ -151,7 +151,7 @@ describe('InterviewSession question generation', () => {
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
 
     await waitFor(() => expect(routerMock.refresh).toHaveBeenCalled())
-    expect(screen.queryByText('질문을 만들지 못했습니다.')).not.toBeInTheDocument()
+    expect(screen.queryByText('질문을 만들지 못했어요.')).not.toBeInTheDocument()
   })
 })
 

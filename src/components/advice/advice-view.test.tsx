@@ -61,3 +61,38 @@ describe('AdviceView', () => {
     expect(screen.queryByRole('button', { name: '다음 전개 조언 받기' })).not.toBeInTheDocument()
   })
 })
+
+it('brings only the chosen option to the front', () => {
+  render(
+    <AdviceView
+      workId="w1"
+      canRun
+      runs={[
+        {
+          id: 'run-1',
+          createdAt: '2026-11-24T01:00:00Z',
+          result: {
+            options: ['다툼', '화해', '이별'].map((title) => ({
+              title,
+              summary: '전개 요약',
+              beats: ['대화를 나눈다'],
+              usesThreads: [],
+              involvedCharacters: [],
+              risk: '',
+            })),
+            warnings: [],
+            recommendedIndex: 0,
+            recommendationReason: '오해를 풀 수 있어요.',
+          },
+        },
+      ]}
+    />,
+  )
+  const first = screen.getByRole('button', { name: '선택지 1 다툼' })
+  const second = screen.getByRole('button', { name: '선택지 2 화해' })
+  fireEvent.click(first)
+  expect(first).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(second)
+  expect(first).toHaveAttribute('aria-pressed', 'false')
+  expect(second.closest('article')).toHaveAttribute('data-selected', 'true')
+})

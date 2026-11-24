@@ -47,7 +47,7 @@ describe('DangerZone', () => {
   it('restores an archived work', async () => {
     run.mockResolvedValue({} as never)
     render(<DangerZone workId="w1" archived />)
-    expect(screen.getByText('보관된 작품입니다.')).toBeInTheDocument()
+    expect(screen.getByText('보관된 작품이에요.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '보관 해제' }))
     const dialog = screen.getByRole('alertdialog')
     fireEvent.click(within(dialog).getByRole('button', { name: '보관 해제' }))

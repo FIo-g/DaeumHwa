@@ -1,5 +1,7 @@
 'use client'
 
+import { CheckIcon } from 'lucide-react'
+import { PopButton } from '@/components/motion'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -39,21 +41,29 @@ function inviteUrl(token: string): string {
   return `${window.location.origin}/invite/${token}`
 }
 
-async function copyLink(token: string) {
-  try {
-    await navigator.clipboard.writeText(inviteUrl(token))
-    toast.success('초대 링크를 복사했습니다.')
-  } catch {
-    toast.error('링크를 복사하지 못했습니다. 직접 선택해서 복사해 주세요.')
-  }
-}
-
 /** Invite links for the owner: create (role, 7 days), copy and cancel. */
 export function InvitesPanel({ workId, invites }: InvitesPanelProps) {
   const router = useRouter()
   const [role, setRole] = useState<InvitableRole>('editor')
   const [pending, setPending] = useState(false)
   const [created, setCreated] = useState<InviteView | null>(null)
+
+  const [copied, setCopied] = useState<{
+    id: string
+    from: 'created' | 'list'
+    sequence: number
+  } | null>(null)
+
+  async function copyLink(invite: InviteView, from: 'created' | 'list') {
+    try {
+      await navigator.clipboard.writeText(inviteUrl(invite.token))
+      setCopied((last) => ({ id: invite.id, from, sequence: (last?.sequence ?? 0) + 1 }))
+      toast.success('초대 링크를 복사했어요.')
+    } catch {
+      setCopied(null)
+      toast.error('링크를 복사하지 못했어요.')
+    }
+  }
 
   async function createInvite() {
     setPending(true)
@@ -75,9 +85,13 @@ export function InvitesPanel({ workId, invites }: InvitesPanelProps) {
 
   async function revokeInvite(invite: InviteView) {
     const saved = await runAction(revokeInviteAction({ inviteId: invite.id }), {
-      success: '초대를 취소했습니다.',
+      success: '초대를 취소했어요.',
     })
-    if (saved !== null) router.refresh()
+    if (saved !== null) {
+      if (created?.id === invite.id) setCreated(null)
+      if (copied?.id === invite.id) setCopied(null)
+      router.refresh()
+    }
   }
 
   return (
@@ -85,8 +99,7 @@ export function InvitesPanel({ workId, invites }: InvitesPanelProps) {
       <div className="flex flex-col gap-1">
         <h2 className="font-medium">초대</h2>
         <p className="text-sm text-muted-foreground">
-          초대 링크를 받은 사람은 로그인한 뒤 이 작품에 참여합니다. 링크는 한 번만 쓸 수 있고 7일 뒤
-          만료됩니다.
+          초대받은 사람은 로그인한 뒤 작품에 참여해요. 링크는 한 번만 쓸 수 있어요. 7일 뒤 만료돼요.
         </p>
       </div>
 
@@ -105,21 +118,24 @@ export function InvitesPanel({ workId, invites }: InvitesPanelProps) {
             ))}
           </SelectContent>
         </Select>
-        <Button onClick={createInvite} disabled={pending}>
+        <PopButton onClick={createInvite} pending={pending}>
           초대 링크 만들기
-        </Button>
+        </PopButton>
       </div>
 
       {created && (
-        <div className="flex flex-col gap-2 rounded-xl border p-3">
+        <div className="b-tools-paper grid gap-2 bg-leaf/35">
           <p className="text-sm font-medium">
             {ROLE_LABEL[created.role]} 초대 링크 · 만료 {formatKoreanDateTime(created.expiresAt)}
           </p>
           <p className="font-mono text-sm break-all">{inviteUrl(created.token)}</p>
-          <div>
-            <Button variant="outline" size="sm" onClick={() => copyLink(created.token)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => copyLink(created, 'created')}>
               링크 복사
             </Button>
+            {copied?.id === created.id && copied.from === 'created' && (
+              <CopyConfirmation key={copied.sequence} />
+            )}
           </div>
         </div>
       )}
@@ -129,18 +145,21 @@ export function InvitesPanel({ workId, invites }: InvitesPanelProps) {
           {invites.map((invite) => (
             <li
               key={invite.id}
-              className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+              className="b-tools-index-row flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <span className="text-sm">
                 {ROLE_LABEL[invite.role]} · 만료 {formatKoreanDateTime(invite.expiresAt)}
               </span>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => copyLink(invite.token)}>
+                <Button variant="outline" size="sm" onClick={() => copyLink(invite, 'list')}>
                   링크 복사
                 </Button>
+                {copied?.id === invite.id && copied.from === 'list' && (
+                  <CopyConfirmation key={copied.sequence} />
+                )}
                 <ConfirmButton
                   title="이 초대를 취소할까요?"
-                  description="취소하면 이 링크로는 더 이상 참여할 수 없습니다."
+                  description="취소한 링크는 다시 쓸 수 없어요."
                   confirmLabel="초대 취소"
                   onConfirm={() => revokeInvite(invite)}
                   size="sm"
@@ -153,5 +172,14 @@ export function InvitesPanel({ workId, invites }: InvitesPanelProps) {
         </ul>
       )}
     </section>
+  )
+}
+
+function CopyConfirmation() {
+  return (
+    <span role="status" className="b-tools-copy">
+      <CheckIcon aria-hidden="true" />
+      복사했어요
+    </span>
   )
 }

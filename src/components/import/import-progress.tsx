@@ -7,7 +7,6 @@ import { ConfirmButton } from '@/components/app/confirm-button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import type { ImportJobRow, ImportJobStatus } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import {
@@ -16,6 +15,7 @@ import {
   skipImportChapterAction,
   startImportJobAction,
 } from '@/server/actions/imports'
+import { ImportMeter, ImportStages } from './import-stages'
 
 // Import progress (F6 step 5). The page polls the job status. When no Inngest runner is set up,
 // this component also drives the job: it calls the advance route one chapter at a time while
@@ -24,11 +24,11 @@ import {
 const POLL_MS = 2000
 const RETRY_MS = 3000
 const MAX_FAILURES = 5
-const CONNECTION_MESSAGE = '연결이 끊겼습니다. 다시 시도하거나 페이지를 새로고침해 주세요.'
-const FALLBACK_ERROR = '가져오기를 진행하지 못했습니다.'
+const CONNECTION_MESSAGE = '연결이 끊겼어요. 다시 시도하거나 페이지를 새로 고쳐 주세요.'
+const FALLBACK_ERROR = '가져오지 못했어요.'
 
 export const IMPORT_STATUS_LABEL: Record<ImportJobStatus, string> = {
-  uploading: '업로드 중',
+  uploading: '올리는 중',
   queued: '대기 중',
   running: '진행 중',
   paused: '일시정지',
@@ -47,6 +47,7 @@ export type ImportJobSnapshot = Pick<
 > & {
   /** Positions of the chapters the author skipped after they stopped the job. */
   skipped: number[]
+  started: boolean
 }
 
 export function toSnapshot(job: ImportJobRow): ImportJobSnapshot {
@@ -59,6 +60,7 @@ export function toSnapshot(job: ImportJobRow): ImportJobSnapshot {
     totalChapters: job.totalChapters,
     error: job.error,
     skipped: skippedPositionsOf(job.state),
+    started: job.startedAt !== null,
   }
 }
 
@@ -100,7 +102,7 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
         setJob((prev) => {
           if (poll.processedChapters < prev.processedChapters) return prev
           if (TERMINAL.includes(prev.status) && !TERMINAL.includes(poll.status)) return prev
-          return { ...prev, ...poll }
+          return { ...prev, ...poll, started: prev.started || poll.status === 'running' }
         })
       })
     }, POLL_MS)
@@ -164,7 +166,7 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
   async function start() {
     setBusy(true)
     const row = await runAction(startImportJobAction({ jobId }), {
-      success: '가져오기를 시작했습니다.',
+      success: '가져오기를 시작했어요.',
     })
     setBusy(false)
     if (row) {
@@ -177,7 +179,7 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
   async function skip() {
     setBusy(true)
     const skippedRow = await runAction(skipImportChapterAction({ jobId }), {
-      success: '이 화를 건너뛰었습니다.',
+      success: '이 화를 건너뛰었어요.',
     })
     if (skippedRow) {
       setNotice(null)
@@ -192,7 +194,7 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
 
   async function cancel() {
     const row = await runAction(cancelImportJobAction({ jobId }), {
-      success: '가져오기를 취소했습니다.',
+      success: '가져오기를 취소했어요.',
     })
     if (row) setJob(toSnapshot(row))
   }
@@ -212,119 +214,126 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
   const canRetry = canEdit && status === 'running' && runner === 'client' && notice !== null
   const canCancel = canEdit && CANCELABLE.includes(status)
   const canSkip = canEdit && status === 'error'
+  const beforeExtraction = status === 'uploading' || (status === 'cancelled' && !job.started)
 
   return (
-    <section aria-label="가져오기 진행 상황" className="grid gap-4 rounded-xl border p-5">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="grid gap-1">
-          <p className="font-medium">{job.fileName}</p>
-          <p className="text-sm text-muted-foreground">
-            {`${job.processedChapters}/${job.totalChapters}화 처리`}
-          </p>
+    <ImportStages
+      stage={status === 'done' ? 4 : beforeExtraction ? 2 : 3}
+      running={status === 'running'}
+    >
+      <section aria-label="가져오기 진행 상황" className="grid min-w-0 gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="grid gap-1">
+            <p className="font-bold wrap-anywhere">{job.fileName}</p>
+            <p className="text-sm text-muted-foreground">
+              {`${job.processedChapters}/${job.totalChapters}화 처리`}
+            </p>
+          </div>
+          <Badge variant="outline">{IMPORT_STATUS_LABEL[status]}</Badge>
         </div>
-        <Badge variant="outline">{IMPORT_STATUS_LABEL[status]}</Badge>
-      </div>
 
-      <Progress value={percent} aria-label="처리 진행률" />
+        <ImportMeter value={percent} label="처리 진행률" />
 
-      {status === 'running' && (
-        <p className="text-sm text-muted-foreground">
-          {runner === 'client'
-            ? '이 화면을 열어 두면 회차를 하나씩 진행합니다.'
-            : '백그라운드에서 회차를 진행합니다.'}
-        </p>
-      )}
-      {status === 'uploading' && (
-        <p className="text-sm text-muted-foreground">
-          원고를 올리는 중이거나 올리다 멈춘 작업입니다. 모든 회차가 올라갔다면 가져오기를
-          시작하세요.
-        </p>
-      )}
-      {status === 'done' && (
-        <p className="text-sm text-muted-foreground">
-          만들어진 카드와 사실은 승인하기 전까지 위키에 들어가지 않습니다.
-        </p>
-      )}
-      {status === 'cancelled' && (
-        <p className="text-sm text-muted-foreground">취소한 가져오기입니다.</p>
-      )}
-
-      {job.skipped.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          {`건너뛴 회차: ${job.skipped.map((position) => `${position}화`).join(', ')}`}
-        </p>
-      )}
-
-      {job.error && (
-        <Alert>
-          <AlertDescription>{job.error}</AlertDescription>
-        </Alert>
-      )}
-      {notice && (
-        <Alert>
-          <AlertDescription>{notice}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {canStart && (
-          <Button onClick={start} disabled={busy}>
-            가져오기 시작
-          </Button>
+        {status === 'running' && (
+          <p className="text-sm text-muted-foreground">
+            {runner === 'client'
+              ? '회차를 처리하는 동안 이 화면을 열어 두세요.'
+              : '이 화면을 닫아도 회차를 처리해요.'}
+          </p>
         )}
-        {canPause && (
-          <Button variant="outline" onClick={pause} disabled={busy}>
-            일시정지
-          </Button>
-        )}
-        {canResume && (
-          <Button onClick={start} disabled={busy}>
-            재개
-          </Button>
-        )}
-        {canSkip && (
-          <ConfirmButton
-            title="이 화를 건너뛸까요?"
-            description="이 화에서는 설정 후보를 뽑지 않고 다음 화로 넘어갑니다. 원고는 그대로 남습니다."
-            confirmLabel="건너뛰기"
-            onConfirm={skip}
-            disabled={busy}
-          >
-            이 화 건너뛰기
-          </ConfirmButton>
-        )}
-        {canRetry && (
-          <Button variant="outline" onClick={retry} disabled={busy}>
-            다시 시도
-          </Button>
-        )}
-        {canCancel && (
-          <ConfirmButton
-            title="가져오기를 취소할까요?"
-            description="이미 올라간 회차와 만들어진 제안은 그대로 남습니다."
-            confirmLabel="취소하기"
-            onConfirm={cancel}
-          >
-            취소
-          </ConfirmButton>
+        {status === 'uploading' && (
+          <p className="text-sm text-muted-foreground">
+            원고를 올리다 멈춘 작업일 수 있어요. 가져오기 시작 전 전체 회차가 올라갔는지 확인해
+            주세요.
+          </p>
         )}
         {status === 'done' && (
-          <>
-            <Link className={buttonVariants()} href={`/works/${workId}/approvals`}>
-              승인 대기에서 확인하기
-            </Link>
-            <Link className={buttonVariants({ variant: 'outline' })} href={`/works/${workId}/wiki`}>
-              설정 보드 보기
-            </Link>
-          </>
+          <p className="text-sm text-muted-foreground">승인한 카드와 사실만 위키에 들어가요.</p>
         )}
-        {onClose && TERMINAL.includes(status) && (
-          <Button variant="ghost" onClick={onClose}>
-            {canEdit ? '새로 가져오기' : '목록으로'}
-          </Button>
+        {status === 'cancelled' && (
+          <p className="text-sm text-muted-foreground">가져오기를 취소했어요.</p>
         )}
-      </div>
-    </section>
+
+        {job.skipped.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {`건너뛴 회차: ${job.skipped.map((position) => `${position}화`).join(', ')}`}
+          </p>
+        )}
+
+        {job.error && (
+          <Alert>
+            <AlertDescription>{job.error}</AlertDescription>
+          </Alert>
+        )}
+        {notice && (
+          <Alert>
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          {canStart && (
+            <Button onClick={start} disabled={busy}>
+              가져오기 시작
+            </Button>
+          )}
+          {canPause && (
+            <Button variant="outline" onClick={pause} disabled={busy}>
+              일시정지
+            </Button>
+          )}
+          {canResume && (
+            <Button onClick={start} disabled={busy}>
+              재개
+            </Button>
+          )}
+          {canSkip && (
+            <ConfirmButton
+              title="이 화를 건너뛸까요?"
+              description="이 회차의 원고는 남아요. 설정 후보 추출은 다음 화부터 이어가요."
+              confirmLabel="건너뛰기"
+              onConfirm={skip}
+              disabled={busy}
+            >
+              이 화 건너뛰기
+            </ConfirmButton>
+          )}
+          {canRetry && (
+            <Button variant="outline" onClick={retry} disabled={busy}>
+              다시 시도
+            </Button>
+          )}
+          {canCancel && (
+            <ConfirmButton
+              title="가져오기를 취소할까요?"
+              description="이미 올린 회차와 기존 제안은 남아요."
+              confirmLabel="취소하기"
+              onConfirm={cancel}
+            >
+              취소
+            </ConfirmButton>
+          )}
+          {status === 'done' && (
+            <>
+              <Link className={buttonVariants()} href={`/works/${workId}/approvals`}>
+                승인 대기에서 확인하기
+              </Link>
+              <Link
+                className={buttonVariants({ variant: 'outline' })}
+                href={`/works/${workId}/wiki`}
+              >
+                설정 보드 보기
+              </Link>
+            </>
+          )}
+          {onClose && TERMINAL.includes(status) && (
+            <Button variant="ghost" onClick={onClose}>
+              {canEdit ? '새로 가져오기' : '목록으로'}
+            </Button>
+          )}
+        </div>
+      </section>
+    </ImportStages>
   )
 }
 

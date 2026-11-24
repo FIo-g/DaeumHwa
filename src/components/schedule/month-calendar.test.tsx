@@ -75,7 +75,7 @@ describe('MonthCalendar', () => {
     )
     expect(within(cellOf(container, '2026-10-05')).getByText('3화 재회')).toBeInTheDocument()
     const empty = within(cellOf(container, '2026-10-06')).getByText('빈 연재일')
-    expect(empty.className).toContain('text-red')
+    expect(empty.className).toContain('bg-mustard')
   })
 
   it('marks every hiatus day with 휴재 and leaves other days alone', () => {
@@ -121,7 +121,7 @@ describe('MonthCalendar', () => {
     )
     const today = cellOf(container, '2026-10-16')
     expect(today).toHaveAttribute('aria-current', 'date')
-    expect(today.className).toContain('outline-2')
+    expect(today.className).toContain('outline-3')
     expect(cellOf(container, '2026-10-15')).not.toHaveAttribute('aria-current')
   })
 

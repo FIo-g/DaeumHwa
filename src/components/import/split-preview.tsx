@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { PopButton } from '@/components/motion'
 import { Input } from '@/components/ui/input'
 import type { SplitChapter, SplitMethod } from '@/lib/import/split'
 import { countChars } from '@/lib/korean/chars'
@@ -70,16 +71,17 @@ export function SplitPreview({
   return (
     <section aria-label="회차 나누기 미리보기" className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">{`나눈 방식: ${METHOD_LABEL[method]}`}</p>
-      <p className="text-sm font-medium">
-        {`${total}화를 가져옵니다. 회차마다 AI 호출이 1번씩 일어납니다.`}
-      </p>
+      <p className="text-sm font-medium">{`${total}화를 가져와요. 회차마다 AI를 한 번 써요.`}</p>
 
-      {total === 0 && <p className="text-sm text-muted-foreground">가져올 회차가 없습니다.</p>}
+      {total === 0 && <p className="text-sm text-muted-foreground">가져올 회차가 없어요.</p>}
 
       <ol className="flex flex-col gap-3">
         {chapters.map((chapter, index) => (
-          <li key={chapter.id} className="grid gap-2 rounded-lg border p-3">
+          <li key={chapter.id} className="b-tools-index-row grid gap-2 rounded-lg border p-3">
             <div className="flex items-center gap-2">
+              <span className="b-number shrink-0" aria-hidden="true">
+                {index + 1}
+              </span>
               <Input
                 aria-label={`${index + 1}번째 회차 제목`}
                 value={chapter.title}
@@ -109,8 +111,8 @@ export function SplitPreview({
       </ol>
 
       {tooMany && (
-        <p role="alert" className="text-sm text-destructive">
-          {`회차는 ${MAX_CHAPTERS}화까지 가져올 수 있습니다. 회차를 합치거나 제외해 주세요.`}
+        <p role="alert" className="text-sm text-ink">
+          {`회차는 ${MAX_CHAPTERS}화까지 가져올 수 있어요. 회차를 합치거나 제외해 주세요.`}
         </p>
       )}
 
@@ -118,9 +120,9 @@ export function SplitPreview({
         <Button variant="outline" onClick={onBack} disabled={busy}>
           파일 다시 고르기
         </Button>
-        <Button onClick={() => onConfirm(chapters)} disabled={busy || total === 0 || tooMany}>
+        <PopButton onClick={() => onConfirm(chapters)} disabled={busy || total === 0 || tooMany}>
           이대로 가져오기
-        </Button>
+        </PopButton>
       </div>
     </section>
   )

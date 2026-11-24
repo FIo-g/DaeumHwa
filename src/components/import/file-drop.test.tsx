@@ -32,7 +32,7 @@ describe('FileDrop', () => {
     chooseFile(new File(['x'], '원고.hwp'))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('HWP 파일은 지원하지 않습니다.')
-    expect(screen.queryByText('파일을 읽는 중입니다.')).not.toBeInTheDocument()
+    expect(screen.queryByText('파일을 읽고 있어요.')).not.toBeInTheDocument()
     expect(screen.getByLabelText('원고 파일')).toBeEnabled()
     expect(onParsed).not.toHaveBeenCalled()
   })
@@ -44,7 +44,7 @@ describe('FileDrop', () => {
     chooseFile(new File(['x'], '원고.txt'))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      '파일을 읽지 못했습니다. 다시 시도해 주세요.',
+      '파일을 읽지 못했어요. 다시 시도해 주세요.',
     )
   })
 

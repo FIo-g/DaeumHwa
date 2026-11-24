@@ -47,7 +47,7 @@ export function WorkSettingsForm({ workId, canEdit, initial }: WorkSettingsFormP
             targetChars: Number(form.get('targetChars')),
           },
         }),
-        { success: '작품 설정을 저장했습니다.' },
+        { success: '작품 설정을 저장했어요.' },
       )
       if (saved) router.refresh()
     } finally {
@@ -58,7 +58,7 @@ export function WorkSettingsForm({ workId, canEdit, initial }: WorkSettingsFormP
   return (
     <form onSubmit={onSubmit} className="flex max-w-xl flex-col gap-4">
       {!canEdit && (
-        <p className="text-sm text-muted-foreground">소유자만 작품 정보를 바꿀 수 있습니다.</p>
+        <p className="text-sm text-muted-foreground">소유자만 작품 정보를 바꿀 수 있어요.</p>
       )}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="work-title">제목</Label>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { PopButton } from '@/components/motion'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { InterviewFocus } from '@/db/types'
@@ -39,13 +40,13 @@ export function QuestionCard({
   const trimmed = answer.trim()
 
   return (
-    <article aria-labelledby="interview-question" className="grid gap-4 rounded-xl border p-5">
-      <div className="grid gap-2">
+    <article aria-labelledby="interview-question" className="grid min-w-0 gap-4">
+      <div className="b-tools-paper b-tools-question grid gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {topic && <Badge variant="secondary">{topic}</Badge>}
           <Badge variant="outline">{focus === 'story' ? '다음 전개' : '설정 채우기'}</Badge>
         </div>
-        <h2 id="interview-question" className="text-lg font-semibold leading-snug">
+        <h2 id="interview-question" className="b-subhead wrap-anywhere">
           {question}
         </h2>
         {rationale && <p className="text-sm text-muted-foreground">{rationale}</p>}
@@ -53,7 +54,7 @@ export function QuestionCard({
 
       {canEdit ? (
         <form
-          className="grid gap-3"
+          className="b-tools-paper grid min-w-0 gap-3"
           onSubmit={(event) => {
             event.preventDefault()
             if (trimmed) onAnswer(trimmed)
@@ -67,7 +68,7 @@ export function QuestionCard({
             rows={5}
             maxLength={MAX_ANSWER_LENGTH}
             disabled={busy}
-            placeholder="떠오르는 대로 적어도 됩니다."
+            placeholder="떠오르는 대로 적어 주세요."
           />
           {answering ? (
             <AiRunStatus
@@ -77,9 +78,9 @@ export function QuestionCard({
             />
           ) : (
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={busy || trimmed.length === 0}>
+              <PopButton type="submit" disabled={busy || trimmed.length === 0}>
                 답하기
-              </Button>
+              </PopButton>
               <Button type="button" variant="outline" disabled={busy} onClick={onSkip}>
                 건너뛰기
               </Button>
@@ -87,7 +88,7 @@ export function QuestionCard({
           )}
         </form>
       ) : (
-        <p className="text-sm text-muted-foreground">편집자 이상만 답할 수 있습니다.</p>
+        <p className="text-sm text-muted-foreground">편집자 이상만 답할 수 있어요.</p>
       )}
     </article>
   )

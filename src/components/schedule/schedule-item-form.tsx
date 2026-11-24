@@ -59,7 +59,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
               chapterId,
               note,
             }),
-            { success: '일정을 고쳤습니다.' },
+            { success: '일정을 고쳤어요.' },
           )
         : await runAction(
             createScheduleItemAction({
@@ -71,7 +71,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
               chapterId,
               note,
             }),
-            { success: '일정을 추가했습니다.' },
+            { success: '일정을 추가했어요.' },
           )
       if (saved) {
         if (item) {
@@ -135,7 +135,9 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
       </div>
       {kind === 'hiatus' && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={fieldId('end-date')}>끝나는 날</Label>
+          <Label htmlFor={fieldId('end-date')}>
+            끝나는 날 <span className="b-tools-field-cue" aria-hidden="true" />
+          </Label>
           <Input
             id={fieldId('end-date')}
             type="date"

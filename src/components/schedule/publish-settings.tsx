@@ -73,7 +73,7 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             bufferTarget: bufferNumber,
           },
         }),
-        { success: '연재 설정을 저장했습니다.' },
+        { success: '연재 설정을 저장했어요.' },
       )
       if (saved) router.refresh()
     } finally {
@@ -100,7 +100,7 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        {!validDays && <p className="text-xs text-destructive">연재 요일을 하나 이상 고르세요.</p>}
+        {!validDays && <p className="text-xs text-ink">연재 요일을 하나 이상 고르세요.</p>}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
@@ -115,9 +115,7 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             onChange={(e) => setPerDay(e.target.value)}
             className="max-w-32"
           />
-          {!validPerDay && (
-            <p className="text-xs text-destructive">1~10 사이의 숫자를 입력하세요.</p>
-          )}
+          {!validPerDay && <p className="text-xs text-ink">1~10 사이의 숫자를 입력하세요.</p>}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="buffer-target">비축 목표 (화)</Label>
@@ -131,9 +129,7 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             onChange={(e) => setBuffer(e.target.value)}
             className="max-w-32"
           />
-          {!validBuffer && (
-            <p className="text-xs text-destructive">0~100 사이의 숫자를 입력하세요.</p>
-          )}
+          {!validBuffer && <p className="text-xs text-ink">0~100 사이의 숫자를 입력하세요.</p>}
         </div>
       </div>
       <div>

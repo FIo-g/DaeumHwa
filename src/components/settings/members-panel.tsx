@@ -46,28 +46,28 @@ export function MembersPanel({
 
   async function changeRole(member: MemberView, role: InvitableRole) {
     const saved = await runAction(changeMemberRoleAction({ workId, userId: member.userId, role }), {
-      success: `${member.name}님의 역할을 바꿨습니다.`,
+      success: `${member.name}님의 역할을 바꿨어요.`,
     })
     if (saved !== null) router.refresh()
   }
 
   async function removeMember(member: MemberView) {
     const saved = await runAction(removeMemberAction({ workId, userId: member.userId }), {
-      success: `${member.name}님을 내보냈습니다.`,
+      success: `${member.name}님을 내보냈어요.`,
     })
     if (saved !== null) router.refresh()
   }
 
   async function leaveWork() {
     const saved = await runAction(removeMemberAction({ workId, userId: currentUserId }), {
-      success: '작품에서 나갔습니다.',
+      success: '작품에서 나갔어요.',
     })
     if (saved !== null) router.push('/works')
   }
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="font-medium">구성원</h2>
+      <h2 className="b-row__title wrap-anywhere">구성원</h2>
       <ul className="flex flex-col divide-y rounded-xl border">
         {members.map((member) => {
           const isSelf = member.userId === currentUserId
@@ -75,10 +75,10 @@ export function MembersPanel({
           return (
             <li
               key={member.userId}
-              className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+              className="b-tools-index-row flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex min-w-0 flex-col">
-                <span className="font-medium">
+                <span className="b-row__title wrap-anywhere">
                   {member.name}
                   {isSelf && <span className="ml-1 text-xs text-muted-foreground">(나)</span>}
                 </span>
@@ -113,7 +113,7 @@ export function MembersPanel({
                 {isOwner && !isMemberOwner && (
                   <ConfirmButton
                     title={`${member.name}님을 내보낼까요?`}
-                    description="내보내면 이 작품을 더 볼 수 없습니다."
+                    description="내보낸 구성원은 이 작품을 더 볼 수 없어요."
                     confirmLabel="내보내기"
                     onConfirm={() => removeMember(member)}
                   >
@@ -123,7 +123,7 @@ export function MembersPanel({
                 {isSelf && !isOwner && !trial && (
                   <ConfirmButton
                     title="작품에서 나갈까요?"
-                    description="나가면 이 작품을 더 볼 수 없습니다. 다시 들어가려면 초대 링크가 필요합니다."
+                    description="작품에서 나가는 즉시 접근 권한이 끝나요. 다시 들어올 때는 초대 링크가 필요해요."
                     confirmLabel="나가기"
                     onConfirm={leaveWork}
                   >

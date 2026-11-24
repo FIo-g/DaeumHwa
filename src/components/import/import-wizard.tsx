@@ -22,6 +22,7 @@ import {
   type ImportJobSnapshot,
   toSnapshot,
 } from './import-progress'
+import { ImportMeter, ImportStages } from './import-stages'
 import { type DraftChapter, SplitPreview } from './split-preview'
 
 // The service takes at most 50 chapters per append call (keeps request bodies small on Vercel).
@@ -62,7 +63,7 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
       setPreview({ fileName: file.fileName, method: result.method, chapters: result.chapters })
       setStep('preview')
     } catch {
-      toast.error('회차를 나누지 못했습니다. 다시 시도해 주세요.')
+      toast.error('회차를 나누지 못했어요. 다시 시도해 주세요.')
     } finally {
       setSplitting(false)
     }
@@ -101,7 +102,7 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
     }
 
     const started = await runAction(startImportJobAction({ jobId: job.id }), {
-      success: '가져오기를 시작했습니다.',
+      success: '가져오기를 시작했어요.',
     })
     finishUpload(toSnapshot(started ?? job))
   }
@@ -124,69 +125,73 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
           onClose={() => setCurrent(null)}
         />
       ) : canEdit ? (
-        <div className="grid gap-4">
-          <p className="text-sm text-muted-foreground">
-            원고 파일을 고르면 회차를 나눠 보여 드립니다. 나눈 회차는 기존 회차 뒤에 완료 상태로
-            추가되고, 회차마다 설정 카드 후보를 뽑습니다. 이미 연재한 원고라면 아래 옵션을 켜세요.
-          </p>
+        <ImportStages
+          stage={step === 'file' && !splitting ? 1 : 2}
+          running={splitting || step === 'uploading'}
+        >
+          <div className="grid min-w-0 gap-4">
+            {step === 'file' && !splitting && <FileDrop onParsed={handleParsed} />}
+            {splitting && (
+              <p role="status" className="text-sm text-muted-ink">
+                회차를 나누고 있어요.
+              </p>
+            )}
 
-          {step === 'file' && (
-            <>
-              <FileDrop disabled={splitting} onParsed={handleParsed} />
-              {splitting && (
-                <p role="status" className="text-sm text-muted-foreground">
-                  회차를 나누는 중입니다.
+            {step === 'preview' && preview && (
+              <>
+                <p className="text-sm text-muted-ink">
+                  가져온 회차는 기존 회차 뒤에 완료 상태로 추가돼요.
                 </p>
-              )}
-            </>
-          )}
-
-          {step === 'preview' && preview && (
-            <>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="size-4"
-                  checked={alreadyPublished}
-                  onChange={(event) => setAlreadyPublished(event.target.checked)}
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4"
+                    checked={alreadyPublished}
+                    onChange={(event) => setAlreadyPublished(event.target.checked)}
+                  />
+                  이미 연재한 원고예요 (비축분에서 제외)
+                </label>
+                <SplitPreview
+                  method={preview.method}
+                  initial={preview.chapters}
+                  onBack={() => {
+                    setPreview(null)
+                    setStep('file')
+                  }}
+                  onConfirm={(drafts) => void startUpload(preview, drafts)}
                 />
-                이미 연재한 원고입니다 (비축분으로 세지 않음)
-              </label>
-              <SplitPreview
-                method={preview.method}
-                initial={preview.chapters}
-                onBack={() => {
-                  setPreview(null)
-                  setStep('file')
-                }}
-                onConfirm={(drafts) => void startUpload(preview, drafts)}
-              />
-            </>
-          )}
+              </>
+            )}
 
-          {step === 'uploading' && (
-            <p role="status" className="text-sm font-medium">
-              {`${uploaded}/${uploadTotal}화 올리는 중`}
-            </p>
-          )}
-        </div>
+            {step === 'uploading' && (
+              <div className="grid gap-2">
+                <p
+                  role="status"
+                  className="text-sm font-medium"
+                >{`${uploaded}/${uploadTotal}화 올리는 중`}</p>
+                <ImportMeter
+                  value={uploadTotal === 0 ? 0 : Math.round((uploaded / uploadTotal) * 100)}
+                  label="파일 올리기 진행률"
+                />
+              </div>
+            )}
+          </div>
+        </ImportStages>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          원고 가져오기는 편집자 이상만 시작할 수 있습니다.
-        </p>
+        <p className="text-sm text-muted-foreground">편집자 이상만 원고를 가져올 수 있어요.</p>
       )}
 
       {!current && jobs.length > 0 && (
         <section aria-label="가져오기 기록" className="grid gap-3">
-          <h2 className="font-semibold">가져오기 기록</h2>
-          <ul className="grid gap-2">
+          <h2 className="b-heading">가져오기 기록</h2>
+          <ul className="grid divide-y rounded-card border border-ink">
             {jobs.map((job) => (
               <li
                 key={job.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
+                className="b-tools-index-row flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
               >
-                <div className="grid gap-0.5">
-                  <span className="font-medium">{job.fileName}</span>
+                <div className="grid min-w-0 gap-0.5 wrap-anywhere">
+                  <span className="b-row__title">{job.fileName}</span>
                   <span className="text-muted-foreground">
                     {`${job.processedChapters}/${job.totalChapters}화`}
                   </span>

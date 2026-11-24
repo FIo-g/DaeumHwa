@@ -1,7 +1,7 @@
 'use client'
 
+import { ArrowUpRightIcon, FileUpIcon } from 'lucide-react'
 import { type DragEvent, useState } from 'react'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { getTextWorker } from '@/lib/client/worker-client'
 import { cn } from '@/lib/utils'
@@ -27,12 +27,12 @@ export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
       const bytes = await file.arrayBuffer()
       const parsed = await getTextWorker().parseFile(file.name, bytes)
       if (parsed.text.trim().length === 0) {
-        setError('원고 내용이 비어 있습니다. 다른 파일을 골라 주세요.')
+        setError('빈 원고예요. 다른 파일을 골라 주세요.')
         return
       }
       onParsed({ fileName: file.name, text: parsed.text })
     } catch (e) {
-      setError(e instanceof Error ? e.message : '파일을 읽지 못했습니다. 다시 시도해 주세요.')
+      setError(e instanceof Error ? e.message : '파일을 읽지 못했어요. 다시 시도해 주세요.')
     } finally {
       setBusy(false)
     }
@@ -52,23 +52,36 @@ export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
         event.preventDefault()
         if (!disabled) setDragging(true)
       }}
-      onDragLeave={() => setDragging(false)}
+      onDragLeave={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          event.currentTarget.contains(event.relatedTarget)
+        )
+          return
+        setDragging(false)
+      }}
+      data-dragging={dragging}
       onDrop={handleDrop}
       className={cn(
-        'grid gap-4 rounded-xl border border-dashed p-6 text-center transition-colors',
-        dragging && 'border-primary bg-muted/50',
+        'b-tools-file-drop grid gap-4 rounded-card border-2 border-dashed border-ink p-4 text-center sm:p-6',
+        dragging && 'bg-leaf/45',
       )}
     >
+      <FileUpIcon className="b-tools-file-icon mx-auto size-10" aria-hidden="true" />
       <div className="grid gap-1">
-        <p className="font-medium">원고 파일을 끌어다 놓거나 아래에서 고르세요</p>
+        <p className="font-medium">원고 파일을 끌어다 놓거나 아래에서 골라 주세요.</p>
         <p className="text-sm text-muted-foreground">
-          TXT, MD, DOCX 파일을 올릴 수 있습니다. HWP는 한글에서 DOCX나 TXT로 저장한 뒤 올려 주세요.
+          txt, md, docx 파일을 올릴 수 있어요. hwp 파일은 한글에서 docx나 txt로 저장해 주세요.
         </p>
       </div>
-      <div className="mx-auto grid w-full max-w-xs gap-1.5 text-left">
-        <Label htmlFor="manuscript-file">원고 파일</Label>
-        <Input
+      <div className="b-tools-file-field mx-auto">
+        <Label htmlFor="manuscript-file" className="b-tools-file-choice">
+          원고 파일
+          <ArrowUpRightIcon aria-hidden="true" className="size-4" />
+        </Label>
+        <input
           id="manuscript-file"
+          className="sr-only"
           type="file"
           accept={ACCEPT}
           disabled={disabled || busy}
@@ -81,11 +94,11 @@ export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
       </div>
       {busy && (
         <p role="status" className="text-sm text-muted-foreground">
-          파일을 읽는 중입니다.
+          파일을 읽고 있어요.
         </p>
       )}
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-ink">
           {error}
         </p>
       )}

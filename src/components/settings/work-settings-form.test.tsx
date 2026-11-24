@@ -57,7 +57,7 @@ describe('WorkSettingsForm', () => {
     expect(screen.getByLabelText('시놉시스')).toBeDisabled()
     expect(screen.getByLabelText('목표 글자 수')).toBeDisabled()
     expect(screen.queryByRole('button', { name: '저장' })).not.toBeInTheDocument()
-    expect(screen.getByText('소유자만 작품 정보를 바꿀 수 있습니다.')).toBeInTheDocument()
+    expect(screen.getByText('소유자만 작품 정보를 바꿀 수 있어요.')).toBeInTheDocument()
   })
 
   it('saves the changed fields and refreshes the page', async () => {
