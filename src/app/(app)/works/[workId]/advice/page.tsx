@@ -1,4 +1,3 @@
-import { SignpostIcon } from 'lucide-react'
 import type { AdviceResult } from '@/ai/tasks/direction-advice'
 import { AdviceView, type AdviceRunView } from '@/components/advice/advice-view'
 import { PageHeader } from '@/components/app/page-header'
@@ -36,20 +35,8 @@ export default async function AdvicePage({ params }: { params: Promise<{ workId:
   }
 
   return (
-    <div className="flex flex-col">
-      <PageHeader
-        title="방향 조언"
-        band="sand"
-        actions={
-          <span className="b-tools-header-art" data-tool="advice" aria-hidden="true">
-            <i />
-            <i />
-            <span>
-              <SignpostIcon />
-            </span>
-          </span>
-        }
-      />
+    <div className="wg-advice-page">
+      <PageHeader title="방향 조언" />
       <AdviceView workId={workId} canRun={hasRole(work.role, 'editor')} runs={views} />
     </div>
   )

@@ -1,10 +1,8 @@
-import { MessageSquareTextIcon } from 'lucide-react'
-import type { CSSProperties } from 'react'
-import { CardRail, Disclosure, PopLink } from '@/components/motion'
+import { Disclosure, PopLink, Sheet } from '@/components/motion'
 import { EmptyState } from '@/components/app/empty-state'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import { formatKoreanDateTime } from '@/lib/dates'
-import { ReaderSimResultCard } from './reader-sim-result'
+import { ReaderSimReaction } from './reader-sim-result'
 
 export type ReaderSimRunView = {
   id: string
@@ -32,8 +30,7 @@ type ReaderSimListProps = {
 export function ReaderSimList({ groups, personaNames }: ReaderSimListProps) {
   if (groups.length === 0) {
     return (
-      <div className="b-tools-empty">
-        <MessageSquareTextIcon aria-hidden="true" />
+      <div className="wg-advice-empty">
         <EmptyState
           title="아직 독자 반응이 없어요."
           description="집필 화면의 ‘독자 반응’ 탭에서도 실행할 수 있어요."
@@ -43,15 +40,11 @@ export function ReaderSimList({ groups, personaNames }: ReaderSimListProps) {
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-8">
+    <div className="wg-advice-history">
       {groups.map((group) => (
-        <section
-          key={group.key}
-          aria-label={group.chapterTitle}
-          className="flex min-w-0 flex-col gap-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="b-heading">{group.chapterTitle}</h2>
+        <Sheet key={group.key} aria-label={group.chapterTitle}>
+          <div className="wg-advice-sheet-heading justify-between">
+            <h2 className="wg-advice-chapter-title">{group.chapterTitle}</h2>
             {group.chapterHref && (
               <PopLink variant="flat" href={group.chapterHref}>
                 회차 열기
@@ -60,24 +53,31 @@ export function ReaderSimList({ groups, personaNames }: ReaderSimListProps) {
           </div>
           {group.runs.map((run, index) =>
             index === 0 ? (
-              <RunCard key={run.id} run={run} personaNames={personaNames} />
+              <RunResult key={run.id} run={run} personaNames={personaNames} />
             ) : (
               <Disclosure
                 key={run.id}
-                title={formatKoreanDateTime(run.createdAt)}
-                className="b-tools-disclosure"
+                title={
+                  <span className="wg-advice-history-title">
+                    <span className="wg-advice-row-number" aria-hidden="true">
+                      {index + 1}
+                    </span>
+                    <time dateTime={run.createdAt}>{formatKoreanDateTime(run.createdAt)}</time>
+                  </span>
+                }
+                className="wg-advice-history-row"
               >
-                <RunCard run={run} personaNames={personaNames} />
+                <RunResult run={run} personaNames={personaNames} />
               </Disclosure>
             ),
           )}
-        </section>
+        </Sheet>
       ))}
     </div>
   )
 }
 
-function RunCard({
+function RunResult({
   run,
   personaNames,
 }: {
@@ -89,27 +89,25 @@ function RunCard({
     personas.length === 0 ? 0 : personas.reduce((sum, p) => sum + p.rating, 0) / personas.length
 
   return (
-    <div className="b-tools-paper grid min-w-0 grid-cols-1 gap-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <span className="text-muted-foreground">{formatKoreanDateTime(run.createdAt)}</span>
+    <div>
+      <div className="wg-advice-run-meta">
+        <time className="wg-advice-timestamp" dateTime={run.createdAt}>
+          {formatKoreanDateTime(run.createdAt)}
+        </time>
         <span>{`평균 ★ ${average.toFixed(1)}`}</span>
       </div>
-      <CardRail label="독자별 반응" railClassName="b-tools-reader-rail">
+      <div role="region" aria-label="독자별 반응" tabIndex={0} className="min-w-0">
         {personas.map((persona, index) => (
-          <div
-            className="b-sequence"
+          <ReaderSimReaction
             key={persona.personaId}
-            style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
-          >
-            <ReaderSimResultCard
-              name={personaNames[persona.personaId] ?? persona.personaId}
-              persona={persona}
-            />
-          </div>
+            index={index}
+            name={personaNames[persona.personaId] ?? persona.personaId}
+            persona={persona}
+          />
         ))}
-      </CardRail>
+      </div>
       {run.result.summary && (
-        <p className="text-sm">
+        <p className="wg-advice-detail wg-advice-reason">
           <span className="font-medium">전체 요약 </span>
           {run.result.summary}
         </p>

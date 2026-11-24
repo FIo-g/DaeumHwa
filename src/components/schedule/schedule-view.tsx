@@ -2,11 +2,9 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarClockIcon, LayersIcon } from 'lucide-react'
 import { EmptyState } from '@/components/app/empty-state'
-import { HandNote, PopLink, Reveal } from '@/components/motion'
+import { CellMeter, CountCell, PopLink, Sheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { ScheduleInput } from '@/db/types'
 import { getTextWorker } from '@/lib/client/worker-client'
 import { runAction } from '@/lib/client/run-action'
@@ -79,6 +77,7 @@ export function ScheduleView({
   }
 
   const bufferCount = bufferChapters.length
+  const bufferTarget = input.settings.bufferTarget
   const calculating = result === null
   const nextPublish = result?.slots[0]?.date ?? null
   const deadline = result?.nextDeadline ?? null
@@ -86,106 +85,105 @@ export function ScheduleView({
     bufferCount > 0 && result?.bufferRunsOutOn && result.bufferRunsOutOn <= addDays(today, 7)
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-7">
-      <section aria-label="요약" className="b-tools-schedule-summary">
-        <div className="b-tools-summary-buffer">
-          <span className="b-label font-bold">비축분</span>
-          <span className="b-title">{bufferCount}화</span>
-          <Reveal decorative className="b-tools-buffer-stack" aria-hidden="true">
-            {bufferCount === 0 ? (
-              <LayersIcon />
-            ) : (
-              Array.from({ length: Math.min(bufferCount, 5) }, (_, index) => (
-                <span className="b-dot" key={index} />
-              ))
-            )}
-          </Reveal>
-        </div>
-        <div className="b-tools-summary-dates">
-          <SummaryCard
-            label="다음 연재"
-            value={
-              calculating
-                ? '계산 중'
-                : nextPublish
-                  ? formatKoreanDate(nextPublish)
-                  : '연재 요일 없음'
-            }
+    <div className="grid min-w-0 grid-cols-1 gap-8">
+      <div className="wg-schedule-overview">
+        <section aria-label="연재 달력" className="grid min-w-0 grid-cols-1 gap-3">
+          <h2 className="b-subhead">연재 달력</h2>
+          <MonthCalendar
+            month={month}
+            today={today}
+            slots={result?.slots ?? []}
+            items={input.items}
+            publishDays={input.settings.publishDays}
+            onMonthChange={setMonth}
           />
-          <SummaryCard
-            label="비축 소진 예상"
-            value={
-              calculating
-                ? '계산 중'
-                : bufferCount === 0
-                  ? '비축분 없음'
-                  : result.bufferRunsOutOn
-                    ? formatKoreanDate(result.bufferRunsOutOn)
-                    : '향후 6주 안에 없음'
-            }
-          />
-          <SummaryCard
-            label="다음 마감"
-            value={
-              calculating
-                ? '계산 중'
-                : deadline
-                  ? `${deadline.title} D-${deadline.daysLeft}`
-                  : '마감 없음'
-            }
-          />
-          {soon && <HandNote className="b-tools-buffer-note">비축분이 곧 떨어져요</HandNote>}
-        </div>
-      </section>
-
-      {alertCount > 0 && (
-        <div>
-          <PopLink href={`/works/${workId}#home-alerts`} variant="flat">
-            주기 점검 {alertCount}건
-          </PopLink>
-        </div>
-      )}
-
-      {result && result.warnings.length > 0 && (
-        <section aria-label="경고" className="b-tools-paper grid gap-1 bg-kraft/35 text-sm">
-          {result.warnings.map((warning) => (
-            <p key={warning}>{warning}</p>
-          ))}
+          <p className="text-sm text-muted-ink">휴재일을 제외한 연재일에 비축 회차를 배정해요.</p>
         </section>
-      )}
 
-      <section aria-label="연재 달력" className="b-tools-paper grid grid-cols-1 gap-3">
-        <h2 className="b-heading">연재 달력</h2>
-        <MonthCalendar
-          month={month}
-          today={today}
-          slots={result?.slots ?? []}
-          items={input.items}
-          onMonthChange={setMonth}
-        />
-        <p className="text-xs text-muted-foreground">
-          휴재일을 제외한 연재일에 비축 회차를 배정해요.
-        </p>
-      </section>
+        <div className="wg-schedule-summary">
+          <section aria-label="요약">
+            <dl className="wg-schedule-ledger">
+              <div>
+                <dt className="font-medium">비축분</dt>
+                <dd className="wg-schedule-stock">
+                  <CountCell value={bufferCount} unit="화" className="wg-schedule-stock-count" />
+                  {bufferTarget > 0 && (
+                    <CellMeter
+                      value={bufferCount}
+                      max={bufferTarget}
+                      cells={bufferTarget}
+                      label="비축 목표"
+                      className="wg-schedule-meter"
+                    />
+                  )}
+                </dd>
+              </div>
+              <SummaryRow
+                label="다음 연재"
+                value={
+                  calculating
+                    ? '계산 중'
+                    : nextPublish
+                      ? formatKoreanDate(nextPublish)
+                      : '연재 요일 없음'
+                }
+              />
+              <SummaryRow
+                label="비축 소진 예상"
+                value={
+                  calculating
+                    ? '계산 중'
+                    : bufferCount === 0
+                      ? '비축분 없음'
+                      : result.bufferRunsOutOn
+                        ? formatKoreanDate(result.bufferRunsOutOn)
+                        : '향후 6주 안에 없음'
+                }
+              />
+              <SummaryRow
+                label="다음 마감"
+                value={
+                  calculating
+                    ? '계산 중'
+                    : deadline
+                      ? `${deadline.title} D-${deadline.daysLeft}`
+                      : '마감 없음'
+                }
+              />
+            </dl>
+            {soon && <p className="wg-schedule-warning">비축분이 곧 떨어져요</p>}
+          </section>
+
+          {result && result.warnings.length > 0 && (
+            <section aria-label="경고" className="wg-schedule-warning grid gap-1">
+              {result.warnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </section>
+          )}
+
+          {alertCount > 0 && (
+            <div>
+              <PopLink href={`/works/${workId}#home-alerts`} variant="flat">
+                주기 점검 {alertCount}건
+              </PopLink>
+            </div>
+          )}
+        </div>
+      </div>
 
       <section aria-label="비축 회차" className="flex flex-col gap-3">
-        <h2 className="b-heading">비축 회차</h2>
+        <h2 className="b-subhead">비축 회차</h2>
         {bufferChapters.length === 0 ? (
-          <div className="b-tools-empty">
-            <CalendarClockIcon aria-hidden="true" />
-            <EmptyState
-              title="아직 비축 회차가 없어요."
-              description="연재일을 지정하지 않은 완료 회차가 여기에 보여요."
-            />
-          </div>
+          <EmptyState
+            title="아직 비축 회차가 없어요."
+            description="연재일을 지정하지 않은 완료 회차가 여기에 보여요."
+          />
         ) : (
-          <ul className="flex flex-col divide-y rounded-xl border">
+          <ul className="wg-schedule-rows">
             {bufferChapters.map((chapter) => (
-              <li
-                key={chapter.id}
-                className="b-tools-index-row flex items-center justify-between gap-3 px-4 py-3"
-              >
-                <span className="min-w-0 truncate text-sm">
+              <li key={chapter.id} className="b-row wg-schedule-buffer-row">
+                <span className="min-w-0 text-sm wrap-anywhere">
                   {chapterLabel(chapter.position, chapter.title)}
                 </span>
                 {canEdit && (
@@ -200,16 +198,12 @@ export function ScheduleView({
       </section>
 
       <section aria-label="일정 항목" className="flex flex-col gap-3">
-        <h2 className="b-heading">일정 항목</h2>
+        <h2 className="b-subhead">일정 항목</h2>
         {canEdit && (
-          <Card className="border-2 border-ink">
-            <CardHeader>
-              <CardTitle>새 일정</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScheduleItemForm workId={workId} today={today} chapters={input.chapters} />
-            </CardContent>
-          </Card>
+          <Sheet as="div" className="grid gap-4">
+            <p className="font-medium">새 일정</p>
+            <ScheduleItemForm workId={workId} today={today} chapters={input.chapters} />
+          </Sheet>
         )}
         <ScheduleItemList
           workId={workId}
@@ -220,20 +214,20 @@ export function ScheduleView({
       </section>
 
       <section aria-label="연재 설정" className="flex flex-col gap-3">
-        <h2 className="b-heading">연재 설정</h2>
-        <div className="b-tools-paper">
+        <h2 className="b-subhead">연재 설정</h2>
+        <Sheet as="div">
           <PublishSettings workId={workId} canEdit={isOwner} settings={input.settings} />
-        </div>
+        </Sheet>
       </section>
     </div>
   )
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="b-tools-summary-date">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+    <div>
+      <dt>{label}</dt>
+      <dd className="font-mono">{value}</dd>
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 import { SubmitButton } from '@/components/app/submit-button'
+import { CountCell } from '@/components/motion'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -35,18 +36,22 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
 
   if (!canEdit) {
     return (
-      <dl className="grid gap-3 text-sm sm:grid-cols-3">
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground">연재 요일</dt>
+      <dl className="wg-schedule-ledger">
+        <div>
+          <dt>연재 요일</dt>
           <dd>{dayText || '없음'}</dd>
         </div>
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground">하루 회차 수</dt>
-          <dd>{settings.chaptersPerPublishDay}화</dd>
+        <div>
+          <dt>하루 회차 수</dt>
+          <dd>
+            <CountCell value={settings.chaptersPerPublishDay} unit="화" />
+          </dd>
         </div>
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground">비축 목표</dt>
-          <dd>{settings.bufferTarget}화</dd>
+        <div>
+          <dt>비축 목표</dt>
+          <dd>
+            <CountCell value={settings.bufferTarget} unit="화" />
+          </dd>
         </div>
       </dl>
     )
@@ -90,9 +95,9 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
           value={days}
           onValueChange={setDays}
           aria-labelledby="publish-days-label"
-          variant="outline"
           size="sm"
-          className="flex-wrap"
+          spacing={0}
+          className="max-w-full"
         >
           {WEEKDAY_LABELS.map((label, index) => (
             <ToggleGroupItem key={label} value={String(index)}>
@@ -113,7 +118,7 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             max={10}
             value={perDay}
             onChange={(e) => setPerDay(e.target.value)}
-            className="max-w-32"
+            className="max-w-32 font-mono"
           />
           {!validPerDay && <p className="text-xs text-ink">1~10 사이의 숫자를 입력하세요.</p>}
         </div>
@@ -127,7 +132,7 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
             max={100}
             value={buffer}
             onChange={(e) => setBuffer(e.target.value)}
-            className="max-w-32"
+            className="max-w-32 font-mono"
           />
           {!validBuffer && <p className="text-xs text-ink">0~100 사이의 숫자를 입력하세요.</p>}
         </div>

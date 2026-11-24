@@ -1,26 +1,33 @@
 'use client'
 
-import { ArrowUpRightIcon, FileUpIcon } from 'lucide-react'
 import { type DragEvent, useState } from 'react'
+import { Sheet } from '@/components/motion'
+import { buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { getTextWorker } from '@/lib/client/worker-client'
-import { cn } from '@/lib/utils'
 
 const ACCEPT = '.txt,.md,.docx'
 
+export type SelectedFile = { fileName: string; size: number }
+
 type FileDropProps = {
   disabled?: boolean
+  onSelect?: (file: SelectedFile) => void
   /** Called with the plain text of the file once the worker has decoded it. */
   onParsed: (file: { fileName: string; text: string }) => void
 }
 
 /** Step 1 of the import: pick or drop a TXT, MD or DOCX file and decode it in the worker. */
-export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
+export function FileDrop({ disabled = false, onSelect, onParsed }: FileDropProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [selected, setSelected] = useState<SelectedFile | null>(null)
 
   async function readFile(file: File) {
+    const selection = { fileName: file.name, size: file.size }
+    setSelected(selection)
+    onSelect?.(selection)
     setError(null)
     setBusy(true)
     try {
@@ -50,7 +57,7 @@ export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
     <div
       onDragOver={(event) => {
         event.preventDefault()
-        if (!disabled) setDragging(true)
+        if (!disabled && !busy) setDragging(true)
       }}
       onDragLeave={(event) => {
         if (
@@ -62,46 +69,53 @@ export function FileDrop({ disabled = false, onParsed }: FileDropProps) {
       }}
       data-dragging={dragging}
       onDrop={handleDrop}
-      className={cn(
-        'b-tools-file-drop grid gap-4 rounded-card border-2 border-dashed border-ink p-4 text-center sm:p-6',
-        dragging && 'bg-sand/45',
-      )}
+      className="wg-import-drop"
     >
-      <FileUpIcon className="b-tools-file-icon mx-auto size-10" aria-hidden="true" />
-      <div className="grid gap-1">
-        <p className="font-medium">원고 파일을 끌어다 놓거나 아래에서 골라 주세요.</p>
-        <p className="text-sm text-muted-foreground">
+      <Sheet as="div" label="20×10" ruled className="wg-import-drop-sheet">
+        <p className="wg-import-write font-medium">
+          원고 파일을 끌어다 놓거나 아래에서 골라 주세요.
+        </p>
+        <p className="wg-import-write text-sm text-muted-foreground">
           txt, md, docx 파일을 올릴 수 있어요. hwp 파일은 한글에서 docx나 txt로 저장해 주세요.
         </p>
-      </div>
-      <div className="b-tools-file-field mx-auto">
-        <Label htmlFor="manuscript-file" className="b-tools-file-choice">
-          원고 파일
-          <ArrowUpRightIcon aria-hidden="true" className="size-4" />
-        </Label>
-        <input
-          id="manuscript-file"
-          className="sr-only"
-          type="file"
-          accept={ACCEPT}
-          disabled={disabled || busy}
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ''
-            if (file) void readFile(file)
-          }}
-        />
-      </div>
-      {busy && (
-        <p role="status" className="text-sm text-muted-foreground">
-          파일을 읽고 있어요.
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-sm text-ink">
-          {error}
-        </p>
-      )}
+        <div className="wg-import-file-field wg-import-write">
+          <Label htmlFor="manuscript-file" className={buttonVariants()}>
+            원고 파일
+          </Label>
+          <input
+            id="manuscript-file"
+            className="sr-only"
+            type="file"
+            accept={ACCEPT}
+            disabled={disabled || busy}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void readFile(file)
+            }}
+          />
+        </div>
+        {selected && <FileDetails file={selected} />}
+        {busy && (
+          <p role="status" className="text-sm text-muted-foreground">
+            파일을 읽고 있어요.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="wg-import-error text-sm">
+            {error}
+          </p>
+        )}
+      </Sheet>
     </div>
+  )
+}
+
+export function FileDetails({ file }: { file: SelectedFile }) {
+  return (
+    <p className="wg-import-write flex flex-wrap items-baseline gap-x-3 font-mono text-sm">
+      <span className="min-w-0 wrap-anywhere">{file.fileName}</span>
+      <span className="text-muted-foreground">{file.size.toLocaleString('ko-KR')} B</span>
+    </p>
   )
 }

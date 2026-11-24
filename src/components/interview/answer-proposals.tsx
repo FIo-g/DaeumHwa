@@ -1,6 +1,5 @@
 'use client'
 
-import { CheckIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
 import { type ProposalDecision, ProposalCard } from '@/components/proposals/proposal-card'
 import type { ProposalView } from '@/server/proposals'
@@ -19,7 +18,7 @@ export function AnswerProposals({ workId, proposals, originalCount }: AnswerProp
 
   if (items.length === 0) {
     return (
-      <p className="text-sm text-muted-ink">
+      <p className="wg-import-write text-sm text-muted-ink">
         {originalCount > 0 ? '이 답의 후보 처리를 마쳤어요.' : '이 답에서 나온 새 제안이 없어요.'}
       </p>
     )
@@ -28,36 +27,38 @@ export function AnswerProposals({ workId, proposals, originalCount }: AnswerProp
   const pending = items.filter((item) => !decisions[item.id]).length
 
   return (
-    <section aria-label="이 답에서 나온 제안" className="b-tools-candidates">
-      <h2 className="font-bold">
+    <section aria-label="이 답에서 나온 제안" className="grid min-w-0 gap-3">
+      <h2 className="wg-import-write b-subhead">
         이 답에서 나온 제안{' '}
-        <span className="text-sm font-normal text-muted-ink">{`대기 ${pending}건`}</span>
+        <span className="font-mono text-sm font-normal text-muted-ink">{`대기 ${pending}건`}</span>
       </h2>
-      {items.map((proposal) => {
-        const decision = decisions[proposal.id]
-        if (decision) {
-          const approved = decision === 'approved'
-          const Icon = approved ? CheckIcon : XIcon
+      <ul className="wg-import-rows">
+        {items.map((proposal) => {
+          const decision = decisions[proposal.id]
           return (
-            <div key={proposal.id} role="status" className="b-tools-stamp" data-approved={approved}>
-              <Icon aria-hidden="true" />
-              {approved ? '승인했어요.' : '거절했어요.'}
-            </div>
+            <li
+              key={proposal.id}
+              className="wg-import-row wg-import-proposal"
+              data-type={proposal.type}
+            >
+              {decision ? (
+                <div role="status" className="wg-import-write text-sm">
+                  {decision === 'approved' ? '승인했어요.' : '거절했어요.'}
+                </div>
+              ) : (
+                <ProposalCard
+                  proposal={proposal}
+                  workId={workId}
+                  chapters={[]}
+                  onFinishDecision={(id, result) => {
+                    if (result) setDecisions((prev) => ({ ...prev, [id]: result }))
+                  }}
+                />
+              )}
+            </li>
           )
-        }
-        return (
-          <div key={proposal.id} className="b-tools-candidate">
-            <ProposalCard
-              proposal={proposal}
-              workId={workId}
-              chapters={[]}
-              onFinishDecision={(id, result) => {
-                if (result) setDecisions((prev) => ({ ...prev, [id]: result }))
-              }}
-            />
-          </div>
-        )
-      })}
+        })}
+      </ul>
     </section>
   )
 }

@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -109,11 +108,11 @@ export function ScheduleItemList({ workId, items, chapters, canEdit }: ScheduleI
   }
 
   return (
-    <ul className="flex flex-col divide-y rounded-xl border" aria-label="일정 목록">
+    <ul className="wg-schedule-rows" aria-label="일정 목록">
       {items.map((item) => {
         const chapter = item.chapterId ? chapterById.get(item.chapterId) : undefined
         return (
-          <li key={item.id} className="b-tools-index-row flex flex-wrap items-start gap-3 p-3">
+          <li key={item.id} className="b-row wg-schedule-list-row">
             {canEdit && (
               <Checkbox
                 className="mt-1"
@@ -124,16 +123,16 @@ export function ScheduleItemList({ workId, items, chapters, canEdit }: ScheduleI
               />
             )}
             <div className="flex min-w-0 flex-1 basis-36 flex-col gap-1 wrap-anywhere">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{SCHEDULE_KIND_LABEL[item.kind]}</Badge>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="wg-schedule-kind">{SCHEDULE_KIND_LABEL[item.kind]}</span>
                 <span
                   className={cn('b-row__title', item.done && 'text-muted-foreground line-through')}
                 >
                   {item.title}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {itemDateText(item)}
+              <p className="text-sm text-muted-ink">
+                <span className="font-mono">{itemDateText(item)}</span>
                 {chapter && ` · ${chapterLabel(chapter.position, chapter.title)}`}
               </p>
               {item.note && <p className="text-sm whitespace-pre-line">{item.note}</p>}
@@ -145,7 +144,7 @@ export function ScheduleItemList({ workId, items, chapters, canEdit }: ScheduleI
                   title="일정을 삭제할까요?"
                   description="삭제한 일정은 되돌릴 수 없어요."
                   confirmLabel="삭제"
-                  variant="outline"
+                  variant="destructive"
                   size="sm"
                   disabled={pendingId === item.id}
                   onConfirm={() => remove(item.id)}

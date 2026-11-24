@@ -1,12 +1,12 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
+import { PopLink } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import type { ImportJobRow, ImportJobStatus } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import {
@@ -68,12 +68,19 @@ type ImportProgressProps = {
   workId: string
   initial: ImportJobSnapshot
   canEdit: boolean
+  chapterLabels?: (string | undefined)[]
   /** Shown for finished or cancelled jobs. Returns the page to the upload step. */
   onClose?: () => void
 }
 
 /** Status, progress and the pause / resume / cancel controls of one import job. */
-export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProgressProps) {
+export function ImportProgress({
+  workId,
+  initial,
+  canEdit,
+  chapterLabels,
+  onClose,
+}: ImportProgressProps) {
   const router = useRouter()
   const [job, setJob] = useState(initial)
   const [busy, setBusy] = useState(false)
@@ -204,27 +211,21 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
     setKick((count) => count + 1)
   }
 
-  const percent =
-    job.totalChapters > 0
-      ? Math.min(100, Math.round((job.processedChapters / job.totalChapters) * 100))
-      : 0
   const canStart = canEdit && status === 'uploading'
   const canPause = canEdit && status === 'running'
   const canResume = canEdit && (status === 'paused' || status === 'error')
   const canRetry = canEdit && status === 'running' && runner === 'client' && notice !== null
   const canCancel = canEdit && CANCELABLE.includes(status)
   const canSkip = canEdit && status === 'error'
+  const activeChapter = chapterLabels?.[job.processedChapters]
   const beforeExtraction = status === 'uploading' || (status === 'cancelled' && !job.started)
 
   return (
-    <ImportStages
-      stage={status === 'done' ? 4 : beforeExtraction ? 2 : 3}
-      running={status === 'running'}
-    >
+    <ImportStages stage={status === 'done' ? 4 : beforeExtraction ? 2 : 3}>
       <section aria-label="가져오기 진행 상황" className="grid min-w-0 gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="grid gap-1">
-            <p className="font-bold wrap-anywhere">{job.fileName}</p>
+        <div className="wg-import-write flex flex-wrap items-start justify-between gap-2">
+          <div className="grid min-w-0 gap-1 font-mono">
+            <p className="wrap-anywhere">{job.fileName}</p>
             <p className="text-sm text-muted-foreground">
               {`${job.processedChapters}/${job.totalChapters}화 처리`}
             </p>
@@ -232,42 +233,57 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
           <Badge variant="outline">{IMPORT_STATUS_LABEL[status]}</Badge>
         </div>
 
-        <ImportMeter value={percent} label="처리 진행률" />
+        <ImportMeter
+          completed={job.processedChapters}
+          total={job.totalChapters}
+          label="처리 진행률"
+        />
+
+        {status === 'running' && activeChapter && (
+          <p
+            key={job.processedChapters}
+            className="wg-import-processing font-heading font-bold wrap-anywhere"
+          >
+            {activeChapter}
+          </p>
+        )}
 
         {status === 'running' && (
-          <p className="text-sm text-muted-foreground">
+          <p className="wg-import-write text-sm text-muted-foreground">
             {runner === 'client'
               ? '회차를 처리하는 동안 이 화면을 열어 두세요.'
               : '이 화면을 닫아도 회차를 처리해요.'}
           </p>
         )}
         {status === 'uploading' && (
-          <p className="text-sm text-muted-foreground">
+          <p className="wg-import-write text-sm text-muted-foreground">
             원고를 올리다 멈춘 작업일 수 있어요. 가져오기 시작 전 전체 회차가 올라갔는지 확인해
             주세요.
           </p>
         )}
         {status === 'done' && (
-          <p className="text-sm text-muted-foreground">승인한 카드와 사실만 위키에 들어가요.</p>
+          <p className="wg-import-write text-sm text-muted-foreground">
+            승인한 카드와 사실만 위키에 들어가요.
+          </p>
         )}
         {status === 'cancelled' && (
-          <p className="text-sm text-muted-foreground">가져오기를 취소했어요.</p>
+          <p className="wg-import-write text-sm text-muted-foreground">가져오기를 취소했어요.</p>
         )}
 
         {job.skipped.length > 0 && (
-          <p className="text-sm text-muted-foreground">
+          <p className="wg-import-write text-sm text-muted-foreground">
             {`건너뛴 회차: ${job.skipped.map((position) => `${position}화`).join(', ')}`}
           </p>
         )}
 
         {job.error && (
-          <Alert>
-            <AlertDescription>{job.error}</AlertDescription>
+          <Alert variant="destructive">
+            <AlertDescription className="wrap-anywhere">{job.error}</AlertDescription>
           </Alert>
         )}
         {notice && (
-          <Alert>
-            <AlertDescription>{notice}</AlertDescription>
+          <Alert variant="destructive">
+            <AlertDescription className="wrap-anywhere">{notice}</AlertDescription>
           </Alert>
         )}
 
@@ -315,15 +331,12 @@ export function ImportProgress({ workId, initial, canEdit, onClose }: ImportProg
           )}
           {status === 'done' && (
             <>
-              <Link className={buttonVariants()} href={`/works/${workId}/approvals`}>
+              <PopLink href={`/works/${workId}/approvals`} arrow={false}>
                 승인 대기에서 확인하기
-              </Link>
-              <Link
-                className={buttonVariants({ variant: 'outline' })}
-                href={`/works/${workId}/wiki`}
-              >
+              </PopLink>
+              <PopLink variant="flat" href={`/works/${workId}/wiki`} arrow={false}>
                 설정 보드 보기
-              </Link>
+              </PopLink>
             </>
           )}
           {onClose && TERMINAL.includes(status) && (

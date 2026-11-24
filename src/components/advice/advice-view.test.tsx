@@ -62,7 +62,7 @@ describe('AdviceView', () => {
   })
 })
 
-it('brings only the chosen option to the front', () => {
+it('marks only the chosen option as selected', () => {
   render(
     <AdviceView
       workId="w1"

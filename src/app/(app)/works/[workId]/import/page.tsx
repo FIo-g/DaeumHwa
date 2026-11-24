@@ -1,8 +1,9 @@
-import { FolderInputIcon } from 'lucide-react'
 import { PageHeader } from '@/components/app/page-header'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { TrialToolGate } from '@/components/app/trial-tool-gate'
+import { chapterLabel } from '@/lib/labels'
 import { hasRole } from '@/server/access'
+import { listChapters } from '@/server/chapters'
 import { listImportJobs } from '@/server/imports'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getWork } from '@/server/works'
@@ -23,23 +24,25 @@ export default async function ImportPage({ params }: { params: Promise<{ workId:
       />
     )
   const jobs = await guardPage(() => listImportJobs(db, actor, workId))
+  const importedIds = new Set(jobs.flatMap((job) => job.chapterIds))
+  const chapters = importedIds.size
+    ? await guardPage(() => listChapters(db, actor, workId, { includeArchived: true }))
+    : []
+  const chapterLabels = Object.fromEntries(
+    chapters
+      .filter((chapter) => importedIds.has(chapter.id))
+      .map(({ id, position, title }) => [id, chapterLabel(position, title)]),
+  )
 
   return (
-    <div className="flex flex-col">
-      <PageHeader
-        title="원고 가져오기"
-        band="cream"
-        actions={
-          <span className="b-tools-header-art" data-tool="import" aria-hidden="true">
-            <i />
-            <i />
-            <span>
-              <FolderInputIcon />
-            </span>
-          </span>
-        }
+    <div className="wg-import-page flex flex-col" data-tool="import">
+      <PageHeader title="원고 가져오기" />
+      <ImportWizard
+        workId={workId}
+        canEdit={hasRole(work.role, 'editor')}
+        jobs={jobs}
+        chapterLabels={chapterLabels}
       />
-      <ImportWizard workId={workId} canEdit={hasRole(work.role, 'editor')} jobs={jobs} />
     </div>
   )
 }

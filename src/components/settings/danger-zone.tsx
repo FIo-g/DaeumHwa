@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { runAction } from '@/lib/client/run-action'
 import { setWorkArchivedAction } from '@/server/actions/works'
+import { SettingsSection } from './settings-section'
 
 type DangerZoneProps = {
   workId: string
@@ -22,36 +23,41 @@ export function DangerZone({ workId, archived }: DangerZoneProps) {
   }
 
   return (
-    <section className="b-tools-paper b-tools-danger flex max-w-xl flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h2 className="font-medium">보관</h2>
-        <p className="text-sm text-muted-foreground">
-          {archived
-            ? '보관된 작품이에요.'
-            : '보관한 작품은 목록에서 빠져요. 원고와 설정은 나중에 다시 열 수 있어요.'}
-        </p>
-      </div>
-      <div>
-        {archived ? (
-          <ConfirmButton
-            title="보관을 해제할까요?"
-            description="작품 목록에 다시 보여요."
-            confirmLabel="보관 해제"
-            onConfirm={() => setArchived(false)}
-          >
-            보관 해제
-          </ConfirmButton>
-        ) : (
-          <ConfirmButton
-            title="작품을 보관할까요?"
-            description="나중에 보관을 해제할 수 있어요."
-            confirmLabel="보관"
-            onConfirm={() => setArchived(true)}
-          >
-            작품 보관
-          </ConfirmButton>
-        )}
-      </div>
-    </section>
+    <SettingsSection
+      title="보관 관리"
+      danger
+      lead={
+        <>
+          <h2>보관</h2>
+          <p>
+            {archived
+              ? '보관된 작품이에요.'
+              : '보관한 작품은 목록에서 빠져요. 원고와 설정은 나중에 다시 열 수 있어요.'}
+          </p>
+        </>
+      }
+    >
+      {archived ? (
+        <ConfirmButton
+          title="보관을 해제할까요?"
+          description="작품 목록에 다시 보여요."
+          confirmLabel="보관 해제"
+          variant="destructive"
+          onConfirm={() => setArchived(false)}
+        >
+          보관 해제
+        </ConfirmButton>
+      ) : (
+        <ConfirmButton
+          title="작품을 보관할까요?"
+          description="나중에 보관을 해제할 수 있어요."
+          confirmLabel="보관"
+          variant="destructive"
+          onConfirm={() => setArchived(true)}
+        >
+          작품 보관
+        </ConfirmButton>
+      )}
+    </SettingsSection>
   )
 }

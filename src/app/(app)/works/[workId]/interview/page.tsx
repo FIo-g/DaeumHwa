@@ -1,4 +1,3 @@
-import { MessagesSquareIcon } from 'lucide-react'
 import { PageHeader } from '@/components/app/page-header'
 import { InterviewSession } from '@/components/interview/interview-session'
 import { TrialToolGate } from '@/components/app/trial-tool-gate'
@@ -34,20 +33,8 @@ export default async function InterviewPage({ params }: { params: Promise<{ work
     : []
 
   return (
-    <div className="flex flex-col">
-      <PageHeader
-        title="인터뷰"
-        band="sand"
-        actions={
-          <span className="b-tools-header-art" data-tool="interview" aria-hidden="true">
-            <i />
-            <i />
-            <span>
-              <MessagesSquareIcon />
-            </span>
-          </span>
-        }
-      />
+    <div className="wg-import-page flex flex-col" data-tool="interview">
+      <PageHeader title="인터뷰" />
       <InterviewSession
         workId={workId}
         canEdit={canEdit}

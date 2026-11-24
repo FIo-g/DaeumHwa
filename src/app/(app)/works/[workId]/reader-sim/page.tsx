@@ -1,4 +1,3 @@
-import { MessageSquareTextIcon } from 'lucide-react'
 import { ReaderSimControls } from '@/components/reader-sim/reader-sim-controls'
 import { hasRole } from '@/server/access'
 import { READER_PERSONAS } from '@/ai/personas'
@@ -61,21 +60,9 @@ export default async function ReaderSimPage({ params }: { params: Promise<{ work
   const personaNames = Object.fromEntries(READER_PERSONAS.map((p) => [p.id, p.name]))
 
   return (
-    <div className="flex flex-col">
-      <PageHeader
-        title="독자 시뮬레이션"
-        band="kraft"
-        actions={
-          <span className="b-tools-header-art" data-tool="reader-sim" aria-hidden="true">
-            <i />
-            <i />
-            <span>
-              <MessageSquareTextIcon />
-            </span>
-          </span>
-        }
-      />
-      <div className="grid min-w-0 grid-cols-1 gap-7">
+    <div className="wg-advice-page">
+      <PageHeader title="독자 시뮬레이션" />
+      <div className="wg-advice-body">
         {hasRole(work.role, 'editor') && (
           <ReaderSimControls
             workId={workId}

@@ -90,7 +90,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
+    <form onSubmit={onSubmit} className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={fieldId('kind')}>종류</Label>
         <Select
@@ -128,6 +128,7 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
         <Input
           id={fieldId('date')}
           type="date"
+          className="font-mono"
           required
           value={date}
           onChange={(e) => setDate(e.target.value)}
@@ -135,12 +136,11 @@ export function ScheduleItemForm({ workId, today, chapters, item, onDone }: Sche
       </div>
       {kind === 'hiatus' && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={fieldId('end-date')}>
-            끝나는 날 <span className="b-tools-field-cue" aria-hidden="true" />
-          </Label>
+          <Label htmlFor={fieldId('end-date')}>끝나는 날</Label>
           <Input
             id={fieldId('end-date')}
             type="date"
+            className="font-mono"
             value={endDate}
             min={date}
             onChange={(e) => setEndDate(e.target.value)}

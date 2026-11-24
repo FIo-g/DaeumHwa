@@ -4,18 +4,21 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
+import { Sheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import type { ImportJobRow, ImportJobStatus } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { seoulToday } from '@/lib/dates'
 import { getTextWorker } from '@/lib/client/worker-client'
 import type { SplitChapter, SplitMethod } from '@/lib/import/split'
+import { stripEpisodePrefix } from '@/lib/labels'
 import {
   appendImportChaptersAction,
   createImportJobAction,
   startImportJobAction,
 } from '@/server/actions/imports'
-import { FileDrop } from './file-drop'
+import { FileDetails, FileDrop, type SelectedFile } from './file-drop'
 import {
   IMPORT_STATUS_LABEL,
   ImportProgress,
@@ -36,19 +39,24 @@ type ImportWizardProps = {
   workId: string
   canEdit: boolean
   jobs: ImportJobRow[]
+  chapterLabels: Record<string, string>
 }
 
 /**
  * The import page. Shows the one unfinished job if there is one; otherwise walks the author
  * through file, preview and upload. Earlier jobs are listed below.
  */
-export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
+export function ImportWizard({ workId, canEdit, jobs, chapterLabels }: ImportWizardProps) {
   const router = useRouter()
   const [current, setCurrent] = useState<ImportJobSnapshot | null>(() => {
     const active = jobs.find((job) => ACTIVE_STATUSES.includes(job.status))
     return active ? toSnapshot(active) : null
   })
   const [step, setStep] = useState<Step>('file')
+  const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null)
+  const [uploadedTitles, setUploadedTitles] = useState<{ jobId: string; titles: string[] } | null>(
+    null,
+  )
   const [preview, setPreview] = useState<Preview | null>(null)
   const [splitting, setSplitting] = useState(false)
   const [uploaded, setUploaded] = useState(0)
@@ -104,51 +112,58 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
     const started = await runAction(startImportJobAction({ jobId: job.id }), {
       success: '가져오기를 시작했어요.',
     })
+    setUploadedTitles({
+      jobId: job.id,
+      titles: drafts.map(({ title }) => stripEpisodePrefix(title) || title.trim()),
+    })
     finishUpload(toSnapshot(started ?? job))
   }
 
   function finishUpload(snapshot: ImportJobSnapshot) {
     setPreview(null)
+    setSelectedFile(null)
     setStep('file')
     setCurrent(snapshot)
     router.refresh()
   }
 
+  const currentJob = current && jobs.find((job) => job.id === current.id)
+  const uploadTitles = uploadedTitles?.jobId === current?.id ? uploadedTitles?.titles : undefined
+  const currentLabels = currentJob?.chapterIds.length
+    ? currentJob.chapterIds.map((id, index) => chapterLabels[id] ?? uploadTitles?.[index])
+    : uploadTitles
+
   return (
-    <div className="grid gap-6">
+    <div className="wg-import-content grid gap-6">
       {current ? (
         <ImportProgress
           key={current.id}
           workId={workId}
           initial={current}
           canEdit={canEdit}
+          chapterLabels={currentLabels}
           onClose={() => setCurrent(null)}
         />
       ) : canEdit ? (
-        <ImportStages
-          stage={step === 'file' && !splitting ? 1 : 2}
-          running={splitting || step === 'uploading'}
-        >
-          <div className="grid min-w-0 gap-4">
-            {step === 'file' && !splitting && <FileDrop onParsed={handleParsed} />}
+        <ImportStages stage={step === 'file' && !splitting ? 1 : 2}>
+          <div className="grid min-w-0 gap-3">
+            {step === 'file' && !splitting && (
+              <FileDrop onSelect={setSelectedFile} onParsed={handleParsed} />
+            )}
+            {selectedFile && (splitting || step !== 'file') && <FileDetails file={selectedFile} />}
             {splitting && (
-              <p role="status" className="text-sm text-muted-ink">
+              <p role="status" className="wg-import-write text-sm text-muted-ink">
                 회차를 나누고 있어요.
               </p>
             )}
 
             {step === 'preview' && preview && (
               <>
-                <p className="text-sm text-muted-ink">
+                <p className="wg-import-write text-sm text-muted-ink">
                   가져온 회차는 기존 회차 뒤에 완료 상태로 추가돼요.
                 </p>
                 <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="size-4"
-                    checked={alreadyPublished}
-                    onChange={(event) => setAlreadyPublished(event.target.checked)}
-                  />
+                  <Checkbox checked={alreadyPublished} onCheckedChange={setAlreadyPublished} />
                   이미 연재한 원고예요 (비축분에서 제외)
                 </label>
                 <SplitPreview
@@ -156,6 +171,7 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
                   initial={preview.chapters}
                   onBack={() => {
                     setPreview(null)
+                    setSelectedFile(null)
                     setStep('file')
                   }}
                   onConfirm={(drafts) => void startUpload(preview, drafts)}
@@ -167,32 +183,33 @@ export function ImportWizard({ workId, canEdit, jobs }: ImportWizardProps) {
               <div className="grid gap-2">
                 <p
                   role="status"
-                  className="text-sm font-medium"
+                  className="wg-import-write font-mono text-sm"
                 >{`${uploaded}/${uploadTotal}화 올리는 중`}</p>
-                <ImportMeter
-                  value={uploadTotal === 0 ? 0 : Math.round((uploaded / uploadTotal) * 100)}
-                  label="파일 올리기 진행률"
-                />
+                <ImportMeter completed={uploaded} total={uploadTotal} label="파일 올리기 진행률" />
               </div>
             )}
           </div>
         </ImportStages>
       ) : (
-        <p className="text-sm text-muted-foreground">편집자 이상만 원고를 가져올 수 있어요.</p>
+        <Sheet ruled>
+          <p className="wg-import-write text-sm text-muted-foreground">
+            편집자 이상만 원고를 가져올 수 있어요.
+          </p>
+        </Sheet>
       )}
 
       {!current && jobs.length > 0 && (
         <section aria-label="가져오기 기록" className="grid gap-3">
-          <h2 className="b-heading">가져오기 기록</h2>
-          <ul className="grid divide-y rounded-card border border-ink">
+          <h2 className="b-subhead">가져오기 기록</h2>
+          <ul className="wg-import-rows">
             {jobs.map((job) => (
               <li
                 key={job.id}
-                className="b-tools-index-row flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
+                className="wg-import-row flex flex-wrap items-center justify-between gap-2 text-sm"
               >
                 <div className="grid min-w-0 gap-0.5 wrap-anywhere">
-                  <span className="b-row__title">{job.fileName}</span>
-                  <span className="text-muted-foreground">
+                  <span className="font-mono">{job.fileName}</span>
+                  <span className="font-mono text-muted-foreground">
                     {`${job.processedChapters}/${job.totalChapters}화`}
                   </span>
                 </div>

@@ -1,0 +1,311 @@
+@layer components {
+  .wg-import-content {
+    inline-size: min(100%, 52rem);
+    min-inline-size: 0;
+    padding-block: var(--b-s5) var(--b-s6);
+  }
+
+  .wg-import-page[data-tool='interview'] .wg-import-content {
+    inline-size: min(100%, 46rem);
+  }
+
+  .wg-import-stages {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-inline-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-import-stage {
+    position: relative;
+    display: grid;
+    align-items: stretch;
+    min-inline-size: 0;
+    border-block: var(--b-line) solid var(--b-grid);
+    border-inline-end: var(--b-line) solid var(--b-grid);
+    color: var(--b-muted);
+  }
+
+  .wg-import-stage > h2 {
+    display: grid;
+    min-block-size: 2.75rem;
+    place-items: center;
+    padding: var(--b-s1);
+    font-size: var(--b-t-label);
+    font-weight: 500;
+    text-align: center;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  .wg-import-stage[data-state='current'] {
+    z-index: 1;
+    outline: var(--b-rule) solid var(--b-ink);
+    outline-offset: calc(-1 * var(--b-line));
+    color: var(--b-ink);
+  }
+
+  .wg-import-stage[data-state='past'] {
+    color: var(--b-paper);
+  }
+
+  .wg-import-stage[data-state='past'] > h2 {
+    background: var(--b-ink);
+  }
+
+  .wg-import-stage-content,
+  .wg-import-meter {
+    min-inline-size: 0;
+  }
+
+  .wg-import-drop-sheet.wg-sheet {
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    min-block-size: 12rem;
+    gap: var(--b-s2);
+    padding-inline: var(--b-s3);
+    line-height: 1.9;
+  }
+
+  .wg-import-drop-sheet > .wg-sheet-edge {
+    justify-self: stretch;
+    margin-block-end: 0;
+  }
+
+  .wg-import-drop[data-dragging='true'] .wg-import-drop-sheet {
+    border-block-color: var(--b-ink);
+    border-block-end-width: var(--b-rule);
+  }
+
+  .wg-import-file-field {
+    position: relative;
+    justify-self: start;
+    margin-block-start: var(--b-s1);
+  }
+
+  .wg-import-file-field > label {
+    cursor: pointer;
+  }
+
+  .wg-import-file-field:has(:focus-visible) > label {
+    outline: var(--b-rule) solid var(--b-ink);
+    outline-offset: 3px;
+  }
+
+  .wg-import-file-field:has(:disabled) > label {
+    cursor: not-allowed;
+  }
+
+  .wg-import-rows {
+    counter-reset: wg-import-line;
+    min-inline-size: 0;
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-import-row {
+    position: relative;
+    min-inline-size: 0;
+    padding-block: var(--b-s3);
+    padding-inline-start: var(--b-s6);
+    border-block-start: var(--b-line) solid var(--b-grid);
+    counter-increment: wg-import-line;
+  }
+
+  .wg-import-row::before {
+    position: absolute;
+    inset-block-start: var(--b-s4);
+    inset-inline-start: var(--b-s1);
+    color: var(--b-muted);
+    font: 400 0.6875rem / 1 var(--b-font-mono);
+    content: counter(wg-import-line, decimal-leading-zero) / '';
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .wg-import-row:is(:hover, :focus-within) {
+    border-block-start-color: var(--b-ink);
+  }
+
+  .wg-import-row:is(:hover, :focus-within)::before {
+    opacity: 1;
+  }
+
+  .wg-import-split-heading {
+    display: grid;
+    grid-template-columns: minmax(2ch, auto) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--b-s2);
+  }
+
+  .wg-import-preview-line {
+    color: var(--b-muted);
+    font-size: var(--b-t-manuscript);
+    line-height: 1.75;
+  }
+
+  .wg-import-error {
+    border-block-start: var(--b-rule) solid var(--b-ink);
+    padding-block-start: var(--b-s2);
+    color: var(--b-ink);
+  }
+
+  .wg-import-cells {
+    --wg-import-cell-size: 0.875rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, var(--wg-import-cell-size));
+    row-gap: var(--b-s1);
+    max-inline-size: 100%;
+    padding-inline-end: var(--b-line);
+  }
+
+  .wg-import-cells > span {
+    position: relative;
+    block-size: var(--wg-import-cell-size);
+    border: var(--b-line) solid var(--b-grid);
+    border-inline-end-width: 0;
+  }
+
+  .wg-import-cells > span::after {
+    position: absolute;
+    inset: 0 calc(-1 * var(--b-line)) 0 auto;
+    inline-size: var(--b-line);
+    background: var(--b-grid);
+    content: '';
+  }
+
+  .wg-import-cells > span::before {
+    position: absolute;
+    inset: 0;
+    background: var(--b-ink);
+    content: '';
+    clip-path: inset(0 100% 0 0);
+  }
+
+  .wg-import-cells > span[data-filled]::before {
+    clip-path: inset(0);
+  }
+
+  .wg-import-question::before {
+    content: none;
+  }
+
+  .wg-import-question-number {
+    position: absolute;
+    inset-block-start: var(--b-s3);
+    inset-inline-start: var(--b-s1);
+    color: var(--b-muted);
+    line-height: 1.625rem;
+  }
+
+  .wg-import-question:is(:hover, :focus-within) .wg-import-question-number {
+    color: var(--b-ink);
+  }
+
+  .wg-import-question-text {
+    line-height: 1.6;
+  }
+
+  .wg-import-question .wg-import-question-heading [data-slot='badge'] {
+    white-space: normal;
+  }
+
+  .wg-import-recent {
+    border-block-start: var(--b-line) solid var(--b-grid);
+    padding-block: var(--b-s3);
+  }
+
+  .wg-import-exchange {
+    font: 400 var(--b-t-manuscript) / 1.75 var(--b-font-title);
+  }
+
+  .wg-import-exchange[data-past] {
+    color: var(--b-muted);
+  }
+
+  .wg-import-proposal > article {
+    border: 0;
+    padding-block: 0;
+  }
+
+  .wg-import-proposal[data-type='fact_create'] .wg-approvals-detail {
+    justify-self: start;
+    border: var(--b-line) solid var(--b-grid);
+    padding-inline: var(--b-s2);
+    color: var(--b-ink);
+    font-size: var(--b-t-label);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-import-stage[data-state='past'] > h2 {
+      animation: wg-import-fill var(--b-step) var(--b-out) both;
+    }
+
+    .wg-import-content:has(.wg-import-stage[data-state='current']:first-child) .wg-import-stages {
+      animation: wg-import-fill var(--b-draw) var(--b-out) both;
+    }
+
+    .wg-import-drop-sheet,
+    .wg-import-empty,
+    .wg-import-interview-progress {
+      --wg-import-write-start: var(--b-draw);
+    }
+
+    .wg-import-write,
+    .wg-import-empty :is(p, button) {
+      animation: wg-import-line var(--b-step) var(--b-out)
+        calc(var(--wg-import-write-start, 0ms) + var(--wg-import-order, 0) * var(--b-stagger)) both;
+    }
+
+    .wg-import-write:nth-child(2),
+    .wg-import-empty p:nth-of-type(2) {
+      --wg-import-order: 1;
+    }
+
+    .wg-import-write:nth-child(3),
+    .wg-import-empty button {
+      --wg-import-order: 2;
+    }
+
+    .wg-import-drop-sheet > .wg-import-file-field {
+      --wg-import-order: 2;
+    }
+
+    .wg-import-question-text {
+      animation: wg-import-line var(--b-step) var(--b-out) var(--b-stagger) both;
+    }
+
+    .wg-import-processing {
+      animation: wg-import-line var(--b-step) var(--b-out) both;
+    }
+
+    .wg-import-row::before {
+      transition: opacity var(--b-quick) var(--b-out);
+    }
+
+    .wg-import-cells > span::before {
+      transition: clip-path var(--b-quick) var(--b-out);
+    }
+
+    .wg-import-exchange[data-settling] {
+      animation: wg-import-settle var(--b-step) var(--b-out) both;
+    }
+  }
+
+  @keyframes wg-import-fill {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+  }
+
+  @keyframes wg-import-line {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+  }
+
+  @keyframes wg-import-settle {
+    from {
+      transform: translateY(var(--b-s2));
+    }
+  }
+}

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { PopButton } from '@/components/motion'
 import { Input } from '@/components/ui/input'
 import type { SplitChapter, SplitMethod } from '@/lib/import/split'
 import { countChars } from '@/lib/korean/chars'
@@ -70,33 +69,36 @@ export function SplitPreview({
 
   return (
     <section aria-label="회차 나누기 미리보기" className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">{`나눈 방식: ${METHOD_LABEL[method]}`}</p>
-      <p className="text-sm font-medium">{`${total}화를 가져와요. 회차마다 AI를 한 번 써요.`}</p>
+      <p className="wg-import-write text-sm text-muted-foreground">{`나눈 방식: ${METHOD_LABEL[method]}`}</p>
+      <p className="wg-import-write text-sm font-medium">{`${total}화를 가져와요. 회차마다 AI를 한 번 써요.`}</p>
 
       {total === 0 && <p className="text-sm text-muted-foreground">가져올 회차가 없어요.</p>}
 
-      <ol className="flex flex-col gap-3">
+      <ol className="wg-import-rows">
         {chapters.map((chapter, index) => (
-          <li key={chapter.id} className="b-tools-index-row grid gap-2 rounded-lg border p-3">
-            <div className="flex items-center gap-2">
-              <span className="b-number shrink-0" aria-hidden="true">
+          <li key={chapter.id} className="wg-import-row grid min-w-0 gap-2">
+            <div className="wg-import-split-heading">
+              <span className="font-mono text-sm" aria-hidden="true">
                 {index + 1}
               </span>
               <Input
                 aria-label={`${index + 1}번째 회차 제목`}
                 value={chapter.title}
                 maxLength={200}
+                className="min-w-0 font-heading font-bold"
                 onChange={(event) => setTitle(chapter.id, event.target.value)}
               />
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="font-mono text-xs text-muted-foreground">
                 {`${countChars(chapter.body).withSpaces}자`}
               </span>
             </div>
-            <p className="truncate text-sm text-muted-foreground">{firstLine(chapter.body)}</p>
+            <p className="wg-import-preview-line wg-import-write font-heading wrap-anywhere">
+              {firstLine(chapter.body)}
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 disabled={index === 0}
                 onClick={() => mergeWithPrevious(chapter.id)}
               >
@@ -111,7 +113,7 @@ export function SplitPreview({
       </ol>
 
       {tooMany && (
-        <p role="alert" className="text-sm text-ink">
+        <p role="alert" className="wg-import-error text-sm">
           {`회차는 ${MAX_CHAPTERS}화까지 가져올 수 있어요. 회차를 합치거나 제외해 주세요.`}
         </p>
       )}
@@ -120,9 +122,9 @@ export function SplitPreview({
         <Button variant="outline" onClick={onBack} disabled={busy}>
           파일 다시 고르기
         </Button>
-        <PopButton onClick={() => onConfirm(chapters)} disabled={busy || total === 0 || tooMany}>
+        <Button onClick={() => onConfirm(chapters)} disabled={busy || total === 0 || tooMany}>
           이대로 가져오기
-        </PopButton>
+        </Button>
       </div>
     </section>
   )

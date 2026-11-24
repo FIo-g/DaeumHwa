@@ -1,4 +1,3 @@
-import { CalendarDaysIcon } from 'lucide-react'
 import { PageHeader } from '@/components/app/page-header'
 import { ScheduleView } from '@/components/schedule/schedule-view'
 import { seoulToday } from '@/lib/dates'
@@ -21,19 +20,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ workI
 
   return (
     <div className="flex flex-col">
-      <PageHeader
-        title="연재 일정"
-        band="cream"
-        actions={
-          <span className="b-tools-header-art" data-tool="schedule" aria-hidden="true">
-            <i />
-            <i />
-            <span>
-              <CalendarDaysIcon />
-            </span>
-          </span>
-        }
-      />
+      <PageHeader title="연재 일정" />
       <ScheduleView
         workId={workId}
         today={today}

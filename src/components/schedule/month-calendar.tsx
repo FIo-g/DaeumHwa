@@ -1,10 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { type CSSProperties, type KeyboardEvent, useId, useRef, useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { Sheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import type { ScheduleKind } from '@/db/types'
-import { addDays, dayOfWeek } from '@/lib/dates'
+import { addDays, dayOfWeek, formatKoreanDate } from '@/lib/dates'
 import { SCHEDULE_KIND_LABEL } from '@/lib/labels'
 import type { ScheduleSlot } from '@/lib/schedule'
 import { cn } from '@/lib/utils'
@@ -27,10 +28,17 @@ type MonthCalendarProps = {
   slots: ScheduleSlot[]
   /** Schedule items. Open hiatus items mark every day in their range. */
   items: CalendarItem[]
+  publishDays?: readonly number[]
   onMonthChange: (month: string) => void
 }
 
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+const ARROW_OFFSETS = new Map([
+  ['ArrowLeft', -1],
+  ['ArrowRight', 1],
+  ['ArrowUp', -7],
+  ['ArrowDown', 7],
+])
 
 /** Shifts a `YYYY-MM` month by a number of months. */
 export function shiftMonth(month: string, delta: number): string {
@@ -56,19 +64,47 @@ export function monthGridDates(month: string): string[] {
 }
 
 /** Hand-built month grid (Sunday first). Shows publish slots, hiatus days, and schedule items. */
-export function MonthCalendar({ month, today, slots, items, onMonthChange }: MonthCalendarProps) {
-  const [direction, setDirection] = useState<-1 | 1>(1)
+export function MonthCalendar({
+  month,
+  today,
+  slots,
+  items,
+  publishDays,
+  onMonthChange,
+}: MonthCalendarProps) {
   const grid = useRef<HTMLDivElement>(null)
+  const detailsId = useId()
+  const [opening, setOpening] = useState(true)
+  const [focusedDay, setFocusedDay] = useState<string | null>(null)
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+
   function turn(delta: -1 | 1) {
-    setDirection(delta)
-    grid.current?.scrollTo?.({ left: 0 })
+    setOpening(false)
+    setFocusedDay(null)
+    setSelectedDay(null)
     onMonthChange(shiftMonth(month, delta))
+  }
+
+  function moveFocus(event: KeyboardEvent<HTMLButtonElement>, date: string) {
+    const offset = ARROW_OFFSETS.get(event.key)
+    if (offset === undefined) return
+    event.preventDefault()
+    grid.current
+      ?.querySelector<HTMLButtonElement>(`[data-date="${addDays(date, offset)}"] > button`)
+      ?.focus()
   }
 
   const dates = monthGridDates(month)
   const first = dates[0]
   const last = dates[dates.length - 1]
   const [year, mon] = month.split('-').map(Number)
+  const monthLabel = `${year}년 ${mon}월`
+  const tabStop =
+    focusedDay && dates.includes(focusedDay)
+      ? focusedDay
+      : dates.includes(today)
+        ? today
+        : `${month}-01`
 
   const slotsByDate = new Map<string, ScheduleSlot[]>()
   for (const slot of slots) {
@@ -96,10 +132,26 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
     }
   }
 
+  const publishOrder = new Map<string, number>()
+  for (const date of dates) {
+    if (
+      slotsByDate.has(date) ||
+      (date >= today && publishDays?.includes(dayOfWeek(date)) && !hiatusDates.has(date))
+    ) {
+      publishOrder.set(date, publishOrder.size)
+    }
+  }
+
+  const selectedSlots = selectedDay ? (slotsByDate.get(selectedDay) ?? []) : []
+  const selectedItems = selectedDay ? (itemsByDate.get(selectedDay) ?? []) : []
+  const selectedHiatus = selectedDay ? hiatusDates.has(selectedDay) : false
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="b-heading" aria-live="polite">{`${year}년 ${mon}월`}</h2>
+    <Sheet as="div" label={monthLabel} page={month.slice(5)} className="wg-schedule-month">
+      <div className="wg-schedule-month-controls">
+        <h2 className="sr-only" aria-live="polite">
+          {monthLabel}
+        </h2>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" aria-label="이전 달" onClick={() => turn(-1)}>
             <ChevronLeftIcon aria-hidden="true" />
@@ -110,25 +162,22 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
         </div>
       </div>
       <div
-        ref={grid}
-        className="b-tools-calendar-scroll"
+        className="wg-schedule-calendar-region"
         role="region"
         aria-label="달력 가로로 보기"
         tabIndex={0}
       >
         <div
+          ref={grid}
           key={month}
           role="grid"
-          data-turn={direction}
-          aria-label={`${year}년 ${mon}월 연재 달력`}
-          className="b-tools-calendar-grid"
+          data-opening={opening}
+          aria-label={`${monthLabel} 연재 달력`}
+          className="wg-schedule-grid"
         >
-          <div
-            role="row"
-            className="grid grid-cols-7 border-b border-ink bg-cream text-center text-sm font-bold"
-          >
+          <div role="row" className="wg-schedule-week wg-schedule-weekdays">
             {WEEKDAY_LABELS.map((label) => (
-              <div role="columnheader" key={label} className="py-1.5">
+              <div role="columnheader" key={label}>
                 {label}
               </div>
             ))}
@@ -137,7 +186,8 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
             <div
               role="row"
               key={dates[week * 7]}
-              className="grid grid-cols-7 border-b border-ink/25 last:border-b-0"
+              className="wg-schedule-week"
+              style={{ '--wg-schedule-week-index': week + 1 } as CSSProperties}
             >
               {dates.slice(week * 7, week * 7 + 7).map((date) => {
                 const inMonth = date.startsWith(month)
@@ -145,45 +195,103 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
                 const daySlots = slotsByDate.get(date) ?? []
                 const dayItems = itemsByDate.get(date) ?? []
                 const isHiatus = hiatusDates.has(date)
+                const isRest =
+                  inMonth &&
+                  publishDays &&
+                  !publishDays.includes(dayOfWeek(date)) &&
+                  !daySlots.length
+                const slot = daySlots[0]
+                const item = dayItems[0]
+                const order = publishOrder.get(date)
+                const extra = Math.max(0, daySlots.length - 1) + Math.max(0, dayItems.length - 1)
                 return (
                   <div
                     role="gridcell"
                     key={date}
                     data-date={date}
+                    data-muted={date < today || !inMonth}
                     aria-current={isToday ? 'date' : undefined}
-                    className={cn(
-                      'b-tools-calendar-day flex min-w-0 flex-col items-start gap-0.5 border-r border-ink/25 p-1.5 text-xs last:border-r-0',
-                      !inMonth && 'bg-muted/40 text-muted-foreground',
-                      isToday && 'rounded-xs outline-3 -outline-offset-3 outline-ink',
-                    )}
+                    className="wg-schedule-day"
                   >
-                    <span className="font-bold tabular-nums">{Number(date.slice(8))}</span>
-                    {isHiatus && <span className="b-tools-calendar-chip bg-cream">휴재</span>}
-                    {daySlots.map((slot, index) => (
-                      <span
-                        key={index}
-                        className={cn(
-                          'b-tools-calendar-chip bg-kraft',
-                          !slot.chapterTitle && 'border-dashed',
-                        )}
-                      >
-                        {slot.chapterTitle || '빈 연재일'}
+                    <button
+                      type="button"
+                      className="wg-schedule-day-button"
+                      tabIndex={date === tabStop ? 0 : -1}
+                      aria-expanded={selectedDay === date}
+                      aria-controls={detailsId}
+                      onFocus={() => setFocusedDay(date)}
+                      onKeyDown={(event) => moveFocus(event, date)}
+                      onClick={() => setSelectedDay((current) => (current === date ? null : date))}
+                    >
+                      <span className="sr-only">{formatKoreanDate(date)}</span>
+                      <span className="wg-schedule-day-number" aria-hidden="true">
+                        {Number(date.slice(8))}
                       </span>
-                    ))}
-                    {dayItems.map((item) => (
                       <span
-                        key={`${item.id}-${date}`}
-                        title={SCHEDULE_KIND_LABEL[item.kind]}
-                        className={cn(
-                          'b-tools-calendar-chip',
-                          item.kind === 'publish' && 'bg-kraft',
-                          item.kind === 'deadline' && 'border-ink',
-                          item.done && 'line-through',
-                        )}
+                        className="wg-schedule-day-entries"
+                        data-publish-day={order !== undefined}
+                        style={
+                          order !== undefined
+                            ? ({ '--wg-schedule-publish-index': order } as CSSProperties)
+                            : undefined
+                        }
                       >
-                        {item.title}
+                        {(isHiatus || isRest) && (
+                          <span
+                            className="wg-schedule-day-entry"
+                            aria-hidden={isHiatus ? undefined : true}
+                          >
+                            <span
+                              className="wg-schedule-day-mark"
+                              data-mark="slash"
+                              aria-hidden="true"
+                            />
+                            {isHiatus && <span className="wg-schedule-day-word">휴재</span>}
+                          </span>
+                        )}
+                        {slot && (
+                          <span
+                            className="wg-schedule-day-entry"
+                            title={slot.chapterTitle || '빈 연재일'}
+                          >
+                            <span
+                              className="wg-schedule-day-mark"
+                              data-mark={slot.chapterTitle ? 'square' : 'ring'}
+                              aria-hidden="true"
+                            />
+                            {slot.position === null ? (
+                              <span className="wg-schedule-day-word">빈 연재일</span>
+                            ) : (
+                              <>
+                                <span className="sr-only">{slot.chapterTitle}</span>
+                                <span className="wg-schedule-chapter-number" aria-hidden="true">
+                                  {slot.position}화
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        )}
+                        {item && (
+                          <span
+                            className="wg-schedule-day-entry"
+                            data-item
+                            title={SCHEDULE_KIND_LABEL[item.kind]}
+                          >
+                            <span
+                              className="wg-schedule-day-mark"
+                              data-mark="dot"
+                              aria-hidden="true"
+                            />
+                            <span
+                              className={cn('wg-schedule-day-word', item.done && 'line-through')}
+                            >
+                              {item.title}
+                            </span>
+                          </span>
+                        )}
                       </span>
-                    ))}
+                      {extra > 0 && <span className="wg-schedule-day-extra">+{extra}</span>}
+                    </button>
                   </div>
                 )
               })}
@@ -191,6 +299,35 @@ export function MonthCalendar({ month, today, slots, items, onMonthChange }: Mon
           ))}
         </div>
       </div>
-    </div>
+      <div id={detailsId} aria-live="polite">
+        {selectedDay && (
+          <div className="wg-schedule-day-details" key={selectedDay}>
+            <time className="font-mono" dateTime={selectedDay}>
+              {formatKoreanDate(selectedDay)}
+            </time>
+            {selectedHiatus && <p>휴재</p>}
+            {selectedSlots.length > 0 && (
+              <ul>
+                {selectedSlots.map((slot, index) => (
+                  <li key={index}>{slot.chapterTitle || '빈 연재일'}</li>
+                ))}
+              </ul>
+            )}
+            {selectedItems.length > 0 && (
+              <ul>
+                {selectedItems.map((item) => (
+                  <li key={item.id} className={item.done ? 'line-through' : undefined}>
+                    {item.title}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!selectedHiatus && selectedSlots.length === 0 && selectedItems.length === 0 && (
+              <p>아직 등록한 일정이 없어요.</p>
+            )}
+          </div>
+        )}
+      </div>
+    </Sheet>
   )
 }
