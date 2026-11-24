@@ -1,272 +1,218 @@
 ---
 name: 다음화
-description: 웹소설 작가의 원고를 설정 위키와 맞춰 보고, 교정지처럼 표시해 돌려주는 연재 파트너
+description: An editorial workspace for serial fiction authors who check manuscripts against a story wiki
 colors:
-  desk: "#eef0ed"
-  sheet: "#fafbf9"
-  graphite: "#2b2d2c"
-  graphite-muted: "#565b58"
-  pencil-grey: "#8f9591"
-  margin-rule: "#c9cdc8"
-  hairline: "#d3d7d2"
-  wash: "#e2e5e1"
-  wash-muted: "#e4e7e3"
-  proof-red: "#c8321f"
-  blue-pencil: "#2f5d9e"
+  ink: '#171814'
+  paper: '#fffcf3'
+  mustard: '#f3cd52'
+  leaf: '#b9dd83'
+  apricot: '#f1bb88'
+  muted-ink: '#44473a'
+  proof-red: '#991b2c'
+  wiki-blue: '#164580'
 typography:
   display:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "3.75rem"
-    fontWeight: 700
-    lineHeight: 1.18
-    letterSpacing: "-0.02em"
-  headline:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "2.25rem"
-    fontWeight: 600
-    lineHeight: 1.25
+    fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: 'clamp(2.5rem, 8.333333vw, 7.5rem)'
+    fontWeight: 400
+    lineHeight: 1.02
+    letterSpacing: '-0.045em'
   title:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "1.75rem"
-    fontWeight: 600
-    lineHeight: 1.25
-    letterSpacing: "-0.01em"
-  manuscript:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "17px"
+    fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: 'clamp(2.25rem, 5.56vw, 5rem)'
     fontWeight: 400
-    lineHeight: 2.1
-  canon-quote:
-    fontFamily: "Noto Serif KR, AppleMyungjo, Nanum Myeongjo, serif"
-    fontSize: "15px"
+    lineHeight: 1.08
+    letterSpacing: '-0.04em'
+  heading:
+    fontFamily: 'Black Han Sans, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: 'clamp(1.75rem, 3.34vw, 3rem)'
     fontWeight: 400
-    lineHeight: "28px"
+    lineHeight: 1.14
+    letterSpacing: '-0.03em'
+  subhead:
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: 'clamp(1.25rem, 2vw, 1.75rem)'
+    fontWeight: 700
+    lineHeight: 1.3
+    letterSpacing: '-0.02em'
   lede:
-    fontFamily: "Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, system-ui, sans-serif"
-    fontSize: "1.25rem"
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: '1.125rem'
     fontWeight: 400
-    lineHeight: 1.625
+    lineHeight: 1.65
+    letterSpacing: '-0.012em'
+  manuscript:
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: '1.125rem'
+    fontWeight: 400
+    lineHeight: 1.95
+    letterSpacing: '0'
+  canon-quote:
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: '1.0625rem'
+    fontWeight: 400
+    lineHeight: 1.75
+    letterSpacing: '0'
   body:
-    fontFamily: "Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, system-ui, sans-serif"
-    fontSize: "0.875rem"
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: '1rem'
     fontWeight: 400
-    lineHeight: 1.43
+    lineHeight: 1.6
+    letterSpacing: '-0.01em'
   label:
-    fontFamily: "Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, system-ui, sans-serif"
-    fontSize: "0.75rem"
-    fontWeight: 500
-    lineHeight: 1.33
+    fontFamily: 'IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, system-ui, sans-serif'
+    fontSize: '0.875rem'
+    fontWeight: 400
+    lineHeight: 1.45
+    letterSpacing: '0'
+  hand:
+    fontFamily: 'Nanum Pen Script, IBM Plex Sans KR, Apple SD Gothic Neo, cursive'
+    fontSize: 'clamp(1.625rem, 2.5vw, 2.125rem)'
+    fontWeight: 400
+    lineHeight: 1.06
+    letterSpacing: '0'
 rounded:
-  sm: "2.4px"
-  md: "4px"
+  field: '8px'
+  button: '10px'
+  card: '16px'
+  sheet: '24px'
 spacing:
-  xs: "8px"
-  sm: "12px"
-  md: "16px"
-  lg: "24px"
-  xl: "40px"
-  sheet: "80px"
+  xxs: '4px'
+  xs: '8px'
+  sm: '12px'
+  md: '16px'
+  lg: '24px'
+  xl: '32px'
+  2xl: '48px'
+  3xl: '64px'
+  4xl: '96px'
+  edge: 'clamp(16px, 5.56vw, 80px)'
+  band: 'clamp(48px, 7vw, 96px)'
+  app: 'clamp(24px, 3.34vw, 48px)'
 components:
   button-primary:
-    backgroundColor: "{colors.graphite}"
-    textColor: "{colors.sheet}"
-    typography: "{typography.body}"
-    rounded: "{rounded.md}"
-    height: "32px"
-    padding: "0 10px"
+    backgroundColor: '{colors.ink}'
+    textColor: '{colors.paper}'
+    typography: '{typography.label}'
+    rounded: '{rounded.button}'
+    height: '44px'
+    padding: '0 16px'
   button-start:
-    backgroundColor: "{colors.graphite}"
-    textColor: "{colors.sheet}"
-    rounded: "{rounded.md}"
-    height: "48px"
-    padding: "0 24px"
+    backgroundColor: '{colors.ink}'
+    textColor: '{colors.paper}'
+    rounded: '{rounded.button}'
+    height: '52px'
+    padding: '0 24px'
   button-outline:
-    backgroundColor: "{colors.desk}"
-    textColor: "{colors.graphite}"
-    rounded: "{rounded.md}"
-    height: "32px"
-    padding: "0 10px"
+    backgroundColor: '{colors.paper}'
+    textColor: '{colors.ink}'
+    rounded: '{rounded.button}'
+    height: '44px'
+    padding: '0 16px'
   button-outline-hover:
-    backgroundColor: "{colors.wash-muted}"
+    backgroundColor: '{colors.leaf}'
   button-ghost-hover:
-    backgroundColor: "{colors.wash-muted}"
-    textColor: "{colors.graphite}"
+    backgroundColor: '{colors.leaf}'
+    textColor: '{colors.ink}'
   input:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.graphite}"
-    rounded: "{rounded.md}"
-    height: "32px"
-    padding: "4px 10px"
+    backgroundColor: '{colors.paper}'
+    textColor: '{colors.ink}'
+    rounded: '{rounded.field}'
+    height: '44px'
+    padding: '8px 12px'
   finding-card:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.graphite}"
-    rounded: "{rounded.sm}"
-    padding: "16px"
+    backgroundColor: '{colors.paper}'
+    textColor: '{colors.ink}'
+    rounded: '{rounded.card}'
+    padding: '16px'
   fact-badge-confirmed:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.blue-pencil}"
-    typography: "{typography.label}"
-    rounded: "{rounded.sm}"
-    height: "20px"
-    padding: "2px 8px"
+    backgroundColor: '{colors.paper}'
+    textColor: '{colors.ink}'
+    typography: '{typography.label}'
+    rounded: '{rounded.field}'
+    height: '20px'
+    padding: '2px 8px'
   nav-item:
-    textColor: "{colors.graphite-muted}"
-    typography: "{typography.body}"
-    rounded: "{rounded.sm}"
-    padding: "6px 12px"
+    textColor: '{colors.muted-ink}'
+    typography: '{typography.label}'
+    rounded: '{rounded.button}'
+    height: '44px'
+    padding: '0 12px'
   nav-item-active:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.graphite}"
+    backgroundColor: '{colors.mustard}'
+    textColor: '{colors.ink}'
 ---
 
-# Design System: 다음화
+# Design System for 다음화
 
 ## Overview
 
-**Creative North Star: "The Returned Galley Proof" (교정지)**
-
-Every screen is an editor's proof handed back to the author: cool proof paper on a slightly darker desk, graphite type, one hairline margin rule, and two pencils. A proof-red pencil marks what is wrong in the manuscript; a blue pencil quotes the canon, the settled fact from the wiki. The intro page plays this out at full size, with a circled word and a red leader running into the margin. Inside the app the same world shows as precision and restraint: sheet-coloured working areas, serif for anything that is manuscript or canon, a quiet system sans for controls.
-
-Density is that of a working document, not a dashboard. Surfaces are flat paper separated by 1px rules; the only lift in the system is the sheet itself sitting on the desk. Light scene only: there is no theme switch, and the inherited shadcn dark block in `globals.css` is not part of this system.
-
-The world refuses the category default for this product: a SaaS hero beside a framed app screenshot, then a row of feature cards.
-
-**Key Characteristics:**
-- Cool proof paper (sheet on desk), graphite text, a single 1px margin rule.
-- Two pencils with fixed jobs: proof red for errors, blue pencil for the canon.
-- Myeongjo serif for headlines, manuscript and canon quotes; system Hangul sans for UI.
-- Marks are drawn strokes (circle, underline, leader), drawn once.
-- Corners of 2 to 4px; flat surfaces; one soft sheet lift.
+Use wide color bands and large ink headings to frame three parts of an editorial task. Start with a manuscript, show a source in the story wiki, and let the author decide which one to change. Use the same motion timings in the public pages and the workspace. Keep the paper under a manuscript, quote, or field upright and opaque.
 
 ## Colors
 
-A near-neutral cool paper palette carrying exactly two inks, each with a single job.
-
-### Primary
-- **Graphite** (`graphite`): all text, primary buttons, the active tab underline, the pending count chip. It is the ink of the page; buttons in graphite read as type, not as brand colour.
-
-### Secondary
-- **Proof Red** (`proof-red`): marks on the manuscript (circle, underline, leader), the correction word, the finding kind label, the suggested sentence, destructive actions and error text. Nothing decorative.
-
-### Tertiary
-- **Blue Pencil** (`blue-pencil`): the canon. Quoted wiki originals, links to wiki cards, confirmed and assumed fact markers, planted points on the thread ledger, focus rings, caret, selection tint (22%) and native `accent-color`.
-
-### Neutral
-- **Desk** (`desk`): page background behind the sheet, the app sidebar column, outline button fill.
-- **Sheet** (`sheet`): the proof paper. Cards, popovers, the top bar, the working area of a work, the auth card, the landing sheet.
-- **Graphite Muted** (`graphite-muted`): secondary text, captions, field labels, inactive nav.
-- **Pencil Grey** (`pencil-grey`): input strokes, undecided (dotted) markers, unplanted thread lines, scrollbar thumb.
-- **Margin Rule** (`margin-rule`): the 1px rule. Section dividers, the margin column's left rule, card borders, top-bar and tab baselines.
-- **Hairline** (`hairline`): the default component border from the shadcn layer.
-- **Wash / Wash Muted** (`wash`, `wash-muted`): secondary button fill and hover fill for outline and ghost controls.
-
-### Named Rules
-**The Two Pencils Rule.** Proof red only marks what is wrong; blue pencil only carries the canon and focus. Never swap them, never use either as a solid fill (translucent text highlights only: 5% red hover, 12% blue comment highlight, 22% blue selection), and never introduce a third accent.
-
-**The Shape Carries Status Rule.** Fact status reads without colour: confirmed is a solid blue line, assumed is dashed blue, undecided is dotted grey.
+- Ink covers titles, buttons, outlines, focus rings, and ledger symbols. Use paper text and focus rings on an ink band.
+- Paper covers the navigation, manuscript, fields, quotes, and overlays. Muted ink covers secondary text, placeholders, and field outlines.
+- Mustard marks entry and the current chapter. Leaf marks checks, evidence, and selected rows. Apricot marks author decisions and chapter plans.
+- Proof red marks inconsistent phrases in the manuscript. Pair the mark with an ink finding number and the manuscript label. Wiki blue belongs to direct quotations and their rules. Pair the quote with a source label and a card link in ink.
+- Use ink or muted ink for validation, destructive actions, links, and fact states. Set confirmed, assumed, and undecided fact badges in solid, dashed, and dotted outlines.
 
 ## Typography
 
-**Display Font:** Noto Serif KR via `next/font` (with AppleMyungjo, Nanum Myeongjo, serif)
-**Body Font:** system Hangul sans (Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, system-ui)
+Use Black Han Sans 400 for the wordmark, display, title, and heading. Use IBM Plex Sans KR 400–700 for the UI, manuscript, and quotations. Use 400 for reading and input. Use 700 for buttons, tabs, and subheads. Limit Nanum Pen Script 400 to one or two short lines.
 
-**Character:** A typeset Myeongjo for everything that is the story or the canon, against an unbranded system sans for everything that is a control. The split tells the author at a glance which text is theirs.
-
-### Hierarchy
-- **Display** (700, 2.5rem mobile to 3.75rem desktop, 1.18): the intro page headline only, balanced, two lines.
-- **Headline** (600, 1.875rem to 2.25rem, 1.25): intro page section heads.
-- **Title** (600, 1.75rem, 1.25): app page titles (page header), auth wordmark at 1.875rem/700.
-- **Manuscript** (400, 17px, 2.1): the editor and its highlight layer, which must share exactly this font, padding and leading. Landing excerpts use the same 2.1 leading at 20 to 24px.
-- **Canon quote** (400, 15px, 28px): quoted manuscript and wiki lines inside findings; the margin note uses 18px relaxed.
-- **Lede** (sans 400, 1.125 to 1.25rem, 1.625, max 34rem): intro paragraphs.
-- **Body** (sans 400, 0.875rem): UI text, nav, descriptions.
-- **Label** (sans 500, 0.75rem): badges, finding kind, field captions such as 원고 / 위키 원문.
-
-### Named Rules
-**The Whose Text Rule.** Serif means manuscript, canon or a heading; sans means interface. A control is never set in serif, and a quoted sentence is never set in sans.
-
-**The Keep-Words Rule.** Korean headings and prose use `break-keep` so words do not split mid-syllable-block.
+Display text reaches 120px at 1440px. Page titles reach 80px and headings reach 48px. Break Korean headings at word boundaries. Allow a long unbroken title to wrap when needed. Limit manuscripts to 48rem and introduction paragraphs to 36rem. Match font face, line height, padding, and wrapping between an editor and its proof overlay.
 
 ## Layout
 
-The intro page is one centred sheet (max 1320px) on the desk with a 24px desk margin from `sm` up. Inside, a two-column proof row from `lg`: a text block (max 44 to 46rem) and a margin column of 21rem (24rem at `xl`) behind a 1px rule with 40px inner padding. Sheet gutters are 24px, 48px at `sm`, 80px at `lg`; sections are separated by a full-width rule and 64 to 96px of vertical space. Below `lg` the margin note stacks under its sentence with a top rule, and leaders are hidden.
+Limit the inner width to 1280px. Use 16–80px side gutters and 48–96px vertical padding on full-width bands. Use 24–48px on work pages and 16–32px inside cards. Use a twelve-column grid with 24px gaps at 1024px and above. Checks use seven columns for the manuscript and five for evidence. The wiki reverses those proportions. Stack those layouts at narrower widths. Let a 46rem ledger scroll inside its own wrapper.
 
-The app is a top bar (56px, sheet, bottom rule), then on a work a 224px sidebar on the desk and a sheet working area with a left rule (16px padding mobile, 40px desktop). The writing screen splits manuscript and side panel; findings switch to two columns (manuscript | canon) inside their card via a container query. Auth pages are a single 384px sheet card.
-
-Spacing steps observed: 8, 12, 16, 24, 40 and 80px.
+Use a sticky 64px paper bar from 640px and a 56px bar below 640px. Move work navigation into a bottom sheet below 768px. In the existing manuscript workspace, keep the side panel at 320px from 1024px and at 380px from 1280px.
 
 ## Elevation & Depth
 
-Flat by default. Depth comes from tone (sheet on desk) and 1px rules, not shadows. There is one shadow in the system, for the sheet itself.
-
-### Shadow Vocabulary
-- **Sheet lift** (`box-shadow: 0 1px 2px rgb(43 45 44 / 0.06), 0 18px 40px -24px rgb(43 45 44 / 0.35)`): the landing sheet and the auth card, where a whole page of paper sits on the desk. Not on cards, panels or buttons.
-
-### Named Rules
-**The One Sheet Rule.** Only a full sheet of paper lifts. Cards inside the sheet are bordered with the margin rule, never shadowed.
+Reserve the 4px by 5px offset ink shadow for prominent calls to action and stacked cards. Reveal the larger 7px by 8px shadow with an opacity transition. Start the stacked cards at −5°, 2°, and 5°. On hover or focus, lift the face by 8px and set its angle to zero. Overlap by 24px at 1024px and above and by 12px from 640px to 1023px. Below 640px use a 12px gap.
 
 ## Shapes
 
-Nearly square paper. The base radius is 4px (buttons, inputs, tabs' list); cards, badges, nav items and findings use the small step (about 2.4px). Full circles appear only as ledger dots and the hand-drawn proof circle. Borders are always 1px, in margin rule or hairline; the 2px weight is reserved for marks (underlines, ledger lines, active tab).
+Use 8px field corners, 10px button corners, 16px card corners, and 24px sheet corners. Apply two-pixel ink outlines to buttons and cards, one-pixel list dividers, and two-pixel proof lines. Give standard controls a 44px target. Reserve 36px targets for dense toolbars. Set focus outlines 3px outside the control.
 
 ## Components
 
-### Buttons
-Type-like and plain.
-- **Shape:** 4px corners, 32px tall (28px small), sans 14px medium.
-- **Primary:** graphite fill, sheet text. The intro page start button is the same at 48px tall, 24px side padding, 16px semibold.
-- **Hover / Focus:** primary fades to 80% graphite; focus shows a 3px blue-pencil ring at 50%; press nudges down 1px.
-- **Outline / Ghost / Secondary:** outline sits on desk with a hairline border; ghost is bare; both hover to wash. Secondary is a wash fill.
-- **Text links as actions:** underlined with the margin rule colour, darkening to the current colour on hover (로그인, card links).
+- **Buttons.** Use ink and paper for primary actions. Use a paper fill and ink outline for secondary actions. A prominent call to action splits the label and arrow into two moving surfaces. Give the arrow a mustard fill on a primary action.
+- **Navigation.** Mark the active work link with a mustard chip, bold text, and an underline. Use an ink count badge for pending approvals. Let the line-tab indicator follow the selected tab.
+- **Fields.** Use paper, a muted-ink border, and an ink caret. Use a stronger ink outline and a written error for invalid input.
+- **Findings.** Place the marked manuscript phrase next to the direct wiki quote. Keep the source link and action labels in ink. Draw proof circles, underlines, and strike-throughs over short phrases. Replay each stroke through its own SVG.
+- **Ledger.** Use an ink circle for the planted chapter, an open ink diamond for the target, and a dotted line for the plan. Add text names for the symbols.
+- **Overlays.** Use paper sheets and an ink backdrop. Start focus on the close button and return it to the opener. Toasts enter from the bottom with a two-pixel ink outline.
 
-### Chips (filters, statuses)
-- **Filters:** URL-driven links styled as small buttons; active is primary, inactive is outline.
-- **Fact status:** outline badge on sheet, 20px, small radius. Confirmed solid blue, assumed dashed blue with `[가정]`, undecided dotted grey.
+## Motion
 
-### Cards / Containers
-- **Corner Style:** small radius (about 2.4px).
-- **Background:** sheet.
-- **Shadow Strategy:** none (see The One Sheet Rule).
-- **Border:** 1px margin rule.
-- **Internal Padding:** 16px (12px compact).
+| Token         | Value  | Application                                              |
+| ------------- | ------ | -------------------------------------------------------- |
+| `--b-quick`   | 160ms  | Presses, icons, color changes, and closing answers       |
+| `--b-step`    | 260ms  | Rows, chips, pointer responses, and short page arrivals  |
+| `--b-draw`    | 420ms  | CTA return, proof strokes, and sheet travel              |
+| `--b-scene`   | 640ms  | Scroll reveals and handwriting                           |
+| `--b-arrival` | 900ms  | First assembly and paired decorations                    |
+| `--b-cycle`   | 2400ms | Decorative demonstrations, up to two cycles per entrance |
+| `--b-stagger` | 70ms   | Sibling entrances, up to six delay positions             |
 
-### Inputs / Fields
-- **Style:** 1px pencil-grey stroke, transparent on sheet, 4px corners, 32px tall; caret in blue pencil.
-- **Focus:** border turns blue pencil with a 3px ring at 50%.
-- **Error / Disabled:** border in proof red with a 20% red ring; disabled at 50% opacity.
-
-### Navigation
-- **Top bar:** sheet, bottom rule, serif wordmark left, user name and ghost 로그아웃 right.
-- **Work sidebar:** on desk, the work title in serif, a 홈 item, then plain-text group labels (원고, 설정, 연재, 작품). Items are 14px sans muted; active sits on sheet with an inset 1px margin-rule outline and medium weight. The approvals count is a graphite chip with tabular numerals. Mobile collapses to a title row with a menu.
-- **Tabs:** a line under the row in margin rule; the active tab is semibold graphite with a 2px graphite underline.
-
-### Proof Mark (signature)
-The finding mark, drawn once.
-- **Intro page:** a hand-drawn proof-red ellipse (1.75px, round caps, non-scaling) around the wrong words, plus on `lg` a 1.5px red leader from the circle to the margin note, which aligns to the marked line. The first-screen mark draws itself (0.45s stroke, then the leader reaches in 0.25s after 0.6s); later marks are static.
-- **In the app:** a 2px proof-red underline under the issue in the manuscript, drawn left to right once in 0.45s when the finding lands, thickening to 3px when the finding is active. This is the user's settled choice; the app does not use the circle.
-- **Motion:** one pencil-stroke draw, `cubic-bezier(0.16, 1, 0.3, 1)`, under 900ms in total. Reduced motion shows the mark already drawn.
-
-### Finding Card
-Sheet card with a kind label in proof red and severity in muted text, then 원고 (the sentence underlined in red, clickable to jump) beside 위키 원문 (the fact in blue serif, with a link to its card), split by a rule. The suggestion follows in red serif, then actions: 제안대로 고치기 (primary), 위키 고치기 (secondary), 무시 (ghost).
-
-### Margin Note
-On the intro page: the correction in red serif 24px semibold, the wiki original in blue serif 18px, and a muted caption naming the source card.
+Use `--b-out` for arrivals, `--b-pop` for a brief overshoot, `--b-in-out` for two-way travel, and `--b-linear` for scroll progress. The default reveal range is `entry 0% cover 30%`. Preserve full opacity for reveal text. A decoration can start at 35% opacity and 32px from its destination. Keep the first headline and action available immediately. Show final states when the user requests reduced motion.
 
 ## Do's and Don'ts
 
-### Do:
-- **Do** keep proof red for marks and errors and blue pencil for the canon and focus, nothing else.
-- **Do** draw marks as strokes: circle and leader on the intro page, a 2px underline in the app, wavy red for spelling, dotted blue for naming.
-- **Do** set manuscript and canon text in Noto Serif KR and controls in the system sans.
-- **Do** separate surfaces with the 1px margin rule (`#c9cdc8`) and keep corners at 2 to 4px.
-- **Do** quote both texts in full when showing a finding: the manuscript sentence and the wiki original.
-- **Do** write every UI string in short, plain Korean; compose shadcn (Base UI) parts with the `render` prop.
-- **Do** honour reduced motion by showing marks already drawn.
+### Do
 
-### Don't:
-- **Don't** mark findings with tinted left borders, coloured backgrounds or pill badges.
-- **Don't** shadow cards, panels or buttons; only a whole sheet lifts.
-- **Don't** add a third accent colour or use either pencil as a large fill.
-- **Don't** build a SaaS hero with a framed app screenshot followed by a row of feature cards.
-- **Don't** add a dark theme or theme switch; the system is light only.
-- **Don't** author motion beyond the pencil-stroke draw (plain hover and colour transitions aside), and never loop it.
+- Show the actual manuscript and its source when explaining an inconsistency.
+- Compose Base UI components through the `render` prop.
+- Put scroll-linked motion and local motion on separate elements. Change only the decoration key when replaying a scene.
+- Use native scrolling and keyboard controls. Check 1440px, 390px, 320px, and reduced motion.
+- Use short Korean interface labels and concise polite sentences.
+
+### Don't
+
+- Avoid left-edge markers for selected navigation. Use a chip or underline.
+- Keep manuscripts and input wrappers clear of transforms, parallax, and blur.
+- Reserve red for manuscript proof marks and blue for direct wiki quotations.
+- Avoid feature-card grids, background particles, glowing gradients, and borrowed reference imagery.

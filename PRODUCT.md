@@ -21,6 +21,7 @@ web
 Lead with the **evidence-backed chapter check**: each finding puts the manuscript sentence next to the wiki's original text, with a suggested fix, and the author decides whether to fix the manuscript or the wiki.
 
 Claims that hold against competitors (StoryBench hands-on, 2026-11-04):
+
 - check results that quote the manuscript beside the wiki original;
 - approval and history across every wiki type (characters, settings, threads, relations);
 - 확정 / 가정 / 미정 statuses and the chapter range a fact holds for;
@@ -44,7 +45,7 @@ Do not call the sample work or the approval step unique; StoryBench has both.
 - Dates and day boundaries use Asia/Seoul.
 - Stack: Next.js 16 App Router, React 19, Tailwind CSS v4, shadcn/ui on Base UI (composition via `render`, not `asChild`), lucide-react icons, sonner toasts.
 - Packages are not added, removed or upgraded without the orchestrator.
-- Fonts today: system Hangul stack, no font package, enforced by `src/app/fonts.test.ts`. This was a design call in the MVP spec, not a user commitment; it may be revisited.
+- Fonts today: Black Han Sans for headings, IBM Plex Sans KR for body text and manuscripts, and Nanum Pen Script for handwritten notes. The root layout loads them through `next/font/google` and `src/app/fonts.test.ts` checks the setup.
 - Not supported: HWP import, real-time co-editing, social login, payments.
 - Undecided: whether a public intro page exists before login (today `/` redirects to `/login` or `/works`).
 
