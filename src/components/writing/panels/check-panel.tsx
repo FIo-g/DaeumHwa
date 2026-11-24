@@ -13,6 +13,7 @@ import { runAction } from '@/lib/client/run-action'
 import { markAutoChecked, wasAutoChecked } from '@/lib/client/sample-session'
 import { useAiRun } from '@/lib/client/use-ai-run'
 import { ISSUE_KIND_LABEL, SEVERITY_LABEL } from '@/lib/labels'
+import { isTrialCheckChapter, TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { resolveIssueAction } from '@/server/actions/issues'
 import type { ChapterCheckResult } from '@/server/chapter-check'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
@@ -42,6 +43,7 @@ type CheckPanelProps = {
  */
 export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
   const editable = canEditChapter(data)
+  const canCheck = editable || (data.trial && isTrialCheckChapter(data.chapter.position))
   const [issues, setIssues] = useState<IssueRow[]>(data.issues)
   // Re-sync when the page reloads the chapter's open issues.
   const [synced, setSynced] = useState<IssueRow[]>(data.issues)
@@ -96,7 +98,7 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     // A route handler, not a Server Action: the check can run for minutes, and Server Actions
     // run one at a time, so autosave and navigation would wait behind it.
     const result = await ai.run(async (signal) => {
-      await api.saveNow()
+      if (editable) await api.saveNow()
       return runAction(
         postAction<ChapterCheckResult>(
           `/api/works/${data.workId}/chapters/${data.chapter.id}/check`,
@@ -109,7 +111,9 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     if (!result) return false
     setIssues(result.issues)
     setCheckedKey((key) => key + 1)
-    if ((opts?.openApproval ?? true) && result.proposals.length > 0) setApprovalOpen(true)
+    if (editable && (opts?.openApproval ?? true) && result.proposals.length > 0) {
+      setApprovalOpen(true)
+    }
     api.refresh()
     return true
   }
@@ -120,20 +124,19 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     runCheckRef.current = runCheck
   })
   useEffect(() => {
-    if (!autoRun || !editable) return
-    // A finished check survives remounts (and StrictMode), so the AI is never called twice.
-    if (autoRan.current || wasAutoChecked(data.chapter.id)) return
-    autoRan.current = true
-    const chapterId = data.chapter.id
-    void runCheckRef.current({ openApproval: false }).then((finished) => {
-      if (finished) markAutoChecked(chapterId)
-    })
-    window.history.replaceState(null, '', window.location.pathname)
-    // StrictMode unmounts the first mount, which aborts the request; let the second one start it.
-    return () => {
-      autoRan.current = false
-    }
-  }, [autoRun, editable, data.chapter.id])
+    if (!autoRun || !canCheck) return
+    // Wait for the panel to settle before starting a request that unmounting would abort.
+    const timer = window.setTimeout(() => {
+      if (autoRan.current || wasAutoChecked(data.chapter.id)) return
+      autoRan.current = true
+      const chapterId = data.chapter.id
+      void runCheckRef.current({ openApproval: false }).then((finished) => {
+        if (finished) markAutoChecked(chapterId)
+      })
+      window.history.replaceState(null, '', window.location.pathname)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [autoRun, canCheck, data.chapter.id])
 
   function focusIssue(issue: IssueRow) {
     const range = rangeOf(text, issue.quote, issue.quoteStart)
@@ -174,7 +177,7 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
   return (
     <section aria-label="회차 점검" className="grid gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        {editable &&
+        {canCheck &&
           (ai.running ? (
             <AiRunStatus label="점검 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
           ) : auto.running ? (
@@ -188,7 +191,11 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
               회차 점검
             </Button>
           ))}
-        {!editable && <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>}
+        {!canCheck && (
+          <p className="text-xs text-muted-foreground">
+            {data.trial ? TRIAL_SIGNUP_MESSAGE : EDITOR_ONLY_NOTE}
+          </p>
+        )}
         {issues.length > 0 && (
           <span className="text-sm text-muted-foreground">열린 지적 {issues.length}건</span>
         )}
@@ -212,7 +219,11 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
       {issues.length === 0 && !checking && (
         <EmptyState
           title="열린 지적이 없습니다."
-          description="회차 점검을 누르거나 회차를 완료로 바꾸면 설정과 어긋나는 문장을 찾아 줍니다."
+          description={
+            data.trial
+              ? undefined
+              : '회차 점검을 누르거나 회차를 완료로 바꾸면 설정과 어긋나는 문장을 찾아 줍니다.'
+          }
         />
       )}
 

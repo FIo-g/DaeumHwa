@@ -4,7 +4,7 @@ import type { ResumePoint } from '@/server/user-state'
 import { chapterLabel } from '@/lib/labels'
 
 /** Top banner on the works list: jumps back to the chapter the user left off in. */
-export function ResumeBanner({ resume }: { resume: ResumePoint }) {
+export function ResumeBanner({ resume, trial }: { resume: ResumePoint; trial?: boolean }) {
   const href =
     resume.chapterId !== null
       ? `/works/${resume.workId}/chapters/${resume.chapterId}`
@@ -20,7 +20,7 @@ export function ResumeBanner({ resume }: { resume: ResumePoint }) {
       className="mb-6 flex items-center justify-between gap-3 rounded-sm border border-rule bg-sheet px-4 py-3 text-sm outline-none transition-colors hover:border-input focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <span className="min-w-0 truncate">
-        이어서 쓰기: {resume.workTitle}
+        {trial ? '이어서 보기' : '이어서 쓰기'}: {resume.workTitle}
         {chapter}
       </span>
       <ArrowRightIcon aria-hidden="true" className="size-4 shrink-0" />

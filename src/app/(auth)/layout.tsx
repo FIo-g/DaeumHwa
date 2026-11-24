@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation'
 import { getSessionUser } from '@/server/session'
 
 export default async function AuthLayout({ children }: { children: ReactNode }) {
-  if (await getSessionUser()) redirect('/works')
+  const user = await getSessionUser()
+  if (user && !user.isAnonymous) redirect('/works')
   return (
     <main className="flex flex-1 items-start justify-center px-4 py-10 sm:items-center sm:py-16">
       <div className="w-full max-w-sm bg-sheet px-6 py-8 shadow-sheet sm:px-8 sm:py-10">

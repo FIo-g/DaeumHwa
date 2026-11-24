@@ -24,6 +24,7 @@ export type MemberView = {
 type MembersPanelProps = {
   workId: string
   viewerRole: Role
+  trial?: boolean
   currentUserId: string
   members: MemberView[]
 }
@@ -33,7 +34,13 @@ type InvitableRole = Exclude<Role, 'owner'>
 const INVITABLE_ROLES: InvitableRole[] = ['editor', 'commenter', 'viewer']
 
 /** Members of the work. The owner changes roles and removes members; anyone can leave. */
-export function MembersPanel({ workId, viewerRole, currentUserId, members }: MembersPanelProps) {
+export function MembersPanel({
+  workId,
+  viewerRole,
+  currentUserId,
+  members,
+  trial,
+}: MembersPanelProps) {
   const router = useRouter()
   const isOwner = viewerRole === 'owner'
 
@@ -113,7 +120,7 @@ export function MembersPanel({ workId, viewerRole, currentUserId, members }: Mem
                     내보내기
                   </ConfirmButton>
                 )}
-                {isSelf && !isOwner && (
+                {isSelf && !isOwner && !trial && (
                   <ConfirmButton
                     title="작품에서 나갈까요?"
                     description="나가면 이 작품을 더 볼 수 없습니다. 다시 들어가려면 초대 링크가 필요합니다."

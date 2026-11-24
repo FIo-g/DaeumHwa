@@ -4,6 +4,8 @@ import type { ComponentProps } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { LandingPage } from './landing-page'
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }))
+
 vi.mock('./proof-row', () => ({
   ProofRow: (props: ComponentProps<'div'>) => <div {...props} />,
 }))

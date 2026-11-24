@@ -17,7 +17,7 @@ export default async function WorkSettingsPage({
   params: Promise<{ workId: string }>
 }) {
   const { workId } = await params
-  const { db, actor } = await pageContext(`/works/${workId}/settings`)
+  const { db, actor, user } = await pageContext(`/works/${workId}/settings`)
   const work = await guardPage(() => getWork(db, actor, workId))
   const members = await guardPage(() => listMembers(db, actor, workId))
   const isOwner = work.role === 'owner'
@@ -57,10 +57,11 @@ export default async function WorkSettingsPage({
             workId={workId}
             viewerRole={work.role}
             currentUserId={actor.userId}
+            trial={user.isAnonymous}
             members={members.map((m) => ({
               userId: m.userId,
               name: m.name,
-              email: m.email,
+              email: user.isAnonymous ? '' : m.email,
               role: m.role,
             }))}
           />

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
+import { TrialButton } from '@/components/auth/trial-button'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ResumeBanner } from '@/components/works/resume-banner'
@@ -11,7 +12,7 @@ import { getResumePoint } from '@/server/user-state'
 import { listWorksWithStats } from '@/server/dashboard'
 
 export default async function WorksPage() {
-  const { db, actor } = await pageContext('/works')
+  const { db, actor, user } = await pageContext('/works')
   const [cards, resume] = await Promise.all([
     guardPage(() => listWorksWithStats(db, actor, { includeArchived: true })),
     getResumePoint(db, actor),
@@ -25,7 +26,8 @@ export default async function WorksPage() {
         title="내 작품"
         actions={
           // With no works yet, the empty state below carries both actions. Once a work exists the
-          // sample has done its job, so the header offers only a new work.
+          // sample has done its job, so the header offers only a new work. Trial users get neither.
+          !user.isAnonymous &&
           active.length > 0 && (
             <Link href="/works/new" className={buttonVariants({ variant: 'default' })}>
               새 작품
@@ -34,19 +36,25 @@ export default async function WorksPage() {
         }
       />
 
-      {resume && <ResumeBanner resume={resume} />}
+      {resume && <ResumeBanner resume={resume} trial={user.isAnonymous} />}
 
       {active.length === 0 ? (
         <EmptyState
           title="아직 작품이 없습니다"
-          description="새 작품을 만들어 설정과 원고를 정리해 보세요."
+          description={
+            user.isAnonymous ? undefined : '새 작품을 만들어 설정과 원고를 정리해 보세요.'
+          }
           action={
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <SampleWorkButton variant="default" />
-              <Link href="/works/new" className={buttonVariants({ variant: 'outline' })}>
-                새 작품 만들기
-              </Link>
-            </div>
+            user.isAnonymous ? (
+              <TrialButton />
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <SampleWorkButton variant="default" />
+                <Link href="/works/new" className={buttonVariants({ variant: 'outline' })}>
+                  새 작품 만들기
+                </Link>
+              </div>
+            )
           }
         />
       ) : (

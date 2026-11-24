@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { flushPendingSaves } from '@/lib/client/use-autosave'
 import type { SessionUser } from '@/server/session'
@@ -35,7 +35,16 @@ export function TopBar({ user }: { user: SessionUser }) {
           다음화
         </Link>
         <div className="flex items-center gap-3">
-          <span className="truncate text-sm text-muted-foreground">{user.name}</span>
+          {user.isAnonymous ? (
+            <>
+              <span className="whitespace-nowrap text-sm text-muted-foreground">체험 중</span>
+              <Link href="/signup" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                가입하고 작품 이어가기
+              </Link>
+            </>
+          ) : (
+            <span className="truncate text-sm text-muted-foreground">{user.name}</span>
+          )}
           <Button variant="ghost" size="sm" onClick={signOut}>
             로그아웃
           </Button>

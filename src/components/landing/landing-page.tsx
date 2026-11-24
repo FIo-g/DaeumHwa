@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { buttonVariants } from '@/components/ui/button'
+import { TrialButton } from '@/components/auth/trial-button'
 import { SAMPLE_WORK } from '@/lib/sample-work'
 import { cn } from '@/lib/utils'
 import { ProofCircle } from './proof-mark'
@@ -82,11 +82,9 @@ function MarginNote({ error, className }: { error: PlantedError; className?: str
 function StartActions() {
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-      <Link href="/signup" className={cn(buttonVariants(), 'h-12 px-6 text-base font-semibold')}>
-        시작하기
-      </Link>
-      <Link href="/login" className="text-base underline decoration-rule hover:decoration-current">
-        로그인
+      <TrialButton className="h-12 px-6 text-base font-semibold" />
+      <Link href="/signup" className="text-base underline decoration-rule hover:decoration-current">
+        가입하기
       </Link>
     </div>
   )
@@ -304,10 +302,6 @@ export function LandingPage() {
             >
               샘플 작품으로 먼저 점검해 보세요
             </h2>
-            <p className="mt-4 max-w-[36rem] text-lg leading-relaxed text-foreground/85">
-              가입하면 내 작품 화면에서 샘플 작품을 바로 만들 수 있습니다. 만들면 3화가 열리고 회차
-              점검이 돌아갑니다.
-            </p>
             <div className="mt-8">
               <StartActions />
             </div>

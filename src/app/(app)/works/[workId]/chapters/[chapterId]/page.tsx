@@ -18,7 +18,7 @@ export default async function ChapterWritingPage({
 }) {
   const { workId, chapterId } = await params
   const demo = (await searchParams).demo === '1'
-  const { db, actor } = await pageContext(`/works/${workId}/chapters/${chapterId}`)
+  const { db, actor, user } = await pageContext(`/works/${workId}/chapters/${chapterId}`)
   const data = await guardPage(() => loadWritingData(db, actor, workId, chapterId))
   return (
     <div className="flex flex-col gap-6">
@@ -35,7 +35,7 @@ export default async function ChapterWritingPage({
       />
       <WritingWorkspace
         key={data.chapter.id}
-        data={data}
+        data={{ ...data, trial: user.isAnonymous }}
         loadServerCopy={loadChapterAction}
         userId={actor.userId}
         autoCheck={demo}

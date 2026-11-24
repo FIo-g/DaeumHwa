@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { TrialButton } from '@/components/auth/trial-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authClient } from '@/lib/auth-client'
@@ -11,11 +12,12 @@ import { type AuthMode, authErrorMessage } from './auth-utils'
 
 type AuthFormProps = {
   mode: AuthMode
+  trial?: boolean
   /** Validated same-origin path to return to after sign in. */
   next: string | undefined
 }
 
-export function AuthForm({ mode, next }: AuthFormProps) {
+export function AuthForm({ mode, next, trial }: AuthFormProps) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +50,7 @@ export function AuthForm({ mode, next }: AuthFormProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      {trial && <p className="text-sm text-muted-foreground">체험 작품을 계정으로 가져갑니다.</p>}
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         {isSignup && (
           <div className="flex flex-col gap-1.5">
@@ -80,6 +83,7 @@ export function AuthForm({ mode, next }: AuthFormProps) {
           {isSignup ? '가입하기' : '로그인'}
         </Button>
       </form>
+      {!trial && <TrialButton variant="outline" className="w-full" />}
       <p className="text-center text-sm text-muted-foreground">
         {isSignup ? (
           <Link href={`/login${nextQuery}`} className="underline underline-offset-4">

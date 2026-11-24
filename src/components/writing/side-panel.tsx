@@ -15,6 +15,8 @@ import type { WritingSidePanelProps } from './types'
 
 type TabKey = 'related' | 'threads' | 'check' | 'proofread' | 'comments' | 'draft' | 'reader'
 
+const TRIAL_TABS = new Set<TabKey>(['related', 'threads', 'check'])
+
 const TABS: { value: TabKey; label: string }[] = [
   { value: 'related', label: '관련 카드' },
   { value: 'threads', label: '떡밥' },
@@ -50,7 +52,7 @@ export function WritingSidePanel({ data, api, text, position, autoCheck }: Writi
           aria-label="작업 패널 탭"
           className="h-auto w-full flex-wrap justify-start gap-x-3 gap-y-2 rounded-none border-b border-rule p-0 pb-2 group-data-horizontal/tabs:h-auto"
         >
-          {TABS.map((item) => (
+          {TABS.filter((item) => !data.trial || TRIAL_TABS.has(item.value)).map((item) => (
             <TabsTrigger
               key={item.value}
               value={item.value}
@@ -70,18 +72,22 @@ export function WritingSidePanel({ data, api, text, position, autoCheck }: Writi
         <TabsContent value="check" keepMounted>
           <CheckPanel data={data} api={api} text={text} autoRun={autoCheck} />
         </TabsContent>
-        <TabsContent value="proofread" keepMounted>
-          <ProofreadPanel data={data} api={api} text={text} />
-        </TabsContent>
-        <TabsContent value="comments" keepMounted>
-          <CommentsPanel data={data} api={api} text={text} />
-        </TabsContent>
-        <TabsContent value="draft" keepMounted>
-          <DraftPanel data={data} api={api} />
-        </TabsContent>
-        <TabsContent value="reader" keepMounted>
-          <ReaderPanel data={data} api={api} text={text} />
-        </TabsContent>
+        {!data.trial && (
+          <>
+            <TabsContent value="proofread" keepMounted>
+              <ProofreadPanel data={data} api={api} text={text} />
+            </TabsContent>
+            <TabsContent value="comments" keepMounted>
+              <CommentsPanel data={data} api={api} text={text} />
+            </TabsContent>
+            <TabsContent value="draft" keepMounted>
+              <DraftPanel data={data} api={api} />
+            </TabsContent>
+            <TabsContent value="reader" keepMounted>
+              <ReaderPanel data={data} api={api} text={text} />
+            </TabsContent>
+          </>
+        )}
       </Tabs>
     </div>
   )

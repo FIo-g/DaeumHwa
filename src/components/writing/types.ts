@@ -20,6 +20,7 @@ export type WritingData = {
   workId: string
   workTitle: string
   role: Role
+  trial?: boolean
   targetChars: number
   chapter: ChapterRow
   chapters: { id: string; position: number; title: string }[]
