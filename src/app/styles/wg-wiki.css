@@ -495,7 +495,7 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wg-wiki-board:has(.wg-title[data-revealed='true']) .wg-wiki-tabs-strip::after {
+    .wg-wiki-board:has(.wg-title) .wg-wiki-tabs-strip::after {
       transform-origin: left;
       animation: wg-wiki-rule var(--b-quick) var(--b-out) var(--b-step) both;
     }
@@ -504,14 +504,12 @@
       animation: wg-wiki-cell-write var(--b-quick) var(--b-out) both;
     }
 
-    .wg-wiki-board:has(.wg-title[data-revealed='true'])
-      .wg-wiki-cell[aria-current='page']
-      .wg-wiki-cell-fill {
+    .wg-wiki-board:has(.wg-title) .wg-wiki-cell[aria-current='page'] .wg-wiki-cell-fill {
       animation: wg-wiki-cell-write var(--b-quick) var(--b-out) var(--b-step) both;
     }
 
-    .wg-wiki-board:has(.wg-title[data-revealed='true']) + .wg-wiki-index .wg-wiki-index-row {
-      animation: wg-wiki-line-write var(--b-step) steps(4, end)
+    .wg-wiki-board:has(.wg-title) + .wg-wiki-index .wg-wiki-index-row {
+      animation: wg-wiki-line-write var(--b-step) steps(4, jump-none)
         calc(var(--wg-wiki-index-delay) + var(--wg-wiki-row) * var(--b-stagger)) both;
     }
 
@@ -532,12 +530,12 @@
     }
 
     .wg-wiki-index-disclosure > [data-open='true'] .wg-wiki-preview-fact {
-      animation: wg-wiki-line-write var(--b-step) steps(4, end)
+      animation: wg-wiki-line-write var(--b-step) steps(4, jump-none)
         calc(var(--wg-wiki-row) * var(--b-stagger)) both;
     }
 
     .wg-wiki-fact-write {
-      animation: wg-wiki-line-write var(--b-step) steps(4, end) both;
+      animation: wg-wiki-line-write var(--b-step) steps(4, jump-none) both;
     }
   }
 

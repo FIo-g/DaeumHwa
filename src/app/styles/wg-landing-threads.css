@@ -455,13 +455,13 @@
       transition: transform var(--b-quick) var(--b-out);
     }
 
-    .wg-landing-threads-ledger[data-landed='true']
-      :is(.wg-landing-threads-axis, .wg-landing-threads-rails),
-    .wg-landing-threads-ledger[data-landed='true'] .wg-landing-threads-row::after {
+    .wg-landing-threads-ledger :is(.wg-landing-threads-axis, .wg-landing-threads-rails),
+    .wg-landing-threads-ledger .wg-landing-threads-row::after {
       animation: wg-landing-threads-draw var(--b-quick) var(--b-out) var(--b-stagger) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-landing-threads-ledger[data-landed='true'] .wg-landing-threads-track {
+    .wg-landing-threads-ledger .wg-landing-threads-track {
       --wg-landing-threads-seed-time: calc(
         var(--b-stagger) + var(--b-quick) + var(--wg-landing-threads-order) * var(--b-stagger)
       );
@@ -469,43 +469,44 @@
       --wg-landing-threads-target-time: calc(var(--wg-landing-threads-line-time) + var(--b-step));
     }
 
-    .wg-landing-threads-ledger[data-landed='true'] .wg-landing-threads-track[data-same='true'] {
+    .wg-landing-threads-ledger .wg-landing-threads-track[data-same='true'] {
       --wg-landing-threads-target-time: var(--wg-landing-threads-line-time);
     }
 
-    .wg-landing-threads-ledger[data-landed='true'] .wg-landing-threads-track[data-planned='true'] {
+    .wg-landing-threads-ledger .wg-landing-threads-track[data-planned='true'] {
       --wg-landing-threads-line-time: var(--wg-landing-threads-seed-time);
     }
 
-    .wg-landing-threads-ledger[data-landed='true']
-      .wg-landing-threads-track
-      > .wg-landing-threads-seed {
+    .wg-landing-threads-ledger .wg-landing-threads-track > .wg-landing-threads-seed {
       animation: wg-landing-threads-mark var(--b-cell) var(--b-out)
         var(--wg-landing-threads-seed-time) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-landing-threads-ledger[data-landed='true'] .wg-landing-threads-track-line {
+    .wg-landing-threads-ledger .wg-landing-threads-track-line {
       animation: wg-landing-threads-draw var(--b-step) var(--b-out)
         var(--wg-landing-threads-line-time) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-landing-threads-ledger[data-landed='true']
-      .wg-landing-threads-track
-      > .wg-landing-threads-target {
+    .wg-landing-threads-ledger .wg-landing-threads-track > .wg-landing-threads-target {
       animation: wg-landing-threads-mark var(--b-cell) var(--b-out)
         var(--wg-landing-threads-target-time) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-landing-threads-choice-entrance[data-landed='true']
+    .wg-landing-threads-choice-entrance
       :is(.wg-landing-threads-choice-option, .wg-landing-threads-fact-row)::before {
       animation: wg-landing-threads-draw var(--b-quick) var(--b-out) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-landing-threads-choice-entrance[data-landed='true']
+    .wg-landing-threads-choice-entrance
       :is(.wg-landing-threads-choice-option, .wg-landing-threads-fact-row)
-      > :not(:focus-visible) {
+      > * {
       animation: wg-landing-threads-write var(--b-step) var(--b-out)
-        calc(var(--b-quick) + var(--wg-landing-threads-order) * var(--b-stagger)) backwards;
+        calc(var(--b-quick) + var(--wg-landing-threads-order) * var(--b-stagger)) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
     .wg-landing-threads-rewrite[data-rewrite='true'] {

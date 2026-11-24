@@ -43,6 +43,7 @@ function ProofMark({
   const origin = useRef<SVGSVGElement>(null)
   const [fragments, setFragments] = useState<Box[]>([])
   const [stroke, setStroke] = useState(DEFAULT_PEN_STROKE)
+  const lastReplay = useRef(replayKey)
   const standalone = children == null
 
   useLayoutEffect(() => {
@@ -78,6 +79,17 @@ function ProofMark({
       setFragments((previous) => (sameFragments(previous, next) ? previous : next))
     })
   }, [children, replayKey, standalone])
+
+  useLayoutEffect(() => {
+    if (lastReplay.current === replayKey) return
+    lastReplay.current = replayKey
+    for (const animation of node.current?.getAnimations?.() ?? []) {
+      if ('animationName' in animation && animation.animationName === 'wg-pen-draw') {
+        animation.currentTime = 0
+        animation.play()
+      }
+    }
+  }, [replayKey])
 
   const strokes = fragments.length || (!standalone && kind !== 'ring') ? fragments : [null]
 

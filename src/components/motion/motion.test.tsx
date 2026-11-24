@@ -51,9 +51,8 @@ function matchMotion(matches: boolean) {
 }
 
 describe('entrances and surfaces', () => {
-  it('server-renders Reveal text with no hidden state and activates the observer fallback once', () => {
+  it('server-renders Reveal and rewinds an entrance only while it is below the viewport', () => {
     matchMotion(false)
-    vi.stubGlobal('CSS', { supports: () => false })
     const view = (
       <Reveal direction="left" delay={70}>
         설정 보드
@@ -73,16 +72,20 @@ describe('entrances and surfaces', () => {
         disconnect = disconnect
       },
     )
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 1000,
+      height: 100,
+    } as DOMRect)
     render(view)
     const heading = screen.getByText('설정 보드')
-    expect(heading).toHaveAttribute('data-revealed', 'false')
+    expect(heading.style.getPropertyValue('--wg-entry-play')).toBe('paused')
     expect(heading.style.getPropertyValue('--wg-reveal-x')).toBe('')
     expect(heading.style.getPropertyValue('--wg-delay')).toBe('70ms')
     expect(watch).toHaveBeenCalledWith(heading)
     act(() =>
       notify?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver),
     )
-    expect(heading).toHaveAttribute('data-revealed', 'true')
+    expect(heading.style.getPropertyValue('--wg-entry-play')).toBe('')
     expect(disconnect).toHaveBeenCalled()
   })
 

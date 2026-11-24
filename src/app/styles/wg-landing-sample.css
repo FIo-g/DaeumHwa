@@ -202,13 +202,15 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wg-landing-sample-layout[data-landed='true'] .wg-landing-sample-episodes::after {
+    .wg-landing-sample-layout .wg-landing-sample-episodes::after {
       animation: wg-landing-sample-write var(--b-draw) var(--b-out) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-landing-sample-results[data-landed='true'] .wg-landing-sample-row {
+    .wg-landing-sample-results .wg-landing-sample-row {
       animation: wg-landing-sample-write var(--b-step) var(--b-out)
-        calc(var(--b-stagger) * var(--wg-landing-sample-order)) backwards;
+        calc(var(--b-stagger) * var(--wg-landing-sample-order)) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
     .wg-landing-sample-line-number,

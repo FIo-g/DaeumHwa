@@ -2,7 +2,7 @@
 
 import { useRef, type HTMLAttributes, type CSSProperties } from 'react'
 import { cn } from '@/lib/utils'
-import { useEntered } from './hooks'
+import { useViewportEntrance } from './hooks'
 
 type RevealProps = HTMLAttributes<HTMLElement> & {
   as?: 'div' | 'li' | 'article'
@@ -23,7 +23,7 @@ export function Reveal({
   ...props
 }: RevealProps) {
   const node = useRef<HTMLElement>(null)
-  const revealed = useEntered(node)
+  useViewportEntrance(node)
 
   return (
     <Element
@@ -32,7 +32,6 @@ export function Reveal({
         node.current = element
       }}
       className={cn(!effectOnly && 'wg-reveal', decorative && 'wg-reveal-decorative', className)}
-      data-revealed={revealed}
       data-direction={direction}
       style={
         {

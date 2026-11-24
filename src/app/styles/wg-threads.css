@@ -523,37 +523,37 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wg-threads-timeline[data-revealed='true'][data-scene-finished='false'] .wg-threads-axis-rule {
+    .wg-threads-timeline[data-scene-finished='false'] .wg-threads-axis-rule {
       animation:
         wg-threads-draw var(--b-step) var(--b-out) both,
         wg-threads-scene var(--b-arrival) var(--b-out) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-threads-timeline[data-revealed='true'][data-scene-finished='false'] .wg-threads-row {
+    .wg-threads-timeline[data-scene-finished='false'] .wg-threads-row {
       --wg-threads-draw-delay: calc(var(--b-step) + var(--wg-threads-order) * var(--b-stagger));
     }
 
-    .wg-threads-timeline[data-revealed='true'][data-scene-finished='false'] .wg-threads-line {
+    .wg-threads-timeline[data-scene-finished='false'] .wg-threads-line {
       animation: wg-threads-draw var(--b-draw) var(--b-out) var(--wg-threads-draw-delay) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-threads-timeline[data-revealed='true'][data-scene-finished='false']
-      [data-backward='true']
-      .wg-threads-line {
+    .wg-threads-timeline[data-scene-finished='false'] [data-backward='true'] .wg-threads-line {
       animation-name: wg-threads-draw-back;
     }
 
-    .wg-threads-timeline[data-revealed='true'][data-scene-finished='false']
-      .wg-threads-plot
-      .wg-threads-seed {
+    .wg-threads-timeline[data-scene-finished='false'] .wg-threads-plot .wg-threads-seed {
       animation: wg-threads-mark var(--b-quick) var(--b-out) var(--wg-threads-draw-delay) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-threads-timeline[data-revealed='true'][data-scene-finished='false']
+    .wg-threads-timeline[data-scene-finished='false']
       .wg-threads-plot
       :is(.wg-threads-target, .wg-threads-development) {
       animation: wg-threads-mark var(--b-quick) var(--b-out)
         calc(var(--wg-threads-draw-delay) + var(--b-draw) - var(--b-quick)) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
   }
 

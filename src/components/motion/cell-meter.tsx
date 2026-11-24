@@ -2,7 +2,7 @@
 
 import { useRef, type CSSProperties } from 'react'
 import { cn } from '@/lib/utils'
-import { useEntered } from './hooks'
+import { useViewportEntrance } from './hooks'
 
 type CellMeterProps = {
   value: number
@@ -20,7 +20,7 @@ export function CellMeter({
   className,
 }: CellMeterProps) {
   const ref = useRef<HTMLSpanElement>(null)
-  const entered = useEntered(ref)
+  useViewportEntrance(ref)
   const limit = Number.isFinite(max) ? Math.max(0, max) : 0
   const count = Number.isFinite(cells) ? Math.max(1, Math.ceil(cells)) : 1
   const amount = Number.isFinite(value) ? Math.max(0, value) : 0
@@ -37,7 +37,6 @@ export function CellMeter({
       aria-valuetext={`${amount}/${limit}`}
       className={cn('wg-cell-meter', className)}
       style={{ '--wg-cell-meter-count': count } as CSSProperties}
-      data-revealed={entered}
     >
       {Array.from({ length: count }, (_, index) => {
         const fill = Math.max(0, Math.min(1, filled - index))

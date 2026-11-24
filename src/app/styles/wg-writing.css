@@ -462,13 +462,11 @@
       transition: clip-path var(--b-quick) var(--b-out);
     }
 
-    .wg-writing-chapter:has(.wg-writing-heading h1[data-revealed='true'])
-      .wg-writing-toolbar::before {
+    .wg-writing-chapter:has(.wg-writing-heading h1) .wg-writing-toolbar::before {
       animation: wg-writing-across var(--b-step) var(--b-out) var(--wg-writing-title-time) both;
     }
 
-    .wg-writing-chapter:has(.wg-writing-heading h1[data-revealed='true'])
-      .wg-writing-surface::before {
+    .wg-writing-chapter:has(.wg-writing-heading h1) .wg-writing-surface::before {
       animation: wg-writing-down var(--b-quick) var(--b-out)
         calc(var(--wg-writing-title-time) + var(--b-step)) both;
     }

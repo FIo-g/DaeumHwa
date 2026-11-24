@@ -1,30 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { GridTitle, usePrefersReducedMotion } from '@/components/motion'
+import { useRef, type CSSProperties } from 'react'
+import { GridTitle } from '@/components/motion'
+import { useViewportEntrance } from '@/components/motion/hooks'
 
 export function useLandingEntrance<Element extends HTMLElement>() {
   const ref = useRef<Element>(null)
-  const [entered, setEntered] = useState(false)
-  const reduced = usePrefersReducedMotion()
-
-  useEffect(() => {
-    const element = ref.current
-    if (entered || reduced || !element || typeof IntersectionObserver === 'undefined') return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return
-        setEntered(true)
-        observer.disconnect()
-      },
-      { rootMargin: '0px 0px -18% 0px' },
-    )
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [entered, reduced])
-
-  return { ref, 'data-landed': entered && !reduced }
+  useViewportEntrance(ref)
+  return { ref }
 }
 
 export function landingOrder(index: number): CSSProperties {

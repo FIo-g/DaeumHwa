@@ -215,7 +215,7 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wg-settings-page:has(.wg-shell-title[data-revealed='true']) .wg-settings-fold::before {
+    .wg-settings-page:has(.wg-shell-title) .wg-settings-fold::before {
       animation: wg-settings-fold-line var(--b-quick) var(--b-out) var(--wg-settings-fold-delay)
         backwards;
     }
@@ -237,9 +237,8 @@
       --wg-settings-line-index: 4;
     }
 
-    .wg-settings-page:has(.wg-shell-title[data-revealed='true'])
-      :is(.wg-settings-lead, .wg-settings-write) {
-      animation: wg-settings-write-line var(--b-quick) steps(5, end)
+    .wg-settings-page:has(.wg-shell-title) :is(.wg-settings-lead, .wg-settings-write) {
+      animation: wg-settings-write-line var(--b-quick) steps(5, jump-none)
         calc(
           var(--wg-settings-fold-delay) + var(--b-quick) + var(--wg-settings-line-index, 0) *
             var(--b-cell)

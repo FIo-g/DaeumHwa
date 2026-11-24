@@ -23,27 +23,34 @@ export function useReplay() {
   return { replayKey, replay: () => setReplayKey((value) => value + 1) }
 }
 
-export function useEntered(ref: RefObject<HTMLElement | null>, enabled = true) {
+export function useViewportEntrance(ref: RefObject<HTMLElement | null>, enabled = true) {
   const reduced = usePrefersReducedMotion()
-  const [entered, setEntered] = useState(false)
 
   useEffect(() => {
     const node = ref.current
-    if (!enabled || reduced || entered || !node || typeof IntersectionObserver === 'undefined')
-      return
+    if (!enabled || reduced || !node || typeof IntersectionObserver === 'undefined') return
 
-    let active = true
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!active || !entry?.isIntersecting) return
-      setEntered(true)
+    const { top, height } = node.getBoundingClientRect()
+    if (!height || top < document.documentElement.clientHeight) return
+
+    // The CSS timeline already started. Rewind it only while the whole scene is below the fold.
+    node.style.setProperty('--wg-entry-play', 'paused')
+    for (const animation of node.getAnimations?.({ subtree: true }) ?? []) {
+      if (animation.playState === 'paused') animation.currentTime = 0
+    }
+
+    function release() {
+      node?.style.removeProperty('--wg-entry-play')
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      release()
       observer.disconnect()
     })
     observer.observe(node)
     return () => {
-      active = false
+      release()
       observer.disconnect()
     }
-  }, [enabled, entered, reduced, ref])
-
-  return entered
+  }, [enabled, reduced, ref])
 }

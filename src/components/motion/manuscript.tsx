@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -10,14 +9,10 @@ import {
   type ReactNode,
 } from 'react'
 import { cn } from '@/lib/utils'
-import { useEntered, usePrefersReducedMotion } from './hooks'
+import { useViewportEntrance } from './hooks'
 import { leaderPoints, matrixPoint } from './proof-geometry'
 import { inverseScreenMatrix, observeProofLayout } from './proof-layout'
-
-/**
- * Manuscript-paper (원고지) primitives. Every screen imports these names, so the names and props
- * below are a fixed contract; only the insides may change.
- */
+import { titleCells, titleRows, type TitleCell } from './title-layout'
 
 type GridTitleProps = {
   /** The title text. One character is set per cell; a space becomes an empty cell. */
@@ -33,52 +28,7 @@ type GridTitleProps = {
   className?: string
 }
 
-type TitleCell = { glyph: string; index: number }
-
-const graphemes = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter('ko') : null
-const space = /^\s+$/u
 const punctuation = /^[.,。、，]$/u
-const durationPattern = /^([\d.]+)(ms|s)$/
-
-function timeInMilliseconds(value: string, fallback: number) {
-  const match = durationPattern.exec(value.trim())
-  return match ? Number(match[1]) * (match[2] === 's' ? 1000 : 1) : fallback
-}
-
-function titleGroups(text: string) {
-  let offset = 0
-  return (text.match(/\s+|\S+/gu) ?? []).map((part) => {
-    const letters = graphemes
-      ? Array.from(graphemes.segment(part), ({ segment }) => segment)
-      : Array.from(part)
-    return letters.map((glyph) => ({ glyph: space.test(glyph) ? '' : glyph, index: offset++ }))
-  })
-}
-
-function titleRows(groups: TitleCell[][], columns: number) {
-  const rows: TitleCell[][] = []
-  let row: TitleCell[] = []
-
-  for (const group of groups) {
-    if (!group[0].glyph) {
-      row.push(...group.slice(0, columns - row.length))
-      continue
-    }
-    if (row.length && row.length + group.length > columns) {
-      if (row.some((cell) => cell.glyph)) rows.push(row)
-      row = []
-    }
-    for (const cell of group) {
-      if (row.length === columns) {
-        rows.push(row)
-        row = []
-      }
-      row.push(cell)
-    }
-  }
-  if (row.length) rows.push(row)
-  return rows
-}
 
 function TitleGlyph({ cell, first = false }: { cell: TitleCell; first?: boolean }) {
   return (
@@ -109,11 +59,10 @@ export function GridTitle({
   const [fit, setFit] = useState(0)
   const fixed = columns && Number.isFinite(columns) ? Math.max(1, Math.trunc(columns)) : 0
   const usedColumns = fixed || fit
-  const entered = useEntered(heading, animate && usedColumns > 0)
-  const groups = titleGroups(children)
-  const glyphCount = groups.reduce((sum, group) => sum + group.length, 0)
-  const rows = usedColumns ? titleRows(groups, usedColumns) : []
-  const rowWidth = fixed || Math.min(fit, glyphCount)
+  useViewportEntrance(heading, animate)
+  const letters = titleCells(children)
+  const rows = usedColumns ? titleRows(letters, usedColumns) : [letters]
+  const rowWidth = fixed || Math.min(fit, letters.length)
 
   useLayoutEffect(() => {
     const area = cells.current
@@ -166,39 +115,26 @@ export function GridTitle({
       className={cn('wg-title', className)}
       data-size={size}
       data-animate={animate}
-      data-revealed={entered}
       style={
         {
           '--wg-columns': rowWidth || undefined,
-          '--wg-letter-count': Math.max(1, glyphCount),
+          '--wg-letter-count': Math.max(1, letters.length),
         } as CSSProperties
       }
     >
       <span className="wg-visually-hidden">{children}</span>
       <span ref={cells} className="wg-title-cells" aria-hidden="true">
         <span ref={probe} className="wg-title-probe" />
-        {usedColumns ? (
-          <span className="wg-title-grid">
-            {rows.flatMap((row) => [
-              ...row.map((cell, index) => (
-                <TitleGlyph key={cell.index} cell={cell} first={index === 0} />
-              )),
-              ...Array.from({ length: rowWidth - row.length }, (_, index) => (
-                <span className="wg-title-cell" key={'blank-' + row[0].index + '-' + index} />
-              )),
-            ])}
-          </span>
-        ) : (
-          <span className="wg-title-flow">
-            {groups.map((group) => (
-              <span className="wg-title-word" key={group[0].index}>
-                {group.map((cell) => (
-                  <TitleGlyph key={cell.index} cell={cell} />
-                ))}
-              </span>
-            ))}
-          </span>
-        )}
+        <span className="wg-title-grid" data-flow={!usedColumns || undefined}>
+          {rows.flatMap((row) => [
+            ...row.map((cell, index) => (
+              <TitleGlyph key={cell.index} cell={cell} first={index === 0} />
+            )),
+            ...Array.from({ length: rowWidth - row.length }, (_, index) => (
+              <span className="wg-title-cell" key={'blank-' + row[0].index + '-' + index} />
+            )),
+          ])}
+        </span>
       </span>
     </Tag>
   )
@@ -254,10 +190,10 @@ type MarginNoteProps = {
 /** A wiki quotation written in the margin in fountain-pen blue. Used for wiki quotes only. */
 export function MarginNote({ children, source, label = '위키 원문', className }: MarginNoteProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const entered = useEntered(ref)
+  useViewportEntrance(ref)
 
   return (
-    <div ref={ref} className={cn('wg-margin-note', className)} data-revealed={entered}>
+    <div ref={ref} className={cn('wg-margin-note', className)}>
       <p className="wg-margin-note-label">{label}</p>
       <blockquote className="wg-margin-note-quote">{children}</blockquote>
       {source && <p className="wg-margin-note-source">{source}</p>}
@@ -342,7 +278,7 @@ export function ProofPair({ manuscript, note, className, replayKey }: ProofPairP
   const leader = useRef<SVGSVGElement>(null)
   const [path, setPath] = useState('')
   const [markReplay, setMarkReplay] = useState('')
-  const entered = useEntered(row)
+  useViewportEntrance(row)
   const replay = replayKey ?? markReplay
   const previousReplay = useRef(replay)
 
@@ -369,8 +305,11 @@ export function ProofPair({ manuscript, note, className, replayKey }: ProofPairP
   useLayoutEffect(() => {
     if (previousReplay.current === replay) return
     previousReplay.current = replay
-    for (const animation of margin.current?.getAnimations?.({ subtree: true }) ?? []) {
-      if ('animationName' in animation && animation.animationName === 'wg-note-write') {
+    for (const animation of row.current?.getAnimations?.({ subtree: true }) ?? []) {
+      if (
+        'animationName' in animation &&
+        ['wg-note-write', 'wg-leader-draw'].includes(String(animation.animationName))
+      ) {
         animation.currentTime = 0
         animation.play()
       }
@@ -378,20 +317,18 @@ export function ProofPair({ manuscript, note, className, replayKey }: ProofPairP
   }, [replay])
 
   return (
-    <div
-      ref={row}
-      className={cn('wg-proof-pair', className)}
-      data-revealed={entered}
-      data-connected={Boolean(path)}
-    >
+    <div ref={row} className={cn('wg-proof-pair', className)} data-connected={Boolean(path)}>
       <div ref={draft} className="wg-proof-pair-manuscript">
         {manuscript}
       </div>
       <div ref={margin} className="wg-proof-pair-note">
         {note}
       </div>
+      <span className="wg-proof-fallback" aria-hidden="true">
+        <span />
+      </span>
       <svg ref={leader} className="wg-proof-pair-leader" aria-hidden="true">
-        {path && <path key={replay} d={path} pathLength={1} />}
+        {path && <path d={path} pathLength={1} />}
       </svg>
     </div>
   )
@@ -407,53 +344,20 @@ type CountCellProps = {
 /** A number in the counting typeface. It counts up once on entry. */
 export function CountCell({ value, unit, className }: CountCellProps) {
   const ref = useRef<HTMLSpanElement>(null)
-  const number = useRef<HTMLSpanElement>(null)
-  const counted = useRef(false)
-  const entered = useEntered(ref)
-  const reduced = usePrefersReducedMotion()
-
-  useEffect(() => {
-    const node = number.current
-    if (!entered || reduced || counted.current || !node || !Number.isFinite(value) || value === 0)
-      return
-
-    const step = timeInMilliseconds(getComputedStyle(node).getPropertyValue('--b-step'), 260)
-    const duration = Math.min(600, step * 2)
-    const magnitude = Math.abs(value)
-    const smallInteger = Number.isInteger(value) && magnitude <= 20
-    const steps = smallInteger ? magnitude : 20
-    let start: number | undefined
-    let frame = requestAnimationFrame(function tick(now) {
-      if (!node) return
-      counted.current = true
-      start ??= now
-      const progress = Math.min(1, (now - start) / duration)
-      if (progress >= 1) {
-        delete node.dataset.counting
-        return
-      }
-      const level = Math.floor(progress * steps)
-      const current = value * (level / steps)
-      const display = smallInteger
-        ? Math.sign(value) * level
-        : Number.isInteger(value)
-          ? Math.trunc(current)
-          : Number(current.toPrecision(3))
-      node.dataset.counting = String(display)
-      frame = requestAnimationFrame(tick)
-    })
-    return () => {
-      cancelAnimationFrame(frame)
-      delete node.dataset.counting
-    }
-  }, [entered, reduced, value])
+  const animated = Number.isInteger(value) && value !== 0 && Math.abs(value) < 2 ** 31
+  useViewportEntrance(ref, animated)
 
   const final = String(value) + (unit ?? '')
   return (
     <span ref={ref} className={cn('wg-count', className)}>
       <span className="wg-visually-hidden">{final}</span>
       <span className="wg-count-face" data-final={final} aria-hidden="true">
-        <span className="wg-count-value" ref={number} data-value={value} />
+        <span
+          className="wg-count-value"
+          data-value={value}
+          data-count-up={animated || undefined}
+          style={animated ? ({ '--wg-count-final': value } as CSSProperties) : undefined}
+        />
         {unit && <span className="wg-count-unit">{unit}</span>}
       </span>
     </span>

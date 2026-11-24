@@ -386,17 +386,17 @@
       transition: clip-path var(--b-quick) var(--b-out);
     }
 
-    .wg-home-page:has(> header h1[data-revealed='true']) .wg-home-panel::before,
-    .wg-home-page:has(> header h1[data-revealed='true']) .wg-home-folds::after {
+    .wg-home-page:has(> header h1) .wg-home-panel::before,
+    .wg-home-page:has(> header h1) .wg-home-folds::after {
       animation: wg-home-rule-in var(--b-quick) var(--b-out) var(--wg-home-rule-delay) both;
       transform-origin: left;
     }
 
-    .wg-home-page:has(> header h1[data-revealed='true']) .wg-home-fold {
+    .wg-home-page:has(> header h1) .wg-home-fold {
       animation: wg-home-fold-in var(--b-quick) var(--b-out) var(--wg-home-rule-delay) backwards;
     }
 
-    .wg-home-page:has(> header h1[data-revealed='true'])
+    .wg-home-page:has(> header h1)
       :is(
         .wg-home-panel > h2,
         .wg-home-thread-meta,
@@ -422,12 +422,12 @@
       --wg-home-row-delay: calc(2 * var(--b-stagger));
     }
 
-    .wg-home-page:has(> header h1[data-revealed='true']) .wg-home-axis-line {
+    .wg-home-page:has(> header h1) .wg-home-axis-line {
       animation: wg-home-rule-in var(--b-quick) var(--b-out)
         calc(var(--wg-home-content-delay) + var(--b-stagger)) both;
     }
 
-    .wg-home-page:has(> header h1[data-revealed='true']) .wg-home-target {
+    .wg-home-page:has(> header h1) .wg-home-target {
       animation: wg-home-mark-in var(--b-cell) var(--b-out)
         calc(var(--wg-home-content-delay) + var(--b-stagger) + var(--b-quick) - var(--b-cell)) both;
     }

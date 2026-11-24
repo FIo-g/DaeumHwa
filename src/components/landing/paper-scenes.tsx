@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect, type ComponentProps, type ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { MarginNote, ProofPair, ProofRing, ProofUnderline, useReplay } from '@/components/motion'
 import { cn } from '@/lib/utils'
 import { LandingTitle, landingOrder, useLandingEntrance } from './entrance'
@@ -20,20 +20,6 @@ export function HeroProof() {
   const { replayKey, replay } = useReplay()
   const entrance = useLandingEntrance<HTMLElement>()
 
-  useLayoutEffect(() => {
-    if (replayKey === 0) return
-    const rows = entrance.ref.current?.querySelector('aside')
-    for (const animation of rows?.getAnimations?.({ subtree: true }) ?? []) {
-      if (
-        'animationName' in animation &&
-        String(animation.animationName).startsWith('wg-landing-hero-')
-      ) {
-        animation.currentTime = 0
-        animation.play()
-      }
-    }
-  }, [entrance.ref, replayKey])
-
   return (
     <figure
       {...entrance}
@@ -42,7 +28,7 @@ export function HeroProof() {
       data-replayed={replayKey > 0}
     >
       <h2 id="b-intro-proof-title">종루의 손짓</h2>
-      <aside aria-label="위키 원문과 교정 메모">
+      <aside key={replayKey} aria-label="위키 원문과 교정 메모">
         {findings.slice(0, 2).map((finding, index) => {
           const Mark = index === 0 ? ProofRing : ProofUnderline
           return (

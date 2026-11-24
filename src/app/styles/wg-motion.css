@@ -1,3 +1,9 @@
+@property --wg-count-number {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
 @layer components {
   .wg-visually-hidden {
     position: absolute;
@@ -56,15 +62,9 @@
     row-gap: clamp(4px, var(--wg-cell-track) * 0.13, 12px);
   }
 
-  :is(.wg-title-flow, .wg-title-word) {
-    display: flex;
-    flex-wrap: wrap;
-    align-content: start;
-    row-gap: clamp(4px, var(--wg-cell-track) * 0.13, 12px);
-  }
-
-  .wg-title-word {
-    max-inline-size: 100%;
+  .wg-title-grid[data-flow] {
+    inline-size: min(100%, calc(var(--wg-letter-count) * var(--wg-cell-track)));
+    grid-template-columns: repeat(auto-fill, var(--wg-cell-track));
   }
 
   .wg-title-cell {
@@ -73,41 +73,29 @@
     display: grid;
     place-items: center;
     grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-    flex: none;
     box-sizing: border-box;
     inline-size: var(--wg-cell-track);
     block-size: var(--wg-cell-track);
     font-size: calc(var(--wg-cell-track) * 0.72);
-  }
-
-  .wg-title-cell::after {
-    content: '';
-    position: absolute;
-    inset: 0;
     border-block: var(--wg-title-line);
     border-inline-end: var(--wg-title-line);
-    pointer-events: none;
   }
 
-  .wg-title-cell[data-first]::after,
-  .wg-title-flow .wg-title-cell::after {
+  .wg-title-cell[data-first] {
     border-inline-start: var(--wg-title-line);
   }
 
-  .wg-title-flow .wg-title-cell::after {
-    border-inline-end: 0;
+  .wg-title-grid[data-flow] .wg-title-cell {
+    border-inline: var(--wg-title-line) 0;
   }
 
-  .wg-title-flow .wg-title-cell::before {
+  .wg-title-grid[data-flow] .wg-title-cell::after {
     content: '';
     position: absolute;
-    inset-block: 0;
+    inset-block: calc(-1 * var(--b-line));
     inset-inline-start: 100%;
     border-inline-start: var(--wg-title-line);
-  }
-
-  .wg-title-flow {
-    padding-inline-end: var(--b-line, 1px);
+    pointer-events: none;
   }
 
   .wg-title-glyph {
@@ -166,12 +154,13 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wg-cell-meter[data-revealed='true'] .wg-cell-meter-cell::before {
+    .wg-cell-meter-cell::before {
       animation: wg-cell-meter-fill var(--wg-cell-meter-step) var(--b-out)
         calc(
           var(--wg-cell-meter-delay, 0ms) + var(--wg-cell-meter-index) * var(--wg-cell-meter-step)
         )
-        backwards;
+        both;
+      animation-play-state: var(--wg-entry-play, running);
     }
   }
 
@@ -268,6 +257,67 @@
     stroke-linejoin: round;
     stroke-dasharray: 1;
     stroke-linecap: round;
+  }
+
+  .wg-proof-fallback {
+    display: none;
+  }
+
+  @media (scripting: none), (prefers-reduced-motion: reduce) {
+    @supports (anchor-scope: --wg-proof-source) {
+      .wg-proof-pair {
+        anchor-scope: --wg-proof-source, --wg-proof-draft, --wg-proof-quote;
+      }
+
+      .wg-proof-pair-manuscript {
+        anchor-name: --wg-proof-draft;
+      }
+
+      .wg-proof-pair-manuscript [data-wg-proof] {
+        anchor-name: --wg-proof-source;
+      }
+
+      .wg-proof-pair :is(.wg-margin-note-quote, .wg-proof-pair-note:not(:has(.wg-margin-note))) {
+        anchor-name: --wg-proof-quote;
+      }
+
+      .wg-proof-pair[data-connected='false']:has(.wg-proof-pair-manuscript [data-wg-proof])
+        .wg-proof-fallback {
+        display: contents;
+        --wg-fallback-rule: var(--b-line) solid var(--b-wiki);
+        --wg-fallback-source-y: anchor(--wg-proof-source bottom);
+      }
+
+      .wg-proof-fallback::before,
+      .wg-proof-fallback::after,
+      .wg-proof-fallback > span {
+        position: absolute;
+        z-index: -1;
+        pointer-events: none;
+        content: '';
+      }
+
+      .wg-proof-fallback::before {
+        inset-inline-start: anchor(--wg-proof-source right);
+        inset-inline-end: anchor(--wg-proof-draft right);
+        inset-block-start: var(--wg-fallback-source-y);
+        border-block-start: var(--wg-fallback-rule);
+      }
+
+      .wg-proof-fallback > span {
+        inset-inline-end: anchor(--wg-proof-draft right);
+        inset-block: min(var(--wg-fallback-source-y), anchor(--wg-proof-quote center))
+          min(var(--wg-fallback-source-y), anchor(--wg-proof-quote center));
+        border-inline-end: var(--wg-fallback-rule);
+      }
+
+      .wg-proof-fallback::after {
+        inset-inline: min(anchor(--wg-proof-draft right), anchor(--wg-proof-quote left))
+          min(anchor(--wg-proof-draft right), anchor(--wg-proof-quote left));
+        inset-block-start: anchor(--wg-proof-quote center);
+        border-block-start: var(--wg-fallback-rule);
+      }
+    }
   }
 
   @media (max-width: 767px) {
@@ -726,7 +776,7 @@
     vector-effect: non-scaling-stroke;
   }
 
-  .wg-proof-mark[data-measured='true'] .wg-proof-pen path {
+  .wg-proof-pen path {
     stroke-dasharray: 100;
   }
 
@@ -768,65 +818,77 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wg-title[data-animate='true'][data-revealed='true']
-      .wg-title-glyph[data-letter]:not([data-letter='']) {
-      animation: wg-letter-write var(--wg-cell-time) steps(1, end)
-        calc(var(--wg-letter) * var(--wg-cell-time)) backwards;
+    .wg-title[data-animate='true'] .wg-title-glyph:not([data-letter='']) {
+      animation: wg-letter-write var(--wg-cell-time) steps(2, jump-none)
+        calc(var(--wg-letter) * var(--wg-cell-time)) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-title[data-animate='true'][data-revealed='true']
-      .wg-title-cell:has(.wg-title-glyph)::before {
+    .wg-title[data-animate='true']
+      .wg-title-cell:has(.wg-title-glyph:not([data-letter='']))::before {
       content: '';
       position: absolute;
       inset: 14% auto 14% 13%;
       border-inline-start: var(--b-rule, 2px) solid var(--b-ink, #1c1b19);
       opacity: 0;
-      animation: wg-cell-cursor var(--wg-cell-time) steps(1, end)
-        calc(var(--wg-letter) * var(--wg-cell-time));
+      animation: wg-cell-cursor var(--wg-cell-time) steps(2, jump-none)
+        calc(var(--wg-letter) * var(--wg-cell-time)) forwards;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-reveal[data-revealed='true'] {
+    .wg-reveal {
       animation: wg-line-write var(--b-step, 260ms) var(--b-out, ease-out) var(--wg-delay, 0ms) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
     .wg-stagger > * {
       animation: wg-line-write var(--b-step, 260ms) var(--b-out, ease-out)
         calc(var(--wg-index, 0) * var(--b-stagger, 70ms)) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
     .wg-disclosure-region[data-open='true'] .wg-disclosure-content {
-      animation: wg-note-write var(--b-step, 260ms) steps(8, end) var(--b-stagger, 70ms) both;
+      animation: wg-note-write var(--b-step, 260ms) steps(8, jump-none) var(--b-stagger, 70ms) both;
     }
 
-    .wg-count-value[data-counting]::before {
-      content: attr(data-counting);
+    .wg-count-value[data-count-up]::before {
+      counter-reset: wg-count var(--wg-count-number);
+      content: counter(wg-count);
+      animation: wg-count-up calc(2 * var(--b-step)) linear both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-margin-note[data-revealed='true']:not(.wg-proof-pair *) .wg-margin-note-quote {
-      animation: wg-note-write var(--b-step, 260ms) steps(8, end) both;
+    .wg-margin-note:not(.wg-proof-pair *) .wg-margin-note-quote {
+      animation: wg-note-write var(--b-step, 260ms) steps(8, jump-none) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-proof-pair[data-revealed='true'][data-connected='true'] .wg-proof-pair-leader path {
+    .wg-proof-pair-leader {
       animation: wg-leader-draw var(--wg-leader-time) var(--b-out, ease-out) var(--wg-pen-time) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-proof-pair[data-revealed='true']
-      :is(.wg-margin-note .wg-margin-note-quote, .wg-proof-pair-note:not(:has(.wg-margin-note))) {
-      animation: wg-note-write var(--b-quick, 170ms) steps(8, end) both;
+    .wg-proof-pair :is(.wg-margin-note-quote, .wg-proof-pair-note:not(:has(.wg-margin-note))) {
+      animation: wg-note-write var(--b-quick, 170ms) steps(8, jump-none) var(--wg-note-delay, 0ms)
+        both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-proof-pair[data-revealed='true'][data-connected='true']
-      :is(.wg-margin-note .wg-margin-note-quote, .wg-proof-pair-note:not(:has(.wg-margin-note))) {
-      animation-delay: calc(var(--wg-pen-time) + var(--wg-leader-time));
+    .wg-proof-pair:has(.wg-proof-pair-manuscript [data-wg-proof]) {
+      --wg-note-delay: calc(var(--wg-pen-time) + var(--wg-leader-time));
     }
 
-    .wg-proof-mark[data-measured='true']:not(.wg-proof-pair *) .wg-proof-pen path,
-    .wg-proof-pair[data-revealed='true'] .wg-proof-mark[data-measured='true'] .wg-proof-pen path {
-      animation: wg-pen-draw var(--b-draw, 460ms) var(--b-out, ease-out) both;
+    .wg-proof-mark {
+      animation: wg-pen-draw var(--wg-pen-time, var(--b-draw)) var(--b-out)
+        var(--wg-proof-delay, 0ms) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-proof-mark[data-measured='true']:not(.wg-proof-pair *) .wg-proof-pen path {
-      animation-delay: var(--wg-proof-delay, 0ms);
+    @media (scripting: enabled) {
+      /* Measured SVG fragments join the mark's existing timeline when they are ready. */
+      .wg-proof-mark[data-measured='false'] .wg-proof-text {
+        text-decoration: none;
+      }
     }
 
     .wg-scan-line::before {
@@ -857,6 +919,15 @@
     .wg-menu-sheet:is([data-starting-style], [data-ending-style]),
     :is(.wg-pop, .wg-menu-button, .wg-rail-control):active {
       transform: none;
+    }
+  }
+
+  @keyframes wg-count-up {
+    from {
+      --wg-count-number: 0;
+    }
+    to {
+      --wg-count-number: var(--wg-count-final);
     }
   }
 

@@ -102,7 +102,6 @@
       calc(var(--wg-landing-hero-letter-count) * var(--b-cell)),
       var(--b-arrival)
     );
-    --wg-landing-hero-pair-time: calc(var(--b-draw) + 2 * var(--b-quick));
     grid-area: proof;
     min-inline-size: 0;
     margin: 0;
@@ -133,8 +132,7 @@
 
   .wg-landing-hero-row {
     --wg-landing-hero-pen-start: calc(
-      var(--wg-landing-hero-title-time) + var(--wg-landing-hero-order) *
-        var(--wg-landing-hero-pair-time)
+      var(--wg-landing-hero-title-time) + var(--wg-landing-hero-order) * var(--b-stagger)
     );
     --wg-landing-hero-leader-start: calc(var(--wg-landing-hero-pen-start) + var(--b-draw));
     --wg-landing-hero-note-start: calc(var(--wg-landing-hero-leader-start) + var(--b-quick));
@@ -273,7 +271,6 @@
   }
 
   .wg-landing-hero-closing {
-    --wg-landing-hero-closing-cell: var(--b-cell-section);
     display: grid;
     container-type: inline-size;
     align-items: center;
@@ -338,12 +335,6 @@
     .wg-landing-hero-pair .wg-proof-pair-note {
       padding: var(--b-s1) 0 var(--b-s3) var(--b-s5);
     }
-
-    #b-closing-title {
-      /* Ten cells fit the second phrase and leave room for a balanced two-line title. */
-      --b-cell-section: min(var(--wg-landing-hero-closing-cell), calc(100cqi / 10));
-      max-inline-size: calc(10 * round(down, var(--b-cell-section), var(--b-line)));
-    }
   }
 
   @media (max-width: 639px) {
@@ -370,62 +361,26 @@
       transition: opacity var(--b-quick) var(--b-out);
     }
 
-    .wg-landing-hero-proof .wg-landing-hero-pair[data-revealed] .wg-proof-pen path,
-    .wg-landing-hero-proof .wg-landing-hero-pair[data-revealed] .wg-proof-pair-leader path,
-    .wg-landing-hero-proof
-      .wg-landing-hero-pair[data-revealed]
-      .wg-margin-note
-      .wg-margin-note-quote {
-      animation: none;
+    .wg-landing-hero-proof .wg-landing-hero-pair .wg-proof-mark {
+      animation-delay: var(--wg-landing-hero-pen-start);
     }
 
-    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
-      .wg-landing-hero-pair[data-revealed]
-      .wg-proof-pen
-      path {
-      animation: wg-landing-hero-pen var(--b-draw) var(--b-out) var(--wg-landing-hero-pen-start)
-        both;
+    .wg-landing-hero-proof .wg-landing-hero-pair .wg-proof-pair-leader {
+      animation-duration: var(--b-quick);
+      animation-delay: var(--wg-landing-hero-leader-start);
     }
 
-    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
-      .wg-landing-hero-pair[data-revealed]
-      .wg-proof-pair-leader
-      path {
-      animation: wg-landing-hero-leader var(--b-quick) var(--b-out)
-        var(--wg-landing-hero-leader-start) both;
-    }
-
-    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
-      .wg-landing-hero-pair[data-revealed]
-      .wg-margin-note
-      .wg-margin-note-quote,
-    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
-      .wg-landing-hero-correction {
-      animation: wg-landing-hero-write var(--b-quick) steps(8, end)
+    .wg-landing-hero-proof .wg-landing-hero-pair .wg-margin-note-quote,
+    .wg-landing-hero-correction {
+      animation: wg-landing-hero-write var(--b-quick) steps(8, jump-none)
         var(--wg-landing-hero-note-start) both;
+      animation-play-state: var(--wg-entry-play, running);
     }
 
-    .wg-landing-hero-proof[data-landed='true'] > h2::before,
-    .wg-landing-hero-closing[data-landed='true'] .wg-landing-hero-closing-rule {
+    .wg-landing-hero-proof > h2::before,
+    .wg-landing-hero-closing-rule {
       animation: wg-landing-hero-write var(--b-draw) var(--b-out) both;
-    }
-  }
-
-  @keyframes wg-landing-hero-pen {
-    from {
-      stroke-dashoffset: 100;
-    }
-    to {
-      stroke-dashoffset: 0;
-    }
-  }
-
-  @keyframes wg-landing-hero-leader {
-    from {
-      stroke-dashoffset: 1;
-    }
-    to {
-      stroke-dashoffset: 0;
+      animation-play-state: var(--wg-entry-play, running);
     }
   }
 

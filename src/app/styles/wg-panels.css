@@ -533,10 +533,6 @@
       animation-delay: calc(3 * var(--b-stagger));
     }
 
-    .wg-panels-pair[data-revealed='true'] .wg-proof-mark[data-measured='true'] .wg-proof-pen path {
-      animation-duration: var(--wg-pen-time);
-    }
-
     .wg-panels-finding[data-exit='apply'] .wg-panels-correction {
       animation: wg-panels-write var(--b-quick) steps(8, end) var(--b-step) both;
     }
