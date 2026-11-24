@@ -12,7 +12,6 @@
   .wg-import-stages {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    border-inline-start: var(--b-line) solid var(--b-grid);
   }
 
   .wg-import-stage {
@@ -25,9 +24,13 @@
     color: var(--b-muted);
   }
 
+  .wg-import-stage:first-child {
+    border-inline-start: var(--b-line) solid var(--b-grid);
+  }
+
   .wg-import-stage > h2 {
     display: grid;
-    min-block-size: 2.75rem;
+    min-block-size: var(--b-tab-height);
     place-items: center;
     padding: var(--b-s1);
     font-size: var(--b-t-label);
@@ -38,23 +41,38 @@
   }
 
   .wg-import-stage[data-state='current'] {
-    z-index: 1;
-    outline: var(--b-rule) solid var(--b-ink);
-    outline-offset: calc(-1 * var(--b-line));
-    color: var(--b-ink);
+    color: var(--b-paper);
+    background: var(--b-ink);
   }
 
   .wg-import-stage[data-state='past'] {
-    color: var(--b-paper);
+    color: var(--b-ink);
   }
 
   .wg-import-stage[data-state='past'] > h2 {
-    background: var(--b-ink);
+    padding-inline-start: calc(var(--b-s1) + 1em);
+  }
+
+  .wg-import-stage-check {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: var(--b-s1);
+    transform: translateY(-50%);
+  }
+
+  .wg-import-stage-check > svg {
+    inline-size: 1em;
+    block-size: 1em;
   }
 
   .wg-import-stage-content,
   .wg-import-meter {
     min-inline-size: 0;
+  }
+
+  .wg-import-meter-cells {
+    --wg-cell-meter-height: 0.875rem;
+    inline-size: min(100%, calc(var(--wg-cell-meter-count) * var(--wg-cell-meter-height)));
   }
 
   .wg-import-drop-sheet.wg-sheet {
@@ -64,12 +82,27 @@
     min-block-size: 12rem;
     gap: var(--b-s2);
     padding-inline: var(--b-s3);
-    line-height: 1.9;
   }
 
-  .wg-import-drop-sheet > .wg-sheet-edge {
-    justify-self: stretch;
-    margin-block-end: 0;
+  .wg-import-drop-cells {
+    --wg-import-drop-cell: 1.25rem;
+    --wg-import-drop-rule: color-mix(in srgb, var(--b-grid) 25%, var(--b-paper));
+    inline-size: calc(
+      round(down, calc(100% - var(--b-line)), var(--wg-import-drop-cell)) + var(--b-line)
+    );
+    block-size: calc(2 * var(--wg-import-drop-cell) + var(--b-line));
+    margin-block-start: var(--b-s2);
+    background-image:
+      repeating-linear-gradient(
+        to right,
+        var(--wg-import-drop-rule) 0 var(--b-line),
+        transparent var(--b-line) var(--wg-import-drop-cell)
+      ),
+      repeating-linear-gradient(
+        to bottom,
+        var(--wg-import-drop-rule) 0 var(--b-line),
+        transparent var(--b-line) var(--wg-import-drop-cell)
+      );
   }
 
   .wg-import-drop[data-dragging='true'] .wg-import-drop-sheet {
@@ -215,7 +248,7 @@
   }
 
   .wg-import-exchange {
-    font: 400 var(--b-t-manuscript) / 1.75 var(--b-font-title);
+    font: 400 var(--b-t-manuscript) / var(--b-manuscript-line) var(--b-font-title);
   }
 
   .wg-import-exchange[data-past] {
@@ -236,7 +269,7 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wg-import-stage[data-state='past'] > h2 {
+    .wg-import-stage[data-state='current'] {
       animation: wg-import-fill var(--b-step) var(--b-out) both;
     }
 

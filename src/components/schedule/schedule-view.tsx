@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
 import { CellMeter, CountCell, PopLink, Sheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -106,7 +106,9 @@ export function ScheduleView({
               <div>
                 <dt className="font-medium">비축분</dt>
                 <dd className="wg-schedule-stock">
-                  <CountCell value={bufferCount} unit="화" className="wg-schedule-stock-count" />
+                  <span className="wg-schedule-stock-count">
+                    <CountCell value={bufferCount} />화
+                  </span>
                   {bufferTarget > 0 && (
                     <CellMeter
                       value={bufferCount}
@@ -121,33 +123,45 @@ export function ScheduleView({
               <SummaryRow
                 label="다음 연재"
                 value={
-                  calculating
-                    ? '계산 중'
-                    : nextPublish
-                      ? formatKoreanDate(nextPublish)
-                      : '연재 요일 없음'
+                  calculating ? (
+                    '계산 중'
+                  ) : nextPublish ? (
+                    <time className="font-mono" dateTime={nextPublish}>
+                      {formatKoreanDate(nextPublish)}
+                    </time>
+                  ) : (
+                    '연재 요일 없음'
+                  )
                 }
               />
               <SummaryRow
                 label="비축 소진 예상"
                 value={
-                  calculating
-                    ? '계산 중'
-                    : bufferCount === 0
-                      ? '비축분 없음'
-                      : result.bufferRunsOutOn
-                        ? formatKoreanDate(result.bufferRunsOutOn)
-                        : '향후 6주 안에 없음'
+                  calculating ? (
+                    '계산 중'
+                  ) : bufferCount === 0 ? (
+                    '비축분 없음'
+                  ) : result.bufferRunsOutOn ? (
+                    <time className="font-mono" dateTime={result.bufferRunsOutOn}>
+                      {formatKoreanDate(result.bufferRunsOutOn)}
+                    </time>
+                  ) : (
+                    '향후 6주 안에 없음'
+                  )
                 }
               />
               <SummaryRow
                 label="다음 마감"
                 value={
-                  calculating
-                    ? '계산 중'
-                    : deadline
-                      ? `${deadline.title} D-${deadline.daysLeft}`
-                      : '마감 없음'
+                  calculating ? (
+                    '계산 중'
+                  ) : deadline ? (
+                    <>
+                      {deadline.title} <span className="font-mono">D-{deadline.daysLeft}</span>
+                    </>
+                  ) : (
+                    '마감 없음'
+                  )
                 }
               />
             </dl>
@@ -223,11 +237,11 @@ export function ScheduleView({
   )
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <dt>{label}</dt>
-      <dd className="font-mono">{value}</dd>
+      <dd>{value}</dd>
     </div>
   )
 }

@@ -62,7 +62,9 @@ export function ReaderSimList({ groups, personaNames }: ReaderSimListProps) {
                     <span className="wg-advice-row-number" aria-hidden="true">
                       {index + 1}
                     </span>
-                    <time dateTime={run.createdAt}>{formatKoreanDateTime(run.createdAt)}</time>
+                    <time className="b-muted" dateTime={run.createdAt}>
+                      {formatKoreanDateTime(run.createdAt)}
+                    </time>
                   </span>
                 }
                 className="wg-advice-history-row"

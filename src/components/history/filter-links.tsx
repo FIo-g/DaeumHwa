@@ -21,7 +21,6 @@ export function FilterLinks({ label, options }: FilterLinksProps) {
             scroll={false}
           >
             {option.label}
-            <span className="wg-history-filter-ink" data-label={option.label} aria-hidden="true" />
           </Link>
         ))}
       </div>

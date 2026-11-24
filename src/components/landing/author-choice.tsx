@@ -42,6 +42,7 @@ const factStates = [
 ]
 
 const dagger = findings[1]
+const decisionTitle = '마지막 결정은 작가에게'
 
 export function AuthorChoice() {
   const [choice, setChoice] = useState<(typeof choices)[number] | null>(null)
@@ -53,9 +54,11 @@ export function AuthorChoice() {
   return (
     <section aria-labelledby="b-decision-title">
       <div className="b-wrap wg-landing-threads-section space-y-6">
-        <LandingTitle id="b-decision-title">마지막 결정은 작가에게</LandingTitle>
+        <LandingTitle id="b-decision-title" columns={decisionTitle.length}>
+          {decisionTitle}
+        </LandingTitle>
         <div {...entrance} className="wg-landing-threads-choice-entrance">
-          <Sheet as="div" page="03" className="wg-landing-threads-choice-sheet">
+          <Sheet as="div" className="wg-landing-threads-choice-sheet">
             <div className="min-w-0">
               <div>
                 {choices.map((option, index) => (

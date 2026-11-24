@@ -51,7 +51,7 @@ export function NewWorkForm() {
         >
           {created.title}
         </h2>
-        <p className="b-lede">작품을 만들었어요. 어떻게 시작할까요?</p>
+        <p className="b-lede b-muted">작품을 만들었어요. 어떻게 시작할까요?</p>
         <StartChoices workId={created.id} created />
       </Sheet>
     )

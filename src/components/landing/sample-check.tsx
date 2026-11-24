@@ -23,13 +23,13 @@ function Comparison({ finding, index }: { finding: Finding; index: number }) {
         className="wg-landing-sample-proof"
         manuscript={
           <div className="wg-landing-sample-draft">
-            <p className="b-label font-mono">
+            <p className="b-label">
               <span className="b-number wg-landing-sample-line-number" aria-hidden="true">
                 {finding.number}
               </span>
-              {finding.chapter}화 · 원고
+              <span className="font-mono">{finding.chapter}</span>화 · 원고
             </p>
-            <p className="wg-landing-sample-sentence font-heading font-bold">
+            <p className="wg-landing-sample-sentence wg-landing-hero-ruled font-heading font-bold">
               {finding.before}
               <ProofUnderline>{finding.wrong}</ProofUnderline>
               {finding.after}
@@ -64,7 +64,9 @@ function CheckProcess() {
     <aside className="wg-landing-sample-process" aria-label="점검 과정">
       <div className="wg-landing-sample-head">
         <h3 className="b-subhead">점검 과정</h3>
-        <ReplayButton onClick={replay} aria-label="점검 과정 다시 보기" />
+        <ReplayButton onClick={replay} aria-label="점검 과정 다시 보기">
+          다시 보기
+        </ReplayButton>
       </div>
       <ol key={replayKey} data-replay={replayKey > 0}>
         {steps.map(({ label, percent }, index) => (
@@ -115,7 +117,7 @@ export function SampleCheck() {
                 }}
               >
                 <span className="wg-landing-sample-episode-title">
-                  <span className="font-mono">{episode.number}화</span> {episode.title}
+                  <span className="font-mono">{episode.number}</span>화 {episode.title}
                 </span>
                 <span className="wg-landing-sample-excerpt">{episode.excerpt}</span>
               </a>
@@ -131,7 +133,7 @@ export function SampleCheck() {
               <h3 className="b-subhead">
                 {selected ? (
                   <>
-                    <span className="font-mono">{selected.number}화</span> · {selected.title}
+                    <span className="font-mono">{selected.number}</span>화 · {selected.title}
                   </>
                 ) : (
                   '1~3화 전체'

@@ -99,6 +99,9 @@ describe('ProposalList', () => {
     )
 
     const group = screen.getByRole('region', { name: '이서윤' })
+    expect(within(group).getByRole('heading', { name: '이서윤 2건' })).toHaveTextContent(
+      /^이서윤 2건$/,
+    )
     group.parentElement!.style.setProperty('--b-draw', '100ms')
     group.parentElement!.style.setProperty('--b-stagger', '70ms')
     await act(async () => {
@@ -186,7 +189,7 @@ describe('ProposalList', () => {
     )
 
     expect(screen.getAllByRole('article')).toHaveLength(20)
-    expect(screen.getByText('전체 45건')).toBeInTheDocument()
+    expect(screen.getByText(/^전체/)).toHaveTextContent(/^전체 45건$/)
     fireEvent.click(screen.getByRole('button', { name: '더 보기 (남은 25묶음)' }))
     expect(screen.getAllByRole('article')).toHaveLength(40)
     fireEvent.click(screen.getByRole('button', { name: '더 보기 (남은 5묶음)' }))
@@ -217,7 +220,7 @@ describe('ProposalList', () => {
     const group = screen.getByRole('region', { name: '인물0' })
     fireEvent.click(within(group).getByRole('button', { name: '이 묶음 승인' }))
     await waitFor(() => expect(screen.queryByRole('region', { name: '인물0' })).toBeNull())
-    expect(screen.getByText('전체 20건')).toBeInTheDocument()
+    expect(screen.getByText(/^전체/)).toHaveTextContent(/^전체 20건$/)
     expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull()
     expect(screen.getAllByRole('article')).toHaveLength(20)
   })

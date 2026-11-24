@@ -142,7 +142,7 @@ export function InvitesPanel({ workId, invites }: InvitesPanelProps) {
                         {formatKoreanDateTime(invite.expiresAt)}
                       </time>
                     </p>
-                    <p className="font-mono text-sm break-all">
+                    <p className="text-sm break-all">
                       {isCreated ? inviteUrl(invite.token) : `/invite/${invite.token}`}
                     </p>
                   </div>

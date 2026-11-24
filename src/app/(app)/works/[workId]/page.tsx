@@ -52,7 +52,7 @@ export default async function WorkHomePage({ params }: { params: Promise<{ workI
           <h2 id="works-start" className="wg-home-section-title">
             아직 원고와 설정이 없어요
           </h2>
-          <p className="b-lede">
+          <p className="b-lede b-muted">
             {canEdit ? '어디서 시작할지 골라 보세요.' : '작품 설정과 원고가 아직 없어요.'}
           </p>
           {canEdit && <StartChoices workId={workId} />}
@@ -60,6 +60,7 @@ export default async function WorkHomePage({ params }: { params: Promise<{ workI
       ) : (
         <HomePanels
           workId={workId}
+          lastChapterPosition={home.nextPosition - 1}
           pendingCount={home.pendingCount}
           openThreads={home.openThreads}
           alerts={home.alerts}

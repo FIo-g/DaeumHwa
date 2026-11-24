@@ -226,7 +226,7 @@ export function ImportProgress({
         <div className="wg-import-write flex flex-wrap items-start justify-between gap-2">
           <div className="grid min-w-0 gap-1 font-mono">
             <p className="wrap-anywhere">{job.fileName}</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-ink">
               {`${job.processedChapters}/${job.totalChapters}화 처리`}
             </p>
           </div>
@@ -249,29 +249,29 @@ export function ImportProgress({
         )}
 
         {status === 'running' && (
-          <p className="wg-import-write text-sm text-muted-foreground">
+          <p className="wg-import-write text-sm text-muted-ink">
             {runner === 'client'
               ? '회차를 처리하는 동안 이 화면을 열어 두세요.'
               : '이 화면을 닫아도 회차를 처리해요.'}
           </p>
         )}
         {status === 'uploading' && (
-          <p className="wg-import-write text-sm text-muted-foreground">
+          <p className="wg-import-write text-sm text-muted-ink">
             원고를 올리다 멈춘 작업일 수 있어요. 가져오기 시작 전 전체 회차가 올라갔는지 확인해
             주세요.
           </p>
         )}
         {status === 'done' && (
-          <p className="wg-import-write text-sm text-muted-foreground">
+          <p className="wg-import-write text-sm text-muted-ink">
             승인한 카드와 사실만 위키에 들어가요.
           </p>
         )}
         {status === 'cancelled' && (
-          <p className="wg-import-write text-sm text-muted-foreground">가져오기를 취소했어요.</p>
+          <p className="wg-import-write text-sm text-muted-ink">가져오기를 취소했어요.</p>
         )}
 
         {job.skipped.length > 0 && (
-          <p className="wg-import-write text-sm text-muted-foreground">
+          <p className="wg-import-write text-sm text-muted-ink">
             {`건너뛴 회차: ${job.skipped.map((position) => `${position}화`).join(', ')}`}
           </p>
         )}

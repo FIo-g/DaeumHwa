@@ -264,26 +264,28 @@ export function ProposalList({
       {selectable && visible.length > 0 && (
         <div className="wg-approvals-selection">
           <Button
-            size="sm"
             onClick={() => approveMany({ proposalIds: selectedIds })}
             disabled={busy || selectedIds.length === 0}
           >
             선택 승인 <span className="font-mono">({selectedIds.length})</span>
           </Button>
-          <span className="font-mono text-sm text-muted-foreground">전체 {visible.length}건</span>
+          <span className="text-sm text-muted-ink">
+            전체 <span className="font-mono">{visible.length}</span>건
+          </span>
         </div>
       )}
 
       {shown.map((group) => (
         <section key={group.key} className="wg-approvals-group" aria-label={group.label}>
           <div className="wg-approvals-group-head">
-            <h2 className="wg-approvals-group-title">
+            <h2
+              className="wg-approvals-group-title"
+              aria-label={`${group.label} ${group.items.length}건`}
+            >
               {group.label}{' '}
-              <CountCell
-                value={group.items.length}
-                unit="건"
-                className="wg-approvals-group-count"
-              />
+              <span className="wg-approvals-group-count">
+                <CountCell value={group.items.length} />건
+              </span>
             </h2>
             <Button
               size="sm"

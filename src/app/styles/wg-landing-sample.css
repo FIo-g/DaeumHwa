@@ -69,18 +69,11 @@
   }
 
   .wg-landing-sample-episode-title {
-    font-size: 0.9375rem;
-    font-weight: 500;
+    font: 700 0.9375rem/1.5 var(--b-font-title);
   }
 
   .wg-landing-sample-excerpt {
-    color: var(--b-muted);
-    font-size: 0.8125rem;
-    line-height: 1.5;
-  }
-
-  .wg-landing-sample-episode[aria-current='true'] .wg-landing-sample-excerpt {
-    color: inherit;
+    font: 400 0.8125rem/1.5 var(--b-font-title);
   }
 
   .wg-landing-sample-head {
@@ -128,7 +121,7 @@
   .wg-landing-sample-sentence {
     margin-block-start: var(--b-s1);
     font-size: clamp(1rem, 1.45vw, 1.3125rem);
-    line-height: 1.75;
+    line-height: round(down, 1.75em, var(--b-line));
     word-break: keep-all;
   }
 

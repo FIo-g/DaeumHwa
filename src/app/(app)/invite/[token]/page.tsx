@@ -1,4 +1,6 @@
+import { PageEdge } from '@/components/app/page-header'
 import { GridTitle, Sheet } from '@/components/motion'
+import { unavailableInviteMessage } from '@/components/invite/invite-notice'
 import { AcceptInvite } from '@/components/invite/accept-invite'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getInviteByToken } from '@/server/members'
@@ -10,12 +12,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
 
   return (
     <div className="wg-auth-main">
-      <Sheet
-        className="b-wrap wg-auth-sheet"
-        label="20×10"
-        page="03"
-        aria-labelledby="wg-auth-invite-title"
-      >
+      <Sheet className="b-wrap wg-auth-sheet" aria-labelledby="wg-auth-invite-title">
+        <PageEdge className="wg-sheet-edge" showPageMark={false} />
         <div className="wg-auth-columns">
           <GridTitle as="h1" size="page" columns={5} id="wg-auth-invite-title">
             작품 초대
@@ -29,7 +27,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
                 role={invite.invite.role}
               />
             ) : (
-              <p className="b-lede wg-auth-written-line">만료되었거나 사용할 수 없는 초대예요.</p>
+              <p className="b-lede wg-auth-written-line">{unavailableInviteMessage}</p>
             )}
           </div>
         </div>

@@ -29,7 +29,7 @@ describe('AdviceView', () => {
     vi.mocked(postAction).mockReturnValue(new Promise(() => {}))
     render(<AdviceView workId="w1" canRun runs={[]} />)
     fireEvent.click(screen.getByRole('button', { name: '다음 전개 조언 받기' }))
-    expect(screen.getByText('조언 만드는 중… 0초')).toBeInTheDocument()
+    expect(screen.getByText('조언 만드는 중…')).toHaveTextContent(/^조언 만드는 중… 0초$/)
     expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '다음 전개 조언 받기' })).not.toBeInTheDocument()
   })

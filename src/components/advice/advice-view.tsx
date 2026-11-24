@@ -78,6 +78,7 @@ export function AdviceView({ workId, canRun, runs }: AdviceViewProps) {
       ) : (
         <div className="wg-advice-empty">
           <EmptyState title="아직 받은 조언이 없어요." />
+          <div className="b-ruled wg-advice-empty-lines" aria-hidden="true" />
         </div>
       )}
 
@@ -93,7 +94,9 @@ export function AdviceView({ workId, canRun, runs }: AdviceViewProps) {
                     <span className="wg-advice-row-number" aria-hidden="true">
                       {index + 2}
                     </span>
-                    <time dateTime={run.createdAt}>{formatKoreanDateTime(run.createdAt)}</time>
+                    <time className="b-muted" dateTime={run.createdAt}>
+                      {formatKoreanDateTime(run.createdAt)}
+                    </time>
                   </span>
                 }
                 className="wg-advice-history-row"

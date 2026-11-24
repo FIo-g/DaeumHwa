@@ -26,7 +26,7 @@ export default async function ChapterHistoryPage({
     (work.role === 'owner' || work.role === 'editor') && chapter.archivedAt === null
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <div className="wg-chapters-history-page flex min-w-0 flex-col gap-6">
       <PageHeader
         title="원고 이력"
         description={chapterLabel(chapter.position, chapter.title)}

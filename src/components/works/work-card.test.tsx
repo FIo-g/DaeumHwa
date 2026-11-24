@@ -25,7 +25,7 @@ describe('WorkCard', () => {
     const link = screen.getByRole('link', { name: /달빛 연대기/ })
     expect(link).toHaveAttribute('href', '/works/w1')
     expect(link).toHaveTextContent('현대 판타지')
-    expect(link).toHaveTextContent('12화')
+    expect(screen.getByText('회차').closest('li')).toHaveTextContent(/^회차12화$/)
   })
 
   it('retains the full work title and the card information for assistive technology', () => {

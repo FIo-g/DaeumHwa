@@ -56,50 +56,36 @@
     transform-origin: left;
   }
 
-  .wg-history-filter-ink {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    padding: inherit;
-    place-items: center;
-    background: var(--b-ink);
+  .wg-history-filter-cell[aria-current='true'] {
     color: var(--b-paper);
-    clip-path: inset(0 100% 0 0);
-    pointer-events: none;
-  }
-
-  .wg-history-filter-ink::before {
-    content: attr(data-label);
-  }
-
-  .wg-history-filter-cell[aria-current='true'] .wg-history-filter-ink {
-    clip-path: inset(0);
+    background: var(--b-ink);
   }
 
   .wg-history-filter-cell:is(:hover, :focus-visible) {
     z-index: 1;
-  }
-
-  .wg-history-filter-cell:is(:hover, :focus-visible),
-  .wg-history-filter-cell:is(:hover, :focus-visible) .wg-history-filter-ink::before {
     text-decoration: underline;
     text-underline-offset: 0.2em;
   }
 
   .wg-history-timeline {
+    --wg-history-rail-gutter: 1.125rem;
+    --wg-history-rail-center: var(--b-s1);
+    --wg-history-date-height: 2.75rem;
+    --wg-history-dot-size: 0.375rem;
+    --wg-history-entry-gutter: 1.625rem;
     position: relative;
     display: grid;
     min-inline-size: 0;
     gap: var(--b-s5);
-    padding-inline-start: 1.125rem;
+    padding-inline-start: var(--wg-history-rail-gutter);
   }
 
   .wg-history-timeline::before {
     position: absolute;
-    inset-block: 3.25rem 0;
-    inset-inline-start: 0.21875rem;
+    inset-block: var(--wg-history-date-height) 0;
+    inset-inline-start: calc(var(--wg-history-rail-center) - var(--b-line) / 2);
     inline-size: var(--b-line);
-    background: var(--b-ink);
+    background: var(--b-grid);
     content: '';
     transform-origin: top;
   }
@@ -113,7 +99,7 @@
     z-index: 2;
     inset-block-start: var(--b-nav);
     display: flex;
-    min-block-size: 2.75rem;
+    min-block-size: var(--wg-history-date-height);
     align-items: center;
     justify-content: space-between;
     gap: var(--b-s2);
@@ -140,37 +126,21 @@
     counter-increment: wg-history-line;
   }
 
-  .wg-history-row::before {
-    position: absolute;
-    inset-block-start: 1.45rem;
-    inset-inline-start: -1.0625rem;
-    inline-size: 0.375rem;
-    block-size: 0.375rem;
-    border-radius: 50%;
-    background: var(--b-ink);
-    content: '';
-  }
-
   .wg-history-entry {
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+    align-items: start;
     gap: var(--b-s2) var(--b-s3);
     min-inline-size: 0;
-    padding: var(--b-s2) var(--b-s1) var(--b-s2) 1.625rem;
+    padding: var(--b-s2) var(--b-s1) var(--b-s2) var(--wg-history-entry-gutter);
     border-block-start: var(--b-line) solid var(--b-grid);
     color: var(--b-ink);
     overflow-wrap: anywhere;
   }
 
-  .wg-history-entry::after {
-    position: absolute;
-    inset: 0 0 auto;
-    border-block-start: var(--b-line) solid var(--b-grid);
-    content: '';
-    opacity: 0;
-    pointer-events: none;
+  .wg-history-entry:is(:hover, :focus-within) {
+    border-block-start-color: var(--b-ink);
   }
 
   .wg-history-line-number {
@@ -187,7 +157,6 @@
     content: counter(wg-history-line, decimal-leading-zero);
   }
 
-  .wg-history-entry:is(:hover, :focus-within)::after,
   .wg-history-entry:is(:hover, :focus-within) .wg-history-line-number {
     opacity: 1;
   }
@@ -203,9 +172,28 @@
 
   .wg-history-meta {
     grid-column: 1 / -1;
-    min-block-size: 1.75rem;
+    align-items: baseline;
     color: var(--b-muted);
     font-size: var(--b-t-label);
+  }
+
+  .wg-history-meta > time {
+    position: relative;
+    line-height: 1.6;
+  }
+
+  .wg-history-meta > time::before {
+    position: absolute;
+    inset-block-start: calc((1lh - var(--wg-history-dot-size)) / 2);
+    inset-inline-start: calc(
+      var(--wg-history-rail-center) - var(--wg-history-rail-gutter) -
+        var(--wg-history-entry-gutter) - var(--wg-history-dot-size) / 2
+    );
+    inline-size: var(--wg-history-dot-size);
+    block-size: var(--wg-history-dot-size);
+    border-radius: 50%;
+    background: var(--b-ink);
+    content: '';
   }
 
   .wg-history-target {
@@ -280,7 +268,6 @@
   }
 
   .wg-history-diff-row [data-empty='true'] {
-    color: var(--b-muted);
     font-weight: 400;
     text-decoration: none;
   }
@@ -331,14 +318,24 @@
     }
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    .wg-history-filter-ink {
-      transition: clip-path var(--b-quick) var(--b-out);
+  @container wg-history (width < 22rem) {
+    .wg-history-entry {
+      grid-template-columns: minmax(0, 1fr);
     }
 
-    .wg-history-filters .wg-history-filter-cell::before {
-      animation: wg-history-draw-across var(--b-quick) var(--b-out) var(--wg-history-rule-start)
-        both;
+    .wg-history-disclosure > button {
+      grid-column: 1;
+    }
+
+    .wg-history-diff-row {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :is(.wg-history-filters, .wg-approvals-filters) .wg-history-filter-cell::before {
+      animation: wg-history-draw-across var(--b-quick) var(--b-out)
+        var(--wg-history-rule-start, var(--wg-approvals-title-time)) both;
     }
 
     .wg-history-timeline::before {
@@ -360,7 +357,6 @@
         calc(var(--wg-history-order) * var(--b-stagger)) backwards;
     }
 
-    .wg-history-entry::after,
     .wg-history-line-number {
       transition: opacity var(--b-quick) var(--b-out);
     }

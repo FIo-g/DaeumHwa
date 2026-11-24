@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { CountCell, Sheet } from '@/components/motion'
+import { threadChapterCenter } from '@/components/threads/thread-geometry'
 import { formatKoreanDate, formatKoreanDateTime } from '@/lib/dates'
 import { THREAD_STATUS_LABEL } from '@/lib/labels'
 import type { PeriodicAlerts } from '@/server/alerts'
@@ -8,6 +9,7 @@ import type { WorkHome } from '@/server/dashboard'
 
 export type HomePanelsProps = {
   workId: string
+  lastChapterPosition: number
   pendingCount: number
   openThreads: WorkHome['openThreads']
   alerts: PeriodicAlerts
@@ -15,10 +17,9 @@ export type HomePanelsProps = {
   recentChanges: { id: string; summary: string; createdAt: Date }[]
 }
 
-const AXIS_CELLS = 6
-
 export function HomePanels({
   workId,
+  lastChapterPosition,
   pendingCount,
   openThreads,
   alerts,
@@ -28,7 +29,7 @@ export function HomePanels({
   const base = `/works/${workId}`
   const threads = openThreads.slice(0, 5)
   const lastPosition = Math.max(
-    AXIS_CELLS,
+    lastChapterPosition,
     ...threads.flatMap(({ plantedPosition, targetPosition }) => [
       plantedPosition ?? 1,
       targetPosition ?? 1,
@@ -39,17 +40,19 @@ export function HomePanels({
     <>
       <Sheet as="div" className="wg-home-sheet">
         <div className="wg-home-folds">
-          <Panel name="approvals" number="01" title="승인 대기">
+          <Panel name="approvals" title="승인 대기">
             <p className="wg-home-total">
-              <CountCell value={pendingCount} unit="건" className="wg-home-total-number" />
-              <span className="b-label block">승인을 기다리는 제안</span>
+              <span className="wg-home-total-number">
+                <CountCell value={pendingCount} />건
+              </span>
+              <span className="b-label b-muted block">승인을 기다리는 제안</span>
             </p>
             <Link href={`${base}/approvals`} className="b-link wg-home-link">
               승인 대기 보기
             </Link>
           </Panel>
 
-          <Panel name="threads" number="02" title="열린 떡밥">
+          <Panel name="threads" title="열린 떡밥">
             {threads.length === 0 ? (
               <EmptyRow>열린 떡밥이 없어요.</EmptyRow>
             ) : (
@@ -68,14 +71,16 @@ export function HomePanels({
             </Link>
           </Panel>
 
-          <Panel name="alerts" number="03" title="주기 점검">
+          <Panel name="alerts" title="주기 점검">
             <div className="wg-home-checks">
-              <CountCell value={alerts.total} unit="건" className="wg-home-total-number" />
+              <span className="wg-home-total-number">
+                <CountCell value={alerts.total} />건
+              </span>
               <AlertList alerts={alerts} />
             </div>
           </Panel>
 
-          <Panel name="schedule" number="04" title="일정">
+          <Panel name="schedule" title="일정">
             <dl className="wg-home-schedule">
               <div className="b-row wg-home-row">
                 <dt>비축</dt>
@@ -86,27 +91,42 @@ export function HomePanels({
               <div className="b-row wg-home-row">
                 <dt>다음 연재일</dt>
                 <dd>
-                  {schedule.nextPublishDate
-                    ? formatKoreanDate(schedule.nextPublishDate)
-                    : '정해지지 않음'}
+                  {schedule.nextPublishDate ? (
+                    <ScheduleDate date={schedule.nextPublishDate} />
+                  ) : (
+                    '정해지지 않음'
+                  )}
                 </dd>
               </div>
               <div className="b-row wg-home-row">
                 <dt>소진 예상일</dt>
                 <dd>
-                  {schedule.bufferRunsOutOn ? formatKoreanDate(schedule.bufferRunsOutOn) : '없음'}
+                  {schedule.bufferRunsOutOn ? (
+                    <ScheduleDate date={schedule.bufferRunsOutOn} />
+                  ) : (
+                    '없음'
+                  )}
                 </dd>
               </div>
               <div className="b-row wg-home-row">
                 <dt>다음 마감</dt>
                 <dd>
-                  {schedule.nextDeadline
-                    ? `${schedule.nextDeadline.title} · ${formatKoreanDate(schedule.nextDeadline.date)} (${
-                        schedule.nextDeadline.daysLeft === 0
-                          ? '오늘'
-                          : `D-${schedule.nextDeadline.daysLeft}`
-                      })`
-                    : '없음'}
+                  {schedule.nextDeadline ? (
+                    <>
+                      <span className="font-heading">{schedule.nextDeadline.title}</span>
+                      {' · '}
+                      <ScheduleDate date={schedule.nextDeadline.date} />
+                      {' ('}
+                      {schedule.nextDeadline.daysLeft === 0 ? (
+                        '오늘'
+                      ) : (
+                        <span className="font-mono">D-{schedule.nextDeadline.daysLeft}</span>
+                      )}
+                      {')'}
+                    </>
+                  ) : (
+                    '없음'
+                  )}
                 </dd>
               </div>
             </dl>
@@ -155,12 +175,10 @@ function ThreadPreview({
 }) {
   const planted = thread.plantedPosition
   const target = thread.targetPosition
-  const cellInset = 50 / AXIS_CELLS
-  const x = (position: number) =>
-    `${cellInset + ((position - 1) / (lastPosition - 1)) * (100 - 2 * cellInset)}%`
+  const x = (position: number) => `${threadChapterCenter(position, lastPosition, 100)}%`
   const sameChapter = planted !== null && planted === target
-  const start = planted === null ? '0%' : sameChapter ? `calc(${x(planted)} - 8px)` : x(planted)
-  const end = target === null ? start : sameChapter ? `calc(${x(target)} + 8px)` : x(target)
+  const start = planted === null ? '0%' : x(planted)
+  const end = target === null ? start : x(target)
   const reverse = planted !== null && target !== null && planted > target
 
   return (
@@ -174,10 +192,11 @@ function ThreadPreview({
       </header>
       {(planted !== null || target !== null) && (
         <>
-          <div className="wg-home-axis" aria-hidden="true">
-            {Array.from({ length: AXIS_CELLS }, (_, index) => (
-              <span className="wg-home-axis-cell" key={index} />
-            ))}
+          <div
+            className="wg-home-axis"
+            aria-hidden="true"
+            style={{ '--wg-home-axis-cells': lastPosition } as CSSProperties}
+          >
             <span
               className="wg-home-axis-line"
               data-planned={planted === null}
@@ -188,19 +207,43 @@ function ThreadPreview({
               }}
             />
             {planted !== null && (
-              <span className="wg-home-planted" style={{ insetInlineStart: start }} />
+              <span
+                className="wg-home-planted"
+                data-thread-coincident={sameChapter ? 'seed' : undefined}
+                style={{ insetInlineStart: start }}
+              />
             )}
             {target !== null && (
-              <span className="wg-home-target" style={{ insetInlineStart: end }} />
+              <span
+                className="wg-home-target"
+                data-thread-coincident={sameChapter ? 'target' : undefined}
+                style={{ insetInlineStart: end }}
+              />
             )}
           </div>
           <p className="wg-home-axis-labels">
-            {planted !== null && <span>{planted}화 심음</span>}
-            {target !== null && <span className="ml-auto">회수 목표 {target}화</span>}
+            {planted !== null && (
+              <span>
+                <span className="font-mono">{planted}화</span> 심음
+              </span>
+            )}
+            {target !== null && (
+              <span className="ml-auto">
+                회수 목표 <span className="font-mono">{target}화</span>
+              </span>
+            )}
           </p>
         </>
       )}
     </article>
+  )
+}
+
+function ScheduleDate({ date }: { date: string }) {
+  return (
+    <time className="font-mono" dateTime={date}>
+      {formatKoreanDate(date)}
+    </time>
   )
 }
 
@@ -251,26 +294,13 @@ function EmptyRow({ children }: { children: string }) {
   )
 }
 
-function Panel({
-  name,
-  number,
-  title,
-  children,
-}: {
-  name: string
-  number: string
-  title: string
-  children: ReactNode
-}) {
+function Panel({ name, title, children }: { name: string; title: string; children: ReactNode }) {
   const id = `home-${name}`
   return (
     <section aria-labelledby={id} className="wg-home-panel" data-panel={name}>
-      <header className="wg-home-panel-head">
-        <h2 id={id} className="wg-home-section-title">
-          {title}
-        </h2>
-        <span aria-hidden="true">{number}</span>
-      </header>
+      <h2 id={id} className="wg-home-section-title">
+        {title}
+      </h2>
       {children}
     </section>
   )

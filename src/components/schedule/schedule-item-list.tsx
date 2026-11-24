@@ -82,7 +82,7 @@ export function ScheduleItemList({ workId, items, chapters, canEdit }: ScheduleI
   const chapterById = new Map(chapters.map((c) => [c.id, c]))
 
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">아직 등록한 일정이 없어요.</p>
+    return <p className="text-sm text-muted-ink">아직 등록한 일정이 없어요.</p>
   }
 
   async function toggleDone(itemId: string, done: boolean) {
@@ -125,9 +125,7 @@ export function ScheduleItemList({ workId, items, chapters, canEdit }: ScheduleI
             <div className="flex min-w-0 flex-1 basis-36 flex-col gap-1 wrap-anywhere">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="wg-schedule-kind">{SCHEDULE_KIND_LABEL[item.kind]}</span>
-                <span
-                  className={cn('b-row__title', item.done && 'text-muted-foreground line-through')}
-                >
+                <span className={cn('b-row__title', item.done && 'text-muted-ink line-through')}>
                   {item.title}
                 </span>
               </div>

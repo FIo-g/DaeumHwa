@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { PageEdge } from '@/components/app/page-header'
 import { TrialButton } from '@/components/auth/trial-button'
 import { Disclosure, GridTitle, PopLink } from '@/components/motion'
 import { ResumeBanner } from '@/components/works/resume-banner'
@@ -22,9 +23,11 @@ export default async function WorksPage() {
   return (
     <div className="b-wrap wg-works-page">
       <header className="wg-works-header">
-        <div className="b-edge mb-2" aria-hidden="true">
-          <span>20×10</span>
-          <span>{active.length}개</span>
+        <div className="wg-works-edge mb-2">
+          <PageEdge />
+          <span className="b-edge wg-works-edge-count" aria-hidden="true">
+            {active.length}개
+          </span>
         </div>
         <div className="wg-works-heading">
           <GridTitle as="h1" size="page" columns={4}>
@@ -49,7 +52,7 @@ export default async function WorksPage() {
                 아직 작품이 없어요
               </h2>
               {!user.isAnonymous && (
-                <p className="b-lede">새 작품을 만들거나 샘플 작품부터 둘러보세요.</p>
+                <p className="b-lede b-muted">새 작품을 만들거나 샘플 작품부터 둘러보세요.</p>
               )}
             </div>
             {user.isAnonymous ? (

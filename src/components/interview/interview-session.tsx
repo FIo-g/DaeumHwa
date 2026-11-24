@@ -232,7 +232,7 @@ export function InterviewSession({
       {finished ? (
         <Sheet className="grid gap-4">
           <p className="wg-import-write font-medium">인터뷰를 끝냈어요.</p>
-          <p className="wg-import-write text-sm text-muted-foreground">
+          <p className="wg-import-write text-sm text-muted-ink">
             처리하지 않은 후보는 승인 대기에 남아요.
           </p>
           <div className="flex flex-wrap gap-2">
@@ -316,7 +316,7 @@ export function InterviewSession({
           )}
 
           {!current && !canEdit && (
-            <p className="text-sm text-muted-foreground">진행 중인 질문이 없어요.</p>
+            <p className="text-sm text-muted-ink">진행 중인 질문이 없어요.</p>
           )}
 
           {canEdit && (
@@ -378,8 +378,8 @@ function InterviewExchange({
       data-past={past || undefined}
       data-settling={settling || undefined}
     >
-      <p className="font-bold wrap-anywhere">{turn.question}</p>
-      <p className="whitespace-pre-wrap wrap-anywhere">
+      <p className="b-ruled font-bold wrap-anywhere">{turn.question}</p>
+      <p className="b-ruled whitespace-pre-wrap wrap-anywhere">
         {turn.skipped ? '건너뛴 질문이에요.' : turn.answer}
       </p>
     </div>

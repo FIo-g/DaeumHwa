@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import type { CSSProperties } from 'react'
+import { PageEdge } from '@/components/app/page-header'
 import { TrialButton } from '@/components/auth/trial-button'
 import { AuthorChoice } from './author-choice'
 import { LandingTitle, PaperBoundary } from './entrance'
@@ -6,6 +8,8 @@ import { ClosingSlip, HeroProof } from './paper-scenes'
 import { PublicNav } from './public-nav'
 import { SampleCheck } from './sample-check'
 import { ThreadPreview } from './thread-preview'
+
+const introTitle = '머릿속 설정집은 접어 두세요.'
 
 function StartActions({ sampleLink = false }: { sampleLink?: boolean }) {
   return (
@@ -28,13 +32,15 @@ export function LandingPage() {
     <div id="b-top" className="b-root">
       <PublicNav landing />
       <main>
-        <section className="b-wrap wg-landing-hero-intro" aria-labelledby="b-intro-title">
+        <section
+          className="b-wrap wg-landing-hero-intro"
+          aria-labelledby="b-intro-title"
+          style={{ '--wg-landing-hero-letter-count': introTitle.length } as CSSProperties}
+        >
           <div className="wg-landing-hero-title">
-            <span className="wg-landing-hero-edge" aria-hidden="true">
-              20×10
-            </span>
+            <PageEdge className="wg-landing-hero-edge" showPageMark={false} />
             <LandingTitle id="b-intro-title" hero>
-              머릿속 설정집은 접어 두세요.
+              {introTitle}
             </LandingTitle>
           </div>
           <div className="wg-landing-hero-copy">

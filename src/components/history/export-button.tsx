@@ -60,7 +60,7 @@ export function ExportButton({ workId, title }: ExportButtonProps) {
         내보내기
       </Button>
       {busy && (
-        <p role="status" className="grid gap-1 text-sm text-muted-foreground">
+        <p role="status" className="grid gap-1 text-sm text-muted-ink">
           백업 파일 만드는 중…
           <ScanLine />
         </p>

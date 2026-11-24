@@ -44,13 +44,13 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
         <div>
           <dt>하루 회차 수</dt>
           <dd>
-            <CountCell value={settings.chaptersPerPublishDay} unit="화" />
+            <CountCell value={settings.chaptersPerPublishDay} />화
           </dd>
         </div>
         <div>
           <dt>비축 목표</dt>
           <dd>
-            <CountCell value={settings.bufferTarget} unit="화" />
+            <CountCell value={settings.bufferTarget} />화
           </dd>
         </div>
       </dl>
@@ -97,10 +97,14 @@ export function PublishSettings({ workId, canEdit, settings }: PublishSettingsPr
           aria-labelledby="publish-days-label"
           size="sm"
           spacing={0}
-          className="max-w-full"
+          className="wg-schedule-publish-days grid w-full grid-cols-7"
         >
           {WEEKDAY_LABELS.map((label, index) => (
-            <ToggleGroupItem key={label} value={String(index)}>
+            <ToggleGroupItem
+              key={label}
+              value={String(index)}
+              className="aspect-square h-auto min-w-0 group-data-[spacing=0]/toggle-group:px-0"
+            >
               {label}
             </ToggleGroupItem>
           ))}

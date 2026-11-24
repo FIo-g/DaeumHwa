@@ -191,8 +191,8 @@ export function ImportWizard({ workId, canEdit, jobs, chapterLabels }: ImportWiz
           </div>
         </ImportStages>
       ) : (
-        <Sheet ruled>
-          <p className="wg-import-write text-sm text-muted-foreground">
+        <Sheet>
+          <p className="wg-import-write text-sm text-muted-ink">
             편집자 이상만 원고를 가져올 수 있어요.
           </p>
         </Sheet>
@@ -209,7 +209,7 @@ export function ImportWizard({ workId, canEdit, jobs, chapterLabels }: ImportWiz
               >
                 <div className="grid min-w-0 gap-0.5 wrap-anywhere">
                   <span className="font-mono">{job.fileName}</span>
-                  <span className="font-mono text-muted-foreground">
+                  <span className="font-mono text-muted-ink">
                     {`${job.processedChapters}/${job.totalChapters}화`}
                   </span>
                 </div>

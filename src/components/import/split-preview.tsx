@@ -69,10 +69,10 @@ export function SplitPreview({
 
   return (
     <section aria-label="회차 나누기 미리보기" className="flex flex-col gap-4">
-      <p className="wg-import-write text-sm text-muted-foreground">{`나눈 방식: ${METHOD_LABEL[method]}`}</p>
+      <p className="wg-import-write text-sm text-muted-ink">{`나눈 방식: ${METHOD_LABEL[method]}`}</p>
       <p className="wg-import-write text-sm font-medium">{`${total}화를 가져와요. 회차마다 AI를 한 번 써요.`}</p>
 
-      {total === 0 && <p className="text-sm text-muted-foreground">가져올 회차가 없어요.</p>}
+      {total === 0 && <p className="text-sm text-muted-ink">가져올 회차가 없어요.</p>}
 
       <ol className="wg-import-rows">
         {chapters.map((chapter, index) => (
@@ -88,7 +88,7 @@ export function SplitPreview({
                 className="min-w-0 font-heading font-bold"
                 onChange={(event) => setTitle(chapter.id, event.target.value)}
               />
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-xs text-muted-ink">
                 {`${countChars(chapter.body).withSpaces}자`}
               </span>
             </div>

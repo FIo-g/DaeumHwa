@@ -14,8 +14,24 @@
   }
 
   .wg-landing-threads-ledger {
+    --wg-thread-seed-size: var(--wg-landing-threads-seed-size);
+    --wg-thread-target-size: var(--wg-landing-threads-target-size);
     --wg-landing-threads-label-width: clamp(9.5rem, 29%, 13rem);
     min-inline-size: 0;
+  }
+
+  .wg-landing-threads-scroll {
+    overflow-x: auto;
+  }
+
+  .wg-landing-threads-scroll:focus-visible {
+    outline-offset: calc(-1 * var(--b-rule));
+  }
+
+  .wg-landing-threads-plot {
+    position: relative;
+    /* Keep each chapter number legible when a longer ledger needs local scrolling. */
+    min-inline-size: calc(var(--wg-landing-threads-count) * 1.75rem);
   }
 
   .wg-landing-threads-axis,
@@ -34,10 +50,28 @@
   }
 
   .wg-landing-threads-axis-cells,
-  .wg-landing-threads-track-cells {
+  .wg-landing-threads-rails {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--wg-landing-threads-count), minmax(0, 1fr));
+  }
+
+  .wg-landing-threads-rails {
+    position: absolute;
+    z-index: 1;
+    inset: 0 0 0 var(--wg-landing-threads-label-width);
+    pointer-events: none;
+  }
+
+  .wg-landing-threads-rails::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
     border-inline-start: var(--b-line) solid var(--b-grid);
+    content: '';
+  }
+
+  .wg-landing-threads-rails > span {
+    border-inline-end: var(--b-line) solid var(--b-grid);
   }
 
   .wg-landing-threads-axis-cells {
@@ -50,8 +84,8 @@
     justify-content: center;
     flex-direction: column;
     min-block-size: 2.625rem;
-    border-inline-end: var(--b-line) solid var(--b-grid);
     font: 400 0.875rem/1.1 var(--b-font-mono);
+    white-space: nowrap;
   }
 
   .wg-landing-threads-axis-cell[data-current='true'] {
@@ -137,7 +171,7 @@
   .wg-landing-threads-overdue {
     grid-area: 2 / 1;
     padding: 0 var(--b-s2) var(--b-s2) 1.9rem;
-    font: 400 var(--b-t-label) / 1.45 var(--b-font-mono);
+    font: 400 var(--b-t-label) / 1.45 var(--b-font-body);
   }
 
   .wg-landing-threads-track {
@@ -145,15 +179,6 @@
     grid-area: 1 / 2 / 3 / 3;
     display: block;
     min-block-size: 3rem;
-  }
-
-  .wg-landing-threads-track-cells {
-    position: absolute;
-    inset: 0;
-  }
-
-  .wg-landing-threads-track-cells > span {
-    border-inline-end: var(--b-line) solid var(--b-grid);
   }
 
   .wg-landing-threads-track
@@ -170,8 +195,8 @@
 
   .wg-landing-threads-track > .wg-landing-threads-track-line {
     inset-inline: var(--wg-landing-threads-start) calc(100% - var(--wg-landing-threads-end));
-    transform: scaleY(1);
-    transform-origin: top;
+    transform: translateY(-50%) scaleY(1);
+    transform-origin: center;
   }
 
   .wg-landing-threads-track[data-planned='true'] .wg-landing-threads-track-line,
@@ -179,8 +204,17 @@
     border-block-start-style: dashed;
   }
 
+  .wg-landing-threads-track[data-planned='true'] .wg-landing-threads-track-line::after {
+    position: absolute;
+    inset-block-start: calc(-1 * var(--b-line));
+    inset-inline-end: calc(var(--wg-landing-threads-target-size) / 2 - var(--b-line));
+    inline-size: var(--b-rule);
+    border-block-start: var(--b-line) solid var(--b-ink);
+    content: '';
+  }
+
   .wg-landing-threads-row[data-thread-active='true'] .wg-landing-threads-track-line {
-    transform: scaleY(2);
+    transform: translateY(-50%) scaleY(2);
   }
 
   .wg-landing-threads-seed,
@@ -191,39 +225,34 @@
 
   .wg-landing-threads-seed {
     inset-inline-start: var(--wg-landing-threads-start);
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
+    inline-size: var(--wg-landing-threads-seed-size);
+    block-size: var(--wg-landing-threads-seed-size);
     background: var(--b-ink);
   }
 
   .wg-landing-threads-target {
     position: relative;
     inset-inline-start: var(--wg-landing-threads-end);
-    inline-size: 1rem;
-    block-size: 1rem;
+    inline-size: var(--wg-landing-threads-target-size);
+    block-size: var(--wg-landing-threads-target-size);
     border: var(--b-line) solid var(--b-ink);
     background: var(--b-paper);
   }
 
   .wg-landing-threads-target::after {
     position: absolute;
-    inset: 2px;
+    inset: var(--b-rule);
     border: var(--b-line) solid var(--b-ink);
     border-radius: inherit;
     content: '';
   }
 
-  .wg-landing-threads-track[data-same='true'] .wg-landing-threads-seed {
-    transform: translate(calc(-50% - 0.5rem), -50%);
-  }
-
-  .wg-landing-threads-track[data-same='true'] .wg-landing-threads-target {
-    transform: translate(calc(-50% + 0.5rem), -50%);
-  }
-
   .wg-landing-threads-detail {
-    padding: var(--b-s2) var(--b-s2) var(--b-s3) var(--wg-landing-threads-label-width);
+    max-inline-size: var(--wg-landing-threads-label-width);
+    padding: var(--b-s2) var(--b-s2) var(--b-s3) 1.9rem;
     font-size: 0.9375rem;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
   }
 
   .wg-landing-threads-legend,
@@ -242,6 +271,10 @@
 
   .wg-landing-threads-plan-key {
     inline-size: 1rem;
+  }
+
+  .wg-landing-threads-choice-entrance {
+    container-type: inline-size;
   }
 
   .wg-landing-threads-choice-sheet {
@@ -274,7 +307,7 @@
     font-weight: 500;
   }
 
-  .wg-landing-threads-choice-button[aria-pressed='true'] .wg-pop-text[data-caption]::after {
+  .wg-landing-threads-choice-button[aria-pressed='true'] .wg-pop-text-fill {
     color: var(--b-paper);
     background: var(--b-ink);
   }
@@ -288,7 +321,6 @@
   }
 
   .wg-landing-threads-reset[aria-disabled='true'] {
-    color: var(--b-muted);
     cursor: default;
   }
 
@@ -330,6 +362,14 @@
     font-size: 0.9375rem;
   }
 
+  @container (width < 18rem) {
+    .wg-landing-threads-choice-option {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+      padding-block-end: var(--b-s2);
+    }
+  }
+
   @media (min-width: 1024px) {
     .wg-landing-threads-layout {
       grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
@@ -338,43 +378,63 @@
   }
 
   @media (max-width: 767px) {
-    .wg-landing-threads-axis,
-    .wg-landing-threads-disclosure .wg-disclosure-trigger,
+    .wg-landing-threads-ledger {
+      --wg-landing-threads-label-width: min(38%, 9.5rem);
+    }
+
     .wg-landing-threads-choice-sheet {
       grid-template-columns: minmax(0, 1fr);
     }
 
     .wg-landing-threads-axis-label {
-      display: none;
+      padding-inline-start: var(--b-s2);
+    }
+
+    .wg-landing-threads-axis-cell {
+      font-size: clamp(0.6875rem, 3.1vw, 0.875rem);
+    }
+
+    .wg-landing-threads-axis-cell > span {
+      font-size: 0.85em;
+    }
+
+    .wg-landing-threads-disclosure .wg-motion-icon {
+      margin-inline-end: var(--b-s1);
     }
 
     .wg-landing-threads-name {
-      grid-template-columns: 1.75rem minmax(0, 1fr);
+      display: block;
       min-block-size: 2.75rem;
+      padding: var(--b-s2) var(--b-s5) var(--b-s1) var(--b-s2);
+      overflow-wrap: anywhere;
+    }
+
+    .wg-landing-threads-line-number {
+      position: absolute;
+      inset-block-start: var(--b-s1);
+      inset-inline-start: calc(var(--wg-landing-threads-label-width) - var(--b-s4));
+      padding-inline-start: 0;
     }
 
     .wg-landing-threads-summary {
       grid-area: 2 / 1;
       display: block;
-      padding: 0 var(--b-s2) var(--b-s2) 1.75rem;
+      padding: 0 var(--b-s2) var(--b-s2);
+      overflow-wrap: anywhere;
     }
 
     .wg-landing-threads-overdue {
       grid-area: 3 / 1;
-      padding-inline-start: 1.75rem;
+      padding-inline-start: var(--b-s2);
     }
 
     .wg-landing-threads-track {
-      grid-area: 4 / 1;
+      grid-area: 1 / 2 / 4 / 3;
       min-block-size: 2.5rem;
     }
 
-    .wg-landing-threads-track-cells {
-      border-block-start: var(--b-line) solid var(--b-grid);
-    }
-
     .wg-landing-threads-detail {
-      padding-inline-start: 1.75rem;
+      padding-inline-start: var(--b-s2);
     }
 
     .wg-landing-threads-facts {
@@ -383,12 +443,6 @@
       padding-inline-start: 0;
       border-block-start: var(--b-line) solid var(--b-grid);
       border-inline-start: 0;
-    }
-  }
-
-  @media (max-width: 345px) {
-    #b-decision-title {
-      --b-cell-section: calc((100vw - 2 * var(--b-edge) - 2px) / 12);
     }
   }
 
@@ -402,7 +456,7 @@
     }
 
     .wg-landing-threads-ledger[data-landed='true']
-      :is(.wg-landing-threads-axis, .wg-landing-threads-track-cells),
+      :is(.wg-landing-threads-axis, .wg-landing-threads-rails),
     .wg-landing-threads-ledger[data-landed='true'] .wg-landing-threads-row::after {
       animation: wg-landing-threads-draw var(--b-quick) var(--b-out) var(--b-stagger) both;
     }

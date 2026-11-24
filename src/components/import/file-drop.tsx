@@ -71,11 +71,11 @@ export function FileDrop({ disabled = false, onSelect, onParsed }: FileDropProps
       onDrop={handleDrop}
       className="wg-import-drop"
     >
-      <Sheet as="div" label="20×10" ruled className="wg-import-drop-sheet">
+      <Sheet as="div" className="wg-import-drop-sheet">
         <p className="wg-import-write font-medium">
           원고 파일을 끌어다 놓거나 아래에서 골라 주세요.
         </p>
-        <p className="wg-import-write text-sm text-muted-foreground">
+        <p className="wg-import-write text-sm text-muted-ink">
           txt, md, docx 파일을 올릴 수 있어요. hwp 파일은 한글에서 docx나 txt로 저장해 주세요.
         </p>
         <div className="wg-import-file-field wg-import-write">
@@ -97,7 +97,7 @@ export function FileDrop({ disabled = false, onSelect, onParsed }: FileDropProps
         </div>
         {selected && <FileDetails file={selected} />}
         {busy && (
-          <p role="status" className="text-sm text-muted-foreground">
+          <p role="status" className="text-sm text-muted-ink">
             파일을 읽고 있어요.
           </p>
         )}
@@ -106,6 +106,7 @@ export function FileDrop({ disabled = false, onSelect, onParsed }: FileDropProps
             {error}
           </p>
         )}
+        <div className="wg-import-drop-cells" aria-hidden="true" />
       </Sheet>
     </div>
   )
@@ -115,7 +116,7 @@ export function FileDetails({ file }: { file: SelectedFile }) {
   return (
     <p className="wg-import-write flex flex-wrap items-baseline gap-x-3 font-mono text-sm">
       <span className="min-w-0 wrap-anywhere">{file.fileName}</span>
-      <span className="text-muted-foreground">{file.size.toLocaleString('ko-KR')} B</span>
+      <span className="text-muted-ink">{file.size.toLocaleString('ko-KR')} B</span>
     </p>
   )
 }

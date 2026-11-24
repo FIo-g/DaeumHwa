@@ -109,7 +109,7 @@ export function ProposalCard({
 
       {isFact && (
         <div className="wg-approvals-fact grid justify-items-start gap-1.5">
-          <p className="text-xs text-muted-foreground">태그</p>
+          <p className="text-xs text-muted-ink">태그</p>
           <FactStatusSelect value={factStatus} onChange={setFactStatus} />
         </div>
       )}
@@ -138,7 +138,7 @@ export function ProposalCard({
         <Button size="sm" variant="outline" onClick={reject} disabled={busy || queueBusy}>
           거절
         </Button>
-        <Button size="sm" onClick={approve} disabled={busy || queueBusy}>
+        <Button size={compact ? 'sm' : 'default'} onClick={approve} disabled={busy || queueBusy}>
           승인
         </Button>
       </div>

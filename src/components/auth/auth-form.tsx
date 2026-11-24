@@ -201,7 +201,7 @@ export function AuthForm({ mode, next, trial }: AuthFormProps) {
           {submitLabel}
         </PopButton>
       </form>
-      {!trial && <TrialButton className="self-start" />}
+      {!trial && <TrialButton variant="outline" className="self-start" />}
     </div>
   )
 }

@@ -209,7 +209,7 @@ export function MonthCalendar({
                     role="gridcell"
                     key={date}
                     data-date={date}
-                    data-muted={date < today || !inMonth}
+                    data-muted={!inMonth}
                     aria-current={isToday ? 'date' : undefined}
                     className="wg-schedule-day"
                   >
@@ -252,6 +252,7 @@ export function MonthCalendar({
                         {slot && (
                           <span
                             className="wg-schedule-day-entry"
+                            data-publish
                             title={slot.chapterTitle || '빈 연재일'}
                           >
                             <span

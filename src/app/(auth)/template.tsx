@@ -2,12 +2,14 @@
 
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { PageEdge } from '@/components/app/page-header'
 import { GridTitle, Sheet } from '@/components/motion'
 
 export default function AuthTemplate({ children }: { children: ReactNode }) {
   const signup = usePathname() === '/signup'
   return (
-    <Sheet as="div" className="b-wrap wg-auth-sheet" label="20×10" page={signup ? '02' : '01'}>
+    <Sheet as="div" className="b-wrap wg-auth-sheet">
+      <PageEdge className="wg-sheet-edge" showPageMark={false} />
       <div className="wg-auth-columns" key={signup ? 'signup' : 'login'}>
         <header className="wg-auth-heading">
           <GridTitle as="h1" size="page" columns={signup ? 2 : 3}>

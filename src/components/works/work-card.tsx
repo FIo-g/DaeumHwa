@@ -29,6 +29,7 @@ export function WorkCard({
   lastEditedAt,
 }: WorkCardProps) {
   const description = `work-card-${id}`
+  const trailingParenthesis = title.match(/^(.*\s)(\S+\s+\([^()]+\))$/u)
   return (
     <Link
       href={`/works/${id}`}
@@ -38,7 +39,19 @@ export function WorkCard({
       title={title}
     >
       <div className="wg-works-name">
-        <span className="b-row__title wg-works-title">{title}</span>
+        <span
+          className="b-row__title wg-works-title"
+          data-unspaced={!/\s/u.test(title) || undefined}
+        >
+          {trailingParenthesis ? (
+            <>
+              {trailingParenthesis[1]}
+              <span className="wg-works-title-phrase">{trailingParenthesis[2]}</span>
+            </>
+          ) : (
+            title
+          )}
+        </span>
         <div className="wg-works-meta" id={`${description}-meta`}>
           <span>{genre || '장르 없음'}</span>
           <span>{ROLE_LABEL[role]}</span>
@@ -47,7 +60,7 @@ export function WorkCard({
       <ul className="wg-works-counts" id={`${description}-counts`}>
         <li>
           <span>회차</span>
-          <CountCell value={chapterCount} unit="화" />
+          <span className="wg-works-chapter-count font-mono">{chapterCount}화</span>
         </li>
         <li>
           <span>승인 대기</span>

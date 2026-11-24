@@ -61,7 +61,10 @@ export default async function WorkSettingsPage({
             ) : (
               <dl className="wg-settings-write flex flex-wrap items-baseline gap-x-4 gap-y-1">
                 <dt>오늘 내 사용량</dt>
-                <dd className="font-mono tabular-nums">{usage.toLocaleString('ko-KR')} 토큰</dd>
+                <dd>
+                  <span className="font-mono tabular-nums">{usage.toLocaleString('ko-KR')}</span>{' '}
+                  토큰
+                </dd>
               </dl>
             )}
           </SettingsSection>

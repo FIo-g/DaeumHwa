@@ -35,10 +35,7 @@
     min-block-size: 44px;
     font-size: 0.875rem;
     font-weight: 500;
-  }
-
-  .wg-landing-hero-nav-link:is(:hover, :focus-visible) {
-    text-decoration: underline;
+    text-decoration: underline var(--b-line);
     text-underline-offset: 0.28em;
   }
 
@@ -82,13 +79,9 @@
     padding-block: var(--b-s2);
   }
 
-  .wg-landing-hero-edge,
-  .wg-landing-hero-page {
+  .wg-landing-hero-edge {
     font: 400 0.8125rem/1.35 var(--b-font-mono);
     font-variant-numeric: tabular-nums;
-  }
-
-  .wg-landing-hero-edge {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -105,7 +98,10 @@
   }
 
   .wg-landing-hero-proof {
-    --wg-landing-hero-title-time: calc(15 * var(--b-cell));
+    --wg-landing-hero-title-time: min(
+      calc(var(--wg-landing-hero-letter-count) * var(--b-cell)),
+      var(--b-arrival)
+    );
     --wg-landing-hero-pair-time: calc(var(--b-draw) + 2 * var(--b-quick));
     grid-area: proof;
     min-inline-size: 0;
@@ -146,21 +142,6 @@
     isolation: isolate;
   }
 
-  .wg-landing-hero-rules {
-    position: absolute;
-    z-index: -1;
-    inset: 0;
-    display: grid;
-    grid-template-rows: repeat(4, 1fr);
-    opacity: 0.24;
-    pointer-events: none;
-  }
-
-  .wg-landing-hero-rules > span {
-    align-self: end;
-    border-block-end: var(--b-line) solid var(--b-grid);
-  }
-
   .wg-landing-hero-line-no {
     position: absolute;
     inset-block-start: 1.22rem;
@@ -170,8 +151,18 @@
     pointer-events: none;
   }
 
-  .wg-landing-hero-row:is(:hover, :focus-within) .wg-landing-hero-rules {
-    opacity: 0.66;
+  .wg-landing-hero-ruled {
+    --wg-landing-hero-rule-ink: color-mix(in srgb, var(--b-grid) 24%, transparent);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0 calc(1lh - var(--b-line)),
+      var(--wg-landing-hero-rule-ink) calc(1lh - var(--b-line)) 1lh
+    );
+  }
+
+  :is(.wg-landing-hero-row, .wg-landing-sample-row):is(:hover, :focus-within)
+    .wg-landing-hero-ruled {
+    --wg-landing-hero-rule-ink: color-mix(in srgb, var(--b-grid) 66%, transparent);
   }
 
   .wg-landing-hero-row:is(:hover, :focus-within) .wg-landing-hero-line-no {
@@ -201,7 +192,9 @@
   }
 
   .wg-landing-hero-sentence {
-    font: 700 clamp(1.0625rem, 1.47vw, 1.375rem)/1.77 var(--b-font-title);
+    --wg-landing-hero-leading: 1.8em;
+    --wg-landing-hero-line: round(down, var(--wg-landing-hero-leading), var(--b-line));
+    font: 700 clamp(1.0625rem, 1.47vw, 1.375rem) / var(--wg-landing-hero-line) var(--b-font-title);
     word-break: keep-all;
   }
 
@@ -210,7 +203,19 @@
   }
 
   .wg-landing-hero-sentence-corrected {
-    line-height: 2.5;
+    --wg-landing-hero-correction-scale: 0.65;
+    /* Set aside one correction slot per line, then move its top half below the text. */
+    --wg-landing-hero-correction-space: calc(1.75em * var(--wg-landing-hero-correction-scale));
+    --wg-landing-hero-line: round(
+      down,
+      calc(var(--wg-landing-hero-leading) + var(--wg-landing-hero-correction-space)),
+      var(--b-line)
+    );
+  }
+
+  .wg-landing-hero-sentence-corrected > .wg-landing-hero-words {
+    position: relative;
+    inset-block-start: calc(-0.5 * var(--wg-landing-hero-correction-space));
   }
 
   .wg-landing-hero-correction-anchor {
@@ -220,30 +225,11 @@
 
   .wg-landing-hero-correction {
     position: absolute;
-    inset-block-start: calc(100% + 2px);
+    inset-block-start: calc(100% + 0.5em);
     inset-inline-start: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--b-s1);
     color: var(--b-proof);
-    font: 400 0.875rem/1.2 var(--b-font-title);
+    font: 400 calc(1em * var(--wg-landing-hero-correction-scale)) / 1 var(--b-font-title);
     pointer-events: none;
-  }
-
-  .wg-landing-hero-correction::after {
-    content: attr(data-correction) / '';
-  }
-
-  .wg-landing-hero-correction svg {
-    inline-size: 0.9375rem;
-    block-size: 0.75rem;
-    transform: scaleY(-1);
-    overflow: visible;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
   }
 
   .wg-landing-hero-caption,
@@ -257,12 +243,10 @@
     font-size: 0.8125rem;
   }
 
-  .wg-landing-hero-replay .wg-pop-text:empty {
-    display: none;
-  }
-
-  .wg-landing-hero-replay .wg-pop-text:empty + .wg-pop-arrow {
-    border-inline-start: 0;
+  .wg-landing-hero-replay {
+    min-block-size: 44px;
+    font-weight: 500;
+    cursor: pointer;
   }
 
   .wg-landing-hero-boundary {
@@ -289,7 +273,9 @@
   }
 
   .wg-landing-hero-closing {
+    --wg-landing-hero-closing-cell: var(--b-cell-section);
     display: grid;
+    container-type: inline-size;
     align-items: center;
     column-gap: var(--b-s6);
     row-gap: var(--b-s4);
@@ -299,6 +285,7 @@
   .wg-landing-hero-closing-edge {
     position: relative;
     grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 
   .wg-landing-hero-closing-rule {
@@ -352,8 +339,10 @@
       padding: var(--b-s1) 0 var(--b-s3) var(--b-s5);
     }
 
-    .wg-landing-hero-closing .wg-title-cells {
-      max-inline-size: calc(9 * var(--b-cell-section));
+    #b-closing-title {
+      /* Ten cells fit the second phrase and leave room for a balanced two-line title. */
+      --b-cell-section: min(var(--wg-landing-hero-closing-cell), calc(100cqi / 10));
+      max-inline-size: calc(10 * round(down, var(--b-cell-section), var(--b-line)));
     }
   }
 
@@ -377,7 +366,6 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wg-landing-hero-rules,
     .wg-landing-hero-line-no {
       transition: opacity var(--b-quick) var(--b-out);
     }
@@ -412,31 +400,14 @@
       .wg-margin-note
       .wg-margin-note-quote,
     .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
-      .wg-landing-hero-correction::after {
+      .wg-landing-hero-correction {
       animation: wg-landing-hero-write var(--b-quick) steps(8, end)
         var(--wg-landing-hero-note-start) both;
-    }
-
-    .wg-landing-hero-proof:is([data-landed='true'], [data-replayed='true'])
-      .wg-landing-hero-correction
-      path {
-      stroke-dasharray: 1;
-      animation: wg-landing-hero-insert var(--b-draw) var(--b-out) var(--wg-landing-hero-pen-start)
-        both;
     }
 
     .wg-landing-hero-proof[data-landed='true'] > h2::before,
     .wg-landing-hero-closing[data-landed='true'] .wg-landing-hero-closing-rule {
       animation: wg-landing-hero-write var(--b-draw) var(--b-out) both;
-    }
-  }
-
-  @keyframes wg-landing-hero-insert {
-    from {
-      stroke-dashoffset: 1;
-    }
-    to {
-      stroke-dashoffset: 0;
     }
   }
 

@@ -42,7 +42,7 @@ export function DangerZone({ workId, archived }: DangerZoneProps) {
           title="보관을 해제할까요?"
           description="작품 목록에 다시 보여요."
           confirmLabel="보관 해제"
-          variant="destructive"
+          variant="link"
           onConfirm={() => setArchived(false)}
         >
           보관 해제
@@ -52,7 +52,7 @@ export function DangerZone({ workId, archived }: DangerZoneProps) {
           title="작품을 보관할까요?"
           description="나중에 보관을 해제할 수 있어요."
           confirmLabel="보관"
-          variant="destructive"
+          variant="link"
           onConfirm={() => setArchived(true)}
         >
           작품 보관

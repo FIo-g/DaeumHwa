@@ -5,6 +5,21 @@
     padding-block: var(--b-band-pad);
   }
 
+  .wg-auth-status {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    align-items: start;
+    max-inline-size: 48rem;
+    gap: var(--b-s4);
+    padding-block: var(--b-band-pad);
+  }
+
+  .wg-auth-invite-notice {
+    margin-block-end: var(--b-s4);
+  }
+
   .wg-auth-footer {
     border-block-start: var(--b-line) solid var(--b-grid);
   }

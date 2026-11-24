@@ -1,4 +1,6 @@
+import { CheckIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { CellMeter } from '@/components/motion'
 
 const STAGES = ['올리기', '나누기', '설정 추출', '승인 대기']
 
@@ -17,7 +19,11 @@ export function ImportStages({ stage, children }: { stage: 1 | 2 | 3 | 4; childr
               aria-current={active ? 'step' : undefined}
             >
               <h2>{label}</h2>
-              {number < stage && <span role="img" aria-label="지난 단계" className="sr-only" />}
+              {number < stage && (
+                <span role="img" aria-label="지난 단계" className="wg-import-stage-check">
+                  <CheckIcon aria-hidden="true" strokeWidth={1.5} />
+                </span>
+              )}
             </li>
           )
         })}
@@ -49,7 +55,9 @@ export function ImportMeter({
       aria-valuemax={100}
       aria-valuenow={percent}
     >
-      <CellStrip filled={completed} count={total} />
+      <div aria-hidden="true">
+        <CellMeter value={completed} max={total} className="wg-import-meter-cells" />
+      </div>
     </div>
   )
 }

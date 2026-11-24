@@ -9,6 +9,7 @@ afterEach(() => {
 
 const props: HomePanelsProps = {
   workId: 'w1',
+  lastChapterPosition: 8,
   pendingCount: 3,
   openThreads: [
     {
@@ -53,7 +54,8 @@ const props: HomePanelsProps = {
 describe('HomePanels', () => {
   it('links the approval panel to the approvals page with the count', () => {
     render(<HomePanels {...props} />)
-    expect(screen.getByText('3건')).toBeInTheDocument()
+    const approvals = screen.getByRole('region', { name: '승인 대기' })
+    expect(approvals.querySelector('.wg-home-total-number')?.textContent).toBe('3건')
     expect(screen.getByRole('link', { name: '승인 대기 보기' })).toHaveAttribute(
       'href',
       '/works/w1/approvals',
@@ -65,7 +67,7 @@ describe('HomePanels', () => {
     expect(screen.getByText('회수 목표 지남')).toBeInTheDocument()
   })
 
-  it('connects planted and planned threads and separates marks at one chapter', () => {
+  it('connects planted and planned threads and centers both marks on a shared chapter', () => {
     const [planted] = props.openThreads
     render(
       <HomePanels
@@ -83,12 +85,33 @@ describe('HomePanels', () => {
     expect(first.querySelector('.wg-home-target')).not.toBeNull()
     const dot = sharedChapter.querySelector<HTMLElement>('.wg-home-planted')
     const target = sharedChapter.querySelector<HTMLElement>('.wg-home-target')
-    expect(dot?.style.insetInlineStart).toMatch(/ - 8px\)$/)
-    expect(target?.style.insetInlineStart).toMatch(/ \+ 8px\)$/)
+    expect(dot?.style.insetInlineStart).toBe('18.75%')
+    expect(target?.style.insetInlineStart).toBe('18.75%')
+    expect(dot).toHaveAttribute('data-thread-coincident', 'seed')
+    expect(target).toHaveAttribute('data-thread-coincident', 'target')
     expect(planned.querySelector('.wg-home-axis-line')).toHaveAttribute('data-planned', 'true')
     expect(planned.querySelector('.wg-home-planted')).toBeNull()
     expect(planned.querySelector('.wg-home-target')).not.toBeNull()
   })
+
+  it.each([3, 6, 12])(
+    'puts the first and last marks at their cell centers for %i chapters',
+    (count) => {
+      render(
+        <HomePanels
+          {...props}
+          lastChapterPosition={count}
+          openThreads={[{ ...props.openThreads[0], plantedPosition: 1, targetPosition: count }]}
+        />,
+      )
+      const plot = screen.getByRole('article').querySelector<HTMLElement>('.wg-home-axis')
+      expect(plot?.style.getPropertyValue('--wg-home-axis-cells')).toBe(String(count))
+      const x = (marker: string) =>
+        Number.parseFloat(plot!.querySelector<HTMLElement>(marker)!.style.insetInlineStart)
+      expect(x('.wg-home-planted')).toBeCloseTo(100 / count / 2)
+      expect(x('.wg-home-target')).toBeCloseTo(100 - 100 / count / 2)
+    },
+  )
 
   it('writes the periodic check messages in Korean', () => {
     render(<HomePanels {...props} />)
@@ -116,7 +139,8 @@ describe('HomePanels', () => {
     expect(screen.getByText('지금 확인할 항목이 없어요.')).toBeInTheDocument()
     expect(screen.getByText('열린 떡밥이 없어요.')).toBeInTheDocument()
     for (const name of ['승인 대기', '주기 점검']) {
-      expect(within(screen.getByRole('region', { name })).getByText('0건')).toBeInTheDocument()
+      const panel = screen.getByRole('region', { name })
+      expect(panel.querySelector('.wg-home-total-number')?.textContent).toBe('0건')
     }
   })
 
@@ -141,9 +165,9 @@ describe('HomePanels', () => {
       />,
     )
 
-    const alerts = within(screen.getByRole('region', { name: '주기 점검' }))
-    expect(alerts.getByText('5건')).toBeInTheDocument()
-    expect(alerts.getAllByRole('listitem')).toHaveLength(5)
+    const alerts = screen.getByRole('region', { name: '주기 점검' })
+    expect(alerts.querySelector('.wg-home-total-number')?.textContent).toBe('5건')
+    expect(within(alerts).getAllByRole('listitem')).toHaveLength(5)
     const threads = within(screen.getByRole('region', { name: '열린 떡밥' }))
     expect(threads.getAllByRole('article')).toHaveLength(5)
     expect(threads.getByRole('link', { name: '떡밥 장부 보기' })).toBeInTheDocument()

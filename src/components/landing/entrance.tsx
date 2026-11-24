@@ -35,17 +35,19 @@ export function LandingTitle({
   id,
   children,
   hero = false,
+  columns,
 }: {
   id: string
   children: string
   hero?: boolean
+  columns?: number
 }) {
   return (
     <GridTitle
       id={id}
       as={hero ? 'h1' : 'h2'}
       size={hero ? 'hero' : 'section'}
-      columns={hero ? 8 : undefined}
+      columns={hero ? 8 : columns}
     >
       {children}
     </GridTitle>

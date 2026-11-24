@@ -1,15 +1,7 @@
 'use client'
 
-import { RotateCcw } from 'lucide-react'
 import { useLayoutEffect, type ComponentProps, type ReactNode } from 'react'
-import {
-  MarginNote,
-  PopButton,
-  ProofPair,
-  ProofRing,
-  ProofUnderline,
-  useReplay,
-} from '@/components/motion'
+import { MarginNote, ProofPair, ProofRing, ProofUnderline, useReplay } from '@/components/motion'
 import { cn } from '@/lib/utils'
 import { LandingTitle, landingOrder, useLandingEntrance } from './entrance'
 import { findings, sampleCaption } from './sample-data'
@@ -18,14 +10,9 @@ const handCorrection = '오른손'
 
 export function ReplayButton({ children, className, ...props }: ComponentProps<'button'>) {
   return (
-    <PopButton
-      variant="paper"
-      arrow={<RotateCcw className="b-icon" aria-hidden="true" />}
-      {...props}
-      className={cn('wg-landing-hero-replay', className)}
-    >
+    <button type="button" {...props} className={cn('b-link wg-landing-hero-replay', className)}>
       {children}
-    </PopButton>
+    </button>
   )
 }
 
@@ -54,9 +41,6 @@ export function HeroProof() {
       aria-labelledby="b-intro-proof-title"
       data-replayed={replayKey > 0}
     >
-      <span className="wg-landing-hero-edge" aria-hidden="true">
-        03
-      </span>
       <h2 id="b-intro-proof-title">종루의 손짓</h2>
       <aside aria-label="위키 원문과 교정 메모">
         {findings.slice(0, 2).map((finding, index) => {
@@ -68,43 +52,35 @@ export function HeroProof() {
               style={landingOrder(index)}
               tabIndex={0}
             >
-              <div className="wg-landing-hero-rules" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </div>
               <sup className="wg-landing-hero-line-no" aria-label={`지적 ${finding.number}`}>
-                0{finding.number}
+                {String(finding.number).padStart(2, '0')}
               </sup>
               <ProofPair
                 className="wg-landing-hero-pair"
+                replayKey={replayKey}
                 manuscript={
                   <>
                     <p className="wg-landing-hero-manuscript-label">원고</p>
                     <p
                       className={cn(
-                        'wg-landing-hero-sentence',
+                        'wg-landing-hero-sentence wg-landing-hero-ruled',
                         index === 1 && 'wg-landing-hero-sentence-corrected',
                       )}
                     >
-                      {finding.before}
-                      {index === 1 ? (
-                        <span className="wg-landing-hero-correction-anchor">
-                          <Mark>{finding.wrong}</Mark>
-                          <span
-                            className="wg-landing-hero-correction"
-                            data-correction={handCorrection}
-                            aria-hidden="true"
-                          >
-                            <svg viewBox="0 0 15 12">
-                              <path pathLength="1" d="M2 11V2m0 9 5-3m-5 3 5-1m-5 1 9-8" />
-                            </svg>
+                      <span className="wg-landing-hero-words">
+                        {finding.before}
+                        {index === 1 ? (
+                          <span className="wg-landing-hero-correction-anchor">
+                            <Mark replayKey={replayKey}>{finding.wrong}</Mark>
+                            <span className="wg-landing-hero-correction" aria-hidden="true">
+                              {handCorrection}
+                            </span>
                           </span>
-                        </span>
-                      ) : (
-                        <Mark>{finding.wrong}</Mark>
-                      )}
-                      {finding.after}
+                        ) : (
+                          <Mark replayKey={replayKey}>{finding.wrong}</Mark>
+                        )}
+                        {finding.after}
+                      </span>
                     </p>
                     {index === 1 && <p className="sr-only">{handCorrection}</p>}
                   </>
@@ -143,9 +119,6 @@ export function ClosingSlip({ actions }: { actions: ReactNode }) {
       {actions}
       <div className="wg-landing-hero-closing-edge">
         <span key={replayKey} className="wg-landing-hero-closing-rule" aria-hidden="true" />
-        <span className="wg-landing-hero-page" aria-hidden="true">
-          04
-        </span>
         <ReplayButton onClick={replay}>교정 슬립 다시 보기</ReplayButton>
       </div>
     </div>

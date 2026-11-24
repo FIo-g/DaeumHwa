@@ -96,7 +96,8 @@
 
   .wg-settings-lead > h2 {
     color: var(--b-ink);
-    font-weight: 500;
+    font-family: var(--b-font-title);
+    font-weight: 700;
   }
 
   .wg-settings-body {
@@ -184,6 +185,15 @@
     padding-inline: var(--b-s3);
     border-inline: var(--b-line) solid var(--b-grid);
     font-size: var(--b-t-label);
+  }
+
+  .wg-settings-section:has(.wg-settings-form) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+  }
+
+  .wg-settings-section:has(.wg-settings-form) .wg-settings-body {
+    grid-area: 3 / 1;
   }
 
   @container (width < 41rem) {

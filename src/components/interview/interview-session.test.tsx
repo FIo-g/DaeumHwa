@@ -84,7 +84,7 @@ describe('InterviewSession question generation', () => {
     vi.mocked(postAction).mockReturnValue(new Promise(() => {}))
     renderSession({})
     fireEvent.click(screen.getByRole('button', { name: '다음 질문' }))
-    expect(screen.getByText('질문 만드는 중… 0초')).toBeInTheDocument()
+    expect(screen.getByText('질문 만드는 중…')).toHaveTextContent(/^질문 만드는 중… 0초$/)
     expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument()
   })
 
@@ -181,7 +181,7 @@ describe('InterviewSession answers', () => {
     renderSession({ current: turn() })
     fireEvent.change(screen.getByLabelText('답변'), { target: { value: '서윤은 검객이다.' } })
     fireEvent.click(screen.getByRole('button', { name: '답하기' }))
-    expect(screen.getByText('답 정리하는 중… 0초')).toBeInTheDocument()
+    expect(screen.getByText('답 정리하는 중…')).toHaveTextContent(/^답 정리하는 중… 0초$/)
     expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument()
   })
 

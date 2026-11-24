@@ -61,7 +61,7 @@ export function QuestionCard({
           {question}
         </h2>
         {rationale && (
-          <p className="wg-import-write text-sm text-muted-foreground wrap-anywhere">{rationale}</p>
+          <p className="wg-import-write text-sm text-muted-ink wrap-anywhere">{rationale}</p>
         )}
       </div>
 
@@ -102,7 +102,7 @@ export function QuestionCard({
           )}
         </form>
       ) : (
-        <p className="text-sm text-muted-foreground">편집자 이상만 답할 수 있어요.</p>
+        <p className="text-sm text-muted-ink">편집자 이상만 답할 수 있어요.</p>
       )}
     </article>
   )

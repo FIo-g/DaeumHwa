@@ -30,10 +30,9 @@ export function AdviceOption({
       className="wg-advice-row wg-advice-reply"
       style={{ '--wg-advice-row': Math.min(index, 3) } as CSSProperties}
     >
-      <div className="wg-advice-gutter" aria-hidden="true">
-        <span className="wg-advice-option-number">{index + 1}</span>
-        {selected && <CheckIcon className="wg-advice-check" strokeWidth={1.5} />}
-      </div>
+      <span className="wg-advice-option-number" aria-hidden="true">
+        {index + 1}
+      </span>
       <header className="wg-advice-reply-heading wg-advice-writing">
         <h3 className="b-subhead">
           <button
@@ -43,11 +42,12 @@ export function AdviceOption({
             aria-pressed={selected}
             onClick={onSelect}
           >
-            {option.title}
+            <span>{option.title}</span>
           </button>
         </h3>
         {recommended && <span className="wg-advice-recommended b-label">추천</span>}
       </header>
+      {selected && <CheckIcon className="wg-advice-check" strokeWidth={1.5} aria-hidden="true" />}
       <div className="wg-advice-reply-body">
         <p className="wg-advice-prose wg-advice-writing">{option.summary}</p>
         <AdviceDetail label="다음 화의 사건">

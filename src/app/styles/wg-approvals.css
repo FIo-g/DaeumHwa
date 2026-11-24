@@ -82,7 +82,8 @@
 
   .wg-approvals-group-count {
     color: var(--b-muted);
-    font: 400 var(--b-t-label) / 1.5 var(--b-font-mono);
+    font: 400 var(--b-t-label) / 1.5 var(--b-font-body);
+    white-space: nowrap;
   }
 
   .wg-approvals-row {
@@ -162,7 +163,7 @@
 
   .wg-approvals-detail {
     max-inline-size: 66ch;
-    color: var(--b-muted);
+    color: var(--b-ink);
     font-size: 0.9375rem;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
