@@ -1,4 +1,7 @@
+import { and, eq } from 'drizzle-orm'
+import { chapters as chapterTable, workMembers, works } from '@/db/schema'
 import type { Actor } from '@/db/types'
+import { AppError } from '@/lib/errors'
 import type { Db } from '@/db/client'
 import { SAMPLE_WORK, type SampleWorkData } from '@/lib/sample-work'
 import { createChaptersBulk } from './chapters'
@@ -7,6 +10,7 @@ import { createRelation } from './relations'
 import { createThread } from './threads'
 import { createEntry } from './wiki'
 import { createWork } from './works'
+import { isTrialUser, lockActiveTrial } from './trial-access'
 
 /**
  * Builds the one-click demo work through the domain services, so change_log is written. The whole
@@ -21,11 +25,30 @@ export async function createSampleWork(
     // Service calls start their own transactions; on the outer tx they become savepoints.
     const run = tx as unknown as Db
 
-    const work = await createWork(run, actor, {
-      title: data.title,
-      genre: data.genre,
-      logline: data.logline,
-    })
+    const trial = await isTrialUser(run, actor.userId)
+    if (trial) {
+      if (!(await lockActiveTrial(tx, actor.userId))) {
+        throw new AppError('UNAUTHENTICATED', '체험을 다시 시작해 주세요.')
+      }
+
+      const [existing] = await tx
+        .select({ workId: works.id, chapterId: chapterTable.id })
+        .from(works)
+        .innerJoin(
+          chapterTable,
+          and(eq(chapterTable.workId, works.id), eq(chapterTable.position, data.landingChapter)),
+        )
+        .where(eq(works.ownerId, actor.userId))
+        .limit(1)
+      if (existing) return existing
+    }
+
+    const work = await createWork(
+      run,
+      actor,
+      { title: data.title, genre: data.genre, logline: data.logline },
+      trial ? { trialSample: true } : undefined,
+    )
 
     const entryIds = new Map<string, string>()
     for (const entry of data.entries) {
@@ -89,7 +112,13 @@ export async function createSampleWork(
     }
 
     const landingId = chapterByPosition.get(data.landingChapter)
-    if (!landingId) throw new Error('sample landing chapter missing')
+    if (!landingId) throw new AppError('BAD_STATE', '샘플 회차를 찾을 수 없습니다.')
+    if (trial) {
+      await tx
+        .update(workMembers)
+        .set({ role: 'viewer' })
+        .where(and(eq(workMembers.workId, work.id), eq(workMembers.userId, actor.userId)))
+    }
     return { workId: work.id, chapterId: landingId }
   })
 }

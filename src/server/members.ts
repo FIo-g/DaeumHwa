@@ -5,6 +5,7 @@ import type { Actor, InviteRow, Role } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { randomToken } from '@/lib/tokens'
 import { getMembership, ROLE_RANK, requireRowWork, requireWorkRole } from '@/server/access'
+import { requireRegisteredUser } from '@/server/trial-access'
 
 // Team mode (spec §3.3, F16). Owners manage members and invites; members may leave on their own.
 
@@ -141,6 +142,7 @@ export async function acceptInvite(
       .where(eq(workInvites.token, token))
       .limit(1)
     if (!invite) throw new AppError('NOT_FOUND', '초대를 찾을 수 없습니다.')
+    await requireRegisteredUser(tx, actor.userId)
 
     const now = new Date()
     const [claimed] = await tx
@@ -211,6 +213,7 @@ export async function removeMember(
   if (input.userId !== actor.userId && actorRole !== 'owner') {
     throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없습니다.')
   }
+  await requireRegisteredUser(db, actor.userId)
   await db
     .delete(workMembers)
     .where(and(eq(workMembers.workId, input.workId), eq(workMembers.userId, input.userId)))

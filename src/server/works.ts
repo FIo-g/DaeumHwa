@@ -4,6 +4,7 @@ import { workMembers, works } from '@/db/schema'
 import type { Actor, Role, WorkRow, WorkSettings } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { requireWorkRole } from '@/server/access'
+import { requireRegisteredUser } from '@/server/trial-access'
 
 export type CreateWorkInput = {
   title: string
@@ -27,7 +28,13 @@ function requireTitle(title: string): string {
 }
 
 /** Creates a work; the creator becomes its owner member in the same transaction. */
-export async function createWork(db: Db, actor: Actor, input: CreateWorkInput): Promise<WorkRow> {
+export async function createWork(
+  db: Db,
+  actor: Actor,
+  input: CreateWorkInput,
+  options?: { trialSample: true },
+): Promise<WorkRow> {
+  if (!options?.trialSample) await requireRegisteredUser(db, actor.userId)
   const title = requireTitle(input.title)
   return db.transaction(async (tx) => {
     const [work] = await tx

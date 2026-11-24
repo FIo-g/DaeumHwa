@@ -23,6 +23,7 @@ import {
 } from '@/db/schema'
 import type { Role } from '@/db/types'
 import { AppError } from '@/lib/errors'
+import { requireRegisteredUser } from '@/server/trial-access'
 
 export const ROLE_RANK: Record<Role, number> = { viewer: 0, commenter: 1, editor: 2, owner: 3 }
 
@@ -80,6 +81,7 @@ export async function requireWorkRole(
   const membership = await getMembership(db, workId, userId)
   if (!membership) throw new AppError('NOT_FOUND', '작품을 찾을 수 없습니다.')
   if (!hasRole(membership.role, min)) {
+    await requireRegisteredUser(db, userId)
     throw new AppError('FORBIDDEN', '이 작업을 할 권한이 없습니다.')
   }
   return membership

@@ -37,7 +37,9 @@ import {
   locateQuote,
   sentenceAt,
 } from '@/lib/korean/sentences'
+import { isTrialCheckChapter, TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { requireRowWork, requireWorkRole } from '@/server/access'
+import { isTrialUser } from '@/server/trial-access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
 import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { listNamingRules } from '@/server/naming'
@@ -230,12 +232,17 @@ async function loadEditableChapter(
   db: Db,
   actor: Actor,
   chapterId: string,
+  allowTrialCheck = false,
 ): Promise<{ chapter: ChapterRow; workId: string }> {
   const workId = await requireRowWork(db, 'chapters', chapterId)
-  await requireWorkRole(db, workId, actor.userId, 'editor')
+  const trial = allowTrialCheck && (await isTrialUser(db, actor.userId))
+  await requireWorkRole(db, workId, actor.userId, trial ? 'viewer' : 'editor')
   const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1)
   if (!chapter || chapter.archivedAt !== null) {
     throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+  }
+  if (trial && !isTrialCheckChapter(chapter.position)) {
+    throw new AppError('FORBIDDEN', TRIAL_SIGNUP_MESSAGE)
   }
   return { chapter, workId }
 }
@@ -274,7 +281,7 @@ export async function runChapterCheck(
   client?: AiClient,
   signal?: AbortSignal,
 ): Promise<ChapterCheckResult> {
-  const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId)
+  const { chapter, workId } = await loadEditableChapter(db, actor, input.chapterId, true)
   const text = chapter.body
   // Stops the sibling call when the other one fails. The caller's cancel stops both.
   const sibling = new AbortController()
