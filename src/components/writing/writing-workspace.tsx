@@ -254,21 +254,27 @@ export function WritingWorkspace({
 
   // On a narrow screen the panel is inside a sheet. The sample auto check must run, and its panel
   // only mounts while the sheet is open, so the sheet starts open for that case. An explicit
-  // close or open by the author wins over the default.
+  // close or open by the author wins over the default. Until the width is known (server render
+  // and hydration) the sheet stays shut, so a wide screen never flashes it open.
   const sampleChapter = useIsSampleChapter(chapter.id)
   const [panelOverride, setPanelOverride] = useState<boolean | null>(null)
-  const panelOpen = panelOverride ?? (autoCheck || sampleChapter)
+  const panelOpen = wide === false && (panelOverride ?? (autoCheck || sampleChapter))
 
   const panelProps = { data, api, text: body, position: chapter.position, autoCheck }
 
+  // The trigger is hidden by CSS on wide screens, so it never shows there before hydration.
   const mobilePanel = wide ? null : (
     <Sheet open={panelOpen} onOpenChange={setPanelOverride}>
-      <SheetTrigger render={<Button variant="outline" size="sm" />}>패널 열기</SheetTrigger>
+      <SheetTrigger render={<Button variant="outline" size="sm" className="lg:hidden" />}>
+        패널 열기
+      </SheetTrigger>
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>작업 패널</SheetTitle>
         </SheetHeader>
-        <WritingSidePanel {...panelProps} />
+        <div className="px-4 pb-6">
+          <WritingSidePanel {...panelProps} />
+        </div>
       </SheetContent>
     </Sheet>
   )
@@ -276,7 +282,7 @@ export function WritingWorkspace({
   return (
     <div className="flex flex-col gap-4">
       {chapter.archivedAt && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 p-4 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-rule bg-sheet p-4 text-sm">
           <p>보관된 회차입니다. 고치려면 다시 열어 주세요.</p>
           {canManage && (
             <Button size="sm" variant="outline" onClick={() => void reopenChapter()}>
@@ -299,7 +305,7 @@ export function WritingWorkspace({
         panelTrigger={mobilePanel}
       />
 
-      <div className="flex items-start gap-8">
+      <div className="flex items-start gap-4 xl:gap-8">
         <div className="min-w-0 flex-1">
           <ManuscriptEditor
             title={title}
@@ -316,11 +322,11 @@ export function WritingWorkspace({
             onBlur={handleBlur}
           />
         </div>
-        {wide && (
-          <aside className="sticky top-6 max-h-[calc(100vh-3rem)] w-[380px] shrink-0 overflow-y-auto">
-            <WritingSidePanel {...panelProps} />
-          </aside>
-        )}
+        {/* The column is reserved by CSS from the first paint, so the manuscript keeps its width
+            when the panel mounts after hydration. */}
+        <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] w-[320px] shrink-0 overflow-y-auto lg:block xl:w-[380px]">
+          {wide && <WritingSidePanel {...panelProps} />}
+        </aside>
       </div>
 
       {canEdit && (
@@ -365,18 +371,28 @@ function useIsSampleChapter(chapterId: string): boolean {
   )
 }
 
-/** Wide screens show the panel beside the editor; narrower ones put it in a sheet. */
-function useWideLayout(): boolean {
-  const [wide, setWide] = useState(false)
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-    const query = window.matchMedia('(min-width: 1024px)')
-    const sync = () => setWide(query.matches)
-    sync()
-    query.addEventListener('change', sync)
-    return () => query.removeEventListener('change', sync)
-  }, [])
-  return wide
+// Keep the panel mount in sync with Tailwind's lg breakpoint.
+const WIDE_QUERY = '(min-width: 64rem)'
+
+function wideQuery(): MediaQueryList | null {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null
+  return window.matchMedia(WIDE_QUERY)
+}
+
+function subscribeWide(onChange: () => void): () => void {
+  const query = wideQuery()
+  if (!query) return () => {}
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+
+/** Null until the width is known: on the server and during hydration. */
+function useWideLayout(): boolean | null {
+  return useSyncExternalStore(
+    subscribeWide,
+    () => wideQuery()?.matches ?? false,
+    () => null,
+  )
 }
 
 function readCurrentVersion(details: unknown): number | null {
