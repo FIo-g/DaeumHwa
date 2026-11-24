@@ -75,6 +75,14 @@
     font-weight: 500;
   }
 
+  .wg-landing-hero-actions > * {
+    white-space: nowrap;
+  }
+
+  .wg-landing-hero-actions > .wg-pop {
+    min-inline-size: max-content;
+  }
+
   .wg-landing-hero-actions > a {
     padding-block: var(--b-s2);
   }

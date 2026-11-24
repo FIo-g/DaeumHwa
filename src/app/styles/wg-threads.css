@@ -150,6 +150,7 @@
     --wg-threads-label-width: clamp(var(--wg-threads-label-min), 23cqi, 16rem);
     --wg-threads-min-cell: 3rem;
     --wg-threads-plot-width: calc(var(--wg-threads-min-cell) * var(--wg-threads-chapters));
+    --wg-threads-now-height: calc(var(--b-t-label) + var(--b-s2));
     --wg-threads-columns: repeat(var(--wg-threads-chapters), minmax(0, 1fr));
     position: relative;
     min-inline-size: calc(var(--wg-threads-label-width) + var(--wg-threads-plot-width));
@@ -161,7 +162,7 @@
     position: absolute;
     z-index: 1;
     grid-column: 2;
-    inset: 0;
+    inset: var(--wg-threads-now-height) 0 0;
     display: grid;
     grid-template-columns: var(--wg-threads-columns);
     pointer-events: none;
@@ -219,7 +220,7 @@
     position: relative;
     display: grid;
     grid-template-columns: var(--wg-threads-columns);
-    padding-block-start: 1.25rem;
+    padding-block-start: var(--wg-threads-now-height);
     border-block-end: var(--b-line) solid var(--b-grid);
   }
 
@@ -248,7 +249,7 @@
 
   .wg-threads-axis-rule {
     position: absolute;
-    inset: 1.25rem 0 auto;
+    inset: var(--wg-threads-now-height) 0 auto;
     border-block-start: var(--b-line) solid var(--b-grid);
     pointer-events: none;
   }
@@ -262,7 +263,7 @@
     pointer-events: none;
     inset-block-start: 0;
     display: grid;
-    block-size: 1.25rem;
+    block-size: var(--wg-threads-now-height);
     place-items: start center;
     font: 500 var(--b-t-label) / 1 var(--b-font-body);
   }

@@ -96,6 +96,7 @@ export function EditorToolbar({
         </Button>
         <ChapterPicker
           chapters={chapters}
+          popupClassName="wg-writing-picker-menu"
           value={chapterId}
           onChange={(id) => {
             if (id && id !== chapterId) onNavigate(hrefOf(id))

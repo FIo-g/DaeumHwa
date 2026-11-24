@@ -422,7 +422,7 @@ export function WritingWorkspace({
         <span className="text-sm font-bold">
           {check.checking ? '점검 중…' : `열린 지적 ${check.issueCount}건`}
         </span>
-        <SheetTrigger render={<Button variant="outline" size="sm" />}>
+        <SheetTrigger render={<Button variant="ghost" size="sm" />}>
           <MenuIcon open={panelOpen} />
           패널 열기
         </SheetTrigger>

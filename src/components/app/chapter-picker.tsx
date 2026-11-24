@@ -20,6 +20,7 @@ type ChapterPickerProps = {
   id?: string
   /** Accessible name for the trigger when no visible label is associated with it. */
   ariaLabel?: string
+  popupClassName?: string
 }
 
 const NONE = '__none__'
@@ -33,6 +34,7 @@ export function ChapterPicker({
   placeholder = '회차 선택',
   id,
   ariaLabel,
+  popupClassName,
 }: ChapterPickerProps) {
   const current = chapters.find((chapter) => chapter.id === value)
   return (
@@ -54,7 +56,7 @@ export function ChapterPicker({
           )}
         </SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className={popupClassName}>
         {allowNone && <SelectItem value={NONE}>없음</SelectItem>}
         {chapters.map((c) => (
           <SelectItem key={c.id} value={c.id}>

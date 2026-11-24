@@ -16,6 +16,12 @@
     padding-block: var(--b-band-pad);
   }
 
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-auth-status-header::after {
+      animation: wg-shell-rule-in var(--b-draw) var(--b-out) both;
+    }
+  }
+
   .wg-auth-invite-notice {
     margin-block-end: var(--b-s4);
   }

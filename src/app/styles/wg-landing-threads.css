@@ -175,6 +175,9 @@
   }
 
   .wg-landing-threads-track {
+    --wg-landing-threads-target-edge: calc(
+      var(--wg-landing-threads-end) - var(--wg-landing-threads-target-size) / 2
+    );
     position: relative;
     grid-area: 1 / 2 / 3 / 3;
     display: block;
@@ -204,10 +207,15 @@
     border-block-start-style: dashed;
   }
 
+  .wg-landing-threads-track[data-planned='true'] .wg-landing-threads-track-line {
+    inset-inline-end: calc(100% - var(--wg-landing-threads-target-edge));
+  }
+
+  /* Finish the dashed rule at the marker edge even when the last dash is partial. */
   .wg-landing-threads-track[data-planned='true'] .wg-landing-threads-track-line::after {
     position: absolute;
     inset-block-start: calc(-1 * var(--b-line));
-    inset-inline-end: calc(var(--wg-landing-threads-target-size) / 2 - var(--b-line));
+    inset-inline-end: 0;
     inline-size: var(--b-rule);
     border-block-start: var(--b-line) solid var(--b-ink);
     content: '';
@@ -232,11 +240,15 @@
 
   .wg-landing-threads-target {
     position: relative;
-    inset-inline-start: var(--wg-landing-threads-end);
+    inset-inline-start: var(--wg-landing-threads-target-edge);
     inline-size: var(--wg-landing-threads-target-size);
     block-size: var(--wg-landing-threads-target-size);
     border: var(--b-line) solid var(--b-ink);
     background: var(--b-paper);
+  }
+
+  .wg-landing-threads-track > .wg-landing-threads-target {
+    transform: translateY(-50%);
   }
 
   .wg-landing-threads-target::after {

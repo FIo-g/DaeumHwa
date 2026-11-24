@@ -71,13 +71,13 @@ export function LandingPage() {
         <div className="b-wrap flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3">
           <p className="b-label b-muted">다음화 · 장기 연재 작가를 위한 설정 위키와 회차 점검</p>
           <nav className="flex flex-wrap gap-x-4" aria-label="하단 길잡이">
-            <a className="b-footer-link" href="#b-sample">
+            <a className="b-link" href="#b-sample">
               예시 점검
             </a>
-            <a className="b-footer-link" href="#b-facts">
+            <a className="b-link" href="#b-facts">
               설정 보드
             </a>
-            <a className="b-footer-link" href="#b-threads">
+            <a className="b-link" href="#b-threads">
               떡밥 장부
             </a>
           </nav>
