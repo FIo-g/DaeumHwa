@@ -71,8 +71,12 @@ test('main screens show no English words', async ({ page, browser }) => {
     '머릿속 설정집은 접어 두세요.',
   )
   const sample = page.getByRole('region', { name: '근거 없이는 지적하지 않아요' })
+  const episodes = sample.getByRole('region', { name: '예시 회차', exact: true })
+  const currentEpisode = episodes.getByRole('link').and(episodes.locator('[aria-current="true"]'))
+  const sampleHead = sample.getByRole('heading', { name: '1~3화 전체', exact: true })
   const findings = sample.getByRole('listitem').filter({ hasText: /[123]화 · 원고/ })
-  await expect(sample.getByRole('heading', { name: '1~3화 전체' })).toBeVisible()
+  await expect(sampleHead).toBeVisible()
+  await expect(currentEpisode).toHaveCount(0)
   await expect(findings).toHaveCount(3)
   await expect(sample.getByText('지적 3건', { exact: true })).toBeVisible()
   await scan('intro')
@@ -81,13 +85,18 @@ test('main screens show no English words', async ({ page, browser }) => {
     { chapter: 2, title: '잿빛 종루 아래', count: 1 },
     { chapter: 1, title: '청해항 입항', count: 0 },
   ]) {
-    await sample.getByRole('link', { name: new RegExp(`^${chapter}화 ${title}`) }).click()
+    const episode = episodes.getByRole('link', { name: new RegExp(`^${chapter}화 ${title}`) })
+    await episode.click()
+    await expect(episode).toHaveAttribute('aria-current', 'true')
+    await expect(currentEpisode).toHaveCount(1)
     await expect(sample.getByRole('heading', { name: `${chapter}화 · ${title}` })).toBeVisible()
     await expect(findings).toHaveCount(count)
     await expect(sample.getByText(`지적 ${count}건`, { exact: true })).toBeVisible()
     await scan(`intro chapter ${chapter}`)
   }
   await sample.getByRole('button', { name: '세 문장 모두 보기' }).click()
+  await expect(sampleHead).toBeVisible()
+  await expect(currentEpisode).toHaveCount(0)
   await expect(findings).toHaveCount(3)
 
   await page.goto('/signup')
@@ -213,6 +222,20 @@ test('main screens show no English words', async ({ page, browser }) => {
     await expect(page.getByRole('heading', { name: '설정 보드', exact: true })).toBeVisible()
     await expect(page.getByText('아직 표기 규칙이 없어요.')).toBeVisible()
   })
+  const naming = page.getByRole('region', { name: '표기 통일', exact: true })
+  const addNaming = naming.getByRole('button', { name: '표기 규칙 추가', exact: true })
+  const namingFields = naming.getByRole('region', { name: '표기 규칙 추가', exact: true })
+  await expect(addNaming).toHaveAttribute('aria-expanded', 'false')
+  await addNaming.click()
+  await expect(addNaming).toHaveAttribute('aria-expanded', 'true')
+  await expect(
+    namingFields.getByRole('textbox', { name: '올바른 표기', exact: true }),
+  ).toBeVisible()
+  await expect(namingFields.getByRole('button', { name: '저장', exact: true })).toBeVisible()
+  await scan('wiki naming add region')
+  await addNaming.click()
+  await expect(namingFields).toBeHidden()
+  await expect(addNaming).toHaveAttribute('aria-expanded', 'false')
 
   await visit(`${base}/wiki?tab=summaries`, 'wiki summaries', async () => {
     await expect(page.getByRole('heading', { name: '설정 보드', exact: true })).toBeVisible()

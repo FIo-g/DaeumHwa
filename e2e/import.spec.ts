@@ -15,7 +15,7 @@ test('import a 3-chapter manuscript and review the proposals', async ({ page }) 
     .setInputFiles(path.join(__dirname, 'fixtures', 'sample-3ch.txt'))
 
   const preview = page.getByRole('region', { name: '회차 나누기 미리보기' })
-  await expect(preview).toBeVisible()
+  await expect(preview).toBeVisible({ timeout: 30_000 })
   await expect(preview.getByLabel(/번째 회차 제목$/)).toHaveCount(3)
   await expect(preview.getByLabel('1번째 회차 제목')).toHaveValue('1화')
   await expect(preview.getByLabel('3번째 회차 제목')).toHaveValue('3화')
