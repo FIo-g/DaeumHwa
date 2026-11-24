@@ -71,10 +71,10 @@ test('main screens show no English words', async ({ page, browser }) => {
     '머릿속 설정집은 접어 두세요.',
   )
   const sample = page.getByRole('region', { name: '근거 없이는 지적하지 않아요' })
-  const sampleResults = sample.locator('#b-sample-result > div.b-paper')
-  await expect(sampleResults.getByRole('heading', { name: '1~3화 전체' })).toBeVisible()
-  await expect(sampleResults.getByRole('listitem')).toHaveCount(3)
-  await expect(sampleResults.getByText('지적 3건', { exact: true })).toBeVisible()
+  const findings = sample.getByRole('listitem').filter({ hasText: /[123]화 · 원고/ })
+  await expect(sample.getByRole('heading', { name: '1~3화 전체' })).toBeVisible()
+  await expect(findings).toHaveCount(3)
+  await expect(sample.getByText('지적 3건', { exact: true })).toBeVisible()
   await scan('intro')
   for (const { chapter, title, count } of [
     { chapter: 3, title: '종루의 손짓', count: 2 },
@@ -82,15 +82,13 @@ test('main screens show no English words', async ({ page, browser }) => {
     { chapter: 1, title: '청해항 입항', count: 0 },
   ]) {
     await sample.getByRole('link', { name: new RegExp(`^${chapter}화 ${title}`) }).click()
-    await expect(
-      sampleResults.getByRole('heading', { name: `${chapter}화 · ${title}` }),
-    ).toBeVisible()
-    await expect(sampleResults.getByRole('listitem')).toHaveCount(count)
-    await expect(sampleResults.getByText(`지적 ${count}건`, { exact: true })).toBeVisible()
+    await expect(sample.getByRole('heading', { name: `${chapter}화 · ${title}` })).toBeVisible()
+    await expect(findings).toHaveCount(count)
+    await expect(sample.getByText(`지적 ${count}건`, { exact: true })).toBeVisible()
     await scan(`intro chapter ${chapter}`)
   }
-  await sampleResults.getByRole('button', { name: '세 문장 모두 보기' }).click()
-  await expect(sampleResults.getByRole('listitem')).toHaveCount(3)
+  await sample.getByRole('button', { name: '세 문장 모두 보기' }).click()
+  await expect(findings).toHaveCount(3)
 
   await page.goto('/signup')
   await expect(page.getByRole('button', { name: '가입하기', exact: true })).toBeVisible()

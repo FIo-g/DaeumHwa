@@ -25,7 +25,7 @@ test('relation graph renders and the backup downloads', async ({ page }) => {
     await expect(picker).toHaveAttribute('aria-controls', /.+/)
     const listId = await picker.getAttribute('aria-controls')
     await page.locator(`[id="${listId}"]`).getByRole('option', { name, exact: true }).click()
-    await expect(picker.locator('[data-slot=select-value]')).toHaveText(name)
+    await expect(picker.getByText(name, { exact: true })).toBeVisible()
   }
   await dialog.getByLabel('관계 종류', { exact: true }).fill('가족')
   await dialog.getByRole('button', { name: '관계 추가', exact: true }).click()
