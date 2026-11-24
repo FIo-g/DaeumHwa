@@ -96,8 +96,8 @@ export default async function WikiPage({
   } else if (tab === 'summaries') {
     const chapters = await guardPage(() => listChapters(db, actor, workId))
     content = (
-      <section aria-labelledby="wiki-summaries-heading" className="b-wiki-index">
-        <h2 id="wiki-summaries-heading" className="b-wiki-section-title">
+      <section aria-labelledby="wiki-summaries-heading" className="wg-wiki-index">
+        <h2 id="wiki-summaries-heading" className="wg-wiki-section-title">
           회차 요약
         </h2>
         <ChapterSummaries chapters={chapters} canEdit={canEdit} />
@@ -141,7 +141,7 @@ export default async function WikiPage({
   }
 
   return (
-    <div className="b-wiki-workspace flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       <SettingsBoardHeader workId={workId} active={tab} />
       {content}
     </div>

@@ -77,7 +77,9 @@ describe('EntryList', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(toggle)
     const preview = screen.getByRole('region', { name: '서윤 미리 보기' })
-    expect(within(preview).getByText('서윤은 검을 쓴다.')).toHaveClass('b-quote--wiki')
+    const fact = within(preview).getByText('서윤은 검을 쓴다.')
+    expect(fact).toHaveClass('wg-wiki-fact-text')
+    expect(fact).not.toHaveClass('b-quote--wiki')
     expect(within(preview).getByRole('link', { name: '카드 열기' })).toHaveAttribute(
       'href',
       '/works/w1/wiki/entries/e1',

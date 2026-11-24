@@ -1,0 +1,414 @@
+@layer components {
+  .wg-wiki-tabs-list {
+    min-inline-size: 0;
+    border-block-end: var(--b-line) solid var(--b-grid);
+    counter-reset: wg-wiki-tabs-line;
+  }
+
+  .wg-wiki-tabs-row {
+    --wg-wiki-tabs-delay: calc(var(--wg-wiki-tabs-order, 0) * var(--b-stagger));
+    position: relative;
+    min-inline-size: 0;
+    padding-block: var(--b-s3);
+    padding-inline-start: var(--b-s6);
+    overflow-wrap: anywhere;
+    counter-increment: wg-wiki-tabs-line;
+  }
+
+  .wg-wiki-tabs-row::before {
+    position: absolute;
+    inset: 0 0 auto;
+    border-block-start: var(--b-line) solid var(--b-grid);
+    content: '';
+    pointer-events: none;
+    animation: wg-wiki-tabs-rule var(--b-draw) var(--b-out) var(--wg-wiki-tabs-delay) both;
+  }
+
+  .wg-wiki-tabs-row:is(:hover, :focus-within)::before {
+    border-block-start-width: var(--b-rule);
+  }
+
+  .wg-wiki-tabs-row:focus-visible {
+    outline: var(--b-rule) solid var(--b-ink);
+    outline-offset: calc(-1 * var(--b-rule));
+  }
+
+  .wg-wiki-tabs-number {
+    position: absolute;
+    inset-block-start: var(--b-s3);
+    inset-inline-start: var(--b-s1);
+    color: var(--b-muted);
+    font: 400 var(--b-t-label) / 1.6 var(--b-font-mono);
+    opacity: 0;
+    transition: opacity var(--b-quick) var(--b-out);
+  }
+
+  .wg-wiki-tabs-number::before {
+    content: counter(wg-wiki-tabs-line, decimal-leading-zero);
+  }
+
+  .wg-wiki-tabs-row:is(:hover, :focus-within) > .wg-wiki-tabs-number {
+    opacity: 1;
+  }
+
+  .wg-wiki-tabs-write {
+    animation: wg-wiki-tabs-write var(--b-step) var(--b-out)
+      calc(var(--b-draw) + var(--wg-wiki-tabs-delay)) both;
+  }
+
+  .wg-wiki-tabs-row[data-wg-wiki-tabs-removing] {
+    animation: wg-wiki-tabs-fold var(--b-step) var(--b-out) calc(var(--b-quick) + var(--b-draw))
+      forwards;
+  }
+
+  .wg-wiki-tabs-row[data-wg-wiki-tabs-removing]::after {
+    position: absolute;
+    inset: 50% 0 auto;
+    border-block-start: var(--b-rule) solid var(--b-ink);
+    content: '';
+    pointer-events: none;
+    animation: wg-wiki-tabs-rule var(--b-draw) var(--b-out) var(--b-quick) both;
+  }
+
+  .wg-wiki-tabs-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--b-s2);
+  }
+
+  .wg-wiki-tabs-naming {
+    display: grid;
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--b-s4);
+  }
+
+  .wg-wiki-tabs-naming-fields,
+  .wg-wiki-tabs-add-fields {
+    display: grid;
+    grid-template-columns: minmax(7rem, 0.55fr) minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: var(--b-s4);
+  }
+
+  .wg-wiki-tabs-naming-fields dd {
+    margin-block-start: var(--b-s1);
+  }
+
+  .wg-wiki-tabs-variant {
+    color: var(--b-ink);
+    text-decoration-color: var(--b-ink);
+    text-decoration-thickness: var(--b-line);
+  }
+
+  .wg-wiki-tabs-add {
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-wiki-tabs-add-fields {
+    align-items: end;
+    grid-template-columns: minmax(7rem, 1fr) minmax(9rem, 1.5fr) minmax(0, 1.5fr) auto;
+  }
+
+  .wg-wiki-tabs-summary {
+    display: grid;
+    grid-template-columns: minmax(9rem, 1fr) minmax(0, 4fr);
+    align-items: start;
+    gap: var(--b-s4);
+  }
+
+  .wg-wiki-tabs-chapter {
+    display: block;
+    min-inline-size: 0;
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+
+  .wg-wiki-tabs-chapter > .b-muted {
+    font: 400 var(--b-t-label) / 1.6 var(--b-font-body);
+  }
+
+  .wg-wiki-tabs-summary-copy {
+    max-inline-size: none;
+    min-block-size: 2lh;
+    white-space: pre-wrap;
+  }
+
+  .wg-wiki-tabs-summary-edit {
+    position: relative;
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--b-s2);
+  }
+
+  .wg-wiki-tabs-summary-ink {
+    position: absolute;
+    inset: 0 0 auto;
+    border-block-start: var(--b-line) solid var(--b-ink);
+    pointer-events: none;
+    animation: wg-wiki-tabs-pen var(--b-draw) var(--b-out) both;
+  }
+
+  .wg-wiki-tabs-title.wg-title {
+    flex: 1 1 10rem;
+    inline-size: auto;
+  }
+
+  .wg-wiki-tabs-sheets {
+    border: 0;
+  }
+
+  .wg-wiki-tabs-sheets > .wg-wiki-tabs-row {
+    padding-block: 0;
+  }
+
+  .wg-wiki-tabs-sheets > .wg-wiki-tabs-row::before {
+    border-block-start-width: var(--b-rule);
+    opacity: 0.72;
+  }
+
+  .wg-wiki-tabs-sheets > .wg-wiki-tabs-row:is(:hover, :focus-within)::before {
+    opacity: 1;
+  }
+
+  .wg-wiki-tabs-sheets .wg-sheet {
+    border-block-start-color: transparent;
+  }
+
+  .wg-wiki-tabs-sheets > .wg-wiki-tabs-row + .wg-wiki-tabs-row {
+    margin-block-start: var(--b-s4);
+  }
+
+  .wg-wiki-tabs-entry {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--b-s2) var(--b-s4);
+  }
+
+  .wg-wiki-tabs-style-fields {
+    display: grid;
+    margin-block-start: var(--b-s3);
+  }
+
+  .wg-wiki-tabs-style-fields > div {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, 1fr);
+    align-items: start;
+    padding-block: var(--b-s2);
+    border-block-start: var(--b-line) solid var(--b-grid);
+    gap: var(--b-s2);
+  }
+
+  .wg-wiki-tabs-style-rules > li {
+    min-block-size: 1lh;
+    white-space: pre-wrap;
+  }
+
+  .wg-wiki-tabs-style-rules > li + li {
+    margin-block-start: var(--b-s1);
+    padding-block-start: var(--b-s1);
+    border-block-start: var(--b-line) solid color-mix(in srgb, var(--b-grid) 35%, transparent);
+  }
+
+  .wg-wiki-tabs-example {
+    color: var(--b-ink);
+    font: 400 var(--b-t-quote) / 1.75 var(--b-font-title);
+    white-space: pre-wrap;
+  }
+
+  .wg-wiki-tabs-directive {
+    display: grid;
+    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) minmax(5.5rem, max-content) auto;
+    align-items: center;
+    gap: var(--b-s3) var(--b-s4);
+  }
+
+  .wg-wiki-tabs-directive-cells,
+  .wg-wiki-tabs-directive-meta {
+    display: grid;
+    min-inline-size: 0;
+    font: 400 var(--b-t-label) / 1.5 var(--b-font-body);
+  }
+
+  .wg-wiki-tabs-directive-cells > span {
+    padding: var(--b-s1) var(--b-s2);
+    border-inline-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-wiki-tabs-directive-cells > span + span {
+    border-block-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-wiki-tabs-request-copy {
+    min-inline-size: 0;
+    font: 400 1rem / 1.7 var(--b-font-title);
+    white-space: pre-wrap;
+  }
+
+  .wg-wiki-tabs-directive-meta {
+    gap: var(--b-s1);
+    color: var(--b-muted);
+  }
+
+  .wg-wiki-tabs-status {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--b-s1);
+  }
+
+  .wg-wiki-tabs-directive[data-status='off'] {
+    color: var(--b-muted);
+  }
+
+  .wg-wiki-tabs-directive[data-status='off']::before,
+  .wg-wiki-tabs-directive[data-status='off'] .wg-wiki-tabs-directive-cells > span {
+    border-style: dashed;
+  }
+
+  .wg-wiki-tabs-request-form {
+    padding-block: var(--b-s3);
+    border-block: var(--b-rule) solid var(--b-grid);
+    border-block-end-width: var(--b-line);
+  }
+
+  .wg-wiki-tabs-request-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--b-s3);
+  }
+
+  @media (max-width: 820px) {
+    .wg-wiki-tabs-naming {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--b-s2);
+    }
+
+    .wg-wiki-tabs-naming > .wg-wiki-tabs-actions {
+      justify-content: end;
+    }
+
+    .wg-wiki-tabs-directive {
+      grid-template-columns: minmax(0, 7rem) minmax(0, 1fr);
+    }
+
+    .wg-wiki-tabs-directive > .wg-wiki-tabs-actions {
+      justify-content: end;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .wg-wiki-tabs-row {
+      padding-inline-start: var(--b-s5);
+    }
+
+    .wg-wiki-tabs-naming-fields {
+      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+      gap: var(--b-s2);
+    }
+
+    .wg-wiki-tabs-naming-fields > :nth-child(3) {
+      grid-column: 1 / -1;
+    }
+
+    .wg-wiki-tabs-add-fields,
+    .wg-wiki-tabs-summary {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--b-s2);
+    }
+
+    .wg-wiki-tabs-add-fields {
+      gap: var(--b-s3);
+      justify-items: stretch;
+    }
+
+    .wg-wiki-tabs-add-fields > button {
+      justify-self: start;
+    }
+
+    .wg-wiki-tabs-directive {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .wg-wiki-tabs-directive-cells,
+    .wg-wiki-tabs-request-copy {
+      grid-column: 1 / -1;
+    }
+
+    .wg-wiki-tabs-directive-cells {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .wg-wiki-tabs-directive-cells > span {
+      max-inline-size: 100%;
+      border-block-end: var(--b-line) solid var(--b-grid);
+    }
+
+    .wg-wiki-tabs-directive-cells > span + span {
+      border-block-start: 0;
+    }
+
+    .wg-wiki-tabs-style-fields > div {
+      grid-template-columns: 2.75rem minmax(0, 1fr);
+    }
+  }
+
+  @keyframes wg-wiki-tabs-rule {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-wiki-tabs-write {
+    from {
+      clip-path: inset(0 0 100% 0);
+      opacity: 0;
+    }
+    to {
+      clip-path: inset(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes wg-wiki-tabs-fold {
+    to {
+      clip-path: inset(50% 0);
+    }
+  }
+
+  @keyframes wg-wiki-tabs-pen {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    70% {
+      clip-path: inset(0);
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wg-wiki-tabs-row::before,
+    .wg-wiki-tabs-row[data-wg-wiki-tabs-removing],
+    .wg-wiki-tabs-row[data-wg-wiki-tabs-removing]::after,
+    .wg-wiki-tabs-write,
+    .wg-wiki-tabs-summary-ink {
+      animation: none;
+    }
+
+    .wg-wiki-tabs-summary-ink {
+      display: none;
+    }
+
+    .wg-wiki-tabs-number {
+      transition: none;
+    }
+  }
+}

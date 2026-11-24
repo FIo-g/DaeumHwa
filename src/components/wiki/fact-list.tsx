@@ -7,7 +7,6 @@ import { FactStatusBadge } from '@/components/app/fact-status-badge'
 import { SourceLabel } from '@/components/app/source-label'
 import { runAction } from '@/lib/client/run-action'
 import { factValidityText } from '@/lib/labels'
-import { cn } from '@/lib/utils'
 import { archiveFactAction } from '@/server/actions/wiki'
 import type { FactView } from '@/server/facts'
 import { FactFormDialog, FactTagDialog, type FactChapterOption } from './fact-form'
@@ -34,10 +33,7 @@ export function FactList({
   return (
     <section aria-labelledby="entry-facts-heading" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2
-          id="entry-facts-heading"
-          className={hideHeading ? 'sr-only' : 'text-base font-semibold'}
-        >
+        <h2 id="entry-facts-heading" className={hideHeading ? 'sr-only' : 'b-subhead'}>
           사실
         </h2>
         {canEdit && (
@@ -53,10 +49,11 @@ export function FactList({
       {facts.length === 0 ? (
         <EmptyState title="아직 사실이 없어요." />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {facts.map((fact) => (
+        <ul className="wg-wiki-fact-list">
+          {facts.map((fact, index) => (
             <FactItem
               key={fact.id}
+              number={index + 1}
               workId={workId}
               fact={fact}
               chapters={chapters}
@@ -70,11 +67,13 @@ export function FactList({
 }
 
 function FactItem({
+  number,
   workId,
   fact,
   chapters,
   canEdit,
 }: {
+  number: number
   workId: string
   fact: FactView
   chapters: FactChapterOption[]
@@ -86,26 +85,10 @@ function FactItem({
   const validity = factValidityText(fact.validFromPosition, fact.validToPosition)
 
   return (
-    <li
-      id={`fact-${fact.id}`}
-      data-status={fact.status}
-      className={cn(
-        'b-wiki-fact b-wiki-fact-insert flex flex-col gap-2 rounded-card bg-paper p-3',
-        superseded && 'opacity-60',
-      )}
-    >
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <FactStatusBadge status={fact.status} />
-        {validity && <span className="text-muted-foreground">{validity}</span>}
-        {fact.supersededBy && (
-          <span className="flex flex-wrap items-center gap-1 text-muted-foreground">
-            <span>({fact.supersededBy.validFromPosition}화부터 바뀜)</span>
-            <a href={`#fact-${fact.supersededBy.id}`} className="underline underline-offset-4">
-              새 사실 보기
-            </a>
-          </span>
-        )}
-      </div>
+    <li id={`fact-${fact.id}`} data-status={fact.status} className="wg-wiki-fact-row">
+      <span className="wg-wiki-line-number" aria-hidden="true">
+        {String(number).padStart(2, '0')}
+      </span>
       <blockquote
         key={JSON.stringify([
           fact.content,
@@ -115,15 +98,27 @@ function FactItem({
           fact.sourceChapterId,
           fact.evidence,
         ])}
-        className="b-quote b-quote--wiki b-wiki-fact-insert wrap-anywhere"
+        className="wg-wiki-fact-text wg-wiki-fact-write"
       >
-        {fact.content}
+        {superseded ? <del>{fact.content}</del> : fact.content}
       </blockquote>
-      <div className="text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <FactStatusBadge status={fact.status} />
+        {validity && <span className="b-muted font-mono">{validity}</span>}
+        {fact.supersededBy && (
+          <span className="flex flex-wrap items-center gap-1 text-muted-foreground">
+            <span className="font-mono">({fact.supersededBy.validFromPosition}화부터 바뀜)</span>
+            <a href={`#fact-${fact.supersededBy.id}`} className="b-link">
+              새 사실 보기
+            </a>
+          </span>
+        )}
+      </div>
+      <div className="b-muted font-mono text-xs">
         <SourceLabel workId={workId} sourceType={fact.sourceType} chapter={fact.sourceChapter} />
       </div>
       {fact.evidence && (
-        <blockquote className="border-t border-rule pt-2 text-sm leading-relaxed wrap-anywhere text-muted-ink">
+        <blockquote className="b-rule-top pt-2 text-sm leading-relaxed wrap-anywhere text-muted-ink">
           {fact.evidence}
         </blockquote>
       )}
@@ -146,6 +141,7 @@ function FactItem({
                   validToPosition: fact.validToPosition,
                 }}
                 triggerLabel="내용 수정"
+                triggerVariant="ghost"
               />
               <FactTagDialog factId={fact.id} status={fact.status} />
               <SupersedeDialog
@@ -158,6 +154,7 @@ function FactItem({
             title="이 사실을 보관할까요?"
             description="보관한 사실은 목록에서 빠져요. 이력에서 되돌릴 수 있어요."
             confirmLabel="보관"
+            variant="ghost"
             onConfirm={async () => {
               const saved = await runAction(archiveFactAction({ factId: fact.id }), {
                 success: '사실을 보관했어요.',

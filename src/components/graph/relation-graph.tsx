@@ -19,7 +19,6 @@ import { ENTRY_KINDS, type EntryKind, type Role } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import { archiveRelationAction } from '@/server/actions/relations'
-import { readMotionDuration } from '@/components/wiki/wiki-motion'
 import {
   type GraphEdge,
   type GraphNode,
@@ -30,13 +29,8 @@ import {
   visibleGraph,
 } from './graph-model'
 import { GraphControls } from './graph-controls'
-import {
-  ENTRY_KIND_MARK,
-  GRAPH_FONT,
-  type GraphPalette,
-  type KindShape,
-  readGraphPalette,
-} from './graph-style'
+import { createGraphPhysics } from './graph-physics-controller'
+import { type GraphPalette, readGraphFont, readGraphPalette, readGraphTiming } from './graph-style'
 import { KindIcon } from './kind-icon'
 import { RelationForm } from './relation-form'
 
@@ -53,14 +47,6 @@ type RelationGraphProps = {
 }
 
 type Selection = { type: 'node' | 'edge'; id: string } | null
-
-const CY_SHAPE: Record<KindShape, string> = {
-  circle: 'ellipse',
-  square: 'rectangle',
-  diamond: 'diamond',
-  hexagon: 'hexagon',
-  triangle: 'triangle',
-}
 
 /** Fitting a small graph would blow the marks up to poster size; stop at a reading scale. */
 const MAX_FIT_ZOOM = 1.15
@@ -79,107 +65,115 @@ function circleLayout(nodes: GraphNode[], edges: GraphEdge[]): LayoutOptions {
     avoidOverlap: true,
     radius: Math.max(110, nodes.length * 24),
     sort: (a, b) => (rank.get(a.id()) ?? 0) - (rank.get(b.id()) ?? 0),
-    stop: (event) => {
-      const graph = event.cy
-      if (graph.zoom() > MAX_FIT_ZOOM) {
-        graph.zoom(MAX_FIT_ZOOM)
-        graph.center()
-      }
-      // Keep the full graph in reach after fitting.
-      graph.minZoom(fitMinZoom(graph.zoom()))
-    },
+    stop: (event) => capFitZoom(event.cy),
   }
 }
 
-function graphStyle(palette: GraphPalette, step: number): StylesheetStyle[] {
+function capFitZoom(graph: Core) {
+  if (graph.zoom() > MAX_FIT_ZOOM) {
+    graph.zoom(MAX_FIT_ZOOM)
+    graph.center()
+  }
+  graph.minZoom(fitMinZoom(graph.zoom()))
+}
+
+function graphStyle(
+  palette: GraphPalette,
+  font: string,
+  { step, easing }: ReturnType<typeof readGraphTiming>,
+): StylesheetStyle[] {
   return [
     {
       selector: 'node',
       style: {
-        shape: (node) => node.data('shape'),
-        width: 'data(size)',
-        height: 'data(size)',
-        'background-color': 'data(fill)',
-        'border-width': 'data(border)',
-        'border-color': 'data(ink)',
+        shape: 'rectangle',
+        width: 'data(width)',
+        height: 'data(height)',
+        'background-color': palette.paper,
+        'border-width': 1.5,
+        'border-color': palette.ink,
+        'border-style': 'dotted',
         label: 'data(name)',
-        'font-family': GRAPH_FONT,
-        'font-size': 12,
-        'font-weight': 500,
+        'font-family': font,
+        'font-size': 13,
+        'font-weight': 700,
         color: palette.ink,
-        'text-valign': 'bottom',
-        'text-margin-y': 5,
-        'text-background-color': palette.paper,
-        'text-background-opacity': 0.9,
-        'text-background-padding': '1px',
-        'overlay-color': palette.ink,
-        'overlay-padding': 4,
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'text-wrap': 'wrap',
+        'text-max-width': '128px',
+        'text-overflow-wrap': 'anywhere',
+        'min-zoomed-font-size': 5,
+        'overlay-opacity': 0,
       },
     },
+    { selector: 'node[kind = "character"]', style: { 'border-style': 'solid' } },
+    { selector: 'node[kind = "place"]', style: { 'border-style': 'double' } },
     {
       selector: 'edge',
       style: {
         label: 'data(label)',
-        width: 1.25,
+        width: 1,
         'line-color': palette.ink,
         'target-arrow-color': palette.ink,
         'target-arrow-shape': 'none',
-        'arrow-scale': 0.8,
+        'arrow-scale': 0.65,
         'curve-style': 'bezier',
-        'font-family': GRAPH_FONT,
+        'font-family': font,
         'font-size': 11,
-        color: palette.muted,
+        color: palette.ink,
         'text-background-color': palette.paper,
-        'text-background-opacity': 0.95,
+        'text-background-opacity': 1,
         'text-background-padding': '2px',
-        'overlay-color': palette.ink,
+        'text-wrap': 'wrap',
+        'text-max-width': '100px',
+        'text-overflow-wrap': 'anywhere',
+        'min-zoomed-font-size': 5,
+        'overlay-opacity': 0,
       },
     },
+    { selector: 'edge[?directed]', style: { 'target-arrow-shape': 'vee' } },
+    { selector: '.dimmed', style: { opacity: 0.64 } },
+    { selector: 'node.chosen', style: { 'background-color': palette.ink, color: palette.paper } },
+    { selector: 'node.chosen, node.highlighted', style: { 'border-width': 2, opacity: 1 } },
+    { selector: 'edge.chosen, edge.connected, edge.highlighted', style: { width: 2, opacity: 1 } },
+    { selector: '.preview-dimmed', style: { opacity: 0.35 } },
     {
-      selector: 'edge[?directed]',
-      style: { 'target-arrow-shape': 'triangle' },
-    },
-    {
-      selector: 'node.chosen',
+      selector: 'edge.outside-chapter',
       style: {
-        'background-color': palette.selection,
-        'border-width': 2,
-        'border-color': palette.ink,
+        'line-style': 'dotted',
+        opacity: 0.26,
+        'text-opacity': 0,
+        'target-arrow-shape': 'none',
+        events: 'no',
       },
     },
-    { selector: 'edge.chosen', style: { width: 3 } },
-    { selector: 'edge.connected', style: { width: 2.5 } },
-    { selector: '.dimmed', style: { opacity: 0.23 } },
     { selector: '.hidden', style: { opacity: 0, events: 'no' } },
     {
       selector: '.animated',
       style: {
-        'transition-property': 'opacity, width, background-color',
+        'transition-property': 'opacity',
         'transition-duration': step,
-        'transition-timing-function': 'ease-out',
+        'transition-timing-function': easing,
       },
     },
   ]
 }
 
-function toElements(
-  nodes: GraphNode[],
-  edges: GraphEdge[],
-  palette: GraphPalette,
-): ElementDefinition[] {
+function toElements(nodes: GraphNode[], edges: GraphEdge[], font: string): ElementDefinition[] {
+  const text = document.createElement('canvas').getContext('2d')
+  if (text) text.font = `700 13px ${font}`
+
   return [
-    ...nodes.map((n) => {
-      const mark = ENTRY_KIND_MARK[n.kind]
+    ...nodes.map((node) => {
+      const length = text?.measureText(node.name).width ?? node.name.length * 13
       return {
         data: {
-          id: n.id,
-          name: n.name,
-          shape: CY_SHAPE[mark.shape],
-          // Pointed shapes look smaller than a circle of the same box.
-          size: mark.shape === 'circle' || mark.shape === 'square' ? 13 : 16,
-          fill: mark.filled ? palette[mark.ink] : palette.paper,
-          ink: palette[mark.ink],
-          border: mark.filled ? 0 : 1.5,
+          id: node.id,
+          name: node.name,
+          kind: node.kind,
+          width: Math.max(56, Math.min(144, Math.ceil(length) + 16)),
+          height: Math.max(32, Math.ceil(length / 120) * 16 + 12),
         },
       }
     }),
@@ -218,7 +212,10 @@ function applyGraphState(
       node.toggleClass('dimmed', Boolean(active && !relatedNodes?.contains(node)))
     })
     cy.edges().forEach((edge) => {
-      edge.toggleClass('hidden', !visible.edgeIds.has(edge.id()))
+      const endpointsVisible =
+        visible.nodeIds.has(edge.source().id()) && visible.nodeIds.has(edge.target().id())
+      edge.toggleClass('hidden', !endpointsVisible)
+      edge.toggleClass('outside-chapter', endpointsVisible && !visible.edgeIds.has(edge.id()))
       edge.toggleClass('chosen', active?.type === 'edge' && edge.id() === active.id)
       edge.toggleClass('connected', Boolean(active?.type === 'node' && connecting?.contains(edge)))
       edge.toggleClass('dimmed', Boolean(active && !connecting?.contains(edge)))
@@ -245,6 +242,11 @@ export function RelationGraph({
   const [dialog, setDialog] = useState<'create' | 'edit' | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const cyRef = useRef<Core | null>(null)
+  const physicsRef = useRef<ReturnType<typeof createGraphPhysics> | null>(null)
+  const [ready, setReady] = useState(false)
+  const entered = useRef(false)
+  const hoveredNode = useRef<string | null>(null)
+  const focusedNode = useRef<string | null>(null)
 
   const kinds = useMemo(() => {
     const present = new Set(nodes.map((n) => n.kind))
@@ -260,24 +262,26 @@ export function RelationGraph({
   useEffect(() => {
     graphStateRef.current = { visible, selection }
     applyGraphState(cyRef.current, visible, selection)
+    physicsRef.current?.updateVisibility(visible)
   }, [visible, selection])
 
   // Mount cytoscape once per data set. The dynamic import keeps it out of the server render.
   useEffect(() => {
     let cancelled = false
     let cy: Core | null = null
-    let cleanUpMotion: (() => void) | undefined
+    let physics: ReturnType<typeof createGraphPhysics> | undefined
     async function mount() {
       const container = containerRef.current
       if (!container) return
       const { default: cytoscape } = await import('cytoscape')
       if (cancelled) return
-      const step = readMotionDuration(container, '--b-step', 260)
+      const timing = readGraphTiming(container)
       const palette = readGraphPalette(container)
+      const font = readGraphFont(container)
       cy = cytoscape({
         container,
-        elements: toElements(nodes, edges, palette),
-        style: graphStyle(palette, step),
+        elements: toElements(nodes, edges, font),
+        style: graphStyle(palette, font, timing),
         maxZoom: 3,
         autounselectify: true,
         layout: circleLayout(nodes, edges),
@@ -287,20 +291,24 @@ export function RelationGraph({
       cy.on('tap', (e) => {
         if (e.target === cy) setSelection(null)
       })
+      cy.on('mouseover mouseout', 'node', (e) => {
+        hoveredNode.current = e.type === 'mouseover' ? e.target.id() : null
+        physics?.updatePreview(hoveredNode.current ?? focusedNode.current)
+      })
       cyRef.current = cy
+      setReady(true)
       const state = graphStateRef.current
       applyGraphState(cy, state.visible, state.selection)
-      const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
-      const syncMotion = () => cy?.elements().toggleClass('animated', !motion.matches)
-      syncMotion()
-      motion.addEventListener('change', syncMotion)
-      cleanUpMotion = () => motion.removeEventListener('change', syncMotion)
+      physics = createGraphPhysics(cy, container, state.visible, !entered.current)
+      physicsRef.current = physics
+      entered.current = true
     }
     void mount()
     return () => {
       cancelled = true
       cyRef.current = null
-      cleanUpMotion?.()
+      physicsRef.current = null
+      physics?.dispose()
       cy?.destroy()
     }
   }, [nodes, edges])
@@ -349,6 +357,38 @@ export function RelationGraph({
     }
   }
 
+  function zoomGraph(factor: number) {
+    const graph = cyRef.current
+    if (!graph) return
+    graph.zoom({
+      level: graph.zoom() * factor,
+      renderedPosition: { x: graph.width() / 2, y: graph.height() / 2 },
+    })
+  }
+
+  function fitGraph(resetLayout = false) {
+    const graph = cyRef.current
+    if (!graph) return
+    physicsRef.current?.arrange(() => {
+      if (resetLayout) {
+        graph.minZoom(0)
+        graph.layout(circleLayout(nodes, edges)).run()
+        return
+      }
+      const onPaper = graph.elements().not('.hidden')
+      if (onPaper.empty()) return
+      graph.minZoom(0)
+      graph.fit(onPaper, 48)
+      capFitZoom(graph)
+    })
+  }
+
+  function previewNode(id: string | null, source: 'focus' | 'pointer') {
+    const ref = source === 'focus' ? focusedNode : hoveredNode
+    ref.current = id
+    physicsRef.current?.updatePreview(hoveredNode.current ?? focusedNode.current)
+  }
+
   const formKey = `${dialog ?? 'none'}-${selectedEdge?.id ?? selectedNode?.id ?? 'new'}`
 
   return (
@@ -373,25 +413,68 @@ export function RelationGraph({
         onToggleKind={toggleKind}
       />
 
-      <div className="b-wiki-graph-arrive grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="wg-graph-layout">
         <div className="flex min-w-0 flex-col gap-2">
           <div
             ref={containerRef}
             role="img"
             aria-label="관계 그래프"
-            className="h-[clamp(20rem,55vh,38rem)] w-full min-w-0 overflow-hidden rounded-card border-2 border-ink bg-paper"
+            className="wg-graph-surface"
+            onPointerLeave={(event) => {
+              if (event.pointerType === 'mouse') previewNode(null, 'pointer')
+            }}
           />
           {visibleNodes.length === 0 && (
             <p role="status" className="b-label b-muted">
               조건에 맞는 카드가 없어요.
             </p>
           )}
-          <p className="text-xs text-muted-foreground">카드나 선을 눌러 자세히 보세요.</p>
+          <div className="wg-graph-toolbar">
+            <p className="text-xs text-muted-foreground">카드나 선을 눌러 자세히 보세요.</p>
+            <div className="wg-graph-cells">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!ready}
+                onClick={() => fitGraph()}
+              >
+                맞추기
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!ready}
+                onClick={() => zoomGraph(1.25)}
+              >
+                확대
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!ready}
+                onClick={() => zoomGraph(0.8)}
+              >
+                축소
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!ready}
+                onClick={() => fitGraph(true)}
+              >
+                배치
+              </Button>
+            </div>
+          </div>
         </div>
 
-        <aside aria-label="선택한 항목" className="b-wiki-graph-panel text-sm">
+        <aside aria-label="선택한 항목" className="wg-graph-panel text-sm">
           {selectedNode && (
-            <div key={selectedNode.id} className="b-wiki-graph-selection flex flex-col gap-2">
+            <div key={selectedNode.id} className="wg-graph-selection flex flex-col gap-2">
               <p className="text-base font-medium">{selectedNode.name}</p>
               <p className="text-muted-foreground">
                 {ENTRY_KIND_LABEL[selectedNode.kind]} ·{' '}
@@ -409,7 +492,7 @@ export function RelationGraph({
           )}
 
           {selectedEdge && (
-            <div key={selectedEdge.id} className="b-wiki-graph-selection flex flex-col gap-2">
+            <div key={selectedEdge.id} className="wg-graph-selection flex flex-col gap-2">
               <p className="text-base font-medium">
                 {nodeById.get(selectedEdge.source)?.name} —{' '}
                 {nodeById.get(selectedEdge.target)?.name}
@@ -443,21 +526,31 @@ export function RelationGraph({
             <p className="text-muted-foreground">그래프에서 카드나 관계를 고르세요.</p>
           )}
 
-          <div className="flex flex-col gap-2 border-t border-rule pt-4">
-            <p className="font-medium">카드 {visibleNodes.length}개</p>
-            <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+          <div className="wg-graph-roster">
+            <p className="font-mono font-medium">카드 {visibleNodes.length}개</p>
+            <ul className="wg-graph-list">
               {visibleNodes.map((n) => (
                 <li key={n.id}>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left b-wiki-graph-option hover:bg-sand focus-visible:bg-sand aria-pressed:bg-ink aria-pressed:font-bold aria-pressed:text-paper"
+                    className="wg-graph-option"
                     aria-pressed={selectedNode?.id === n.id}
+                    onFocus={(event) => {
+                      if (event.currentTarget.matches(':focus-visible')) previewNode(n.id, 'focus')
+                    }}
+                    onBlur={() => previewNode(null, 'focus')}
+                    onPointerEnter={(event) => {
+                      if (event.pointerType === 'mouse') previewNode(n.id, 'pointer')
+                    }}
+                    onPointerLeave={(event) => {
+                      if (event.pointerType === 'mouse') previewNode(null, 'pointer')
+                    }}
                     onClick={() => setSelection({ type: 'node', id: n.id })}
                   >
-                    <KindIcon kind={n.kind} inked />
+                    <KindIcon kind={n.kind} />
                     <span>
                       {n.name}
-                      <span className="text-muted-foreground"> · {ENTRY_KIND_LABEL[n.kind]}</span>
+                      <span className="wg-graph-option-meta"> · {ENTRY_KIND_LABEL[n.kind]}</span>
                     </span>
                   </button>
                 </li>
@@ -465,20 +558,20 @@ export function RelationGraph({
             </ul>
           </div>
 
-          <div className="flex flex-col gap-2 border-t border-rule pt-4">
-            <p className="font-medium">관계 {visibleEdges.length}개</p>
-            <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+          <div className="wg-graph-roster">
+            <p className="font-mono font-medium">관계 {visibleEdges.length}개</p>
+            <ul className="wg-graph-list">
               {visibleEdges.map((e) => (
                 <li key={e.id}>
                   <button
                     type="button"
-                    className="w-full rounded-sm px-2 py-1 text-left b-wiki-graph-option hover:bg-sand focus-visible:bg-sand aria-pressed:bg-ink aria-pressed:font-bold aria-pressed:text-paper"
+                    className="wg-graph-option"
                     aria-pressed={selectedEdge?.id === e.id}
                     onClick={() => setSelection({ type: 'edge', id: e.id })}
                   >
                     {nodeById.get(e.source)?.name} {e.directed ? '→' : '—'}{' '}
                     {nodeById.get(e.target)?.name}
-                    <span className="text-muted-foreground"> · {e.kind}</span>
+                    <span className="wg-graph-option-meta"> · {e.kind}</span>
                   </button>
                 </li>
               ))}

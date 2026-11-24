@@ -118,7 +118,7 @@ export function ThreadForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${ids}-title`}>제목</Label>
         <Input
@@ -144,7 +144,7 @@ export function ThreadForm({
           상태와 심은 회차는 아래 기록 추가에서 바꿔요.
         </p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`${ids}-status`}>상태</Label>
             <Select
@@ -184,12 +184,13 @@ export function ThreadForm({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${ids}-target`}>회수 목표 회차</Label>
           <Input
             id={`${ids}-target`}
             type="number"
+            className="font-mono"
             inputMode="numeric"
             min={1}
             max={10000}
@@ -223,12 +224,12 @@ export function ThreadForm({
         </div>
       </div>
 
-      <fieldset className="flex flex-col gap-2">
+      <fieldset className="flex min-w-0 flex-col gap-2">
         <legend className="mb-1.5 text-sm leading-none font-medium">관련 카드</legend>
         {entries.length === 0 ? (
           <p className="text-sm text-muted-foreground">연결할 카드가 없어요.</p>
         ) : (
-          <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
+          <div className="grid max-h-48 divide-y divide-grid overflow-y-auto">
             {entries.map((entry) => {
               const checkboxId = `${ids}-entry-${entry.id}`
               return (
@@ -238,7 +239,10 @@ export function ThreadForm({
                     checked={relatedIds.includes(entry.id)}
                     onCheckedChange={(checked) => toggleRelated(entry.id, checked)}
                   />
-                  <Label htmlFor={checkboxId} className="font-normal">
+                  <Label
+                    htmlFor={checkboxId}
+                    className="flex-wrap gap-x-1 font-normal wrap-anywhere"
+                  >
                     {entry.name}
                     <span className="text-muted-foreground">({ENTRY_KIND_LABEL[entry.kind]})</span>
                   </Label>

@@ -3,19 +3,30 @@
 import Link from 'next/link'
 import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
 import { SubmitButton } from '@/components/app/submit-button'
-import { Badge } from '@/components/ui/badge'
+import { GridTitle } from '@/components/motion'
 import { buttonVariants, Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import type { DirectiveKind, DirectiveScope, DirectiveStatus, SpeechLevel } from '@/db/types'
+import type {
+  DirectiveKind,
+  DirectiveScope,
+  DirectiveSource,
+  DirectiveStatus,
+  SpeechLevel,
+} from '@/db/types'
 import type { InferredProposal } from '@/server/directive-infer'
 import { banPatternFor } from '@/lib/directives'
-import { DIRECTIVE_KIND_LABEL, DIRECTIVE_SCOPE_LABEL } from '@/lib/labels'
+import {
+  DIRECTIVE_KIND_LABEL,
+  DIRECTIVE_SCOPE_LABEL,
+  DIRECTIVE_SOURCE_LABEL,
+  DIRECTIVE_STATUS_LABEL,
+} from '@/lib/labels'
 import { runAction } from '@/lib/client/run-action'
 import {
   archiveDirectiveAction,
@@ -23,6 +34,7 @@ import {
   decideInferredAction,
   updateDirectiveAction,
 } from '@/server/actions/wiki'
+import { useWikiTabArchive } from './naming-rules'
 import { SelectField } from './select-field'
 
 /** One author request as the ledger page passes it in. */
@@ -32,6 +44,7 @@ export type DirectiveItem = {
   kind: DirectiveKind
   text: string
   status: DirectiveStatus
+  source?: DirectiveSource
   entryId: string | null
   entryName: string | null
   chapterPosition: number | null
@@ -76,6 +89,10 @@ const SPEECH_OPTIONS: { value: SpeechOption; label: string }[] = [
 
 const NONE = '__none__'
 
+function inferredKey({ runId, index }: InferredProposal) {
+  return `${runId}-${index}`
+}
+
 /** The author request ledger: active and switched-off requests, a form to add one, and the style cards they sit beside. */
 export function DirectiveList({
   workId,
@@ -85,10 +102,16 @@ export function DirectiveList({
   canEdit,
   inferred = [],
 }: DirectiveListProps) {
-  const [directiveState, setDirectiveState] = useState(directives)
-  const [inferredState, setInferredState] = useState(inferred)
-  const active = directiveState.filter((d) => d.status === 'active')
-  const off = directiveState.filter((d) => d.status === 'off')
+  const router = useRouter()
+  const [decisions, setDecisions] = useState<Record<string, DirectiveItem | null>>({})
+  const remaining = inferred.filter((proposal) => !(inferredKey(proposal) in decisions))
+  const added = inferred.flatMap((proposal) => {
+    const row = decisions[inferredKey(proposal)]
+    return row && !directives.some(({ id }) => id === row.id) ? [row] : []
+  })
+  const { rows, archive } = useWikiTabArchive([...directives, ...added])
+  const active = rows.filter((d) => d.status === 'active')
+  const off = rows.filter((d) => d.status === 'off')
   const speaking = characters.filter((c) => c.speech)
 
   async function handleDecide(proposal: InferredProposal, decision: 'add' | 'ignore') {
@@ -101,67 +124,64 @@ export function DirectiveList({
       }),
     )
     if (!saved) return
-    setInferredState((prev) =>
-      prev.filter((p) => !(p.runId === proposal.runId && p.index === proposal.index)),
-    )
-    if (decision === 'add') {
-      const scope: DirectiveScope = proposal.entryId ? 'character' : 'work'
-      setDirectiveState((prev) => [
-        ...prev,
-        {
-          id: `inferred-${proposal.runId}-${proposal.index}`,
-          scope,
+    const row: DirectiveItem | null = saved.directiveId
+      ? {
+          id: saved.directiveId,
+          scope: proposal.entryId ? 'character' : 'work',
           kind: proposal.kind,
           text: proposal.text,
           status: 'active',
+          source: 'inferred',
           entryId: proposal.entryId,
           entryName: proposal.entryName,
           chapterPosition: null,
           pattern: proposal.pattern,
           speechLevel: null,
           targetChars: null,
-        } as DirectiveItem,
-      ])
-    }
+        }
+      : null
+    setDecisions((current) => ({ ...current, [inferredKey(proposal)]: row }))
+    router.refresh()
   }
 
   return (
     <div className="flex flex-col gap-5">
-      {inferredState.length > 0 && (
+      {remaining.length > 0 && (
         <section aria-labelledby="directives-inferred-heading" className="flex flex-col gap-3">
-          <h2 id="directives-inferred-heading" className="b-wiki-section-title">
-            수정에서 찾은 요청
-          </h2>
-          <p className="text-sm text-muted-foreground">
+          <GridTitle id="directives-inferred-heading">수정에서 찾은 요청</GridTitle>
+          <p className="b-label b-muted">
             작가님이 초안을 고친 곳에서 찾아낸 요청이에요. 추가해야 적용돼요.
           </p>
-          <ul className="b-wiki-records">
-            {inferredState.map((proposal, index) => (
+          <ul className="wg-wiki-tabs-list">
+            {remaining.map((proposal, index) => (
               <InferredRow
-                key={`${proposal.runId}-${proposal.index}`}
+                key={inferredKey(proposal)}
                 proposal={proposal}
                 rowIndex={index}
                 canEdit={canEdit}
-                onDecide={(decision) => void handleDecide(proposal, decision)}
+                onDecide={(decision) => handleDecide(proposal, decision)}
               />
             ))}
           </ul>
         </section>
       )}
       <section aria-labelledby="directives-active-heading" className="flex flex-col gap-3">
-        <h2 id="directives-active-heading" className="b-wiki-section-title">
-          적용 중인 요청
-        </h2>
+        <GridTitle id="directives-active-heading">적용 중인 요청</GridTitle>
         {active.length === 0 ? (
           <EmptyState title="아직 요청이 없어요. AI가 매번 지켜야 할 걸 적어 두세요." />
         ) : (
-          <ul className="b-wiki-records">
+          <ul className="wg-wiki-tabs-list">
             {active.map((directive, index) => (
               <DirectiveRow
                 key={directive.id}
                 directive={directive}
                 canEdit={canEdit}
                 rowIndex={index}
+                archive={(row) =>
+                  archive(directive, row, () =>
+                    runAction(archiveDirectiveAction({ directiveId: directive.id })),
+                  )
+                }
               />
             ))}
           </ul>
@@ -170,16 +190,21 @@ export function DirectiveList({
 
       {off.length > 0 && (
         <section aria-labelledby="directives-off-heading" className="flex flex-col gap-3">
-          <h2 id="directives-off-heading" className="text-base font-semibold">
+          <h2 id="directives-off-heading" className="b-subhead">
             꺼 둔 요청
           </h2>
-          <ul className="b-wiki-records">
+          <ul className="wg-wiki-tabs-list">
             {off.map((directive, index) => (
               <DirectiveRow
                 key={directive.id}
                 directive={directive}
                 canEdit={canEdit}
                 rowIndex={index}
+                archive={(row) =>
+                  archive(directive, row, () =>
+                    runAction(archiveDirectiveAction({ directiveId: directive.id })),
+                  )
+                }
               />
             ))}
           </ul>
@@ -190,28 +215,38 @@ export function DirectiveList({
 
       <section aria-labelledby="directives-styles-heading" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="directives-styles-heading" className="text-base font-semibold">
+          <h2 id="directives-styles-heading" className="b-subhead">
             함께 적용되는 문체와 말투
           </h2>
           <Link
             href={`/works/${workId}/wiki?tab=styles`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            className={buttonVariants({ variant: 'link', size: 'sm' })}
           >
             문체 카드 고치기
           </Link>
         </div>
         {styleCards.length === 0 && speaking.length === 0 ? (
-          <p className="text-sm text-muted-foreground">아직 문체 카드나 말투가 없어요.</p>
+          <p className="b-label b-muted">아직 문체 카드나 말투가 없어요.</p>
         ) : (
-          <ul className="flex flex-col gap-2 text-sm">
-            {styleCards.map((card) => (
-              <li key={`card-${card.name}`} className="whitespace-pre-line">
-                {`${card.name}: ${card.rules}`}
-              </li>
-            ))}
-            {speaking.map((character) => (
-              <li key={`speech-${character.id}`} className="whitespace-pre-line">
-                {`${character.name}: ${character.speech}`}
+          <ul className="wg-wiki-tabs-list">
+            {[
+              ...styleCards.map((card, index) => ({
+                key: `card-${index}`,
+                copy: `${card.name}: ${card.rules}`,
+              })),
+              ...speaking.map((character) => ({
+                key: `speech-${character.id}`,
+                copy: `${character.name}: ${character.speech}`,
+              })),
+            ].map(({ key, copy }, index) => (
+              <li
+                key={key}
+                className="wg-wiki-tabs-row wg-wiki-tabs-entry"
+                style={{ '--wg-wiki-tabs-order': Math.min(index, 2) } as CSSProperties}
+                tabIndex={0}
+              >
+                <span className="wg-wiki-tabs-number" aria-hidden="true" />
+                <p className="whitespace-pre-line text-sm wg-wiki-tabs-write">{copy}</p>
               </li>
             ))}
           </ul>
@@ -232,6 +267,15 @@ function inferredScopeText(proposal: InferredProposal): string {
   return DIRECTIVE_SCOPE_LABEL.work
 }
 
+function DirectiveCells({ scope, kind }: { scope: string; kind: DirectiveKind }) {
+  return (
+    <div className="wg-wiki-tabs-directive-cells wg-wiki-tabs-write">
+      <span>{scope}</span>
+      <span>{DIRECTIVE_KIND_LABEL[kind]}</span>
+    </div>
+  )
+}
+
 function InferredRow({
   proposal,
   rowIndex,
@@ -241,14 +285,14 @@ function InferredRow({
   proposal: InferredProposal
   rowIndex: number
   canEdit: boolean
-  onDecide: (decision: 'add' | 'ignore') => void
+  onDecide: (decision: 'add' | 'ignore') => Promise<void>
 }) {
   const [pending, setPending] = useState(false)
 
   async function decide(decision: 'add' | 'ignore') {
     setPending(true)
     try {
-      onDecide(decision)
+      await onDecide(decision)
     } finally {
       setPending(false)
     }
@@ -256,19 +300,21 @@ function InferredRow({
 
   return (
     <li
-      className="flex flex-col gap-2 p-3"
-      style={{ '--b-i': Math.min(rowIndex, 5) } as CSSProperties}
+      className="wg-wiki-tabs-row wg-wiki-tabs-directive"
+      style={{ '--wg-wiki-tabs-order': Math.min(rowIndex, 2) } as CSSProperties}
+      tabIndex={0}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{inferredScopeText(proposal)}</Badge>
-        <Badge variant="outline">{DIRECTIVE_KIND_LABEL[proposal.kind]}</Badge>
-      </div>
-      <p className="whitespace-pre-line text-sm">{proposal.text}</p>
+      <span className="wg-wiki-tabs-number" aria-hidden="true" />
+      <DirectiveCells scope={inferredScopeText(proposal)} kind={proposal.kind} />
+      <p className="wg-wiki-tabs-request-copy wg-wiki-tabs-write">{proposal.text}</p>
+      <span className="wg-wiki-tabs-directive-meta wg-wiki-tabs-write">
+        {DIRECTIVE_SOURCE_LABEL.inferred}
+      </span>
       {canEdit && (
-        <div className="flex flex-wrap gap-2">
+        <div className="wg-wiki-tabs-actions">
           <Button
             type="button"
-            variant="outline"
+            variant="link"
             size="sm"
             disabled={pending}
             onClick={() => void decide('add')}
@@ -277,7 +323,7 @@ function InferredRow({
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="link"
             size="sm"
             disabled={pending}
             onClick={() => void decide('ignore')}
@@ -294,11 +340,14 @@ function DirectiveRow({
   directive,
   canEdit,
   rowIndex,
+  archive,
 }: {
   directive: DirectiveItem
   canEdit: boolean
   rowIndex: number
+  archive: (row: HTMLLIElement | null) => Promise<void>
 }) {
+  const row = useRef<HTMLLIElement>(null)
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const nextStatus: DirectiveStatus = directive.status === 'active' ? 'off' : 'active'
@@ -314,27 +363,33 @@ function DirectiveRow({
 
   return (
     <li
-      className="flex flex-col gap-2 p-3"
-      style={{ '--b-i': Math.min(rowIndex, 5) } as CSSProperties}
+      ref={row}
+      className="wg-wiki-tabs-row wg-wiki-tabs-directive"
+      data-status={directive.status}
+      style={{ '--wg-wiki-tabs-order': Math.min(rowIndex, 2) } as CSSProperties}
+      tabIndex={0}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{scopeText(directive)}</Badge>
-        <Badge variant="outline">{DIRECTIVE_KIND_LABEL[directive.kind]}</Badge>
+      <span className="wg-wiki-tabs-number" aria-hidden="true" />
+      <DirectiveCells scope={scopeText(directive)} kind={directive.kind} />
+      <p className="wg-wiki-tabs-request-copy wg-wiki-tabs-write">{directive.text}</p>
+      <div className="wg-wiki-tabs-directive-meta wg-wiki-tabs-write">
+        <span className="wg-wiki-tabs-status">
+          <span aria-hidden="true">{directive.status === 'active' ? '●' : '◎'}</span>
+          {DIRECTIVE_STATUS_LABEL[directive.status]}
+        </span>
+        {directive.source && <span>{DIRECTIVE_SOURCE_LABEL[directive.source]}</span>}
       </div>
-      <p className="whitespace-pre-line text-sm">{directive.text}</p>
       {canEdit && (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={pending} onClick={toggle}>
+        <div className="wg-wiki-tabs-actions">
+          <Button type="button" variant="link" size="sm" disabled={pending} onClick={toggle}>
             {directive.status === 'active' ? '끄기' : '켜기'}
           </Button>
           <ConfirmButton
             title="이 요청을 보관할까요?"
             confirmLabel="보관"
+            variant="link"
             size="sm"
-            onConfirm={async () => {
-              const saved = await runAction(archiveDirectiveAction({ directiveId: directive.id }))
-              if (saved) router.refresh()
-            }}
+            onConfirm={() => archive(row.current)}
           >
             보관
           </ConfirmButton>
@@ -387,7 +442,7 @@ function DirectiveAddForm({ workId, characters }: { workId: string; characters: 
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-xl border p-4">
+    <form onSubmit={onSubmit} className="wg-wiki-tabs-request-form flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="directive-text">요청 내용</Label>
         <Textarea
@@ -400,7 +455,7 @@ function DirectiveAddForm({ workId, characters }: { workId: string; characters: 
           onChange={(e) => setText(e.target.value)}
         />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="wg-wiki-tabs-request-fields">
         <SelectField
           id="directive-scope"
           label="범위"

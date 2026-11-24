@@ -13,7 +13,7 @@ export default async function GraphPage({ params }: { params: Promise<{ workId: 
   const graph = await guardPage(() => getGraphData(db, actor, workId))
 
   return (
-    <div className="b-wiki-workspace flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       <SettingsBoardHeader workId={workId} active="graph" />
       <section aria-labelledby="graph-heading">
         <RelationGraph
@@ -24,7 +24,7 @@ export default async function GraphPage({ params }: { params: Promise<{ workId: 
           latestPosition={graph.latestPosition}
           intro={
             <div className="flex flex-col gap-1">
-              <h2 id="graph-heading" className="b-wiki-section-title">
+              <h2 id="graph-heading" className="b-subhead">
                 관계 그래프
               </h2>
               <p className="b-label b-muted">회차를 넘기며 관계가 어떻게 달라지는지 봐요.</p>

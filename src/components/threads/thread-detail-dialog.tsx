@@ -67,9 +67,9 @@ export function ThreadDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent finalFocus={finalFocus} className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent finalFocus={finalFocus} className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{thread.title}</DialogTitle>
+          <DialogTitle className="wrap-anywhere">{thread.title}</DialogTitle>
           <DialogDescription>
             {THREAD_STATUS_LABEL[thread.status]} · 중요도 {IMPORTANCE_LABEL[thread.importance]}
           </DialogDescription>
@@ -89,19 +89,21 @@ export function ThreadDetailDialog({
             <p className="wrap-anywhere whitespace-pre-wrap">
               {thread.description || '설명이 없어요.'}
             </p>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-              <dt className="text-muted-foreground">심은 회차</dt>
-              <dd>
+            <dl className="wg-threads-info grid grid-cols-[max-content_minmax(0,1fr)]">
+              <dt className="pr-3 text-muted-ink">심은 회차</dt>
+              <dd className="font-mono">
                 {thread.plantedPosition === null ? '아직 심지 않음' : `${thread.plantedPosition}화`}
               </dd>
-              <dt className="text-muted-foreground">회수 목표</dt>
-              <dd className="flex items-center gap-2">
+              <dt className="pr-3 text-muted-ink">회수 목표</dt>
+              <dd className="flex flex-wrap items-baseline gap-x-2 font-mono">
                 {thread.targetChapterPosition === null
                   ? '정하지 않음'
                   : `${thread.targetChapterPosition}화`}
-                {thread.overdue && <span className="b-wiki-overdue">회수 목표 지남</span>}
+                {thread.overdue && (
+                  <span className="wg-threads-overdue font-sans">회수 목표 지남</span>
+                )}
               </dd>
-              <dt className="text-muted-foreground">관련 카드</dt>
+              <dt className="pr-3 text-muted-ink">관련 카드</dt>
               <dd>
                 {thread.relatedEntries.length === 0
                   ? '없음'
@@ -128,7 +130,7 @@ export function ThreadDetailDialog({
         )}
 
         <section className="flex flex-col gap-3" aria-labelledby="thread-timeline-title">
-          <h3 id="thread-timeline-title" className="text-sm font-medium">
+          <h3 id="thread-timeline-title" className="font-heading text-base font-bold">
             기록
           </h3>
           {thread.events.length === 0 ? (
@@ -136,13 +138,17 @@ export function ThreadDetailDialog({
           ) : (
             <ol className="flex flex-col gap-2">
               {thread.events.map((event) => (
-                <li key={event.id} className="b-paper flex flex-col gap-1 p-3 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">
+                <li key={event.id} className="wg-threads-record flex flex-col gap-1 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium wrap-anywhere">
                       {THREAD_EVENT_LABEL[event.kind]} ·{' '}
-                      {event.chapterPosition === null
-                        ? '회차 없음'
-                        : chapterLabel(event.chapterPosition, event.chapterTitle)}
+                      {event.chapterPosition === null ? (
+                        '회차 없음'
+                      ) : (
+                        <span className="font-mono">
+                          {chapterLabel(event.chapterPosition, event.chapterTitle)}
+                        </span>
+                      )}
                     </span>
                     {canEdit && (
                       <ConfirmButton
@@ -158,7 +164,7 @@ export function ThreadDetailDialog({
                   </div>
                   {event.note && <p className="wrap-anywhere whitespace-pre-wrap">{event.note}</p>}
                   {event.evidence && (
-                    <p className="text-muted-foreground">근거: {event.evidence}</p>
+                    <p className="text-muted-ink wrap-anywhere">근거: {event.evidence}</p>
                   )}
                 </li>
               ))}
@@ -167,8 +173,8 @@ export function ThreadDetailDialog({
         </section>
 
         {canEdit && !editing && (
-          <section className="flex flex-col gap-3 border-t pt-4" aria-label="기록 추가">
-            <h3 className="text-sm font-medium">기록 추가</h3>
+          <section className="wg-threads-record-form flex flex-col gap-3" aria-label="기록 추가">
+            <h3 className="font-heading text-base font-bold">기록 추가</h3>
             <ThreadEventForm thread={thread} chapters={chapters} />
           </section>
         )}

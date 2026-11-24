@@ -6,6 +6,8 @@ export type ForceGraphRendererProps = {
   width: number
   height: number
   palette: GraphPalette
+  font: string
+  focusedNodeId?: string
   selectedEdgeId?: string
   selectedNodeId?: string
   onNodeSelect: (id: string) => void
@@ -45,4 +47,13 @@ export function linkCurvatures(links: GraphEdge[]): Map<string, number> {
     }
   }
   return curvatures
+}
+
+export function isLinkedTo(link: GraphEdge, nodeId?: string): boolean {
+  if (!nodeId) return false
+  // The force engine replaces each endpoint ID with its node object.
+  const endpoints: (string | GraphNode)[] = [link.source, link.target]
+  return endpoints.some(
+    (endpoint) => (typeof endpoint === 'string' ? endpoint : endpoint.id) === nodeId,
+  )
 }

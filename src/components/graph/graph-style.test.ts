@@ -12,12 +12,9 @@ describe('ENTRY_KIND_MARK', () => {
   })
 
   it('uses only neutral tokens for card marks', () => {
-    for (const kind of ENTRY_KINDS) expect(['ink', 'muted']).toContain(ENTRY_KIND_MARK[kind].ink)
     expect(GRAPH_COLOR_TOKENS).toEqual({
       ink: '--b-ink',
-      muted: '--b-muted',
       paper: '--b-paper',
-      selection: '--b-kraft',
     })
   })
 })

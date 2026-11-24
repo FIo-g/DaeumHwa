@@ -26,6 +26,7 @@ export function RelationGraphView({
   const [position, setPosition] = useState(() => defaultPosition(latestPosition))
   const [showAll, setShowAll] = useState(false)
   const [hiddenKinds, setHiddenKinds] = useState(initiallyHiddenKinds)
+  const [focusedNodeId, setFocusedNodeId] = useState<string>()
   const [selection, setSelection] = useState<Selection>(null)
   const detailsRef = useRef<HTMLElement>(null)
   const [mode, setMode] = useState<'3d' | '2d'>('3d')
@@ -142,11 +143,12 @@ export function RelationGraphView({
         onToggleKind={toggleKind}
       />
 
-      <div className="b-wiki-graph-arrive grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)]">
+      <div className="wg-graph-layout">
         <GraphViewport
           mode={graph.mode}
           selectedEdgeId={selectedEdge?.id}
           selectedNodeId={selectedNode?.id}
+          focusedNodeId={focusedNodeId}
           data={graph.data}
           onNodeSelect={selectNodeFromCanvas}
           onLinkSelect={selectEdgeFromCanvas}
@@ -157,11 +159,11 @@ export function RelationGraphView({
         <aside
           ref={detailsRef}
           aria-label="카드 및 관계"
-          className="b-wiki-graph-panel scroll-mt-20 text-sm break-keep"
+          className="wg-graph-panel scroll-mt-20 text-sm break-keep"
         >
           <div aria-live="polite">
             {selectedNode && (
-              <div key={selectedNode.id} className="b-wiki-graph-selection flex flex-col gap-2">
+              <div key={selectedNode.id} className="wg-graph-selection flex flex-col gap-2">
                 <h2 className="text-base font-medium">{selectedNode.name}</h2>
                 <p className="text-muted-foreground">
                   {ENTRY_KIND_LABEL[selectedNode.kind]} ·{' '}
@@ -180,7 +182,7 @@ export function RelationGraphView({
             )}
 
             {selectedEdge && (
-              <div key={selectedEdge.id} className="b-wiki-graph-selection flex flex-col gap-2">
+              <div key={selectedEdge.id} className="wg-graph-selection flex flex-col gap-2">
                 <h2 className="text-base font-medium">{edgeTitle(selectedEdge)}</h2>
                 <p>{selectedEdge.kind}</p>
                 {selectedEdge.description && (
@@ -214,27 +216,23 @@ export function RelationGraphView({
             )}
           </div>
 
-          <section
-            aria-label="표시된 카드"
-            className="flex flex-col gap-2 border-t border-rule pt-4"
-          >
-            <h2 className="font-medium">카드 {graph.visibleNodes.length}개</h2>
-            <ul className="max-h-40 space-y-1 overflow-y-auto p-0.5">
+          <section aria-label="표시된 카드" className="wg-graph-roster">
+            <h2 className="font-mono font-medium">카드 {graph.visibleNodes.length}개</h2>
+            <ul className="wg-graph-list">
               {graph.visibleNodes.map((node) => (
                 <li key={node.id}>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left hover:bg-sand focus-visible:bg-sand aria-pressed:bg-ink aria-pressed:font-bold aria-pressed:text-paper"
+                    className="wg-graph-option"
                     aria-pressed={selectedNode?.id === node.id}
+                    onFocus={() => setFocusedNodeId(node.id)}
+                    onBlur={() => setFocusedNodeId(undefined)}
                     onClick={() => selectNode(node.id)}
                   >
-                    <KindIcon kind={node.kind} inked />
+                    <KindIcon kind={node.kind} />
                     <span>
                       {node.name}
-                      <span className="text-muted-foreground">
-                        {' '}
-                        · {ENTRY_KIND_LABEL[node.kind]}
-                      </span>
+                      <span className="wg-graph-option-meta"> · {ENTRY_KIND_LABEL[node.kind]}</span>
                     </span>
                   </button>
                 </li>
@@ -242,25 +240,22 @@ export function RelationGraphView({
             </ul>
           </section>
 
-          <section
-            aria-label="표시된 관계"
-            className="flex flex-col gap-2 border-t border-rule pt-4"
-          >
-            <h2 className="font-medium">관계 {graph.visibleEdges.length}개</h2>
+          <section aria-label="표시된 관계" className="wg-graph-roster">
+            <h2 className="font-mono font-medium">관계 {graph.visibleEdges.length}개</h2>
             {graph.visibleEdges.length === 0 ? (
               <p className="text-muted-foreground">표시할 관계가 없어요.</p>
             ) : (
-              <ul className="max-h-40 space-y-1 overflow-y-auto p-0.5">
+              <ul className="wg-graph-list">
                 {graph.visibleEdges.map((edge) => (
                   <li key={edge.id}>
                     <button
                       type="button"
-                      className="w-full rounded-sm px-2 py-1 text-left hover:bg-sand focus-visible:bg-sand aria-pressed:bg-ink aria-pressed:font-bold aria-pressed:text-paper"
+                      className="wg-graph-option"
                       aria-pressed={selectedEdge?.id === edge.id}
                       onClick={() => selectEdge(edge.id)}
                     >
                       {edgeTitle(edge)}
-                      <span className="text-muted-foreground"> · {edge.kind}</span>
+                      <span className="wg-graph-option-meta"> · {edge.kind}</span>
                     </button>
                   </li>
                 ))}

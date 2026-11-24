@@ -17,11 +17,14 @@ export function EntryHistory({ changes }: { changes: EntryHistoryItem[] }) {
     return <EmptyState title="아직 변경 이력이 없어요." />
   }
   return (
-    <ol className="flex flex-col divide-y rounded-lg border">
-      {changes.map((change) => (
-        <li key={change.id} className="flex flex-col gap-1 p-3 text-sm">
+    <ol className="wg-wiki-history">
+      {changes.map((change, index) => (
+        <li key={change.id} className="wg-wiki-history-row text-sm">
+          <span className="wg-wiki-line-number" aria-hidden="true">
+            {String(index + 1).padStart(2, '0')}
+          </span>
           <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <time dateTime={change.createdAt.toISOString()}>
+            <time className="font-mono" dateTime={change.createdAt.toISOString()}>
               {formatKoreanDateTime(change.createdAt)}
             </time>
             {change.proposerType === 'ai' ? <AiBadge /> : <span>작가</span>}

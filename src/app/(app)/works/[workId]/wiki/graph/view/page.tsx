@@ -11,12 +11,12 @@ export default async function GraphViewPage({ params }: { params: Promise<{ work
   const graph = await guardPage(() => getGraphViewData(db, actor, workId))
 
   return (
-    <div className="b-wiki-workspace flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       {/* The 3D view is part of the 관계 그래프 tab, so that tab stays marked. */}
       <SettingsBoardHeader workId={workId} active="graph" />
       <section aria-labelledby="graph-3d-heading" className="flex flex-col gap-4">
-        <div className="b-wiki-toolbar">
-          <h2 id="graph-3d-heading" className="b-wiki-section-title">
+        <div className="wg-graph-toolbar">
+          <h2 id="graph-3d-heading" className="b-subhead">
             3D 관계 그래프
           </h2>
           <PopLink href={graphPath} variant="paper">

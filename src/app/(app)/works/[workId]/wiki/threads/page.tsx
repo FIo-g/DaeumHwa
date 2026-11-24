@@ -45,9 +45,12 @@ export default async function ThreadsPage({ params }: { params: Promise<{ workId
   }))
 
   return (
-    <div className="b-wiki-workspace flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-6">
       <SettingsBoardHeader workId={workId} active="threads" />
-      <section aria-labelledby="threads-heading" className="flex flex-col gap-4">
+      <section
+        aria-labelledby="threads-heading"
+        className="wg-threads-workspace flex min-w-0 flex-col gap-5"
+      >
         <ThreadBoard
           workId={workId}
           role={work.role}

@@ -187,8 +187,8 @@ function FactFormFields({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
+    <form onSubmit={onSubmit} className="wg-wiki-form">
+      <div className="wg-wiki-form-row">
         <Label htmlFor="fact-content">사실 내용</Label>
         <Textarea
           id="fact-content"
@@ -199,19 +199,19 @@ function FactFormFields({
           onChange={(e) => setContent(e.target.value)}
         />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">태그</span>
+      <div className="wg-wiki-form-row">
+        <span className="b-label font-medium">태그</span>
         <FactStatusSelect value={status} onChange={setStatus} />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <span id="fact-source-label" className="text-sm font-medium">
+      <div className="wg-wiki-form-row">
+        <span id="fact-source-label" className="b-label font-medium">
           출처 회차
         </span>
         <div role="group" aria-labelledby="fact-source-label">
           <ChapterPicker chapters={chapters} value={chapterId} onChange={setChapterId} allowNone />
         </div>
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="wg-wiki-form-row">
         <Label htmlFor="fact-reveal">공개 회차</Label>
         <Input
           id="fact-reveal"
@@ -221,11 +221,11 @@ function FactFormFields({
           value={reveal}
           onChange={(e) => setReveal(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">이 회차 전에는 AI 초안에 넣지 않아요.</p>
+        <p className="wg-wiki-form-hint">이 회차 전에는 AI 초안에 넣지 않아요.</p>
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="grid min-w-0 gap-1.5">
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
+          <div className="grid min-w-0 gap-1.5">
             <Label htmlFor="fact-valid-from">유효 시작 회차</Label>
             <Input
               id="fact-valid-from"
@@ -235,7 +235,7 @@ function FactFormFields({
               onChange={(e) => setValidFrom(e.target.value)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="grid min-w-0 gap-1.5">
             <Label htmlFor="fact-valid-to">유효 끝 회차</Label>
             <Input
               id="fact-valid-to"
@@ -248,7 +248,7 @@ function FactFormFields({
         </div>
         <p className="text-xs text-muted-foreground">빈칸은 처음부터 끝까지 적용돼요.</p>
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="wg-wiki-form-row">
         <Label htmlFor="fact-evidence">근거 문장</Label>
         <Input
           id="fact-evidence"
@@ -301,12 +301,12 @@ export function FactTagDialog({
         setOpen(next)
       }}
     >
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>{triggerLabel}</DialogTrigger>
+      <DialogTrigger render={<Button variant="ghost" size="sm" />}>{triggerLabel}</DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>태그 바꾸기</DialogTitle>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <form onSubmit={onSubmit} className="wg-wiki-form">
           <FactStatusSelect value={picked} onChange={setPicked} />
           <DialogFooter>
             <SubmitButton pending={pending}>저장</SubmitButton>

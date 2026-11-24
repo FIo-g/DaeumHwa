@@ -1,11 +1,10 @@
 'use client'
 
-import { ChevronDownIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useId, useRef, useState, type CSSProperties } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
 import { FactStatusBadge } from '@/components/app/fact-status-badge'
-import { MenuSheet, PopLink } from '@/components/motion'
+import { Disclosure, MenuSheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EntryKind, FactStatus } from '@/db/types'
@@ -111,10 +110,10 @@ function LookupControls({
           검색
         </Button>
       </form>
-      <fieldset className="b-wiki-sort flex flex-wrap gap-2">
+      <fieldset className="wg-wiki-sort">
         <legend className="sr-only">정렬</legend>
         {SORT_OPTIONS.map(({ value, label }) => (
-          <label key={value} className="b-chip b-wiki-choice">
+          <label key={value} className="wg-wiki-cell">
             <input
               type="radio"
               name={sortName}
@@ -123,6 +122,7 @@ function LookupControls({
               className="sr-only"
             />
             <span>{label}</span>
+            <span aria-hidden="true" className="wg-wiki-cell-fill" data-label={label} />
           </label>
         ))}
       </fieldset>
@@ -145,7 +145,11 @@ export function EntryList({
   const isCharacters = tab === 'characters'
   const base = `/works/${workId}/wiki`
   const [search, setSearch] = useState(query)
-  const [order, setOrder] = useState<SortOrder>('name')
+  const [sort, setSort] = useState<{ order: SortOrder; changed: boolean }>({
+    order: 'name',
+    changed: false,
+  })
+  const { order } = sort
   const [selection, setSelection] = useState<{ id: string; open: boolean } | null>(
     initialEntryId ? { id: initialEntryId, open: true } : null,
   )
@@ -179,20 +183,20 @@ export function EntryList({
     value: search,
     onSearch: setSearch,
     order,
-    onSort: setOrder,
+    onSort: (order: SortOrder) => setSort({ order, changed: true }),
   }
 
   return (
-    <section aria-labelledby="wiki-index-heading" className="b-wiki-index">
-      <div className="b-wiki-search-dock">
-        <div className="b-wiki-toolbar">
-          <h2 id="wiki-index-heading" className="b-wiki-section-title">
+    <section aria-labelledby="wiki-index-heading" className="wg-wiki-index">
+      <div className="wg-wiki-search-dock">
+        <div className="wg-wiki-toolbar">
+          <h2 id="wiki-index-heading" className="wg-wiki-section-title">
             {isCharacters ? '인물 색인' : '세계관 색인'}
           </h2>
-          <div className="b-wiki-search-inline">
+          <div className="wg-wiki-search-inline">
             <LookupControls {...lookupProps} />
           </div>
-          <div className="b-wiki-search-sheet">
+          <div className="wg-wiki-search-sheet">
             <MenuSheet
               title="검색·정렬"
               label="검색·정렬"
@@ -213,13 +217,13 @@ export function EntryList({
           )}
         </div>
         {filterKinds && (
-          <nav className="flex flex-wrap gap-2" aria-label="분류 필터">
+          <nav className="wg-wiki-filters" aria-label="분류 필터">
             {[null, ...filterKinds].map((kind) => (
               <Link
                 key={kind ?? 'all'}
                 href={queryHref(kind)}
                 aria-current={kind === kindFilter ? 'page' : undefined}
-                className="b-chip b-wiki-choice"
+                className="wg-wiki-cell"
               >
                 {kind ? ENTRY_KIND_LABEL[kind] : '전체'}
               </Link>
@@ -242,7 +246,7 @@ export function EntryList({
             term && (
               <Link
                 href={queryHref(kindFilter, '')}
-                className="b-chip b-wiki-choice"
+                className="b-link"
                 onClick={() => setSearch('')}
               >
                 검색 지우기
@@ -251,95 +255,89 @@ export function EntryList({
           }
         />
       ) : (
-        <ol className="b-wiki-index-list" role="list">
+        <ol key={order} className="wg-wiki-index-list" role="list" data-sorted={sort.changed}>
           {visible.map(({ entry, number }, index) => {
-            const matches = selected?.entry.id === entry.id
-            const expanded = matches && Boolean(selection?.open)
-            const previewId = `wiki-preview-${entry.id}`
+            const selectedEntry = selected?.entry.id === entry.id
+            const expanded = selectedEntry && Boolean(selection?.open)
             const detailHref = `${base}/entries/${entry.id}`
             return (
               <li
                 key={entry.id}
                 role="listitem"
-                className="b-wiki-index-item"
-                style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+                className="wg-wiki-index-item"
+                style={{ '--wg-wiki-row': Math.min(index, 3) } as CSSProperties}
               >
-                <div className="b-wiki-index-row b-row b-sequence" data-expanded={expanded}>
-                  <span className="b-number" aria-hidden="true">
+                <div className="wg-wiki-index-row">
+                  <span className="wg-wiki-index-number" aria-hidden="true">
                     {String(number).padStart(2, '0')}
                   </span>
-                  <button
-                    type="button"
-                    className="b-wiki-index-toggle"
-                    aria-label={`${entry.name} 미리 보기`}
-                    aria-expanded={expanded}
-                    aria-controls={matches ? previewId : undefined}
-                    onClick={() => setSelection({ id: entry.id, open: !expanded })}
-                  >
-                    <ChevronDownIcon className="b-icon b-chevron" aria-hidden="true" />
-                  </button>
-                  <div className="b-wiki-index-content">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <Link className="b-row__title b-wiki-card-link" href={detailHref}>
+                  <div className="wg-wiki-index-content">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <Link className="b-link wg-wiki-name" href={detailHref}>
                         {entry.name}
                       </Link>
-                      <span className="b-wiki-tag">{ENTRY_KIND_LABEL[entry.kind]}</span>
+                      <span className="wg-wiki-kind">{ENTRY_KIND_LABEL[entry.kind]}</span>
                     </div>
                     {entry.aliases.length > 0 && (
                       <span className="b-label b-muted">{entry.aliases.join(' · ')}</span>
                     )}
-                    <p className="line-clamp-2 text-sm">{entry.summary}</p>
-                    <span className="b-label b-muted">사실 {entry.factCount}개</span>
+                    {entry.summary && <p className="text-sm">{entry.summary}</p>}
+                    <span className="b-label b-muted font-mono">사실 {entry.factCount}개</span>
                   </div>
                 </div>
-                {matches && (
-                  <section
-                    id={previewId}
-                    aria-label={`${entry.name} 미리 보기`}
-                    className="b-wiki-preview b-disclosure"
-                    data-open={expanded}
-                    inert={!expanded}
-                    aria-hidden={!expanded}
-                  >
-                    <div className="b-wiki-preview-slip b-fade" aria-hidden="true" />
-                    <div className="b-paper b-wiki-preview-paper">
-                      <p className="b-wiki-tag">{ENTRY_KIND_LABEL[entry.kind]}</p>
-                      <h3 className="b-heading wrap-anywhere">{entry.name}</h3>
-                      <p className="wrap-anywhere">{entry.summary || '요약이 없어요.'}</p>
-                      <h4 className="font-bold">사실</h4>
-                      {entry.facts.length ? (
-                        <ul className="flex flex-col gap-3">
-                          {entry.facts.map((fact) => (
-                            <li key={fact.id} className="b-wiki-fact" data-status={fact.status}>
-                              <blockquote className="b-quote b-quote--wiki wrap-anywhere">
-                                {fact.content}
-                              </blockquote>
-                              <div className="b-label b-muted flex flex-wrap items-center gap-2">
-                                <FactStatusBadge status={fact.status} />
-                                {factValidityText(fact.validFromPosition, fact.validToPosition)}
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="b-muted b-label">아직 사실이 없어요.</p>
-                      )}
-                      <p className="b-label b-muted">
-                        {entry.firstAppearance === null
-                          ? '등장 회차가 없어요.'
-                          : `${entry.firstAppearance}화에 처음 등장`}
-                      </p>
-                      <PopLink href={detailHref} className="w-fit">
-                        카드 열기
-                      </PopLink>
-                    </div>
-                  </section>
-                )}
+                <Disclosure
+                  title={<span className="sr-only">{entry.name} 미리 보기</span>}
+                  open={expanded}
+                  onOpenChange={(open) => setSelection({ id: entry.id, open })}
+                  className="wg-wiki-index-disclosure"
+                >
+                  {selectedEntry && <EntryPreview entry={entry} detailHref={detailHref} />}
+                </Disclosure>
               </li>
             )
           })}
         </ol>
       )}
     </section>
+  )
+}
+
+function EntryPreview({ entry, detailHref }: { entry: EntryListItem; detailHref: string }) {
+  return (
+    <div className="wg-wiki-preview">
+      <p className="wg-wiki-kind">{ENTRY_KIND_LABEL[entry.kind]}</p>
+      <h3 className="wg-wiki-name">{entry.name}</h3>
+      <p className="text-sm">{entry.summary || '요약이 없어요.'}</p>
+      <h4 className="text-sm font-medium">사실</h4>
+      {entry.facts.length ? (
+        <ul>
+          {entry.facts.map((fact, index) => (
+            <li
+              key={fact.id}
+              className="wg-wiki-preview-fact"
+              style={{ '--wg-wiki-row': Math.min(index, 3) } as CSSProperties}
+            >
+              <blockquote className="wg-wiki-fact-text">{fact.content}</blockquote>
+              <div className="b-label b-muted flex flex-wrap items-center gap-2">
+                <FactStatusBadge status={fact.status} />
+                <span className="font-mono">
+                  {factValidityText(fact.validFromPosition, fact.validToPosition)}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="b-muted b-label">아직 사실이 없어요.</p>
+      )}
+      <p className="b-label b-muted font-mono">
+        {entry.firstAppearance === null
+          ? '등장 회차가 없어요.'
+          : `${entry.firstAppearance}화에 처음 등장`}
+      </p>
+      <Link href={detailHref} className="b-link w-fit text-sm">
+        카드 열기
+      </Link>
+    </div>
   )
 }

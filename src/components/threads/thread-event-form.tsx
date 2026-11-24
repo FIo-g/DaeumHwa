@@ -95,8 +95,8 @@ export function ThreadEventForm({ thread, chapters, onDone }: ThreadEventFormPro
 
   const chapterLabelId = `${ids}-chapter`
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-2">
+    <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-3">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${ids}-kind`}>기록 종류</Label>
           <Select
@@ -153,7 +153,7 @@ export function ThreadEventForm({ thread, chapters, onDone }: ThreadEventFormPro
         />
       </div>
       {error && (
-        <p role="alert" className="text-sm text-ink">
+        <p role="alert" className="wg-threads-error text-sm text-ink">
           {error}
         </p>
       )}

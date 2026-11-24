@@ -1,0 +1,265 @@
+@layer components {
+  .wg-graph-toolbar {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--b-s2) var(--b-s4);
+  }
+
+  .wg-graph-controls {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--b-s3);
+  }
+
+  .wg-graph-controls > .wg-graph-toolbar + .wg-graph-toolbar {
+    border-block-start: var(--b-line) solid var(--b-grid);
+    padding-block-start: var(--b-s2);
+  }
+
+  .wg-graph-range {
+    display: grid;
+    flex: 1 1 16rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--b-s2);
+    min-inline-size: 0;
+  }
+
+  .wg-graph-range > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .wg-graph-cells {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .wg-graph-kind {
+    display: inline-flex;
+    min-block-size: 36px;
+    align-items: center;
+    gap: var(--b-s1);
+    padding: var(--b-s1) var(--b-s2);
+  }
+
+  .wg-graph-slider {
+    appearance: none;
+    inline-size: 100%;
+    min-block-size: 36px;
+    margin: 0;
+    border: 0;
+    cursor: pointer;
+    background: linear-gradient(
+        to right,
+        color-mix(in srgb, var(--b-grid) 45%, transparent) 1px,
+        transparent 1px
+      )
+      repeat-x left center;
+  }
+
+  .wg-graph-slider:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  .wg-graph-slider::-webkit-slider-runnable-track {
+    block-size: 1px;
+    background: var(--b-grid);
+  }
+
+  .wg-graph-slider::-moz-range-track {
+    block-size: 1px;
+    background: var(--b-grid);
+  }
+
+  .wg-graph-slider::-webkit-slider-thumb {
+    appearance: none;
+    inline-size: 0.875rem;
+    block-size: 1.5rem;
+    margin-block-start: calc((1px - 1.5rem) / 2);
+    border: 0;
+    border-radius: 0;
+    background: var(--b-ink);
+  }
+
+  .wg-graph-slider::-moz-range-thumb {
+    inline-size: 0.875rem;
+    block-size: 1.5rem;
+    border: 0;
+    border-radius: 0;
+    background: var(--b-ink);
+  }
+
+  .wg-graph-layout {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--b-s4);
+  }
+
+  @media (min-width: 64rem) {
+    .wg-graph-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(12rem, 25%);
+    }
+  }
+
+  .wg-graph-surface {
+    --wg-graph-grid-ink: color-mix(in srgb, var(--b-grid) 12%, transparent);
+    position: relative;
+    isolation: isolate;
+    inline-size: 100%;
+    min-inline-size: 0;
+    block-size: clamp(20rem, 55vh, 38rem);
+    overflow: hidden;
+    border-block: var(--b-line) solid var(--b-grid);
+    background-color: var(--b-paper);
+    color: var(--b-ink);
+  }
+
+  .wg-graph-surface::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, var(--wg-graph-grid-ink) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--wg-graph-grid-ink) 1px, transparent 1px);
+    background-position: center;
+    background-size: 32px 32px;
+    content: '';
+    pointer-events: none;
+    animation: wg-graph-grid-in var(--b-quick) var(--b-out) both;
+  }
+
+  .wg-graph-surface[data-force-graph] {
+    block-size: clamp(20rem, 58vh, 42rem);
+  }
+
+  @media (max-width: 47.999rem) {
+    .wg-graph-surface,
+    .wg-graph-surface[data-force-graph] {
+      block-size: clamp(20rem, 95vw, 34rem);
+    }
+  }
+
+  .wg-graph-surface[data-mode='3d']::before {
+    content: none;
+  }
+
+  .wg-graph-surface .float-tooltip-kap {
+    padding: var(--b-s1) var(--b-s2) !important;
+    color: var(--b-ink) !important;
+    background: var(--b-paper) !important;
+    border: var(--b-line) solid var(--b-grid);
+    border-radius: 0 !important;
+    font: var(--b-t-label) var(--b-font-body) !important;
+  }
+
+  .wg-graph-panel {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    align-self: start;
+    gap: var(--b-s4);
+    padding-block: var(--b-s3);
+    border-block: var(--b-line) solid var(--b-grid);
+    overflow-wrap: anywhere;
+  }
+
+  .wg-graph-roster {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--b-s1);
+    border-block-start: var(--b-line) solid var(--b-grid);
+    padding-block-start: var(--b-s2);
+  }
+
+  .wg-graph-list {
+    max-block-size: 10rem;
+    padding: 2px;
+    overflow-y: auto;
+  }
+
+  .wg-graph-list > li + li {
+    border-block-start: var(--b-line) solid color-mix(in srgb, var(--b-grid) 35%, transparent);
+  }
+
+  .wg-graph-option {
+    display: flex;
+    inline-size: 100%;
+    min-block-size: 32px;
+    align-items: center;
+    gap: var(--b-s2);
+    padding: var(--b-s1) var(--b-s2);
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .wg-graph-option:not(:has(svg)) {
+    display: block;
+  }
+
+  .wg-graph-option-meta {
+    color: var(--b-muted);
+  }
+
+  .wg-graph-option:is(:hover, :focus-visible) {
+    text-decoration: underline;
+    outline: 2px solid var(--b-ink);
+    outline-offset: -2px;
+  }
+
+  .wg-graph-option[aria-pressed='true'] {
+    color: var(--b-paper);
+    background: var(--b-ink);
+  }
+
+  .wg-graph-option[aria-pressed='true'] .wg-graph-option-meta {
+    color: inherit;
+  }
+
+  .wg-graph-option[aria-pressed='true']:focus-visible {
+    outline: 2px solid var(--b-paper);
+    outline-offset: -4px;
+  }
+
+  .wg-graph-selection {
+    animation: wg-graph-detail-in var(--b-step) var(--b-out) both;
+  }
+
+  .wg-graph-form > :last-child {
+    border-block-start: var(--b-line) solid var(--b-grid);
+    padding-block-start: var(--b-s3);
+  }
+
+  @keyframes wg-graph-grid-in {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-graph-detail-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wg-graph-surface::before,
+    .wg-graph-selection {
+      animation: none;
+    }
+  }
+}

@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import { Component, memo, type ReactNode, useEffect, useRef, useState } from 'react'
 import type { ForceGraphRendererProps } from './force-graph-renderer'
-import { readGraphPalette } from './graph-style'
+import { readGraphFont, readGraphPalette } from './graph-style'
 
 const ForceGraph2D = dynamic(() => import('./force-graph-2d'), {
   ssr: false,
@@ -14,7 +14,7 @@ const ForceGraph3D = dynamic(() => import('./force-graph-3d'), {
   loading: GraphLoading,
 })
 
-type Viewport = Pick<ForceGraphRendererProps, 'width' | 'height' | 'palette'>
+type Viewport = Pick<ForceGraphRendererProps, 'width' | 'height' | 'palette' | 'font'>
 type GraphViewportProps = Omit<ForceGraphRendererProps, keyof Viewport> & {
   mode: '3d' | '2d'
   on3DUnavailable: () => void
@@ -89,15 +89,15 @@ export const GraphViewport = memo(function GraphViewport({
       const height = container.clientHeight
       if (!width || !height) return
       const palette = readGraphPalette(container, colorContext)
+      const font = readGraphFont(container)
       setViewport((previous) =>
         previous?.width === width &&
         previous.height === height &&
         previous.palette.ink === palette.ink &&
-        previous.palette.muted === palette.muted &&
         previous.palette.paper === palette.paper &&
-        previous.palette.selection === palette.selection
+        previous.font === font
           ? previous
-          : { width, height, palette },
+          : { width, height, palette, font },
       )
     }
 
@@ -158,7 +158,9 @@ export const GraphViewport = memo(function GraphViewport({
       ref={containerRef}
       role="region"
       aria-label="관계 그래프"
-      className="h-[clamp(20rem,60vh,44rem)] w-full min-w-0 overflow-hidden rounded-card border-2 border-ink bg-paper text-ink"
+      className="wg-graph-surface"
+      data-force-graph
+      data-mode={mode}
     >
       {content}
     </div>

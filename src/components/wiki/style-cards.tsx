@@ -1,13 +1,13 @@
 'use client'
 
-import { SparklesIcon } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
 import { SubmitButton } from '@/components/app/submit-button'
+import { GridTitle, Sheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -29,6 +29,7 @@ import {
   createStyleCardAction,
   updateStyleCardAction,
 } from '@/server/actions/wiki'
+import { useWikiTabArchive } from './naming-rules'
 import { SelectField } from './select-field'
 
 export type StyleCardItem = {
@@ -59,13 +60,15 @@ export function StyleCards({
   canEdit,
   canSuggest = canEdit,
 }: StyleCardsProps) {
+  const { rows, archive } = useWikiTabArchive(cards)
+
   return (
     <div className="flex flex-col gap-5">
       <section aria-labelledby="style-cards-heading" className="flex flex-col gap-3">
-        <div className="b-wiki-toolbar">
-          <h2 id="style-cards-heading" className="b-wiki-section-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <GridTitle id="style-cards-heading" className="wg-wiki-tabs-title">
             문체 카드
-          </h2>
+          </GridTitle>
           {canEdit && (
             <StyleCardDialog
               workId={workId}
@@ -74,14 +77,14 @@ export function StyleCards({
             />
           )}
         </div>
-        {cards.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState
             title="아직 문체 카드가 없어요."
             description="인물 말투와 예시 대사를 적어 두세요. AI 초안이 그 말투를 따라 써요."
           />
         ) : (
-          <div className="b-wiki-records">
-            {cards.map((card, index) => (
+          <div className="wg-wiki-tabs-list wg-wiki-tabs-sheets">
+            {rows.map((card, index) => (
               <StyleCardView
                 key={card.id}
                 workId={workId}
@@ -89,6 +92,13 @@ export function StyleCards({
                 index={index}
                 characters={characters}
                 canEdit={canEdit}
+                archive={(row) =>
+                  archive(card, row, () =>
+                    runAction(archiveStyleCardAction({ cardId: card.id }), {
+                      success: '문체 카드를 보관했어요.',
+                    }),
+                  )
+                }
               />
             ))}
           </div>
@@ -97,24 +107,28 @@ export function StyleCards({
       {canSuggest && (
         <section aria-labelledby="style-suggest-heading" className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <h2 id="style-suggest-heading" className="text-base font-semibold">
+            <h2 id="style-suggest-heading" className="b-subhead">
               AI로 문체 카드 제안
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="b-label b-muted">
               원고에서 인물 대사를 모아 문체 카드 초안을 만들어 승인 대기에 올려요.
             </p>
           </div>
           {characters.length === 0 ? (
             <EmptyState title="아직 인물이 없어요." />
           ) : (
-            <ul className="b-wiki-records">
+            <ul className="wg-wiki-tabs-list">
               {characters.map((character, index) => (
                 <li
                   key={character.id}
-                  style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
-                  className="flex flex-wrap items-center justify-between gap-2 p-3"
+                  style={{ '--wg-wiki-tabs-order': Math.min(index, 2) } as CSSProperties}
+                  className="wg-wiki-tabs-row wg-wiki-tabs-entry"
+                  tabIndex={0}
                 >
-                  <span className="b-row__title text-sm">{character.name}</span>
+                  <span className="wg-wiki-tabs-number" aria-hidden="true" />
+                  <span className="font-heading font-bold wg-wiki-tabs-write">
+                    {character.name}
+                  </span>
                   <SuggestButton workId={workId} entryId={character.id} />
                 </li>
               ))}
@@ -145,8 +159,7 @@ function SuggestButton({ workId, entryId }: { workId: string; entryId: string })
     )
   }
   return (
-    <Button type="button" variant="outline" size="sm" onClick={suggest}>
-      <SparklesIcon />
+    <Button type="button" variant="link" size="sm" onClick={suggest}>
       AI로 문체 카드 제안
     </Button>
   )
@@ -158,65 +171,90 @@ function StyleCardView({
   index,
   characters,
   canEdit,
+  archive,
 }: {
   workId: string
   card: StyleCardItem
   index: number
   characters: { id: string; name: string }[]
   canEdit: boolean
+  archive: (row: HTMLDivElement | null) => Promise<void>
 }) {
-  const router = useRouter()
+  const row = useRef<HTMLDivElement>(null)
   return (
-    <article
-      className="flex flex-col gap-3 p-4"
-      style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+    <div
+      ref={row}
+      className="wg-wiki-tabs-row"
+      tabIndex={0}
+      style={{ '--wg-wiki-tabs-order': Math.min(index, 2) } as CSSProperties}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="font-medium">{card.name}</h3>
-          <p className="text-xs text-muted-foreground">
-            연결 인물 <span className="text-foreground">{card.entryName ?? '없음'}</span>
-          </p>
-        </div>
-        {canEdit && (
-          <div className="flex flex-wrap gap-2">
-            <StyleCardDialog
-              workId={workId}
-              characters={characters}
-              card={card}
-              triggerLabel="수정"
-            />
-            <ConfirmButton
-              title="이 문체 카드를 보관할까요?"
-              confirmLabel="보관"
-              size="sm"
-              onConfirm={async () => {
-                const saved = await runAction(archiveStyleCardAction({ cardId: card.id }), {
-                  success: '문체 카드를 보관했어요.',
-                })
-                if (saved) router.refresh()
-              }}
-            >
-              보관
-            </ConfirmButton>
+      <span className="wg-wiki-tabs-number" aria-hidden="true" />
+      <Sheet as="article" page={String(index + 1).padStart(2, '0')}>
+        <div className="wg-wiki-tabs-entry">
+          <div
+            key={JSON.stringify([card.name, card.entryName])}
+            className="wg-wiki-tabs-write min-w-0"
+          >
+            <h3 className="font-heading text-lg font-bold">{card.name}</h3>
+            <p className="b-label b-muted">
+              연결 인물 <span className="text-ink">{card.entryName ?? '없음'}</span>
+            </p>
           </div>
-        )}
-      </div>
-      <dl className="grid gap-2 text-sm">
-        <div>
-          <dt className="text-xs text-muted-foreground">말투</dt>
-          <dd className="whitespace-pre-line">{card.tone || '-'}</dd>
+          {canEdit && (
+            <div className="wg-wiki-tabs-actions">
+              <StyleCardDialog
+                workId={workId}
+                characters={characters}
+                card={card}
+                triggerLabel="수정"
+              />
+              <ConfirmButton
+                title="이 문체 카드를 보관할까요?"
+                confirmLabel="보관"
+                variant="link"
+                size="sm"
+                onConfirm={() => archive(row.current)}
+              >
+                보관
+              </ConfirmButton>
+            </div>
+          )}
         </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">규칙</dt>
-          <dd className="whitespace-pre-line">{card.rules || '-'}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">예시</dt>
-          <dd className="whitespace-pre-line">{card.examples || '-'}</dd>
-        </div>
-      </dl>
-    </article>
+        <dl
+          key={JSON.stringify([card.tone, card.rules, card.examples])}
+          className="wg-wiki-tabs-style-fields wg-wiki-tabs-write"
+        >
+          <div>
+            <dt className="b-label b-muted">말투</dt>
+            <dd className="whitespace-pre-wrap">{card.tone || '-'}</dd>
+          </div>
+          <div>
+            <dt className="b-label b-muted">규칙</dt>
+            <dd>
+              <ul className="wg-wiki-tabs-style-rules">
+                {(card.rules || '-').split(/\r?\n/).map((rule, index) => (
+                  <li key={index}>{rule}</li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+          <div>
+            <dt className="b-label b-muted">예시</dt>
+            <dd>
+              {card.examples ? (
+                <blockquote className="wg-wiki-tabs-example">
+                  <span aria-hidden="true">「</span>
+                  <span>{card.examples}</span>
+                  <span aria-hidden="true">」</span>
+                </blockquote>
+              ) : (
+                '-'
+              )}
+            </dd>
+          </div>
+        </dl>
+      </Sheet>
+    </div>
   )
 }
 
@@ -234,7 +272,9 @@ function StyleCardDialog({
   const [open, setOpen] = useState(false)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>{triggerLabel}</DialogTrigger>
+      <DialogTrigger render={<Button variant={card ? 'link' : 'default'} size="sm" />}>
+        {triggerLabel}
+      </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{card ? '문체 카드 수정' : '문체 카드 추가'}</DialogTitle>

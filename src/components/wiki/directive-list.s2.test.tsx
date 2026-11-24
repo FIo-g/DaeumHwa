@@ -100,7 +100,7 @@ afterEach(() => {
 })
 
 describe('DirectiveList', () => {
-  it('renders the active requests with scope and kind badges', () => {
+  it('renders the active requests with scope, kind, status, and source', () => {
     render(
       <DirectiveList
         workId="w1"
@@ -114,6 +114,8 @@ describe('DirectiveList', () => {
     const work = screen.getByText('감정은 행동으로 보여 준다.').closest('li') as HTMLElement
     expect(within(work).getByText('작품 전체')).toBeInTheDocument()
     expect(within(work).getByText('문체')).toBeInTheDocument()
+    expect(within(work).getByText('적용 중')).toBeInTheDocument()
+    expect(within(work).getByText('작가')).toBeInTheDocument()
     const person = screen.getByText('서윤은 누구에게나 반말을 한다.').closest('li') as HTMLElement
     expect(within(person).getByText('인물 서윤')).toBeInTheDocument()
     expect(within(person).getByText('말투')).toBeInTheDocument()
@@ -137,6 +139,7 @@ describe('DirectiveList', () => {
     expect(screen.getByText('꺼 둔 요청')).toBeInTheDocument()
     const off = screen.getByText('짧게 쓴다.').closest('li') as HTMLElement
     expect(within(off).getByText('분량')).toBeInTheDocument()
+    expect(within(off).getByText('꺼 둠')).toBeInTheDocument()
     expect(within(off).getByRole('button', { name: '켜기' })).toBeInTheDocument()
   })
 
@@ -162,6 +165,25 @@ describe('DirectiveList', () => {
     const work = screen.getByText('감정은 행동으로 보여 준다.').closest('li') as HTMLElement
     fireEvent.click(within(work).getByRole('button', { name: '끄기' }))
     await waitFor(() => expect(update).toHaveBeenCalledWith({ directiveId: 'd1', status: 'off' }))
+  })
+
+  it('moves the row to the switched-off list when server props change', () => {
+    const props = { workId: 'w1', characters, styleCards, canEdit: true }
+    const { rerender } = render(<DirectiveList {...props} directives={directives} />)
+
+    rerender(
+      <DirectiveList
+        {...props}
+        directives={directives.map((item) =>
+          item.id === 'd1' ? { ...item, status: 'off' } : item,
+        )}
+      />,
+    )
+
+    const off = screen.getByRole('region', { name: '꺼 둔 요청' })
+    const row = within(off).getByText('감정은 행동으로 보여 준다.').closest('li') as HTMLElement
+    expect(within(row).getByText('꺼 둠')).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: '켜기' })).toBeInTheDocument()
   })
 
   it('sends the chosen scope, kind and fields when a request is added', async () => {

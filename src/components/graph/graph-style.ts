@@ -1,14 +1,12 @@
+import type { Css } from 'cytoscape'
 import type { EntryKind } from '@/db/types'
 
 export const GRAPH_COLOR_TOKENS = {
   ink: '--b-ink',
-  muted: '--b-muted',
   paper: '--b-paper',
-  selection: '--b-kraft',
 } as const
 
 export type GraphPalette = Record<keyof typeof GRAPH_COLOR_TOKENS, string>
-type GraphInk = 'ink' | 'muted'
 
 export function readGraphPalette(
   element: Element,
@@ -31,31 +29,27 @@ export function readGraphPalette(
 
   return {
     ink: read('ink', computed.color),
-    muted: read('muted', computed.color),
     paper: read('paper', computed.backgroundColor),
-    selection: read('selection', computed.color),
   }
 }
 
-export const GRAPH_FONT =
-  '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif'
+export function readGraphFont(element: Element): string {
+  const font = getComputedStyle(element).getPropertyValue('--b-font-body')
+  return font.replace(/'/g, '"').replace(/\s+/g, ' ').trim() || 'sans-serif'
+}
 
 export type KindShape = 'circle' | 'square' | 'diamond' | 'hexagon' | 'triangle'
-export type KindMark = { shape: KindShape; ink: GraphInk; filled: boolean }
+export type KindMark = { shape: KindShape; filled: boolean }
 
-/**
- * Card kinds read without hue: the shape first, then a filled or outlined mark, then graphite,
- * muted or pencil grey. Selection uses kraft.
- */
 export const ENTRY_KIND_MARK: Record<EntryKind, KindMark> = {
-  character: { shape: 'circle', ink: 'ink', filled: true },
-  place: { shape: 'square', ink: 'muted', filled: true },
-  organization: { shape: 'hexagon', ink: 'ink', filled: false },
-  item: { shape: 'diamond', ink: 'muted', filled: true },
-  rule: { shape: 'square', ink: 'muted', filled: false },
-  event: { shape: 'triangle', ink: 'ink', filled: false },
-  term: { shape: 'diamond', ink: 'muted', filled: false },
-  other: { shape: 'circle', ink: 'muted', filled: false },
+  character: { shape: 'circle', filled: true },
+  place: { shape: 'square', filled: true },
+  organization: { shape: 'hexagon', filled: false },
+  item: { shape: 'diamond', filled: true },
+  rule: { shape: 'square', filled: false },
+  event: { shape: 'triangle', filled: false },
+  term: { shape: 'diamond', filled: false },
+  other: { shape: 'circle', filled: false },
 }
 
 /** Outline points of a shape centred on (x, y) that fits a circle of radius r. */
@@ -103,11 +97,11 @@ export function drawKindMark(
   x: number,
   y: number,
   r: number,
-  palette: GraphPalette,
+  ink: string,
+  paper: string,
   lineWidth: number,
-  surface = palette.paper,
 ): void {
-  const { shape, ink, filled } = ENTRY_KIND_MARK[kind]
+  const { shape, filled } = ENTRY_KIND_MARK[kind]
   // Keep outlined marks the same outer size as filled ones.
   const radius = filled ? r : r - lineWidth / 2
   context.beginPath()
@@ -119,12 +113,28 @@ export function drawKindMark(
     for (const [px, py] of rest) context.lineTo(px, py)
     context.closePath()
   }
-  context.fillStyle = filled ? palette[ink] : surface
+  context.fillStyle = filled ? ink : paper
   context.fill()
   if (!filled) {
     context.lineWidth = lineWidth
     context.lineJoin = 'round'
-    context.strokeStyle = palette[ink]
+    context.strokeStyle = ink
     context.stroke()
+  }
+}
+
+export function readGraphTiming(element: Element) {
+  const style = getComputedStyle(element)
+  function milliseconds(token: string, fallback: number) {
+    const duration = style.getPropertyValue(token).trim()
+    const value = Number.parseFloat(duration)
+    if (!Number.isFinite(value)) return fallback
+    return duration.endsWith('ms') ? value : value * 1000
+  }
+
+  return {
+    step: milliseconds('--b-step', 260),
+    easing: (style.getPropertyValue('--b-out').trim() ||
+      'ease-out') as Css.TransitionTimingFunction,
   }
 }

@@ -19,10 +19,14 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { ContextTier, EntryKind } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
-import { CHARACTER_FIELD_LABELS, ENTRY_KIND_LABEL, PLACE_FIELD_LABELS } from '@/lib/labels'
+import {
+  CHARACTER_FIELD_LABELS,
+  CONTEXT_TIER_LABEL,
+  ENTRY_KIND_LABEL,
+  PLACE_FIELD_LABELS,
+} from '@/lib/labels'
 import { createEntryAction, updateEntryAction } from '@/server/actions/wiki'
 import { SelectField } from './select-field'
-import { CONTEXT_TIER_LABEL } from '@/lib/labels'
 
 /** The editable parts of a wiki card, as the detail page passes them in. */
 export type EditableEntry = {
@@ -74,12 +78,16 @@ export function EntryFormDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          mode === 'create' ? <PopButton /> : <Button variant={triggerVariant} size={triggerSize} />
+          mode === 'create' ? (
+            <PopButton arrow={false} />
+          ) : (
+            <Button variant={triggerVariant} size={triggerSize} />
+          )
         }
       >
         {triggerLabel}
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? '카드 만들기' : '카드 수정'}</DialogTitle>
         </DialogHeader>
@@ -164,7 +172,7 @@ function EntryFormFields({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="wg-wiki-form">
       {kinds.length > 1 && (
         <SelectField
           id="entry-kind"
@@ -181,10 +189,13 @@ function EntryFormFields({
         value={aliases}
         onChange={setAliases}
       />
-      <TextField id="entry-summary" label="한 줄 요약" value={summary} onChange={setSummary} />
-      <p className="-mt-2 text-xs text-muted-foreground">
-        짧게 쓸수록 AI가 같은 묘사를 덜 반복해요.
-      </p>
+      <TextField
+        id="entry-summary"
+        label="한 줄 요약"
+        value={summary}
+        onChange={setSummary}
+        hint="짧게 쓸수록 AI가 같은 묘사를 덜 반복해요."
+      />
       <SelectField
         id="entry-context-tier"
         label="AI 문맥"
@@ -201,10 +212,10 @@ function EntryFormFields({
           onChange={(value) => setFields((prev) => ({ ...prev, [key]: value }))}
         />
       ))}
-      <div className="flex flex-col gap-2">
+      <div className="wg-wiki-custom-fields">
         <p className="text-sm font-medium">자유 필드</p>
         {customFields.map((row, index) => (
-          <div key={index} className="flex items-center gap-2">
+          <div key={index} className="wg-wiki-custom-row">
             <Input
               aria-label={`자유 필드 이름 ${index + 1}`}
               placeholder="항목 이름"
@@ -232,7 +243,7 @@ function EntryFormFields({
               aria-label={`자유 필드 ${index + 1} 삭제`}
               onClick={() => setCustomFields((prev) => prev.filter((_, i) => i !== index))}
             >
-              <Trash2Icon />
+              <Trash2Icon strokeWidth={1.5} />
             </Button>
           </div>
         ))}
@@ -243,12 +254,12 @@ function EntryFormFields({
             size="sm"
             onClick={() => setCustomFields((prev) => [...prev, { key: '', value: '' }])}
           >
-            <PlusIcon />
+            <PlusIcon strokeWidth={1.5} />
             항목 추가
           </Button>
         </div>
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="wg-wiki-form-row">
         <Label htmlFor="entry-body">설명</Label>
         <Textarea id="entry-body" value={body} onChange={(e) => setBody(e.target.value)} rows={5} />
       </div>
@@ -265,23 +276,31 @@ function TextField({
   value,
   onChange,
   required,
+  hint,
 }: {
   id: string
   label: string
   value: string
   onChange: (value: string) => void
   required?: boolean
+  hint?: string
 }): ReactNode {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="wg-wiki-form-row">
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
         value={value}
         required={required}
+        aria-describedby={hint ? `${id}-hint` : undefined}
         maxLength={500}
         onChange={(e) => onChange(e.target.value)}
       />
+      {hint && (
+        <p id={`${id}-hint`} className="wg-wiki-form-hint">
+          {hint}
+        </p>
+      )}
     </div>
   )
 }

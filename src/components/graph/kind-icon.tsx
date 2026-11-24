@@ -1,21 +1,9 @@
 import type { EntryKind } from '@/db/types'
 import { cn } from '@/lib/utils'
-import { ENTRY_KIND_MARK, GRAPH_COLOR_TOKENS, kindShapePoints } from './graph-style'
+import { ENTRY_KIND_MARK, kindShapePoints } from './graph-style'
 
-/**
- * The card kind's graph mark as a small SVG, the legend for the canvas. It draws in currentColor;
- * `inked` uses the kind's own ink instead, as on the graph.
- */
-export function KindIcon({
-  kind,
-  inked = false,
-  className,
-}: {
-  kind: EntryKind
-  inked?: boolean
-  className?: string
-}) {
-  const { shape, ink, filled } = ENTRY_KIND_MARK[kind]
+export function KindIcon({ kind, className }: { kind: EntryKind; className?: string }) {
+  const { shape, filled } = ENTRY_KIND_MARK[kind]
   const paint = filled
     ? { fill: 'currentColor' }
     : { fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinejoin: 'round' as const }
@@ -26,7 +14,6 @@ export function KindIcon({
       aria-hidden="true"
       data-kind-shape={shape}
       className={cn('size-3 shrink-0', className)}
-      style={inked ? { color: `var(${GRAPH_COLOR_TOKENS[ink]})` } : undefined}
     >
       {shape === 'circle' ? (
         <circle cx={6} cy={6} r={r} {...paint} />
