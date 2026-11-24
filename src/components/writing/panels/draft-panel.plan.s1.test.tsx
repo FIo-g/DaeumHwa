@@ -25,7 +25,7 @@ const encoder = new TextEncoder()
 
 const PLACEHOLDER =
   '무슨 일이 일어나야 하나요? 지시 없이도 위키와 앞 회차를 바탕으로 계획을 받을 수 있어요.'
-const REVISION_PLACEHOLDER = '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 윤서가 먼저 말을 걸게)'
+const REVISION_PLACEHOLDER = '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 주인공이 먼저 말을 걸게)'
 
 function makeData(): WritingData {
   return {
@@ -329,11 +329,11 @@ describe('DraftPanel plan edits', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '계획 세우기' }))
     await screen.findByText('이번 화 계획')
-    expect(screen.getByText('장면 1 · 도입 · 약 1,250자')).toBeInTheDocument()
+    expect(screen.getByText(/도입 · 약/)).toHaveTextContent('장면 1 · 도입 · 약 1,250자')
 
     fireEvent.change(screen.getByLabelText('목표 분량 (자)'), { target: { value: '4000' } })
 
-    expect(screen.getByText('장면 1 · 도입 · 약 2,000자')).toBeInTheDocument()
+    expect(screen.getByText(/도입 · 약/)).toHaveTextContent('장면 1 · 도입 · 약 2,000자')
   })
 
   it('sends the quick-path body while a plan is on screen', async () => {

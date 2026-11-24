@@ -196,7 +196,7 @@ export function DraftCheck({ workId, runId, onApplied, onPreviewChange }: DraftC
         <Button onClick={() => void apply()} disabled={applying}>
           적용
         </Button>
-        <Button variant="outline" onClick={() => void discard()} disabled={applying}>
+        <Button variant="link" onClick={() => void discard()} disabled={applying}>
           버리기
         </Button>
       </div>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
-import { GridTitle, ScanLine } from '@/components/motion'
+import { ScanLine } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -462,7 +462,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
 
   return (
     <section aria-label="AI 초안" className="wg-panels-section">
-      <GridTitle>AI 초안</GridTitle>
+      <h2 className="wg-panels-heading">AI 초안</h2>
       <div className="grid gap-2">
         <Label htmlFor="draft-instructions">무슨 일이 일어나야 하나요?</Label>
         {activeRequests !== null && activeRequests > 0 && (
@@ -508,6 +508,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         <Label htmlFor="draft-target">목표 분량 (자)</Label>
         <Input
           id="draft-target"
+          className="font-mono"
           type="number"
           inputMode="numeric"
           min={TARGET_MIN}
@@ -564,7 +565,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
               계획 세우기
             </Button>
             <Button
-              variant="outline"
+              variant="link"
               onClick={() => void write(false)}
               disabled={instructions.trim() === '' || planning}
             >
@@ -597,7 +598,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
           {finished && (
             <div className="flex flex-wrap gap-2">
               <Button
-                variant="outline"
+                variant="link"
                 onClick={appendToChapter}
                 disabled={appended || refineOpen || checkOpen}
               >
@@ -605,7 +606,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
               </Button>
               {complete && runId && (
                 <Button
-                  variant="outline"
+                  variant="link"
                   onClick={() => void createChapter()}
                   disabled={creating || refineOpen || checkOpen}
                 >

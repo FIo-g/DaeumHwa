@@ -84,7 +84,7 @@ describe('CheckContext', () => {
         '회차 점검은 저장된 원고에 나온 카드와 항상 넣기로 정한 카드, 3화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보내요.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByText('설정 카드 1개 (전체 5개 중)')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '설정 카드 1개 (전체 5개 중)' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '서윤' })).toHaveAttribute(
       'href',
       '/works/w1/wiki/entries/e1',
@@ -95,7 +95,7 @@ describe('CheckContext', () => {
     expect(screen.getByText(FACT_STATUS_LABEL.confirmed)).toBeInTheDocument()
     expect(screen.getByText('3화부터')).toBeInTheDocument()
     expect(screen.getByText('분량 한도로 빠진 카드: 한세린')).toBeInTheDocument()
-    expect(screen.getByText('열린 떡밥 1개')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '열린 떡밥 1개' })).toBeInTheDocument()
     expect(screen.getByText(THREAD_STATUS_LABEL.planted)).toBeInTheDocument()
     expect(screen.getByText('회수 목표 2화')).toBeInTheDocument()
     expect(screen.getByText('회수 목표 지남')).toBeInTheDocument()

@@ -9,7 +9,6 @@ import { EmptyState } from '@/components/app/empty-state'
 import {
   CountCell,
   Disclosure,
-  GridTitle,
   MarginNote,
   PopButton,
   ProofPair,
@@ -320,7 +319,7 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
   return (
     <section aria-label="회차 점검" className="wg-panels-section">
       <div className="wg-panels-check-head">
-        <GridTitle columns={5}>회차 점검</GridTitle>
+        <h2 className="wg-panels-heading">회차 점검</h2>
         <div ref={checkControls} className="flex flex-wrap items-center justify-between gap-2">
           {canCheck &&
             (ai.running ? (
@@ -524,6 +523,7 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
                         <Button
                           size="sm"
                           variant="link"
+                          className="px-0 text-(length:--wg-panels-action-type)"
                           disabled={busy}
                           onClick={() => setFixing(issue)}
                         >
@@ -533,6 +533,7 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
                       <Button
                         size="sm"
                         variant="link"
+                        className="px-0 text-(length:--wg-panels-action-type)"
                         disabled={busy}
                         onClick={() => void resolve(issue, 'dismissed')}
                       >

@@ -3,13 +3,13 @@
 import Link from 'next/link'
 import { type CSSProperties, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
-import { GridTitle } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import type { ThreadEventKind } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { IMPORTANCE_LABEL, THREAD_STATUS_LABEL } from '@/lib/labels'
 import { addThreadEventAction } from '@/server/actions/threads'
 import { allowedEventKinds } from '@/components/threads/thread-event-form'
+import { threadChapterCenter } from '@/components/threads/thread-geometry'
 import type { WorkspaceApi, WritingData } from '../types'
 import { EDITOR_ONLY_NOTE, canEditChapter } from './shared'
 
@@ -43,12 +43,14 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
 
   const positions = [
     data.chapter.position,
+    ...data.chapters.map((chapter) => chapter.position),
     ...open.flatMap((thread) => [thread.plantedPosition, thread.targetChapterPosition]),
   ].filter((position): position is number => position !== null)
   const first = Math.min(...positions)
   const last = Math.max(...positions)
-  const span = Math.max(1, last - first)
-  const onAxis = (position: number) => `${((position - first) / span) * 100}%`
+  const chapterCount = last - first + 1
+  const onAxis = (position: number) =>
+    `${threadChapterCenter(position - first + 1, chapterCount, 100)}%`
 
   async function record(threadId: string, kind: QuickKind) {
     setBusyId(threadId)
@@ -62,9 +64,11 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
 
   return (
     <section aria-label="열린 떡밥" className="wg-panels-section">
-      <GridTitle>떡밥</GridTitle>
+      <h2 className="wg-panels-heading">떡밥</h2>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">열린 떡밥 {open.length}개</p>
+        <p className="text-sm text-muted-foreground">
+          열린 떡밥 <span className="font-mono">{open.length}개</span>
+        </p>
         <Link
           href={`/works/${data.workId}/wiki/threads`}
           className="text-xs underline underline-offset-4"
@@ -85,6 +89,9 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
           // resolved strictly after it. A thread that was never planted cannot be developed.
           const planted = thread.plantedPosition
           const target = thread.targetChapterPosition
+          const coincident = planted !== null && planted === target
+          const start = Math.min(planted ?? first, target ?? last)
+          const end = Math.max(planted ?? first, target ?? last)
           const developedBlocked = planted === null || data.chapter.position < planted
           const resolvedBlocked = planted === null || data.chapter.position <= planted
           return (
@@ -102,41 +109,53 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
                   {THREAD_STATUS_LABEL[thread.status]}
                 </span>
                 <span>중요도 {IMPORTANCE_LABEL[thread.importance]}</span>
-                {thread.plantedPosition !== null && (
-                  <span className="font-mono">{thread.plantedPosition}화에 심음</span>
+                {planted !== null && (
+                  <span>
+                    <span className="font-mono">{planted}화</span>에 심음
+                  </span>
                 )}
-                {thread.targetChapterPosition !== null && (
-                  <span className="font-mono">목표 {thread.targetChapterPosition}화</span>
+                {target !== null && (
+                  <span>
+                    목표 <span className="font-mono">{target}화</span>
+                  </span>
                 )}
               </div>
               <div className="wg-panels-axis" aria-hidden="true">
-                <div className="wg-panels-axis-track">
-                  <span
-                    className="wg-panels-axis-line"
-                    data-planned={planted === null}
-                    style={{
-                      insetInlineStart: onAxis(Math.min(planted ?? first, target ?? last)),
-                      insetInlineEnd:
-                        target === null
-                          ? '0%'
-                          : `calc(100% - ${onAxis(Math.max(planted ?? first, target))})`,
-                    }}
-                  />
-                  {target !== null && (
-                    <span
-                      className="wg-panels-axis-target"
-                      style={{ insetInlineStart: onAxis(target) }}
-                    />
-                  )}
-                  {planted !== null && (
-                    <span
-                      className="wg-panels-axis-seed"
-                      style={{ insetInlineStart: onAxis(planted) }}
-                    />
-                  )}
+                <div
+                  className="wg-panels-axis-plot"
+                  style={{ '--wg-panels-axis-count': chapterCount } as CSSProperties}
+                >
+                  <div className="wg-panels-axis-track">
+                    {start !== end && (
+                      <span
+                        className="wg-panels-axis-line"
+                        data-planned={planted === null}
+                        style={{
+                          insetInlineStart: onAxis(start),
+                          insetInlineEnd: `calc(100% - ${onAxis(end)})`,
+                        }}
+                      />
+                    )}
+                    {planted !== null && (
+                      <span
+                        className="wg-panels-axis-marker wg-panels-axis-seed"
+                        data-thread-coincident={coincident ? 'seed' : undefined}
+                        style={{ insetInlineStart: onAxis(planted) }}
+                      />
+                    )}
+                    {target !== null && (
+                      <span
+                        className="wg-panels-axis-marker wg-panels-axis-target"
+                        data-thread-coincident={coincident ? 'target' : undefined}
+                        style={{ insetInlineStart: onAxis(target) }}
+                      />
+                    )}
+                  </div>
+                  <div className="wg-panels-axis-labels">
+                    <span>{first}화</span>
+                    {last !== first && <span>{last}화</span>}
+                  </div>
                 </div>
-                <span>{first}화</span>
-                {last !== first && <span>{last}화</span>}
               </div>
               {editable ? (
                 <div className="grid gap-2">
@@ -144,7 +163,7 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
                     {kinds.includes('planted') && (
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="link"
                         disabled={busy}
                         onClick={() => void record(thread.id, 'planted')}
                       >
@@ -155,7 +174,7 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
                       <>
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="link"
                           disabled={busy || developedBlocked}
                           onClick={() => void record(thread.id, 'developed')}
                         >
@@ -163,7 +182,7 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
                         </Button>
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="link"
                           disabled={busy || resolvedBlocked}
                           onClick={() => void record(thread.id, 'resolved')}
                         >

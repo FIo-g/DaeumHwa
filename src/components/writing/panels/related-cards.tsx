@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
 import { FactStatusBadge } from '@/components/app/fact-status-badge'
-import { GridTitle } from '@/components/motion'
 import { buttonVariants } from '@/components/ui/button'
 import { getTextWorker } from '@/lib/client/worker-client'
 import type { Mention } from '@/lib/korean/mentions'
@@ -123,7 +122,7 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
 
   return (
     <section aria-label="관련 카드" className="wg-panels-section">
-      <GridTitle>관련 카드</GridTitle>
+      <h2 className="wg-panels-heading">관련 카드</h2>
       {cards.length === 0 && (
         <p className="text-sm text-muted-foreground">이 회차 원고에 이름이 나온 카드가 없어요.</p>
       )}

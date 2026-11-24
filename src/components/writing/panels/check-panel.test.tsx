@@ -222,7 +222,7 @@ describe('CheckPanel', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(fetchMock.mock.calls[0][0]).toBe('/api/works/work-1/chapters/c1/check')
-    expect(screen.getByText('점검 중… 0초')).toBeTruthy()
+    expect(screen.getByText(/^점검 중…$/)).toHaveTextContent('점검 중… 0초')
     expect(screen.getByRole('button', { name: '취소' })).toBeTruthy()
   })
 

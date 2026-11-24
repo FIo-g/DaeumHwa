@@ -116,7 +116,7 @@ describe('CheckPanel auto check', () => {
 
     const { rerender } = renderPanel()
 
-    expect(screen.getByText('자동 점검 중… 5초')).toBeInTheDocument()
+    expect(screen.getByText(/^자동 점검 중…$/)).toHaveTextContent('자동 점검 중… 5초')
     expect(screen.queryByRole('button', { name: '회차 점검' })).toBeNull()
     // A running check is not an empty result: the empty state waits until it finishes.
     expect(screen.getByRole('status')).toHaveTextContent('보통 15~25초 걸려요.')

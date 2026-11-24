@@ -120,7 +120,7 @@ export function DraftRefine({
           <Button onClick={() => void apply()} disabled={applying}>
             적용
           </Button>
-          <Button variant="outline" onClick={discard} disabled={applying}>
+          <Button variant="link" onClick={discard} disabled={applying}>
             버리기
           </Button>
         </div>
@@ -131,7 +131,7 @@ export function DraftRefine({
   return (
     <div className="grid gap-2">
       <div>
-        <Button size="sm" variant="outline" onClick={() => void refine()} disabled={disabled}>
+        <Button size="sm" variant="link" onClick={() => void refine()} disabled={disabled}>
           다듬기
         </Button>
       </div>

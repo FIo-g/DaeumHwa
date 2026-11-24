@@ -73,7 +73,12 @@ export function EditorToolbar({
           {canEdit ? SAVE_STATUS_TEXT[status] : '보기 전용'}
         </p>
         {canEdit && (
-          <Button variant="ghost" size="sm" onClick={onSaveNow} disabled={status === 'saving'}>
+          <Button
+            variant={status === 'dirty' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={onSaveNow}
+            disabled={status === 'saving'}
+          >
             저장
           </Button>
         )}
@@ -131,7 +136,7 @@ export function EditorToolbar({
         )}
         <Link
           href={`/works/${workId}/chapters/${chapterId}/history`}
-          className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+          className={buttonVariants({ variant: 'link', size: 'sm' })}
         >
           버전 이력
         </Link>

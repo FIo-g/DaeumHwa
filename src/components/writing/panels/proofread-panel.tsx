@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { AiBadge } from '@/components/app/ai-badge'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
-import { GridTitle, ProofStrike, ScanLine } from '@/components/motion'
+import { ProofStrike, ScanLine } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
@@ -126,13 +126,13 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
 
   return (
     <section aria-label="맞춤법과 표현" className="wg-panels-section">
-      <GridTitle>맞춤법</GridTitle>
+      <h2 className="wg-panels-heading">맞춤법</h2>
       <div className="flex flex-wrap items-center gap-2">
         {editable ? (
           <>
             <Button
               size="sm"
-              variant="outline"
+              variant="link"
               disabled={ruleRunning || ai.running}
               onClick={() => void runRules()}
             >
@@ -150,7 +150,7 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
           <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>
         )}
         {editable && ruleCount > 0 && (
-          <Button size="sm" variant="ghost" onClick={applyAllRules}>
+          <Button size="sm" variant="link" onClick={applyAllRules}>
             모두 적용 (규칙)
           </Button>
         )}

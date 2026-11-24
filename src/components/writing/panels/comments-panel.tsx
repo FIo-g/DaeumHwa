@@ -4,7 +4,6 @@ import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
-import { GridTitle } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -137,7 +136,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
 
   return (
     <section aria-label="코멘트" className="wg-panels-section">
-      <GridTitle>코멘트</GridTitle>
+      <h2 className="wg-panels-heading">코멘트</h2>
       {canComment && (
         <div className="wg-panels-form">
           {selection ? (
@@ -161,7 +160,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
                 </Button>
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="link"
                   onClick={() => {
                     setSelection(null)
                     setBody('')
@@ -172,7 +171,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
               </div>
             </>
           ) : (
-            <Button size="sm" variant="outline" onClick={startComment}>
+            <Button size="sm" variant="link" onClick={startComment}>
               선택한 문장에 코멘트
             </Button>
           )}
@@ -233,7 +232,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="link"
                     onClick={() => {
                       setReplyTo(replyTo === comment.id ? null : comment.id)
                       setReplyBody('')
@@ -241,14 +240,14 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
                   >
                     답글
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void setResolved(comment)}>
+                  <Button size="sm" variant="link" onClick={() => void setResolved(comment)}>
                     {resolved ? '다시 열기' : '해결'}
                   </Button>
                   <ConfirmButton
                     title="코멘트를 지울까요?"
                     description="이 댓글에 달린 답글도 지워요."
                     confirmLabel="지우기"
-                    variant="ghost"
+                    variant="link"
                     size="sm"
                     onConfirm={() => remove(comment.id)}
                   >

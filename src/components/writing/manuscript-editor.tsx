@@ -1,6 +1,6 @@
 'use client'
 
-import { type RefObject, useEffect, useLayoutEffect, useState } from 'react'
+import { type RefObject, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ReadingProgress, ScanLine, Sheet } from '@/components/motion'
 import { Input } from '@/components/ui/input'
 import { countChars } from '@/lib/korean/chars'
@@ -32,14 +32,29 @@ export type ManuscriptEditorProps = {
   onShowIssue?(id: string): void
 }
 
-type Layer = { text: string; highlights: Highlight[] }
+type Composition = { text: string; highlights: Highlight[]; start: number; end: number }
 
-/**
- * The manuscript editor: a title field and a textarea that grows with its content. A highlight
- * layer sits behind the textarea. While an IME composition (Korean jamo assembly) is open, the
- * layer keeps its previous text and highlights, so nothing is recomputed under the author's
- * fingers. They catch up on compositionend.
- */
+/** Keeps marks on the unchanged parts of the manuscript while the IME edits a selection. */
+function compositionHighlights(composition: Composition, text: string) {
+  const { text: original, highlights, start, end } = composition
+  if (text === original) return highlights
+  const delta = text.length - original.length
+  if (
+    start > end + delta ||
+    !text.startsWith(original.slice(0, start)) ||
+    !text.endsWith(original.slice(end))
+  ) {
+    return []
+  }
+  return highlights.flatMap((highlight) => {
+    if (highlight.end <= start) return [highlight]
+    if (highlight.start >= end) {
+      return [{ ...highlight, start: highlight.start + delta, end: highlight.end + delta }]
+    }
+    return []
+  })
+}
+
 export function ManuscriptEditor({
   page,
   title,
@@ -62,42 +77,34 @@ export function ManuscriptEditor({
   onIssueFocus,
   onShowIssue,
 }: ManuscriptEditorProps) {
-  const [composing, setComposing] = useState(false)
-  const [layer, setLayer] = useState<Layer>({ text: body, highlights })
-
-  // State derived from props, adjusted during render: the layer follows the body and the
-  // highlights, except while an IME composition is open.
-  if (!composing && (layer.text !== body || layer.highlights !== highlights)) {
-    setLayer({ text: body, highlights })
-  }
-
-  // Grow the textarea to its content so the page scrolls instead of the field.
+  const mirrorRef = useRef<HTMLDivElement>(null)
+  const [composition, setComposition] = useState<Composition | null>(null)
+  const displayedHighlights = useMemo(
+    () => (composition ? compositionHighlights(composition, body) : highlights),
+    [body, composition, highlights],
+  )
   useLayoutEffect(() => {
-    const el = textareaRef.current
-    if (!el) return
-    fit(el)
-  }, [body, textareaRef])
+    const mirror = mirrorRef.current
+    const textarea = textareaRef.current
+    if (
+      !mirror ||
+      !textarea ||
+      typeof ResizeObserver === 'undefined' ||
+      globalThis.CSS?.supports('field-sizing', 'content')
+    ) {
+      return
+    }
 
-  useEffect(() => {
-    const onResize = () => {
-      const el = textareaRef.current
-      if (el) fit(el)
-    }
-    const fonts = document.fonts
-    let active = true
-    void fonts?.ready.then(() => {
-      if (active) onResize()
+    const observer = new ResizeObserver(([entry]) => {
+      const height =
+        entry.borderBoxSize?.[0]?.blockSize ?? parseFloat(getComputedStyle(mirror).blockSize)
+      textarea.style.blockSize = `${height}px`
     })
-    fonts?.addEventListener('loadingdone', onResize)
-    window.addEventListener('resize', onResize)
-    return () => {
-      active = false
-      fonts?.removeEventListener('loadingdone', onResize)
-      window.removeEventListener('resize', onResize)
-    }
+    observer.observe(mirror, { box: 'border-box' })
+    return () => observer.disconnect()
   }, [textareaRef])
 
-  const proof = layer.highlights.filter(isProofHighlight)
+  const proof = displayedHighlights.filter(isProofHighlight)
   const openProof = proof.filter(({ closing }) => !closing)
   const counts = countChars(body)
   const percent = targetChars > 0 ? Math.round((counts.withSpaces / targetChars) * 100) : 0
@@ -159,28 +166,43 @@ export function ManuscriptEditor({
         )}
       </header>
       <div className="wg-writing-surface">
+        <div
+          ref={mirrorRef}
+          aria-hidden="true"
+          className={cn(MANUSCRIPT_TEXT_CLASS, 'wg-writing-mirror')}
+        >
+          {body === '' || body.endsWith('\n') ? body + '\u200b' : body}
+        </div>
         <HighlightLayer
-          text={layer.text}
-          highlights={layer.highlights}
+          text={body}
+          highlights={displayedHighlights}
+          mirrorRef={mirrorRef}
+          textareaRef={textareaRef}
           resultKey={check?.resultKey}
           linkedId={linkedId}
           readingId={readingId}
-          revision={composing ? null : revision}
+          revision={composition ? null : revision}
         />
         <textarea
           ref={textareaRef}
           aria-label="원고 본문"
-          rows={10}
+          rows={1}
+          wrap="soft"
           value={body}
           readOnly={readOnly}
           spellCheck={false}
           onChange={(e) => onBodyChange(e.target.value)}
-          onCompositionStart={() => {
-            setComposing(true)
+          onCompositionStart={({ currentTarget }) => {
+            setComposition({
+              text: currentTarget.value,
+              highlights,
+              start: currentTarget.selectionStart,
+              end: currentTarget.selectionEnd,
+            })
             onComposingChange(true)
           }}
           onCompositionEnd={() => {
-            setComposing(false)
+            setComposition(null)
             onComposingChange(false)
           }}
           onSelect={(e) => reportSelection(e.currentTarget)}
@@ -222,17 +244,4 @@ export function ManuscriptEditor({
       </p>
     </Sheet>
   )
-}
-
-/** Sets the textarea height to its content height. Never touches the value. */
-function fit(el: HTMLTextAreaElement) {
-  const { scrollX, scrollY } = window
-  el.style.height = 'auto'
-  el.style.height = `${el.scrollHeight}px`
-  // Collapsing to auto height shortens the document for one layout pass, and the browser clamps
-  // the page scroll. Put it back so typing at the end of a long chapter does not jump to the top.
-  // Only restore when it changed, so an in-flight smooth scroll is not cut short.
-  if (window.scrollX !== scrollX || window.scrollY !== scrollY) {
-    window.scrollTo({ left: scrollX, top: scrollY, behavior: 'instant' })
-  }
 }

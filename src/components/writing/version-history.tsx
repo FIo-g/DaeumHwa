@@ -52,7 +52,7 @@ export function VersionHistory({
           replay={selection.replay}
         />
       ) : (
-        <p className="text-sm text-muted-foreground">비교할 버전을 고르세요.</p>
+        <p className="text-sm text-muted-ink">비교할 버전을 고르세요.</p>
       )}
     </div>
   )

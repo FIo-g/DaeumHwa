@@ -5,8 +5,22 @@
   }
 
   .wg-chapters-contents > [data-slot='table-container'] {
-    scrollbar-width: thin;
-    scrollbar-color: var(--b-muted) var(--b-paper);
+    container: wg-chapters / inline-size;
+  }
+
+  .wg-chapters-contents {
+    --wg-chapters-cell-inline-pad: var(--b-s3);
+    --wg-chapters-cell-block-pad: var(--b-s2);
+    --wg-chapters-title-inset: 2.5rem;
+    --wg-chapters-date-width: 9rem;
+  }
+
+  .wg-chapters-cell-label {
+    display: none;
+  }
+
+  .wg-chapters-title-cell {
+    min-inline-size: 11.5rem;
   }
 
   .wg-chapters-contents::before,
@@ -26,6 +40,7 @@
     font: 700 1rem/1.65 var(--b-font-title);
     vertical-align: middle;
     white-space: normal;
+    text-wrap: balance;
     word-break: keep-all;
     overflow-wrap: anywhere;
   }
@@ -45,9 +60,10 @@
 
   .wg-chapters-line-number {
     position: absolute;
-    inset-block-start: 50%;
+    inset-block: 0;
     inset-inline-start: 0.625rem;
-    transform: translateY(-50%);
+    block-size: 1em;
+    margin-block: auto;
     font: 400 0.6875rem/1 var(--b-font-mono);
     color: var(--b-muted);
     opacity: 0;
@@ -68,23 +84,22 @@
   .wg-chapters-status::before,
   .wg-chapters-status::after {
     position: absolute;
-    inset-block-start: 50%;
+    inset-block: 0;
     inset-inline-start: 0;
     inline-size: 0.6875rem;
     block-size: 0.6875rem;
+    margin-block: auto;
     border-radius: 50%;
     content: '';
   }
 
   .wg-chapters-status::before {
-    transform: translateY(-50%);
     clip-path: inset(0 100% 0 0);
     background: currentColor;
   }
 
   .wg-chapters-status::after {
-    transform: translateY(-50%);
-    border: 3px double currentColor;
+    border: calc(3 * var(--b-line)) double currentColor;
   }
 
   .wg-chapters-status[data-status='done']::before {
@@ -104,6 +119,10 @@
     align-items: start;
     gap: var(--b-s5);
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wg-chapters-history-page {
+    container: wg-history-page / inline-size;
   }
 
   .wg-chapters-version-row {
@@ -155,7 +174,7 @@
   }
 
   .wg-chapters-proof-scroll {
-    max-inline-size: none;
+    line-height: var(--b-manuscript-line);
     max-block-size: 70vh;
     max-block-size: round(down, 70vh, 1lh);
     overflow-y: auto;
@@ -166,6 +185,7 @@
 
   .wg-chapters-proof-lines {
     position: relative;
+    max-inline-size: none;
   }
 
   .wg-chapters-proof-lines :is(ins, del) {
@@ -201,9 +221,112 @@
     text-decoration: line-through var(--b-ink) var(--b-line);
   }
 
-  @media (width >= 48rem) {
+  @container wg-history-page (width >= 37rem) {
     .wg-chapters-history {
       grid-template-columns: minmax(13rem, 1fr) minmax(0, 3fr);
+    }
+  }
+
+  @container wg-chapters (width < 58rem) {
+    .wg-chapters-contents [data-slot='table'] {
+      --wg-chapters-cell-inline-pad: 0px;
+      --wg-chapters-cell-block-pad: 0px;
+      --wg-chapters-title-inset: var(--b-s5);
+      --wg-chapters-date-width: 100%;
+      display: block;
+    }
+
+    .wg-chapters-contents [data-slot='table-header'] {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    .wg-chapters-contents [data-slot='table-body'] {
+      display: block;
+    }
+
+    .wg-chapters-table-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(7.25rem, 1.5fr) minmax(0, 0.65fr) minmax(
+          0,
+          0.95fr
+        );
+      align-items: start;
+      gap: var(--b-s2) var(--b-s3);
+      padding: var(--b-s2);
+    }
+
+    .wg-chapters-cell {
+      min-inline-size: 0;
+    }
+
+    .wg-chapters-title-cell {
+      grid-column: span 3;
+      align-self: center;
+      min-inline-size: 0;
+    }
+
+    .wg-chapters-status-cell {
+      justify-self: end;
+      align-self: center;
+    }
+
+    .wg-chapters-cell:has(> .wg-chapters-cell-label) {
+      display: grid;
+      grid-row: span 2;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: subgrid;
+      justify-items: start;
+      row-gap: 0;
+    }
+
+    .wg-chapters-manage-cell {
+      grid-column: span 2;
+    }
+
+    .wg-chapters-cell-label {
+      display: block;
+      color: var(--b-muted);
+      font: 500 var(--b-t-label)/1.35 var(--b-font-body);
+      text-align: start;
+      white-space: normal;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    .wg-chapters-cell time {
+      white-space: normal;
+    }
+
+    .wg-chapters-date {
+      font-size: var(--b-t-label);
+    }
+  }
+
+  @container wg-chapters (width < 20rem) {
+    .wg-chapters-table-row {
+      --wg-chapters-title-inset: var(--b-s4);
+      grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(3.6rem, 1fr);
+      column-gap: var(--b-s2);
+    }
+
+    .wg-chapters-cell:has(> .wg-chapters-cell-label) {
+      grid-column: span 2;
+    }
+
+    .wg-chapters-cell.wg-chapters-updated-cell {
+      grid-column: 1 / -1;
+    }
+
+    .wg-chapters-cell.wg-chapters-order-cell {
+      grid-column: span 3;
+    }
+
+    .wg-chapters-cell.wg-chapters-manage-cell {
+      grid-column: span 1;
     }
   }
 

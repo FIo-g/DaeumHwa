@@ -68,7 +68,7 @@ describe('DraftPlanCardView', () => {
     renderView()
 
     expect(screen.getByText('이번 화 계획')).toBeInTheDocument()
-    expect(screen.getByText('장면 2 · 고조 · 약 1,250자')).toBeInTheDocument()
+    expect(screen.getByText(/고조 · 약/)).toHaveTextContent('장면 2 · 고조 · 약 1,250자')
     expect(screen.getByText('회차 끝 (질문): 누가 문을 열었나?')).toBeInTheDocument()
     expect(screen.getByText('움직일 떡밥: 성문의 비밀')).toBeInTheDocument()
   })
@@ -151,7 +151,7 @@ describe('DraftPlanCardView', () => {
 
     fireEvent.change(
       screen.getByPlaceholderText(
-        '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 윤서가 먼저 말을 걸게)',
+        '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 주인공이 먼저 말을 걸게)',
       ),
       { target: { value: '윤서가 먼저' } },
     )

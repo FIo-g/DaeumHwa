@@ -120,12 +120,12 @@ export function WikiFixDialog({ issue, data, onClose, onDone }: WikiFixDialogPro
         </div>
 
         <div className="wg-panels-form">
-          <p className="text-sm font-medium">새 사실의 상태 (이 회차부터 바뀜일 때)</p>
+          <p className="text-sm font-medium">새 사실의 상태 (이 회차부터 바뀌는 경우)</p>
           <FactStatusSelect value={status} onChange={setStatus} />
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => void supersede()} disabled={!canSubmit}>
+        <DialogFooter className="flex-col">
+          <Button variant="link" onClick={() => void supersede()} disabled={!canSubmit}>
             이 회차부터 바뀜
           </Button>
           <Button onClick={() => void editFact()} disabled={!canSubmit}>

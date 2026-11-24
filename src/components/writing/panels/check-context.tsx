@@ -86,7 +86,8 @@ export function CheckContext(props: {
               </p>
               <div className="grid gap-2">
                 <h3 className="wg-panels-subhead">
-                  {`설정 카드 ${view.entries.length}개 (전체 ${view.totalEntries}개 중)`}
+                  설정 카드 <span className="font-mono">{view.entries.length}</span>개 (전체{' '}
+                  <span className="font-mono">{view.totalEntries}</span>개 중)
                 </h3>
                 {view.entries.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -151,7 +152,9 @@ export function CheckContext(props: {
               </div>
               {view.threads.length > 0 && (
                 <div className="grid gap-2">
-                  <h3 className="wg-panels-subhead">{`열린 떡밥 ${view.threads.length}개`}</h3>
+                  <h3 className="wg-panels-subhead">
+                    열린 떡밥 <span className="font-mono">{view.threads.length}</span>개
+                  </h3>
                   <ul className="grid gap-1">
                     {view.threads.map((thread) => (
                       <li key={thread.id} className="flex flex-wrap items-center gap-2 text-sm">

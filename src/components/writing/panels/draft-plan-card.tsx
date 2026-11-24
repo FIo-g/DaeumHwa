@@ -40,7 +40,7 @@ type DraftPlanCardViewProps = {
   onKept?(): void
 }
 
-const REVISION_PLACEHOLDER = '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 윤서가 먼저 말을 걸게)'
+const REVISION_PLACEHOLDER = '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 주인공이 먼저 말을 걸게)'
 
 /**
  * The chapter plan card (stage 1): one block per scene, editable only in its summary. The author
@@ -154,8 +154,12 @@ export function DraftPlanCardView({
             style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
           >
             <div className="wg-panels-plan-scene">
-              <p className="font-mono text-sm">
-                {`장면 ${index + 1} · ${SCENE_ROLE_LABELS[scene.role]} · 약 ${(sceneChars ?? scene.targetChars).toLocaleString('ko-KR')}자`}
+              <p className="text-sm">
+                장면 <span className="font-mono">{index + 1}</span> ·{' '}
+                {SCENE_ROLE_LABELS[scene.role]} · 약{' '}
+                <span className="font-mono">
+                  {(sceneChars ?? scene.targetChars).toLocaleString('ko-KR')}자
+                </span>
               </p>
               <div className="flex shrink-0 gap-1">
                 <Button
@@ -233,7 +237,7 @@ export function DraftPlanCardView({
                   <span className="shrink-0 text-xs text-muted-foreground">장부에 넣었어요</span>
                 ) : (
                   <Button
-                    variant="outline"
+                    variant="link"
                     size="sm"
                     disabled={busy || keeping.includes(index)}
                     onClick={() => void keepSuggestion(request, index)}
@@ -258,7 +262,7 @@ export function DraftPlanCardView({
           disabled={busy}
           onChange={(event) => setNote(event.target.value.replace(/[\r\n]/g, ''))}
         />
-        <Button variant="outline" disabled={busy || note.trim() === ''} onClick={revise}>
+        <Button variant="link" disabled={busy || note.trim() === ''} onClick={revise}>
           다시 계획
         </Button>
       </div>

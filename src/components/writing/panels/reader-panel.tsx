@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { type CSSProperties, useEffect, useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
-import { GridTitle } from '@/components/motion'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -107,7 +106,7 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
 
   return (
     <section aria-label="독자 반응" className="wg-panels-section">
-      <GridTitle>독자 반응</GridTitle>
+      <h2 className="wg-panels-heading">독자 반응</h2>
       {!editable && <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>}
 
       {editable && (
@@ -143,7 +142,7 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
             )}
             <Link
               href={`/works/${data.workId}/reader-sim`}
-              className={buttonVariants({ variant: 'ghost' })}
+              className={buttonVariants({ variant: 'link' })}
             >
               지난 결과 보기
             </Link>

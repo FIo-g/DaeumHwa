@@ -7,6 +7,7 @@ import { Sheet } from '@/components/motion'
 import { getTextWorker } from '@/lib/client/worker-client'
 import { runAction } from '@/lib/client/run-action'
 import { type DiffPart, diffStats } from '@/lib/diff'
+import { hasJongseong } from '@/lib/korean/josa'
 import { getVersionAction, restoreVersionAction } from '@/server/actions/manuscript'
 
 type VersionDiffProps = {
@@ -36,6 +37,8 @@ export function VersionDiff({
 }: VersionDiffProps) {
   const router = useRouter()
   const [state, setState] = useState<DiffState>({ status: 'loading' })
+  const lastDigit = '영일이삼사오육칠팔구'.charAt(versionNumber % 10)
+  const conjunction = hasJongseong(lastDigit) ? '과' : '와'
 
   useEffect(() => {
     // The parent remounts this component per version (key), so the first state is 'loading'.
@@ -72,7 +75,10 @@ export function VersionDiff({
       className="wg-chapters-proof min-w-0"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="b-subhead">버전 {versionNumber}과 현재 원고 비교</h2>
+        <h2 className="b-subhead">
+          버전 <span className="font-mono">{versionNumber}</span>
+          {conjunction} 현재 원고 비교
+        </h2>
         {canRestore && (
           <ConfirmButton
             title="이 버전으로 되돌릴까요?"
@@ -86,7 +92,7 @@ export function VersionDiff({
         )}
       </div>
 
-      {state.status === 'loading' && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
+      {state.status === 'loading' && <p className="text-sm text-muted-ink">불러오는 중…</p>}
       {state.status === 'error' && <p className="text-sm text-ink">버전을 불러오지 못했어요.</p>}
       {state.status === 'ready' && <DiffBody parts={state.parts} replay={replay} />}
     </Sheet>
@@ -106,8 +112,8 @@ function DiffBody({ parts, replay }: { parts: DiffPart[]; replay: boolean }) {
           현재 원고에만 있는 글 <span className="font-mono">{stats.deleted}자</span>
         </span>
       </p>
-      <div className="wg-chapters-proof-scroll b-manuscript" data-replay={replay || undefined}>
-        <div className="wg-chapters-proof-lines">
+      <div className="wg-chapters-proof-scroll" data-replay={replay || undefined}>
+        <div className="wg-chapters-proof-lines b-manuscript">
           <div>
             {parts.length === 0 && <span className="text-muted-ink">내용이 없어요.</span>}
             {parts.map(({ type, value }, index) => {
