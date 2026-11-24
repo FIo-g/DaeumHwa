@@ -10,6 +10,7 @@ type WorkSidebarProps = {
   workId: string
   workTitle: string
   pendingCount: number
+  trial: boolean
 }
 
 type NavItem = {
@@ -17,9 +18,11 @@ type NavItem = {
   label: string
   path: string
   badge?: 'pending'
+  requiresSignup?: boolean
 }
 
 const HOME_ITEM: NavItem = { key: 'home', label: '홈', path: '' }
+const SIGNUP_REQUIRED = '가입 필요'
 
 // Grouped by what the author is doing: writing, keeping the canon, running the serial, the work.
 const GROUPS: { label: string; items: NavItem[] }[] = [
@@ -42,16 +45,16 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
     label: '연재',
     items: [
       { key: 'schedule', label: '일정', path: '/schedule' },
-      { key: 'advice', label: '방향 조언', path: '/advice' },
-      { key: 'reader-sim', label: '독자 시뮬레이션', path: '/reader-sim' },
+      { key: 'advice', label: '방향 조언', path: '/advice', requiresSignup: true },
+      { key: 'reader-sim', label: '독자 시뮬레이션', path: '/reader-sim', requiresSignup: true },
     ],
   },
   {
     label: '작품',
     items: [
       { key: 'settings', label: '작품 설정', path: '/settings' },
-      { key: 'import', label: '가져오기', path: '/import' },
-      { key: 'interview', label: '인터뷰', path: '/interview' },
+      { key: 'import', label: '가져오기', path: '/import', requiresSignup: true },
+      { key: 'interview', label: '인터뷰', path: '/interview', requiresSignup: true },
     ],
   },
 ]
@@ -64,10 +67,9 @@ function isActive(pathname: string, href: string, homeHref: string): boolean {
 function NavList({
   workId,
   pendingCount,
+  trial,
   mobile = false,
-}: {
-  workId: string
-  pendingCount: number
+}: Omit<WorkSidebarProps, 'workTitle'> & {
   mobile?: boolean
 }) {
   const pathname = usePathname()
@@ -76,6 +78,7 @@ function NavList({
   const renderItem = (item: NavItem, index = 0) => {
     const href = `${base}${item.path}`
     const active = isActive(pathname, href, base)
+    const signupRequired = trial && item.requiresSignup
     return (
       <li
         key={item.key}
@@ -84,6 +87,7 @@ function NavList({
       >
         <Link
           href={href}
+          aria-label={signupRequired ? `${item.label} ${SIGNUP_REQUIRED}` : undefined}
           aria-current={active ? 'page' : undefined}
           className={cn(
             'b-control b-link flex min-h-11 items-center justify-between gap-2 rounded-button px-3 text-sm active:translate-y-px',
@@ -99,6 +103,16 @@ function NavList({
               className="min-w-5 rounded-field bg-primary px-1.5 py-0.5 text-center text-xs text-primary-foreground tabular-nums"
             >
               {pendingCount}
+            </span>
+          )}
+          {signupRequired && (
+            <span
+              className={cn(
+                'b-chip min-h-0 shrink-0 cursor-inherit px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
+                active && 'border-paper bg-ink text-paper',
+              )}
+            >
+              {SIGNUP_REQUIRED}
             </span>
           )}
         </Link>
@@ -135,18 +149,18 @@ function NavList({
  * Work-section navigation: a fixed sidebar on wide screens, a sheet on narrow ones.
  * Every member sees the same links; the settings page itself shows read-only views to non-owners.
  */
-export function WorkSidebar({ workId, workTitle, pendingCount }: WorkSidebarProps) {
+export function WorkSidebar({ workId, workTitle, pendingCount, trial }: WorkSidebarProps) {
   return (
     <>
       <div className="flex min-w-0 items-center justify-between gap-3 border-b border-rule bg-paper px-edge py-2 md:hidden">
         <span className="truncate font-heading text-lg">{workTitle}</span>
         <MenuSheet title={workTitle} label="작품 메뉴 열기" triggerText="작품 메뉴 열기">
-          <NavList workId={workId} pendingCount={pendingCount} mobile />
+          <NavList workId={workId} pendingCount={pendingCount} trial={trial} mobile />
         </MenuSheet>
       </div>
       <aside className="hidden w-56 shrink-0 flex-col gap-6 border-r border-rule bg-paper px-3 py-8 md:flex">
         <p className="wrap-anywhere px-3 font-heading text-xl break-keep">{workTitle}</p>
-        <NavList workId={workId} pendingCount={pendingCount} />
+        <NavList workId={workId} pendingCount={pendingCount} trial={trial} />
       </aside>
     </>
   )
