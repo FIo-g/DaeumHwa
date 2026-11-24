@@ -17,7 +17,7 @@ export function ResumeBanner({ resume }: { resume: ResumePoint }) {
   return (
     <Link
       href={href}
-      className="mb-6 flex items-center justify-between gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-sm transition-colors hover:bg-muted"
+      className="mb-6 flex items-center justify-between gap-3 rounded-sm border border-rule bg-sheet px-4 py-3 text-sm outline-none transition-colors hover:border-input focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <span className="min-w-0 truncate">
         이어서 쓰기: {resume.workTitle}

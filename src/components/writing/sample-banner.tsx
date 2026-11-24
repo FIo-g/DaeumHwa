@@ -45,7 +45,7 @@ export function SampleBanner({
   const targetPosition = chapterPosition === 3 ? 2 : 3
   const target = chapters.find((c) => c.position === targetPosition)
   return (
-    <div className="rounded-xl border bg-muted/40 p-4 text-sm">
+    <div className="rounded-sm border border-rule bg-sheet p-4 text-sm">
       <p className="font-medium">샘플 작품</p>
       <p className="mt-1 text-muted-foreground">
         1~3화 원고에 설정 오류 3곳을 심어 두었습니다. 2화에 1곳, 3화에 2곳입니다. 점검 결과에서 원고
@@ -55,12 +55,15 @@ export function SampleBanner({
         {target && (
           <Link
             href={`/works/${workId}/chapters/${target.id}?demo=1`}
-            className="underline underline-offset-4"
+            className="underline decoration-rule underline-offset-4 hover:decoration-current"
           >
             {targetPosition}화 점검하기
           </Link>
         )}
-        <Link href={`/works/${workId}/wiki`} className="underline underline-offset-4">
+        <Link
+          href={`/works/${workId}/wiki`}
+          className="underline decoration-rule underline-offset-4 hover:decoration-current"
+        >
           설정 보드 보기
         </Link>
       </div>
