@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState, type HTMLAttributes, type CSSProperties } from 'react'
+import { useRef, type HTMLAttributes, type CSSProperties } from 'react'
 import { cn } from '@/lib/utils'
-import { usePrefersReducedMotion } from './hooks'
+import { useEntered } from './hooks'
 
 const OFFSETS = {
-  up: ['0px', '32px'],
-  down: ['0px', '-32px'],
-  left: ['32px', '0px'],
-  right: ['-32px', '0px'],
+  up: ['0px', '4px'],
+  down: ['0px', '-4px'],
+  left: ['4px', '0px'],
+  right: ['-4px', '0px'],
   none: ['0px', '0px'],
 } as const
 
@@ -31,20 +31,7 @@ export function Reveal({
   ...props
 }: RevealProps) {
   const node = useRef<HTMLElement>(null)
-  const [revealed, setRevealed] = useState(false)
-  const reduced = usePrefersReducedMotion()
-
-  useEffect(() => {
-    if (reduced || !node.current || typeof IntersectionObserver === 'undefined') return
-
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting) return
-      setRevealed(true)
-      observer.disconnect()
-    })
-    observer.observe(node.current)
-    return () => observer.disconnect()
-  }, [reduced])
+  const revealed = useEntered(node)
 
   const [x, y] = OFFSETS[direction]
   return (
@@ -53,13 +40,13 @@ export function Reveal({
       ref={(element: HTMLElement | null) => {
         node.current = element
       }}
-      className={cn(!effectOnly && 'b-reveal', decorative && 'b-reveal--decor', className)}
+      className={cn(!effectOnly && 'wg-reveal', decorative && 'wg-reveal-decorative', className)}
       data-revealed={revealed}
       style={
         {
-          '--b-reveal-x': x,
-          '--b-reveal-y': y,
-          '--b-delay': `${delay}ms`,
+          '--wg-reveal-x': x,
+          '--wg-reveal-y': y,
+          '--wg-delay': `${delay}ms`,
           ...style,
         } as CSSProperties
       }

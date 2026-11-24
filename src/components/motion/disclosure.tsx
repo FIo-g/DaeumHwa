@@ -1,7 +1,8 @@
 'use client'
 
 import { useId, useState, type ReactNode } from 'react'
-import { ChevronDownIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 type DisclosureProps = {
   title: ReactNode
@@ -23,6 +24,7 @@ export function Disclosure({
   const id = useId()
   const [internal, setInternal] = useState(defaultOpen)
   const expanded = open ?? internal
+  const Chevron = expanded ? ChevronUpIcon : ChevronDownIcon
 
   function toggle() {
     if (open === undefined) setInternal(!expanded)
@@ -30,29 +32,29 @@ export function Disclosure({
   }
 
   return (
-    <div className={className}>
+    <div className={cn('wg-disclosure', className)}>
       <button
         id={`${id}-trigger`}
         type="button"
         aria-controls={id}
         aria-expanded={expanded}
         onClick={toggle}
-        className="b-row b-disclosure-trigger flex items-center justify-between gap-3 border-b-0"
+        className="wg-disclosure-trigger"
       >
-        <span className="b-row__title">{title}</span>
-        <ChevronDownIcon className="b-icon b-chevron" aria-hidden="true" />
-        <span className="b-row-rule" aria-hidden="true" />
+        <span className="wg-disclosure-title">{title}</span>
+        <Chevron className="wg-motion-icon" strokeWidth={1.5} aria-hidden="true" />
+        <span className="wg-disclosure-rule" aria-hidden="true" />
       </button>
       <div
         id={id}
         role="region"
         aria-labelledby={`${id}-trigger`}
-        className="b-disclosure"
+        className="wg-disclosure-region"
         data-open={expanded}
         inert={!expanded}
         aria-hidden={!expanded}
       >
-        {children}
+        <div className="wg-disclosure-content">{children}</div>
       </div>
     </div>
   )

@@ -3,10 +3,10 @@ import { cn } from '@/lib/utils'
 
 export function Stagger({ children, className, ...props }: ComponentPropsWithoutRef<'div'>) {
   return (
-    <div className={cn('b-stagger', className)} {...props}>
+    <div className={cn('wg-stagger', className)} {...props}>
       {Children.map(children, (child, index) =>
         child == null ? null : (
-          <div style={{ '--b-i': Math.min(index, 5) } as CSSProperties}>{child}</div>
+          <div style={{ '--wg-index': Math.min(index, 5) } as CSSProperties}>{child}</div>
         ),
       )}
     </div>

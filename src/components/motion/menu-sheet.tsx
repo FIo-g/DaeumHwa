@@ -1,8 +1,7 @@
 'use client'
 
 import { useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
-import { Button } from '@/components/ui/button'
-import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Dialog } from '@base-ui/react/dialog'
 import { cn } from '@/lib/utils'
 import { Stagger } from './stagger'
 
@@ -14,16 +13,17 @@ export function MenuIcon({
   return (
     <svg
       {...props}
-      className={cn('b-icon b-menu-icon', open && 'b-menu-icon--close', className)}
+      className={cn('wg-motion-icon', className)}
+      data-open={open}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.8}
+      strokeWidth={1.5}
       strokeLinecap="round"
       aria-hidden="true"
     >
-      <line x1={4} x2={20} y1={9} y2={9} />
-      <line x1={4} x2={20} y1={15} y2={15} />
+      <line x1={open ? 6 : 4} x2={open ? 18 : 20} y1={open ? 6 : 9} y2={open ? 18 : 9} />
+      <line x1={open ? 6 : 4} x2={open ? 18 : 20} y1={open ? 18 : 15} y2={open ? 6 : 15} />
     </svg>
   )
 }
@@ -51,57 +51,39 @@ export function MenuSheet({
   const dismiss = useRef<HTMLButtonElement>(null)
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        aria-label={label}
-        render={
-          <Button
-            variant="outline"
-            size={triggerText ? 'default' : 'icon'}
-            className={triggerClassName}
-          />
-        }
-      >
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger aria-label={label} className={cn('wg-menu-button', triggerClassName)}>
         <MenuIcon open={open} />
         {triggerText}
-      </SheetTrigger>
-      <SheetContent
-        side="bottom"
-        showCloseButton={false}
-        initialFocus={dismiss}
-        className={cn(
-          'b-menu-sheet mx-auto max-h-[80dvh] max-w-[34rem] overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]',
-          className,
-        )}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <SheetTitle className="b-subhead min-w-0 wrap-anywhere break-keep">{title}</SheetTitle>
-          <SheetClose
-            ref={dismiss}
-            aria-label="메뉴 닫기"
-            render={<Button variant="outline" size="icon" />}
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="wg-menu-backdrop" />
+        <Dialog.Popup initialFocus={dismiss} className={cn('wg-menu-sheet', className)}>
+          <div className="wg-menu-header">
+            <Dialog.Title className="wg-menu-title">{title}</Dialog.Title>
+            <Dialog.Close ref={dismiss} aria-label="메뉴 닫기" className="wg-menu-button">
+              <MenuIcon open={open} />
+            </Dialog.Close>
+          </div>
+          <div
+            onClick={(event) => {
+              const target = event.target
+              if (
+                target instanceof Element &&
+                target.closest('a[href]') &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.shiftKey &&
+                !event.altKey
+              )
+                setOpen(false)
+            }}
           >
-            <MenuIcon open={open} />
-          </SheetClose>
-        </div>
-        <div
-          onClick={(event) => {
-            const target = event.target
-            if (
-              target instanceof Element &&
-              target.closest('a[href]') &&
-              !event.metaKey &&
-              !event.ctrlKey &&
-              !event.shiftKey &&
-              !event.altKey
-            )
-              setOpen(false)
-          }}
-        >
-          <Stagger className="gap-2">{children}</Stagger>
-        </div>
-        {footer}
-      </SheetContent>
-    </Sheet>
+            <Stagger className="wg-menu-items">{children}</Stagger>
+          </div>
+          {footer}
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

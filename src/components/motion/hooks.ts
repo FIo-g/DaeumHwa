@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useSyncExternalStore, type PointerEvent } from 'react'
+import { useEffect, useState, useSyncExternalStore, type RefObject } from 'react'
 
 const QUERY = '(prefers-reduced-motion: reduce)'
 
@@ -23,32 +23,27 @@ export function useReplay() {
   return { replayKey, replay: () => setReplayKey((value) => value + 1) }
 }
 
-export function usePointerTilt() {
+export function useEntered(ref: RefObject<HTMLElement | null>, enabled = true) {
   const reduced = usePrefersReducedMotion()
-  const lastMove = useRef(-Infinity)
+  const [entered, setEntered] = useState(false)
 
-  function reset(event: PointerEvent<HTMLElement>) {
-    const { style } = event.currentTarget
-    for (const name of ['--b-rx', '--b-ry', '--b-px', '--b-py']) style.removeProperty(name)
-    lastMove.current = -Infinity
-  }
-
-  function move(event: PointerEvent<HTMLElement>) {
-    if (reduced || event.pointerType !== 'mouse' || event.timeStamp - lastMove.current < 16) {
+  useEffect(() => {
+    const node = ref.current
+    if (!enabled || reduced || entered || !node || typeof IntersectionObserver === 'undefined')
       return
+
+    let active = true
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!active || !entry?.isIntersecting) return
+      setEntered(true)
+      observer.disconnect()
+    })
+    observer.observe(node)
+    return () => {
+      active = false
+      observer.disconnect()
     }
-    const target = event.currentTarget
-    const box = target.getBoundingClientRect()
-    if (!box.width || !box.height) return
+  }, [enabled, entered, reduced, ref])
 
-    const x = Math.max(-1, Math.min(1, (2 * (event.clientX - box.left)) / box.width - 1))
-    const y = Math.max(-1, Math.min(1, (2 * (event.clientY - box.top)) / box.height - 1))
-    lastMove.current = event.timeStamp
-    target.style.setProperty('--b-rx', `${-5 * y}deg`)
-    target.style.setProperty('--b-ry', `${7 * x}deg`)
-    target.style.setProperty('--b-px', `${10 * x}px`)
-    target.style.setProperty('--b-py', `${8 * y}px`)
-  }
-
-  return { onPointerMove: move, onPointerLeave: reset, onPointerCancel: reset }
+  return entered
 }

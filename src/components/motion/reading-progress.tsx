@@ -71,11 +71,11 @@ export function ReadingProgress({ scrollRef, className }: ScrollSource & { class
   const ref = useRef<HTMLSpanElement>(null)
   const { value, measured } = useScrollProgress(ref, scrollRef)
   return (
-    <span ref={ref} className={cn('b-progress', className)} aria-hidden="true">
+    <span ref={ref} className={cn('wg-reading-progress', className)} aria-hidden="true">
       <span
-        className="b-progress__fill"
+        className="wg-reading-progress-fill"
         data-measured={measured}
-        style={{ '--b-progress': value } as CSSProperties}
+        style={{ '--wg-reading-progress': value } as CSSProperties}
       />
     </span>
   )
@@ -94,7 +94,7 @@ export function DotMeter({
   return (
     <span
       ref={ref}
-      className={cn('inline-flex items-center gap-2', className)}
+      className={cn('wg-dot-meter', className)}
       role="progressbar"
       aria-label={label}
       aria-valuenow={Math.round(value * 100)}
@@ -102,7 +102,7 @@ export function DotMeter({
       {Array.from({ length }, (_, index) => (
         <span
           key={index}
-          className="b-dot b-meter-dot"
+          className="wg-meter-cell"
           data-filled={index < filled}
           aria-hidden="true"
         />

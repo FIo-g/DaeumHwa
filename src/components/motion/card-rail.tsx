@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { ArrowLeftIcon, ArrowRightIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { usePrefersReducedMotion } from './hooks'
 
@@ -124,28 +123,28 @@ export function CardRail({
   }
 
   return (
-    <div className={cn('min-w-0', className)}>
-      <div className="flex justify-end gap-2" hidden={!canScroll}>
-        <Button
-          variant="outline"
-          size="icon"
+    <div className={cn('wg-card-rail-frame', className)}>
+      <div className="wg-rail-controls" hidden={!canScroll}>
+        <button
+          type="button"
+          className="wg-rail-control"
           aria-label="이전 카드"
           aria-controls={id}
           disabled={edges.start}
           onClick={() => step(-1)}
         >
-          <ArrowLeftIcon aria-hidden="true" />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
+          <ArrowLeftIcon className="wg-motion-icon" strokeWidth={1.5} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="wg-rail-control"
           aria-label="다음 카드"
           aria-controls={id}
           disabled={edges.end}
           onClick={() => step(1)}
         >
-          <ArrowRightIcon aria-hidden="true" />
-        </Button>
+          <ArrowRightIcon className="wg-motion-icon" strokeWidth={1.5} aria-hidden="true" />
+        </button>
       </div>
       <div
         id={id}
@@ -153,7 +152,7 @@ export function CardRail({
         tabIndex={0}
         role="region"
         aria-label={label}
-        className={cn('b-rail', railClassName)}
+        className={cn('wg-card-rail', railClassName)}
         onScroll={updateEdges}
         onKeyDown={(event) => {
           if (

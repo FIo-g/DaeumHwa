@@ -10,35 +10,41 @@ type PopOptions = {
   arrow?: ReactNode
 }
 
-function popClass(variant: PopOptions['variant'] = 'primary', className?: string) {
-  return cn(
-    'b-button',
-    variant === 'primary' && 'b-button--primary',
-    variant === 'sand' && 'b-button--sand',
-    variant === 'flat' ? 'b-button--flat' : 'b-button--shadow',
-    className,
+function PopArrow() {
+  return (
+    <svg
+      className="wg-motion-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 12h15m-6-6 6 6-6 6" />
+    </svg>
   )
 }
 
 function PopFace({ children, arrow }: { children: ReactNode; arrow?: ReactNode }) {
+  const caption =
+    typeof children === 'string' || typeof children === 'number' ? children : undefined
+
   return (
     <>
-      <span className="b-button__text">{children}</span>
-      <span className="b-button__arrow" aria-hidden="true">
-        {arrow ?? (
-          <svg
-            className="b-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M4 12h15m-6-6 6 6-6 6" />
-          </svg>
-        )}
+      <span className="wg-pop-text" data-caption={caption}>
+        {children}
       </span>
+      {arrow !== false && (
+        <span className="wg-pop-arrow" aria-hidden="true" data-default-arrow={arrow == null}>
+          {arrow ?? <PopArrow />}
+          {arrow == null && (
+            <span className="wg-pop-arrow-fill">
+              <PopArrow />
+            </span>
+          )}
+        </span>
+      )}
     </>
   )
 }
@@ -49,7 +55,7 @@ export function PopButton({
   children,
   arrow,
   className,
-  variant,
+  variant = 'primary',
   size,
   disabled,
   pending,
@@ -63,7 +69,8 @@ export function PopButton({
       type={type}
       disabled={disabled || pending}
       aria-busy={pending || props['aria-busy']}
-      className={popClass(variant, className)}
+      className={cn('wg-pop', className)}
+      data-variant={variant}
       data-size={size}
     >
       <PopFace arrow={arrow}>{pending ? (pendingLabel ?? children) : children}</PopFace>
@@ -77,7 +84,7 @@ export function PopLink({
   children,
   arrow,
   className,
-  variant,
+  variant = 'primary',
   size,
   disabled,
   pending,
@@ -86,7 +93,7 @@ export function PopLink({
   ...props
 }: PopLinkProps) {
   const face = <PopFace arrow={arrow}>{pending ? (pendingLabel ?? children) : children}</PopFace>
-  const classes = popClass(variant, className)
+  const classes = cn('wg-pop', className)
   if (disabled || pending) {
     return (
       <span
@@ -95,6 +102,7 @@ export function PopLink({
         aria-busy={pending}
         aria-label={label}
         className={classes}
+        data-variant={variant}
         data-size={size}
       >
         {face}
@@ -102,7 +110,7 @@ export function PopLink({
     )
   }
   return (
-    <Link {...props} aria-label={label} className={classes} data-size={size}>
+    <Link {...props} aria-label={label} className={classes} data-variant={variant} data-size={size}>
       {face}
     </Link>
   )
