@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { MenuSheet } from '@/components/motion/menu-sheet'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { flushPendingSaves } from '@/lib/client/use-autosave'
@@ -14,7 +15,7 @@ export function TopBar({ user }: { user: SessionUser }) {
 
   async function continueToSignup() {
     if (await flushPendingSaves()) router.push('/signup')
-    else toast.error('원고를 저장한 뒤 다시 시도해 주세요.')
+    else toast.error('원고를 저장하지 못했어요. 저장 상태를 확인해 주세요.')
   }
 
   async function signOut() {
@@ -34,18 +35,18 @@ export function TopBar({ user }: { user: SessionUser }) {
   }
 
   return (
-    <header className="border-b border-rule bg-sheet">
-      <div className="flex h-14 items-center justify-between gap-4 px-4 md:px-6">
-        <Link href="/works" className="font-serif text-lg font-bold tracking-tight">
-          다음화
+    <header className="b-top">
+      <div className="b-wrap b-nav-inner">
+        <Link href="/works" className="b-brand b-link">
+          <span>다음화</span>
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {user.isAnonymous ? (
             <>
-              <span className="whitespace-nowrap text-sm text-muted-foreground">체험 중</span>
+              <span className="b-label whitespace-nowrap text-muted-ink">체험 중</span>
               <Link
                 href="/signup"
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                className={buttonVariants({ variant: 'outline', className: 'px-2 sm:px-4' })}
                 onNavigate={(event) => {
                   event.preventDefault()
                   void continueToSignup()
@@ -55,11 +56,23 @@ export function TopBar({ user }: { user: SessionUser }) {
               </Link>
             </>
           ) : (
-            <span className="truncate text-sm text-muted-foreground">{user.name}</span>
+            <span className="b-label hidden truncate text-muted-ink sm:block">{user.name}</span>
           )}
-          <Button variant="ghost" size="sm" onClick={signOut}>
+          <Button variant="ghost" onClick={signOut} className="hidden sm:inline-flex">
             로그아웃
           </Button>
+          <MenuSheet
+            title={user.isAnonymous ? '체험 중' : user.name}
+            label="계정 메뉴 열기"
+            triggerClassName="sm:hidden"
+          >
+            <Link className="b-row b-link flex items-center rounded-button border-0" href="/works">
+              <span>내 작품</span>
+            </Link>
+            <Button variant="outline" onClick={signOut}>
+              로그아웃
+            </Button>
+          </MenuSheet>
         </div>
       </div>
     </header>

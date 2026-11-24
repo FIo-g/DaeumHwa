@@ -28,7 +28,7 @@ afterEach(() => {
   }
 })
 
-const NOTICE = '모델 학습에 쓰일 수 있습니다'
+const NOTICE = '모델 학습에 쓰일 수 있어요'
 
 describe('ModelNotice', () => {
   it('warns when the OpenCode default model is a Contributor model', () => {
@@ -38,7 +38,7 @@ describe('ModelNotice', () => {
     render(<ModelNotice />)
     const status = screen.getByRole('status')
     expect(status).toHaveTextContent(
-      '현재 AI 모델(muse-spark-1.3-contributor)은 보낸 원고와 설정이 모델 학습에 쓰일 수 있습니다. 공개 전 원고라면 다른 모델을 쓰세요.',
+      '현재 AI 모델(muse-spark-1.3-contributor)에 보낸 원고와 설정은 모델 학습에 쓰일 수 있어요. 공개 전 원고에는 다른 모델을 쓰세요.',
     )
   })
 

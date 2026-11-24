@@ -43,7 +43,7 @@ export function ChapterPicker({
         else onChange(next)
       }}
     >
-      <SelectTrigger id={id} aria-label={ariaLabel} className="min-w-40">
+      <SelectTrigger id={id} aria-label={ariaLabel} className="w-40 max-w-full font-bold">
         <SelectValue>
           {(selected: string | null) => {
             if (selected === NONE) return '없음'

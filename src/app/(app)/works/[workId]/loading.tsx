@@ -4,8 +4,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 export default function WorkLoading() {
   return (
     <div role="status" aria-busy="true" className="flex flex-col gap-4">
-      <span className="sr-only">불러오는 중입니다.</span>
-      <Skeleton className="h-8 w-48 max-w-full" />
+      <span className="sr-only">불러오는 중이에요.</span>
+      <Skeleton className="h-12 w-48 max-w-full bg-mustard" />
       <Skeleton className="h-4 w-80 max-w-full" />
       {[0, 1, 2, 3].map((i) => (
         <Skeleton key={i} className="h-24 w-full" />

@@ -13,8 +13,9 @@ export function AiRunStatus({
   onCancel: () => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-      <span>{`${label}… ${elapsedSec}초`}</span>
+    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-ink">
+      <span className="b-ai-pulse" aria-hidden="true" />
+      <span className="tabular-nums">{`${label}… ${elapsedSec}초`}</span>
       <Button variant="outline" size="sm" onClick={onCancel}>
         취소
       </Button>

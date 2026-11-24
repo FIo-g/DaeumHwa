@@ -4,10 +4,10 @@ import { buttonVariants } from '@/components/ui/button'
 
 export default function AppNotFound() {
   return (
-    <div className="mx-auto w-full max-w-lg px-4 py-16">
+    <div className="b-band b-band--apricot flex flex-1 justify-center px-edge [&>*]:w-full [&>*]:max-w-lg">
       <EmptyState
-        title="페이지를 찾을 수 없습니다"
-        description="주소가 바뀌었거나 볼 수 없는 페이지입니다."
+        title="페이지를 찾지 못했어요"
+        description="주소를 다시 확인해 주세요."
         action={
           <Link href="/works" className={buttonVariants({ variant: 'outline' })}>
             내 작품으로 가기

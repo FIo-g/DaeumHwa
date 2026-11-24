@@ -26,14 +26,14 @@ describe('AiSetupBanner', () => {
     render(<AiSetupBanner />)
     const status = screen.getByRole('status')
     expect(status).toHaveTextContent(
-      'AI 키가 설정되지 않았습니다. ANTHROPIC_API_KEY 또는 OPENCODE_API_KEY를 설정하면 AI 기능을 쓸 수 있습니다.',
+      'AI 키가 설정되지 않았어요. ANTHROPIC_API_KEY 또는 OPENCODE_API_KEY를 설정해 주세요.',
     )
   })
 
   it('shows the notice when AI_PROVIDER is fake and no key is set', () => {
     process.env.AI_PROVIDER = 'fake'
     render(<AiSetupBanner />)
-    expect(screen.getByRole('status')).toHaveTextContent('AI 키가 설정되지 않았습니다')
+    expect(screen.getByRole('status')).toHaveTextContent('AI 키가 설정되지 않았어요')
   })
 
   it('renders nothing when an Anthropic key is configured', () => {

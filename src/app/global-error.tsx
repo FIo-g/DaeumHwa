@@ -2,8 +2,6 @@
 
 import { useEffect } from 'react'
 
-// Replaces the root layout when it or (app)/layout.tsx fails. Global CSS is not loaded here,
-// so the styles are inline and use system colors to follow the OS color scheme.
 export default function GlobalError({ error, retry }: { error: unknown; retry: () => void }) {
   useEffect(() => {
     console.error(error)
@@ -12,44 +10,31 @@ export default function GlobalError({ error, retry }: { error: unknown; retry: (
   return (
     <html lang="ko">
       <head>
-        <title>다음화 - 오류</title>
+        <title>다음화 · 오류</title>
+        <style>{`
+          body {
+            display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 16px;
+            box-sizing: border-box; background: #f1bb88; color: #171814; color-scheme: light;
+            font: 400 1rem/1.6 "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+          }
+          section { background: #fffcf3; border: 2px solid; border-radius: 16px; padding: 32px; }
+          h1 { margin: 0; font-size: clamp(1.75rem, 3.34vw, 3rem); line-height: 1.14; }
+          button {
+            min-height: 44px; padding: 8px 16px; border: 2px solid #171814; border-radius: 10px;
+            color: #fffcf3; background: #171814; font: inherit; font-weight: 700; cursor: pointer;
+          }
+          button:hover { background: #44473a; }
+          button:focus-visible { outline: 2px solid #171814; outline-offset: 3px; }
+        `}</style>
       </head>
-      <body
-        style={{
-          margin: 0,
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 12,
-          padding: 16,
-          colorScheme: 'light dark',
-          background: 'Canvas',
-          color: 'CanvasText',
-          fontFamily:
-            '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif',
-          textAlign: 'center',
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>문제가 발생했습니다</h1>
-        <p style={{ margin: 0, opacity: 0.7 }}>잠시 후 다시 시도해 주세요.</p>
-        <button
-          type="button"
-          onClick={() => retry()}
-          style={{
-            marginTop: 8,
-            padding: '8px 16px',
-            borderRadius: 6,
-            border: '1px solid currentColor',
-            background: 'transparent',
-            color: 'inherit',
-            font: 'inherit',
-            cursor: 'pointer',
-          }}
-        >
-          다시 시도
-        </button>
+      <body>
+        <section>
+          <h1>페이지를 불러오지 못했어요</h1>
+          <p>잠시 후 다시 시도해 주세요.</p>
+          <button type="button" onClick={retry}>
+            다시 시도
+          </button>
+        </section>
       </body>
     </html>
   )

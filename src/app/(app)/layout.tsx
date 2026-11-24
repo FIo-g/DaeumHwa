@@ -10,11 +10,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const pathname = (await headers()).get('x-pathname') ?? undefined
   const user = await requirePageUser(pathname)
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="b-root flex min-w-0 flex-1 flex-col">
       <TopBar user={user} />
       <AiSetupBanner />
       <ModelNotice />
-      <main className="flex flex-1 flex-col">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
     </div>
   )
 }

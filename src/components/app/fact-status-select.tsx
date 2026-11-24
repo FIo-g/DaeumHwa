@@ -28,7 +28,7 @@ export function FactStatusSelect({ value, onChange, name }: FactStatusSelectProp
         variant="outline"
       >
         {FACT_STATUSES.map((status) => (
-          <ToggleGroupItem key={status} value={status}>
+          <ToggleGroupItem key={status} value={status} className="min-w-0 px-2.5">
             {FACT_STATUS_LABEL[status]}
           </ToggleGroupItem>
         ))}

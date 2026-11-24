@@ -13,10 +13,10 @@ export default function AppError({ error, retry }: { error: unknown; retry: () =
   }, [error])
 
   return (
-    <div className="mx-auto w-full max-w-lg px-4 py-16">
+    <div className="b-band b-band--apricot flex flex-1 justify-center px-edge [&>*]:w-full [&>*]:max-w-lg">
       <EmptyState
-        title="문제가 발생했습니다"
-        description="잠시 후 다시 시도해 주세요. 계속되면 작품 목록으로 돌아가세요."
+        title="페이지를 불러오지 못했어요"
+        description="잠시 후 다시 시도해 주세요."
         action={
           <div className="flex flex-wrap justify-center gap-2">
             <Button onClick={() => retry()}>다시 시도</Button>

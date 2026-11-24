@@ -324,7 +324,7 @@ export function WritingWorkspace({
         </div>
         {/* The column is reserved by CSS from the first paint, so the manuscript keeps its width
             when the panel mounts after hydration. */}
-        <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] w-[320px] shrink-0 overflow-y-auto lg:block xl:w-[380px]">
+        <aside className="sticky top-[calc(var(--b-nav)+1.5rem)] hidden max-h-[calc(100dvh-var(--b-nav)-3rem)] w-[320px] shrink-0 overflow-y-auto lg:block xl:w-[380px]">
           {wide && <WritingSidePanel {...panelProps} />}
         </aside>
       </div>

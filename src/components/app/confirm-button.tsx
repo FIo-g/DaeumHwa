@@ -52,9 +52,7 @@ export function ConfirmButton({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger
-        render={<Button variant={variant} size={size} disabled={disabled} />}
-      >
+      <AlertDialogTrigger render={<Button variant={variant} size={size} disabled={disabled} />}>
         {children}
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -64,7 +62,7 @@ export function ConfirmButton({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>취소</AlertDialogCancel>
-          <AlertDialogAction onClick={confirm} disabled={pending}>
+          <AlertDialogAction onClick={confirm} disabled={pending} aria-busy={pending}>
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>

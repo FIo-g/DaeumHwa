@@ -2,10 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { MenuIcon } from 'lucide-react'
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import type { CSSProperties } from 'react'
+import { MenuSheet } from '@/components/motion/menu-sheet'
 import { cn } from '@/lib/utils'
 
 type WorkSidebarProps = {
@@ -66,36 +64,37 @@ function isActive(pathname: string, href: string, homeHref: string): boolean {
 function NavList({
   workId,
   pendingCount,
-  onNavigate,
+  mobile = false,
 }: {
   workId: string
   pendingCount: number
-  onNavigate?: () => void
+  mobile?: boolean
 }) {
   const pathname = usePathname()
   const base = `/works/${workId}`
 
-  const renderItem = (item: NavItem) => {
+  const renderItem = (item: NavItem, index = 0) => {
     const href = `${base}${item.path}`
     const active = isActive(pathname, href, base)
     return (
-      <li key={item.key}>
+      <li
+        key={item.key}
+        className={mobile ? 'b-nav-step' : undefined}
+        style={mobile ? ({ '--b-i': Math.min(index, 5) } as CSSProperties) : undefined}
+      >
         <Link
           href={href}
-          onClick={onNavigate}
           aria-current={active ? 'page' : undefined}
           className={cn(
-            'flex items-center justify-between gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-sheet hover:text-foreground',
-            active
-              ? 'bg-sheet font-medium text-foreground shadow-[inset_0_0_0_1px_var(--rule)]'
-              : 'text-muted-foreground',
+            'b-control b-link flex min-h-11 items-center justify-between gap-2 rounded-button px-3 text-sm hover:bg-leaf hover:text-ink active:translate-y-px',
+            active ? 'bg-mustard font-bold text-ink underline decoration-2' : 'text-muted-ink',
           )}
         >
           <span>{item.label}</span>
           {item.badge === 'pending' && pendingCount > 0 && (
             <span
               data-slot="pending-count"
-              className="min-w-5 rounded-sm bg-primary px-1.5 py-0.5 text-center text-xs text-primary-foreground tabular-nums"
+              className="min-w-5 rounded-field bg-primary px-1.5 py-0.5 text-center text-xs text-primary-foreground tabular-nums"
             >
               {pendingCount}
             </span>
@@ -108,10 +107,22 @@ function NavList({
   return (
     <nav aria-label="작품 메뉴" className="flex flex-col gap-5">
       <ul className="flex flex-col gap-0.5">{renderItem(HOME_ITEM)}</ul>
-      {GROUPS.map((group) => (
+      {GROUPS.map((group, groupIndex) => (
         <div key={group.label} className="flex flex-col gap-1">
           <p className="px-3 text-xs text-muted-foreground">{group.label}</p>
-          <ul className="flex flex-col gap-0.5">{group.items.map(renderItem)}</ul>
+          <ul className="flex flex-col gap-0.5">
+            {group.items.map((item, index) =>
+              renderItem(
+                item,
+                1 +
+                  GROUPS.slice(0, groupIndex).reduce(
+                    (count, previous) => count + previous.items.length,
+                    0,
+                  ) +
+                  index,
+              ),
+            )}
+          </ul>
         </div>
       ))}
     </nav>
@@ -123,32 +134,16 @@ function NavList({
  * Every member sees the same links; the settings page itself shows read-only views to non-owners.
  */
 export function WorkSidebar({ workId, workTitle, pendingCount }: WorkSidebarProps) {
-  const [open, setOpen] = useState(false)
   return (
     <>
-      <div className="flex items-center gap-3 border-b border-rule px-4 py-2 md:hidden">
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger render={<Button variant="outline" size="sm" />}>
-            <MenuIcon aria-hidden="true" />
-            작품 메뉴 열기
-          </SheetTrigger>
-          <SheetContent side="left">
-            <SheetHeader>
-              <SheetTitle>{workTitle}</SheetTitle>
-            </SheetHeader>
-            <div className="px-4 pb-6">
-              <NavList
-                workId={workId}
-                pendingCount={pendingCount}
-                onNavigate={() => setOpen(false)}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
-        <span className="truncate font-serif text-sm font-semibold">{workTitle}</span>
+      <div className="flex min-w-0 items-center justify-between gap-3 border-b border-rule bg-paper px-edge py-2 md:hidden">
+        <span className="truncate font-heading text-lg">{workTitle}</span>
+        <MenuSheet title={workTitle} label="작품 메뉴 열기" triggerText="작품 메뉴 열기">
+          <NavList workId={workId} pendingCount={pendingCount} mobile />
+        </MenuSheet>
       </div>
-      <aside className="hidden w-56 shrink-0 flex-col gap-6 px-3 py-8 md:flex">
-        <p className="truncate px-3 font-serif text-base font-semibold">{workTitle}</p>
+      <aside className="hidden w-56 shrink-0 flex-col gap-6 border-r border-rule bg-paper px-3 py-8 md:flex">
+        <p className="wrap-anywhere px-3 font-heading text-xl break-keep">{workTitle}</p>
         <NavList workId={workId} pendingCount={pendingCount} />
       </aside>
     </>

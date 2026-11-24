@@ -6,12 +6,17 @@ type EmptyStateProps = {
   action?: ReactNode
 }
 
-/** Shown in place of a list when there is nothing to show yet. */
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
-      <p className="font-medium">{title}</p>
-      {description && <p className="text-sm text-muted-foreground">{description}</p>}
+    <div className="b-paper flex flex-col items-center gap-3 px-6 py-12 text-center">
+      <div className="b-decor b-piece relative mb-2 size-12" aria-hidden="true">
+        <div className="absolute inset-1 rotate-[-9deg] rounded-field border-2 border-ink bg-mustard" />
+        <div className="absolute inset-1 translate-x-1 translate-y-1 rotate-6 rounded-field border-2 border-ink bg-paper" />
+      </div>
+      <p className="b-subhead">{title}</p>
+      {description && (
+        <p className="b-label max-w-prose wrap-anywhere break-keep text-muted-ink">{description}</p>
+      )}
       {action}
     </div>
   )

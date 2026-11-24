@@ -1,22 +1,29 @@
 import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 
 type PageHeaderProps = {
   title: string
   description?: string
   actions?: ReactNode
+  band?: 'mustard' | 'leaf' | 'apricot' | 'paper'
 }
 
-/** Title row at the top of a page, with optional description and action buttons. */
-export function PageHeader({ title, description, actions }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, band = 'paper' }: PageHeaderProps) {
   return (
-    <header className="flex flex-col gap-3 pb-6 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-serif text-[1.75rem] leading-tight font-semibold tracking-tight text-balance break-keep">
-          {title}
-        </h1>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+    <header
+      className={cn(
+        'b-page-header flex min-w-0 flex-wrap items-start justify-between gap-4 pb-6',
+        band !== 'paper' &&
+          `b-band b-band--${band} b-band--app mb-6 rounded-card border-2 border-ink px-app`,
+      )}
+    >
+      <div className="b-route-heading flex min-w-0 flex-1 basis-64 flex-col gap-2">
+        <h1 className="b-title min-w-0 wrap-anywhere break-keep">{title}</h1>
+        {description && (
+          <p className="b-lede wrap-anywhere break-keep text-muted-ink">{description}</p>
+        )}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>
   )
 }
