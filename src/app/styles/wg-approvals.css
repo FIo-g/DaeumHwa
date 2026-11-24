@@ -1,0 +1,329 @@
+/* Manuscript-paper theme: approvals. Class prefix: wg-approvals- */
+@layer components {
+  .wg-approvals-page,
+  .wg-approvals-filters,
+  .wg-approvals-queue {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--b-s4);
+  }
+
+  .wg-approvals-page {
+    --wg-approvals-title-time: calc(5 * var(--b-cell));
+  }
+
+  .wg-approvals-filters {
+    gap: var(--b-s2);
+    padding-block-end: var(--b-s3);
+  }
+
+  .wg-approvals-filters,
+  .wg-approvals-group-head {
+    position: relative;
+  }
+
+  .wg-approvals-filters::after,
+  .wg-approvals-group-head::before {
+    position: absolute;
+    inset-inline: 0;
+    background: var(--b-grid);
+    content: '';
+    pointer-events: none;
+    transform-origin: left;
+  }
+
+  .wg-approvals-filters::after {
+    inset-block-end: 0;
+    block-size: var(--b-line);
+  }
+
+  .wg-approvals-group-head::before {
+    inset-block-start: 0;
+    block-size: var(--b-rule);
+  }
+
+  .wg-approvals-queue {
+    gap: var(--b-s5);
+  }
+
+  .wg-approvals-selection,
+  .wg-approvals-batch,
+  .wg-approvals-group-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--b-s2) var(--b-s4);
+  }
+
+  .wg-approvals-batch {
+    border-block: var(--b-line) solid var(--b-grid);
+    padding-block: var(--b-s2);
+  }
+
+  .wg-approvals-group {
+    min-inline-size: 0;
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-approvals-group-head {
+    padding-block: var(--b-s2);
+  }
+
+  .wg-approvals-group-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--b-s1) var(--b-s3);
+    min-inline-size: 0;
+    font: 700 var(--b-t-subhead) / 1.45 var(--b-font-title);
+    overflow-wrap: anywhere;
+  }
+
+  .wg-approvals-group-count {
+    color: var(--b-muted);
+    font: 400 var(--b-t-label) / 1.5 var(--b-font-mono);
+  }
+
+  .wg-approvals-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+    align-items: start;
+    min-inline-size: 0;
+    border-block-start: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-approvals-row:is(:hover, :focus-within, [data-selected]) {
+    border-block-start-color: var(--b-ink);
+  }
+
+  .wg-approvals-gutter {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    padding-block-start: var(--b-s3);
+  }
+
+  .wg-approvals-line-number {
+    justify-self: center;
+    color: var(--b-muted);
+    font: 400 var(--b-t-label) / 1.5 var(--b-font-mono);
+  }
+
+  .wg-approvals-row > .wg-approvals-line-number {
+    margin-block-start: var(--b-s3);
+  }
+
+  .wg-approvals-card {
+    display: grid;
+    gap: var(--b-s3);
+    min-inline-size: 0;
+    border-block: var(--b-line) solid var(--b-grid);
+    padding-block: var(--b-s3);
+  }
+
+  .wg-approvals-card[data-compact='true'] {
+    gap: var(--b-s2);
+    padding-block: var(--b-s2);
+  }
+
+  .wg-approvals-row > .wg-approvals-card {
+    border: 0;
+    padding-inline-start: var(--b-s2);
+  }
+
+  .wg-approvals-details {
+    display: grid;
+    align-content: start;
+    gap: var(--b-s2);
+    min-inline-size: 0;
+  }
+
+  .wg-approvals-meta,
+  .wg-approvals-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--b-s1) var(--b-s2);
+  }
+
+  .wg-approvals-meta {
+    color: var(--b-muted);
+    font-size: var(--b-t-label);
+    overflow-wrap: anywhere;
+  }
+
+  .wg-approvals-kind {
+    border: var(--b-line) solid var(--b-grid);
+    padding: 0 var(--b-s2);
+    color: var(--b-ink);
+  }
+
+  .wg-approvals-detail {
+    max-inline-size: 66ch;
+    color: var(--b-muted);
+    font-size: 0.9375rem;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .wg-approvals-evidence {
+    display: grid;
+    gap: var(--b-s1);
+    border-block-start: var(--b-line) solid var(--b-grid);
+    padding-block-start: var(--b-s2);
+  }
+
+  .wg-approvals-editor {
+    border-block-start: var(--b-line) solid var(--b-grid);
+    padding-block-start: var(--b-s3);
+  }
+
+  .wg-approvals-check,
+  .wg-approvals-strike {
+    position: absolute;
+    z-index: 1;
+    fill: none;
+    stroke: var(--b-ink);
+    stroke-width: 1.5px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+
+  .wg-approvals-check {
+    inset-block-start: var(--b-s2);
+    inset-inline: 0;
+    inline-size: 1.5rem;
+    margin-inline: auto;
+  }
+
+  .wg-approvals-strike {
+    inset-block-start: 50%;
+    inset-inline-start: 2.75rem;
+    inline-size: calc(100% - 2.75rem);
+    block-size: 1rem;
+  }
+
+  .wg-approvals-strike path {
+    vector-effect: non-scaling-stroke;
+  }
+
+  @media (hover: hover) {
+    .wg-approvals-line-number {
+      opacity: 0;
+    }
+
+    .wg-approvals-row:is(:hover, :focus-within, [data-selected]) .wg-approvals-line-number {
+      opacity: 1;
+    }
+  }
+
+  .wg-approvals-row[data-decision='approved'] .wg-approvals-line-number {
+    opacity: 0;
+  }
+
+  @media (min-width: 64rem) {
+    .wg-approvals-row > article.wg-approvals-card {
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: var(--b-s5);
+    }
+
+    .wg-approvals-row :is(.wg-approvals-details, .wg-approvals-fact) {
+      grid-column: 1;
+    }
+
+    .wg-approvals-row .wg-approvals-actions {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: start;
+    }
+
+    .wg-approvals-row .wg-approvals-editor {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wg-approvals-row[data-decision] {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-approvals-filters::after,
+    .wg-approvals-group-head::before {
+      animation: wg-approvals-rule var(--b-step) var(--b-out) var(--wg-approvals-title-time, 0ms)
+        both;
+    }
+
+    .wg-approvals-page .wg-approvals-row .wg-approvals-details {
+      animation: wg-approvals-write var(--b-quick) var(--b-out)
+        calc(
+          var(--wg-approvals-title-time) + var(--b-step) + var(--wg-approvals-entry-index, 0) *
+            var(--b-stagger)
+        )
+        backwards;
+    }
+
+    .wg-approvals-line-number {
+      transition: opacity var(--b-quick) var(--b-out);
+    }
+
+    .wg-approvals-row[data-decision] {
+      --wg-approvals-pen-delay: calc(var(--wg-approvals-decision-index, 0) * var(--b-stagger));
+      --wg-approvals-fade-delay: calc(var(--wg-approvals-pen-delay) + var(--b-draw));
+      animation: wg-approvals-fold var(--b-step) var(--b-out)
+        calc(var(--wg-approvals-fade-delay) + var(--b-quick)) both;
+    }
+
+    .wg-approvals-row[data-decision] > .wg-approvals-card {
+      animation: wg-approvals-fade var(--b-quick) var(--b-out) var(--wg-approvals-fade-delay) both;
+    }
+
+    :is(.wg-approvals-check, .wg-approvals-strike) path {
+      stroke-dasharray: 1;
+      animation: wg-approvals-pen var(--b-draw) var(--b-out) var(--wg-approvals-pen-delay) both;
+    }
+  }
+
+  @keyframes wg-approvals-rule {
+    from {
+      transform: scaleX(0);
+    }
+  }
+
+  @keyframes wg-approvals-write {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-approvals-pen {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes wg-approvals-fade {
+    to {
+      opacity: 0.3;
+    }
+  }
+
+  @keyframes wg-approvals-fold {
+    from {
+      clip-path: inset(0 0 0 0);
+    }
+    to {
+      clip-path: inset(0 0 100% 0);
+    }
+  }
+}

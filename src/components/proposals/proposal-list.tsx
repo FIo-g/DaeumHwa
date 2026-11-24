@@ -1,15 +1,26 @@
 'use client'
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Reveal, usePrefersReducedMotion } from '@/components/motion'
+import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
+import { CountCell, usePrefersReducedMotion } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { runAction } from '@/lib/client/run-action'
 import { chapterLabel } from '@/lib/labels'
 import { bulkApproveAction } from '@/server/actions/proposals'
-import type { ProposalView } from '@/server/proposals'
+import type { BulkApproveInput, ProposalView } from '@/server/proposals'
 import { ProposalCard, type ProposalChapterOption, type ProposalDecision } from './proposal-card'
 
 type ProposalListProps = {
@@ -19,15 +30,52 @@ type ProposalListProps = {
   /** 'entity' groups by the card or thread a proposal is about; 'chapter' groups by chapter. */
   grouping: 'entity' | 'chapter'
   selectable?: boolean
+  importBatches?: ImportBatch[]
 }
 
 type Group = { key: string; label: string; items: ProposalView[] }
+type ImportBatch = { sourceRef: string; count: number }
+type DecisionScene = { outcome: ProposalDecision; indices: Map<string, number> }
 
 /** Groups rendered at once. The rest load on "더 보기", so a big import does not mount everything. */
 const GROUP_PAGE_SIZE = 20
 
 // Cards keep their own edit state; memo stops an approval elsewhere in the list from re-rendering them.
 const MemoProposalCard = memo(ProposalCard)
+
+function readTime(style: CSSStyleDeclaration, token: string) {
+  const value = style.getPropertyValue(token).trim()
+  return (parseFloat(value) || 0) * (value.endsWith('ms') ? 1 : 1000)
+}
+
+function ImportApproval({
+  batch,
+  busy,
+  onApprove,
+}: {
+  batch: ImportBatch
+  busy: boolean
+  onApprove: (sourceRef: string) => Promise<void>
+}) {
+  const router = useRouter()
+  return (
+    <section aria-label="원고 가져오기 제안" className="wg-approvals-batch">
+      <p className="font-medium">원고 가져오기 제안 {batch.count}건</p>
+      <ConfirmButton
+        title={`제안 ${batch.count}건을 모두 승인할까요?`}
+        description="기본 태그가 붙어 위키에 바로 반영돼요."
+        confirmLabel="승인"
+        disabled={busy}
+        onConfirm={async () => {
+          await onApprove(batch.sourceRef)
+          router.refresh()
+        }}
+      >
+        이 가져오기의 제안 모두 승인
+      </ConfirmButton>
+    </section>
+  )
+}
 
 function chapterLabelOf(item: ProposalView, chapters: ProposalChapterOption[]): string {
   const chapter = item.chapterId ? chapters.find((c) => c.id === item.chapterId) : undefined
@@ -71,16 +119,16 @@ export function ProposalList({
   chapters,
   grouping,
   selectable = false,
+  importBatches = [],
 }: ProposalListProps) {
   const [done, setDone] = useState<Set<string>>(() => new Set())
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [snapshot, setSnapshot] = useState<ProposalView[] | null>(null)
-  const [decisions, setDecisions] = useState<Map<string, ProposalDecision> | null>(null)
+  const [scene, setScene] = useState<DecisionScene | null>(null)
   const [shownGroups, setShownGroups] = useState(GROUP_PAGE_SIZE)
   const reducedMotion = usePrefersReducedMotion()
   const list = useRef<HTMLDivElement>(null)
   const locked = useRef(false)
-  const positions = useRef<Map<string, number> | null>(null)
   const actionFocus = useRef<HTMLElement | null>(null)
   const busy = snapshot !== null
 
@@ -110,66 +158,55 @@ export function ProposalList({
     setSnapshot(null)
   }, [])
 
+  const markDecisions = useCallback((ids: string[], outcome: ProposalDecision) => {
+    const requested = new Set(ids)
+    const indices = new Map<string, number>()
+    for (const row of list.current?.querySelectorAll<HTMLElement>('[data-proposal-row]') ?? []) {
+      const id = row.dataset.proposalRow
+      if (id && requested.delete(id)) indices.set(id, indices.size)
+    }
+    for (const id of requested) indices.set(id, -1)
+    setScene({ outcome, indices })
+  }, [])
+
   const finish = useCallback(
     (id: string, decision: ProposalDecision | null) => {
-      if (decision) setDecisions(new Map([[id, decision]]))
+      if (decision) markDecisions([id], decision)
       else release()
     },
-    [release],
+    [markDecisions, release],
   )
 
   useEffect(() => {
-    if (!decisions) return
     const node = list.current
-    if (!node) return
-    const token = getComputedStyle(node).getPropertyValue('--b-scene').trim()
-    const duration = parseFloat(token) * (token.endsWith('ms') ? 1 : 1000)
-    const timer = window.setTimeout(
-      () => {
-        if (!reducedMotion) {
-          positions.current = new Map(
-            Array.from(node.querySelectorAll<HTMLElement>('[data-proposal-row]'), (row) => [
-              row.dataset.proposalRow!,
-              row.getBoundingClientRect().top,
-            ]),
-          )
-        }
-        setDone((prev) => new Set([...prev, ...decisions.keys()]))
-        setSelected((prev) => new Set([...prev].filter((id) => !decisions.has(id))))
-        setDecisions(null)
+    if (!scene || !node) return
+    const style = getComputedStyle(node)
+    const duration =
+      readTime(style, '--b-draw') + readTime(style, '--b-quick') + readTime(style, '--b-step')
+    const stagger = readTime(style, '--b-stagger')
+    const idsByDelay = new Map<number, string[]>()
+    for (const [id, index] of scene.indices) {
+      const delay = reducedMotion || index < 0 ? 0 : duration + index * stagger
+      const ids = idsByDelay.get(delay)
+      if (ids) ids.push(id)
+      else idsByDelay.set(delay, [id])
+    }
+    const end = Math.max(...idsByDelay.keys())
+    const timers = Array.from(idsByDelay, ([delay, ids]) =>
+      window.setTimeout(() => {
+        setDone((prev) => new Set([...prev, ...ids]))
+        if (delay !== end) return
+        setSelected((prev) => new Set([...prev].filter((id) => !scene.indices.has(id))))
+        setScene(null)
         release()
-      },
-      reducedMotion ? 0 : duration || 0,
+      }, delay),
     )
-    return () => window.clearTimeout(timer)
-  }, [decisions, reducedMotion, release])
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+  }, [scene, reducedMotion, release])
 
   useLayoutEffect(() => {
     const node = list.current
     if (!node || busy) return
-    const previous = positions.current
-    positions.current = null
-    if (previous && !reducedMotion) {
-      const moved = Array.from(node.querySelectorAll<HTMLElement>('[data-proposal-row]'))
-        .filter((row) => !row.querySelector('[data-editing="true"]'))
-        .map((row) => ({
-          row,
-          distance:
-            (previous.get(row.dataset.proposalRow!) ?? row.getBoundingClientRect().top) -
-            row.getBoundingClientRect().top,
-        }))
-        .filter(({ distance }) => distance !== 0)
-      for (const { row, distance } of moved) {
-        row.style.transition = 'none'
-        row.style.translate = `0 ${distance}px`
-      }
-      if (moved.length > 0) node.getBoundingClientRect()
-      for (const { row } of moved) {
-        row.style.transition = ''
-        row.style.translate = ''
-      }
-    }
-
     const focused = actionFocus.current
     actionFocus.current = null
     if (focused && document.activeElement === document.body) {
@@ -180,7 +217,7 @@ export function ProposalList({
       const focusTarget = target ?? node
       focusTarget.focus()
     }
-  }, [busy, reducedMotion, done])
+  }, [busy])
 
   function toggle(id: string, on: boolean) {
     setSelected((prev) => {
@@ -191,16 +228,19 @@ export function ProposalList({
     })
   }
 
-  async function approveIds(ids: string[]) {
-    if (ids.length === 0 || !begin()) return
-    const data = await runAction(bulkApproveAction({ workId, proposalIds: ids }))
+  async function approveMany(input: Pick<BulkApproveInput, 'proposalIds' | 'sourceRef'>) {
+    if (input.proposalIds?.length === 0 || !begin()) return
+    const ids =
+      input.proposalIds ??
+      visible.filter((item) => item.sourceRef === input.sourceRef).map((p) => p.id)
+    const data = await runAction(bulkApproveAction({ workId, ...input }))
     if (!data) {
       release()
       return
     }
     const failedIds = new Set(data.failed.map((f) => f.proposalId))
     const approved = ids.filter((id) => !failedIds.has(id))
-    if (approved.length > 0) setDecisions(new Map(approved.map((id) => [id, 'approved'])))
+    if (approved.length > 0) markDecisions(approved, 'approved')
     else release()
     if (data.approved > 0) toast.success(`${data.approved}건을 승인했어요.`)
     if (data.failed.length > 0) toast.error(`${data.failed.length}건을 승인하지 못했어요.`)
@@ -208,74 +248,110 @@ export function ProposalList({
 
   const selectedIds = [...selected].filter((id) => visibleIds.has(id))
   const shown = groups.slice(0, shownGroups)
+  const entryIndices = new Map(shown.flatMap((group) => group.items).map(({ id }, i) => [id, i]))
 
   return (
-    <div className="b-works-queue" ref={list} tabIndex={-1}>
+    <div className="wg-approvals-queue" ref={list} tabIndex={-1}>
+      {importBatches.map((batch) => (
+        <ImportApproval
+          key={batch.sourceRef}
+          batch={batch}
+          busy={busy}
+          onApprove={(sourceRef) => approveMany({ sourceRef })}
+        />
+      ))}
       {visible.length === 0 && <EmptyState title="승인 대기 중인 제안이 없어요." />}
       {selectable && visible.length > 0 && (
-        <div className="b-works-selection">
+        <div className="wg-approvals-selection">
           <Button
             size="sm"
-            onClick={() => approveIds(selectedIds)}
+            onClick={() => approveMany({ proposalIds: selectedIds })}
             disabled={busy || selectedIds.length === 0}
           >
-            선택 승인{' '}
-            <span key={selectedIds.length} className="b-works-selection-count">
-              ({selectedIds.length})
-            </span>
+            선택 승인 <span className="font-mono">({selectedIds.length})</span>
           </Button>
-          <span className="text-sm text-muted-foreground">전체 {visible.length}건</span>
+          <span className="font-mono text-sm text-muted-foreground">전체 {visible.length}건</span>
         </div>
       )}
 
       {shown.map((group) => (
-        <section key={group.key} className="b-works-proposal-group" aria-label={group.label}>
-          <Reveal effectOnly className="b-works-group-head">
-            <h2 className="font-semibold">
+        <section key={group.key} className="wg-approvals-group" aria-label={group.label}>
+          <div className="wg-approvals-group-head">
+            <h2 className="wg-approvals-group-title">
               {group.label}{' '}
-              <span className="text-sm font-normal text-muted-foreground">
-                {group.items.length}건
-              </span>
+              <CountCell
+                value={group.items.length}
+                unit="건"
+                className="wg-approvals-group-count"
+              />
             </h2>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => approveIds(group.items.map((p) => p.id))}
+              onClick={() => approveMany({ proposalIds: group.items.map((p) => p.id) })}
               disabled={busy}
             >
               이 묶음 승인
             </Button>
-          </Reveal>
-          {group.items.map((item) => (
-            <div
-              key={item.id}
-              className="b-works-proposal-row"
-              data-proposal-row={item.id}
-              data-selected={selected.has(item.id)}
-              tabIndex={-1}
-            >
-              {selectable && (
-                <Checkbox
-                  className="mt-4"
-                  aria-label="이 제안 선택"
-                  checked={selected.has(item.id)}
-                  disabled={busy}
-                  onCheckedChange={(on) => toggle(item.id, on)}
-                />
-              )}
-              <div className="min-w-0 flex-1">
+          </div>
+          {group.items.map((item, index) => {
+            const decisionIndex = scene?.indices.get(item.id)
+            const outcome = decisionIndex === undefined ? undefined : scene?.outcome
+            return (
+              <div
+                key={item.id}
+                className="wg-approvals-row"
+                data-proposal-row={item.id}
+                data-selected={selected.has(item.id) || undefined}
+                data-decision={outcome}
+                style={
+                  {
+                    '--wg-approvals-entry-index': Math.min(entryIndices.get(item.id) ?? 0, 3),
+                    '--wg-approvals-decision-index': decisionIndex,
+                  } as CSSProperties
+                }
+                tabIndex={-1}
+              >
+                <div className="wg-approvals-gutter">
+                  <span className="wg-approvals-line-number" aria-hidden="true">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  {selectable && (
+                    <Checkbox
+                      aria-label="이 제안 선택"
+                      checked={selected.has(item.id)}
+                      disabled={busy}
+                      onCheckedChange={(on) => toggle(item.id, on)}
+                    />
+                  )}
+                  {outcome === 'approved' && (
+                    <svg className="wg-approvals-check" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 13 Q6 14 9 19 Q13 11 21 4" pathLength="1" />
+                    </svg>
+                  )}
+                </div>
                 <MemoProposalCard
                   proposal={item}
                   workId={workId}
                   chapters={chapters}
                   queueBusy={busy}
-                  decision={decisions?.get(item.id)}
+                  decision={outcome}
                   onBeginDecision={begin}
                   onFinishDecision={finish}
                 />
+                {outcome === 'rejected' && (
+                  <svg
+                    className="wg-approvals-strike"
+                    viewBox="0 0 100 12"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    <path d="M0 9 Q45 5 100 3" pathLength="1" />
+                  </svg>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </section>
       ))}
 

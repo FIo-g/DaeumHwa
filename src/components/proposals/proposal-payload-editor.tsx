@@ -91,7 +91,7 @@ export function ProposalPayloadEditor({ type, payload, onChange }: ProposalPaylo
   const baseId = useId()
   const current: Json = payload && typeof payload === 'object' ? (payload as Json) : {}
   return (
-    <div className="grid gap-3">
+    <div className="wg-approvals-editor grid min-w-0 gap-3">
       {FIELDS[type].map((field) => (
         <PayloadField
           key={field.path.join('.')}
@@ -126,7 +126,7 @@ function PayloadField({
   }
 
   return (
-    <div className="grid gap-1.5">
+    <div className="grid min-w-0 gap-1.5">
       <Label htmlFor={id}>{field.label}</Label>
       {field.multiline ? (
         <Textarea id={id} value={text} onChange={(e) => handleChange(e.target.value)} />

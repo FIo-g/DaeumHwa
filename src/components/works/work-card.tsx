@@ -1,6 +1,6 @@
-import { ArrowUpRightIcon } from 'lucide-react'
+import { ArrowRightIcon } from 'lucide-react'
 import Link from 'next/link'
-import { HandNote, TiltCard } from '@/components/motion'
+import { CountCell } from '@/components/motion'
 import type { Role } from '@/db/types'
 import { formatKoreanDateTime } from '@/lib/dates'
 import { ROLE_LABEL } from '@/lib/labels'
@@ -30,49 +30,42 @@ export function WorkCard({
 }: WorkCardProps) {
   const description = `work-card-${id}`
   return (
-    <TiltCard pointer={false} className="b-works-book">
-      <Link
-        href={`/works/${id}`}
-        className="b-works-book-link"
-        aria-label={title}
-        aria-describedby={`${description}-meta ${description}-counts ${description}-foot`}
-        title={title}
-      >
-        <div className="b-works-book-head">
-          <div className="b-works-book-meta" id={`${description}-meta`}>
-            <div className="flex min-w-0 flex-wrap gap-2">
-              <span className="b-works-tag">{genre || '장르 없음'}</span>
-              <span className="b-works-tag">{ROLE_LABEL[role]}</span>
-            </div>
-            <ArrowUpRightIcon className="b-works-book-arrow" aria-hidden="true" />
-          </div>
-          <span className="b-heading b-works-book-title">{title}</span>
+    <Link
+      href={`/works/${id}`}
+      className="b-row wg-works-row"
+      aria-label={title}
+      aria-describedby={`${description}-meta ${description}-counts ${description}-foot`}
+      title={title}
+    >
+      <div className="wg-works-name">
+        <span className="b-row__title wg-works-title">{title}</span>
+        <div className="wg-works-meta" id={`${description}-meta`}>
+          <span>{genre || '장르 없음'}</span>
+          <span>{ROLE_LABEL[role]}</span>
         </div>
-        <ul className="b-works-book-counts" id={`${description}-counts`}>
-          <li>
-            <span>회차</span>
-            <strong>
-              {chapterCount}
-              <small>화</small>
-            </strong>
-          </li>
-          <li>
-            <span>승인 대기</span>
-            <strong>{pendingCount}</strong>
-          </li>
-          <li>
-            <span>열린 떡밥</span>
-            <strong>{openThreadCount}</strong>
-          </li>
-        </ul>
-        <div className="b-works-book-foot" id={`${description}-foot`}>
-          <span className="b-label text-muted-ink">
-            최근 수정{' '}
-            <time dateTime={lastEditedAt.toISOString()}>{formatKoreanDateTime(lastEditedAt)}</time>
-          </span>
-          {alertCount > 0 && <HandNote className="b-works-warning">경고 {alertCount}</HandNote>}
-        </div>
-      </Link>
-    </TiltCard>
+      </div>
+      <ul className="wg-works-counts" id={`${description}-counts`}>
+        <li>
+          <span>회차</span>
+          <CountCell value={chapterCount} unit="화" />
+        </li>
+        <li>
+          <span>승인 대기</span>
+          <CountCell value={pendingCount} />
+        </li>
+        <li>
+          <span>열린 떡밥</span>
+          <CountCell value={openThreadCount} />
+        </li>
+      </ul>
+      <div className="wg-works-date" id={`${description}-foot`}>
+        <span>
+          최근 수정{' '}
+          <time dateTime={lastEditedAt.toISOString()}>{formatKoreanDateTime(lastEditedAt)}</time>
+        </span>
+        {alertCount > 0 && <span className="wg-works-warning">경고 {alertCount}</span>}
+      </div>
+      <ArrowRightIcon size={20} strokeWidth={1.5} className="wg-works-arrow" aria-hidden="true" />
+    </Link>
   )
 }

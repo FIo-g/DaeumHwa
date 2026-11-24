@@ -4,7 +4,7 @@ import { useState, type CSSProperties } from 'react'
 import { AiBadge } from '@/components/app/ai-badge'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
-import { Disclosure, Reveal } from '@/components/motion'
+import { Disclosure } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import type { ChangeRow, ChangeTargetTable, ProposerType } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
@@ -71,43 +71,42 @@ export function ChangeList({
     return <EmptyState title="변경 이력이 없어요." />
   }
 
-  const groups = new Map<string, ChangeView[]>()
-  for (const row of rows) {
+  const groups = new Map<string, { row: ChangeView; order: number }[]>()
+  for (const [index, row] of rows.entries()) {
     const day = seoulToday(new Date(row.createdAt))
     const group = groups.get(day)
-    if (group) group.push(row)
-    else groups.set(day, [row])
+    const entry = { row, order: Math.min(index, 2) }
+    if (group) group.push(entry)
+    else groups.set(day, [entry])
   }
 
   return (
-    <div className="grid gap-4">
-      <Reveal effectOnly className="b-works-timeline">
+    <div className="grid min-w-0 gap-4">
+      <div className="wg-history-timeline">
         {[...groups].map(([day, entries]) => {
           const [year, month, date] = day.split('-').map(Number)
           return (
-            <section key={day} aria-labelledby={`history-${day}`} className="b-works-history-day">
-              <h2 id={`history-${day}`} className="b-works-history-date">
+            <section key={day} aria-labelledby={`history-${day}`} className="wg-history-day">
+              <h2 id={`history-${day}`} className="wg-history-date">
                 <time dateTime={day}>
                   {year}년 {month}월 {date}일
                 </time>
               </h2>
-              <ul className="b-works-history-entries">
-                {entries.map((row, index) => (
-                  <Reveal
-                    as="li"
-                    delay={70 * Math.min(index, 5)}
+              <ul className="wg-history-entries">
+                {entries.map(({ row, order }) => (
+                  <li
                     key={row.id}
-                    className="b-works-history-row"
-                    style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+                    className="wg-history-row"
+                    style={{ '--wg-history-order': order } as CSSProperties}
                   >
                     <ChangeEntry row={row} canEdit={canEdit} onRevert={revert} />
-                  </Reveal>
+                  </li>
                 ))}
               </ul>
             </section>
           )
         })}
-      </Reveal>
+      </div>
       {hasMore && (
         <div>
           <Button variant="outline" onClick={loadMore} disabled={busy}>
@@ -130,19 +129,20 @@ function ChangeEntry({
 }) {
   const [detail, setDetail] = useState<'unopened' | 'open' | 'closed'>('unopened')
   return (
-    <article className="b-works-change">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-ink">
-        <time dateTime={new Date(row.createdAt).toISOString()}>
+    <article className="wg-history-entry">
+      <span className="wg-history-line-number" aria-hidden="true" />
+      <div className="wg-history-meta">
+        <time className="b-mono" dateTime={new Date(row.createdAt).toISOString()}>
           {formatKoreanDateTime(row.createdAt)}
         </time>
-        <span className="b-works-tag bg-sand">{CHANGE_TARGET_LABEL[row.targetTable]}</span>
+        <span className="wg-history-target">{CHANGE_TARGET_LABEL[row.targetTable]}</span>
         {row.proposerType === 'ai' && <AiBadge />}
         {row.proposerType === 'ai' && <span>승인</span>}
         <span>{row.actorName ?? '알 수 없음'}</span>
       </div>
-      <p className="b-row__title wrap-anywhere">{row.summary}</p>
+      <p className="wg-history-summary b-row__title">{row.summary}</p>
       {canEdit && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="wg-history-actions">
           <ConfirmButton
             size="sm"
             title="이 변경을 되돌릴까요?"
@@ -159,12 +159,13 @@ function ChangeEntry({
         </div>
       )}
       <Disclosure
+        className="wg-history-disclosure"
         title={detail === 'open' ? '접기' : '자세히 보기'}
         open={detail === 'open'}
         onOpenChange={(open) => setDetail(open ? 'open' : 'closed')}
       >
         {detail !== 'unopened' && (
-          <div className="b-works-change-diff">
+          <div className="wg-history-detail" data-open={detail === 'open'}>
             <ChangeDiff targetTable={row.targetTable} before={row.before} after={row.after} />
           </div>
         )}

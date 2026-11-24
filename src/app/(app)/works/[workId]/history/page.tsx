@@ -74,14 +74,13 @@ export default async function HistoryPage({
   ]
 
   return (
-    <div className="b-works-history-page">
+    <div className="wg-history-page">
       <PageHeader
         title="변경 이력"
-        band="kraft"
         actions={isOwner ? <ExportButton workId={workId} title={work.title} /> : undefined}
       />
 
-      <div className="b-works-filter-panel">
+      <div className="wg-history-filters">
         <FilterLinks label="대상" options={targetOptions} />
         <FilterLinks label="제안자" options={proposerOptions} />
       </div>

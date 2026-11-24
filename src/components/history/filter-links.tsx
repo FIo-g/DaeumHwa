@@ -9,18 +9,19 @@ type FilterLinksProps = {
 
 export function FilterLinks({ label, options }: FilterLinksProps) {
   return (
-    <nav aria-label={label} className="b-works-filters">
-      <span className="b-label font-bold">{label}</span>
-      <div className="flex min-w-0 flex-wrap gap-2">
+    <nav aria-label={label} className="wg-history-filter">
+      <span className="wg-history-filter-label">{label}</span>
+      <div className="wg-history-filter-cells">
         {options.map((option) => (
           <Link
             key={option.href}
             href={option.href}
             aria-current={option.active ? 'true' : undefined}
-            className="b-works-filter"
+            className="wg-history-filter-cell b-control"
             scroll={false}
           >
-            <span>{option.label}</span>
+            {option.label}
+            <span className="wg-history-filter-ink" data-label={option.label} aria-hidden="true" />
           </Link>
         ))}
       </div>

@@ -19,6 +19,7 @@ vi.mock('@/lib/client/run-action', () => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 const run = vi.mocked(runAction)
 const bulk = vi.mocked(bulkApproveAction)
@@ -85,7 +86,7 @@ afterEach(() => {
 })
 
 describe('ProposalList', () => {
-  it('approves a whole card group at once and removes it from the list', async () => {
+  it('approves a whole card group and marks its rows in reading order', async () => {
     run.mockResolvedValue({ approved: 2, failed: [] } as never)
     render(
       <ProposalList
@@ -98,9 +99,48 @@ describe('ProposalList', () => {
     )
 
     const group = screen.getByRole('region', { name: '이서윤' })
-    fireEvent.click(within(group).getByRole('button', { name: '이 묶음 승인' }))
+    group.parentElement!.style.setProperty('--b-draw', '100ms')
+    group.parentElement!.style.setProperty('--b-stagger', '70ms')
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: '이 묶음 승인' }))
+    })
 
     expect(bulk).toHaveBeenCalledWith({ workId: 'work-1', proposalIds: ['p-entry', 'p-fact'] })
+    const marked = within(group).getAllByRole('article')
+    expect(marked.map((row) => row.parentElement!.dataset.decision)).toEqual([
+      'approved',
+      'approved',
+    ])
+    expect(
+      marked.map((row) =>
+        row.parentElement!.style.getPropertyValue('--wg-approvals-decision-index'),
+      ),
+    ).toEqual(['0', '1'])
+    await waitFor(() => expect(screen.queryByRole('region', { name: '이서윤' })).toBeNull())
+    expect(screen.getByRole('region', { name: '민준' })).toBeInTheDocument()
+  })
+
+  it('approves an import batch after confirmation and leaves the other batches pending', async () => {
+    run.mockResolvedValueOnce({ approved: 1, failed: [] } as never)
+    render(
+      <ProposalList
+        proposals={[entry, { ...minjun, sourceRef: 'job-2' }]}
+        workId="work-1"
+        chapters={chapters}
+        grouping="entity"
+        importBatches={[{ sourceRef: 'job-1', count: 1 }]}
+      />,
+    )
+
+    const batch = screen.getByRole('region', { name: '원고 가져오기 제안' })
+    expect(within(batch).getByText('원고 가져오기 제안 1건')).toBeVisible()
+    fireEvent.click(within(batch).getByRole('button', { name: '이 가져오기의 제안 모두 승인' }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toHaveAccessibleName('제안 1건을 모두 승인할까요?')
+    expect(dialog).toHaveAccessibleDescription('기본 태그가 붙어 위키에 바로 반영돼요.')
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }))
+
+    expect(bulk).toHaveBeenCalledWith({ workId: 'work-1', sourceRef: 'job-1' })
     await waitFor(() => expect(screen.queryByRole('region', { name: '이서윤' })).toBeNull())
     expect(screen.getByRole('region', { name: '민준' })).toBeInTheDocument()
   })
@@ -266,7 +306,7 @@ describe('ProposalList', () => {
       />,
     )
     const group = screen.getByRole('region', { name: '이서윤' })
-    group.parentElement!.style.setProperty('--b-scene', '100ms')
+    group.parentElement!.style.setProperty('--b-draw', '100ms')
     fireEvent.click(within(group).getByRole('button', { name: '거절' }))
     await waitFor(() =>
       expect(within(group).getByRole('article')).toHaveAttribute('data-decision', 'rejected'),

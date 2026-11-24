@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { formatKoreanDateTime } from '@/lib/dates'
 import {
   CHAPTER_STATUS_LABEL,
@@ -173,23 +174,33 @@ export function ChangeDiff({ targetTable, before, after }: ChangeDiffProps) {
   const changed = keys.filter((k) => JSON.stringify(b[k] ?? null) !== JSON.stringify(a[k] ?? null))
 
   if (changed.length === 0) {
-    return <p className="text-sm text-muted-foreground">바뀐 내용이 없어요.</p>
+    return <p className="wg-history-diff-empty">바뀐 내용이 없어요.</p>
   }
 
   return (
-    <dl className="grid gap-2 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-4">
-      {changed.map((key) => (
-        <div key={key} className="contents">
-          <dt className="text-muted-foreground">{fieldLabel(key, targetTable)}</dt>
-          <dd className="flex min-w-0 flex-wrap items-center gap-2 wrap-anywhere">
-            <span className="text-muted-foreground line-through">
-              {formatValue(key, targetTable, b[key])}
-            </span>
-            <span aria-hidden="true">→</span>
-            <span>{formatValue(key, targetTable, a[key])}</span>
-          </dd>
-        </div>
-      ))}
+    <dl className="wg-history-diff">
+      {changed.map((key, index) => {
+        const previous = formatValue(key, targetTable, b[key])
+        const next = formatValue(key, targetTable, a[key])
+        return (
+          <div
+            key={key}
+            className="wg-history-diff-row"
+            style={{ '--wg-history-order': Math.min(index, 8) } as CSSProperties}
+          >
+            <dt>{fieldLabel(key, targetTable)}</dt>
+            <dd>
+              <span className="wg-history-diff-before" data-empty={previous === '없음'}>
+                {previous}
+              </span>
+              <span aria-hidden="true">→</span>
+              <span className="wg-history-diff-after" data-empty={next === '없음'}>
+                {next}
+              </span>
+            </dd>
+          </div>
+        )
+      })}
     </dl>
   )
 }

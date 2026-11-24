@@ -1,18 +1,16 @@
 'use client'
 
-import { CheckIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
-import { AiBadge } from '@/components/app/ai-badge'
 import { FactStatusSelect } from '@/components/app/fact-status-select'
 import { Button } from '@/components/ui/button'
 import type { FactStatus } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
-import { chapterLabel, PROPOSAL_SOURCE_LABEL, PROPOSAL_TYPE_LABEL } from '@/lib/labels'
+import { chapterLabel } from '@/lib/labels'
 import type { ProposalPayloadMap } from '@/lib/proposal-payloads'
 import { approveProposalAction, rejectProposalAction } from '@/server/actions/proposals'
 import type { ProposalView } from '@/server/proposals'
-import { evidenceOf, summarizeProposal } from './proposal-summary'
+import { ProposalDetails } from './proposal-details'
 import { ProposalPayloadEditor } from './proposal-payload-editor'
 
 export type ProposalDecision = 'approved' | 'rejected'
@@ -58,8 +56,6 @@ export function ProposalCard({
 
   const chapter = proposal.chapterId ? chapters.find((c) => c.id === proposal.chapterId) : undefined
   const chapterText = chapter ? chapterLabel(chapter.position, chapter.title) : null
-  const summary = summarizeProposal(proposal.type, draft)
-  const evidence = evidenceOf(proposal.type, draft)
 
   function finish(result: boolean, outcome: ProposalDecision) {
     setBusy(false)
@@ -92,41 +88,27 @@ export function ProposalCard({
 
   return (
     <article
-      className="b-works-proposal"
+      className="wg-approvals-card"
       data-compact={compact}
       data-decision={decision}
-      data-editing={editing}
       aria-busy={busy || undefined}
     >
-      {decision === 'approved' && (
-        <span className="b-works-stamp" aria-hidden="true">
-          <CheckIcon size={24} /> 승인
-        </span>
-      )}
-      <div className="grid gap-2">
-        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-ink">
-          <AiBadge />
-          <span className="b-works-tag bg-sand">{PROPOSAL_TYPE_LABEL[proposal.type]}</span>
-          <span>{PROPOSAL_SOURCE_LABEL[proposal.source]}</span>
-          {chapter && chapterText && (
-            <Link href={`/works/${workId}/chapters/${chapter.id}`} className="underline">
+      <ProposalDetails
+        proposal={proposal}
+        payload={draft}
+        compact={compact}
+        chapter={
+          chapter &&
+          chapterText && (
+            <Link href={`/works/${workId}/chapters/${chapter.id}`} className="b-link">
               {chapterText}
             </Link>
-          )}
-        </p>
-        <p className="b-subhead wrap-anywhere">{summary.headline}</p>
-        {summary.detail && <p className="b-label wrap-anywhere text-muted-ink">{summary.detail}</p>}
-      </div>
-
-      {!compact && evidence && (
-        <figure className="b-works-evidence">
-          <figcaption className="b-label font-bold">근거</figcaption>
-          <blockquote className="b-quote wrap-anywhere">&ldquo;{evidence}&rdquo;</blockquote>
-        </figure>
-      )}
+          )
+        }
+      />
 
       {isFact && (
-        <div className="grid gap-1.5">
+        <div className="wg-approvals-fact grid justify-items-start gap-1.5">
           <p className="text-xs text-muted-foreground">태그</p>
           <FactStatusSelect value={factStatus} onChange={setFactStatus} />
         </div>
@@ -143,10 +125,10 @@ export function ProposalCard({
         />
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="wg-approvals-actions">
         <Button
           size="sm"
-          variant="ghost"
+          variant="link"
           aria-expanded={editing}
           onClick={() => setEditing((v) => !v)}
           disabled={busy || queueBusy}

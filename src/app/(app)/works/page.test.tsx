@@ -82,7 +82,10 @@ describe('WorksPage', () => {
     render(await WorksPage())
 
     expect(screen.queryByRole('button', { name: '샘플 작품으로 체험하기' })).toBeNull()
-    expect(screen.getByRole('link', { name: '새 작품' }).closest('header')).not.toBeNull()
+    const createLinks = screen.getAllByRole('link', { name: '새 작품' })
+    expect(createLinks).toHaveLength(2)
+    expect(createLinks[0].closest('header')).not.toBeNull()
+    expect(createLinks[1]).toHaveAttribute('href', '/works/new')
     expect(screen.queryByText('아직 작품이 없어요')).not.toBeInTheDocument()
     expect(screen.getByText('테스트 작품')).toBeInTheDocument()
   })

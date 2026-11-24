@@ -29,7 +29,23 @@ export function SampleWorkButton() {
   }
 
   return (
-    <PopButton pending={pending} pendingLabel="만드는 중…" onClick={() => void onClick()}>
+    <PopButton
+      className="wg-works-sample"
+      pending={pending}
+      pendingLabel={
+        <>
+          만드는 중…
+          <span className="wg-works-sample-cells" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </span>
+        </>
+      }
+      onClick={() => void onClick()}
+    >
       샘플 작품으로 체험하기
     </PopButton>
   )
