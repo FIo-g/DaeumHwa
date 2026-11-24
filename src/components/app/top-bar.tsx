@@ -12,6 +12,11 @@ import type { SessionUser } from '@/server/session'
 export function TopBar({ user }: { user: SessionUser }) {
   const router = useRouter()
 
+  async function continueToSignup() {
+    if (await flushPendingSaves()) router.push('/signup')
+    else toast.error('원고를 저장한 뒤 다시 시도해 주세요.')
+  }
+
   async function signOut() {
     await flushPendingSaves()
     try {
@@ -38,7 +43,14 @@ export function TopBar({ user }: { user: SessionUser }) {
           {user.isAnonymous ? (
             <>
               <span className="whitespace-nowrap text-sm text-muted-foreground">체험 중</span>
-              <Link href="/signup" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              <Link
+                href="/signup"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                onNavigate={(event) => {
+                  event.preventDefault()
+                  void continueToSignup()
+                }}
+              >
                 가입 후 작품 이어가기
               </Link>
             </>

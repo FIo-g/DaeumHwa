@@ -7,6 +7,7 @@ import {
 } from '@/components/reader-sim/reader-sim-list'
 import type { ReaderSimResult } from '@/ai/tasks/reader-sim'
 import { chapterLabel } from '@/lib/labels'
+import { TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { listChapters } from '@/server/chapters'
 import { listReaderSimRuns } from '@/server/ai-features'
 import { guardPage, pageContext } from '@/server/page-helpers'
@@ -14,8 +15,11 @@ import { getWork } from '@/server/works'
 
 export default async function ReaderSimPage({ params }: { params: Promise<{ workId: string }> }) {
   const { workId } = await params
-  const { db, actor } = await pageContext(`/works/${workId}/reader-sim`)
+  const { db, actor, user } = await pageContext(`/works/${workId}/reader-sim`)
   await guardPage(() => getWork(db, actor, workId))
+  if (user.isAnonymous) {
+    return <PageHeader title="독자 시뮬레이션" description={TRIAL_SIGNUP_MESSAGE} />
+  }
   const runs = await guardPage(() => listReaderSimRuns(db, actor, workId))
   const chapters = await guardPage(() => listChapters(db, actor, workId, { includeArchived: true }))
 

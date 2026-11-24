@@ -62,6 +62,7 @@ export type AiRunMeta = {
   userId: string
   workId: string | null
   chapterId?: string | null
+  trialCheck?: true
   signal?: AbortSignal
   timeoutMs?: number
   subRun?: true
@@ -523,7 +524,7 @@ function dailyTokenLimit(
 }
 
 async function assertTrialRunAllowed(db: Db, meta: AiRunMeta, task: AiTaskName): Promise<void> {
-  if (!meta.workId || !meta.chapterId || !TRIAL_CHECK_TASKS.has(task)) {
+  if (!meta.trialCheck || !meta.workId || !meta.chapterId || !TRIAL_CHECK_TASKS.has(task)) {
     throw new AppError('FORBIDDEN', TRIAL_SIGNUP_MESSAGE)
   }
   const [chapter] = await db

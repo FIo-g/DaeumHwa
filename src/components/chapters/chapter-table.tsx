@@ -56,13 +56,14 @@ type ChapterTableProps = {
   targetChars: number
   /** Editor role or higher. Viewers see the table read-only. */
   canEdit: boolean
+  trial?: boolean
 }
 
 /**
  * Chapter list for 회차 관리. Archived chapters are hidden until the toggle is on.
  * Status, publish date, order, archive and restore go through server actions, then refresh.
  */
-export function ChapterTable({ workId, chapters, targetChars, canEdit }: ChapterTableProps) {
+export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: ChapterTableProps) {
   const router = useRouter()
   const [showArchived, setShowArchived] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -71,6 +72,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit }: Chapter
 
   const visible = chapters.filter((c) => c.archivedAt === null)
   const shown = showArchived ? chapters : visible
+  const canOrganize = canEdit && !trial
 
   /** Runs one action and refreshes the page on success. Resolves to whether it succeeded. */
   async function perform(
@@ -95,7 +97,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit }: Chapter
       `status-${chapter.id}`,
       setChapterStatusAction({ chapterId: chapter.id, status: next }),
     )
-    if (ok && chapter.status === 'draft' && next === 'done') {
+    if (ok && !trial && chapter.status === 'draft' && next === 'done') {
       startAutoCheck({
         workId,
         chapterId: chapter.id,
@@ -143,8 +145,8 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit }: Chapter
               <TableHead className="text-right">글자 수 (공백 포함)</TableHead>
               <TableHead>연재일</TableHead>
               <TableHead className="hidden md:table-cell">수정일</TableHead>
-              {canEdit && <TableHead>순서</TableHead>}
-              {canEdit && <TableHead>관리</TableHead>}
+              {canOrganize && <TableHead>순서</TableHead>}
+              {canOrganize && <TableHead>관리</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -207,7 +209,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit }: Chapter
                   <TableCell className="hidden md:table-cell">
                     {formatKoreanDateTime(chapter.updatedAt)}
                   </TableCell>
-                  {canEdit && (
+                  {canOrganize && (
                     <TableCell>
                       {!archived && (
                         <div className="flex items-center gap-1">
@@ -243,7 +245,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit }: Chapter
                       )}
                     </TableCell>
                   )}
-                  {canEdit && (
+                  {canOrganize && (
                     <TableCell>
                       {archived ? (
                         <ConfirmButton

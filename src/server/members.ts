@@ -4,7 +4,13 @@ import { user, workInvites, workMembers, works } from '@/db/schema'
 import type { Actor, InviteRow, Role } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import { randomToken } from '@/lib/tokens'
-import { getMembership, ROLE_RANK, requireRowWork, requireWorkRole } from '@/server/access'
+import {
+  getMembership,
+  ROLE_RANK,
+  requireRowWork,
+  requireWorkRole,
+  workMemberRole,
+} from '@/server/access'
 import { requireRegisteredUser } from '@/server/trial-access'
 
 // Team mode (spec §3.3, F16). Owners manage members and invites; members may leave on their own.
@@ -38,7 +44,7 @@ export async function listMembers(
       userId: workMembers.userId,
       name: user.name,
       email: user.email,
-      role: workMembers.role,
+      role: workMemberRole,
       createdAt: workMembers.createdAt,
     })
     .from(workMembers)

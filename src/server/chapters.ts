@@ -17,6 +17,7 @@ import { chapterLabel, stripEpisodePrefix } from '@/lib/labels'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { recomputeAppearances } from '@/server/appearances'
 import { recordChange } from '@/server/changes'
+import { requireRegisteredUser } from '@/server/trial-access'
 import { updateDraftEditRatio } from '@/server/usage-events'
 import { lockWork } from '@/server/work-lock'
 
@@ -204,6 +205,7 @@ export async function createChapter(
   input: CreateChapterInput,
 ): Promise<ChapterRow> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
+  if (input.position !== undefined) await requireRegisteredUser(db, actor.userId)
   if (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 1)) {
     throw new AppError('VALIDATION', '회차 위치가 올바르지 않습니다.')
   }
@@ -361,11 +363,7 @@ export async function saveChapterWithTitleChange(
       .where(and(eq(chapters.id, chapter.id), eq(chapters.version, input.expectedVersion)))
       .returning()
     if (!updated) {
-      const [current] = await tx
-        .select()
-        .from(chapters)
-        .where(eq(chapters.id, chapter.id))
-        .limit(1)
+      const [current] = await tx.select().from(chapters).where(eq(chapters.id, chapter.id)).limit(1)
       if (current && current.title === title && current.body === body) {
         return { saved: { chapter: current, titleChanged: false }, changed: false }
       }
@@ -448,6 +446,7 @@ export async function moveChapter(
 ): Promise<void> {
   await db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, chapterId, 'editor')
+    await requireRegisteredUser(tx, actor.userId)
     if (chapter.archivedAt) throw new AppError('BAD_STATE', '보관된 회차는 이동할 수 없습니다.')
 
     const [neighbour] = await tx
@@ -481,6 +480,7 @@ export async function moveChapter(
 /** Archives a chapter (kept with its history; hidden from lists). Editor role. */
 export async function archiveChapter(db: Db, actor: Actor, chapterId: string): Promise<ChapterRow> {
   const { chapter } = await loadChapter(db, actor, chapterId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   if (chapter.archivedAt) return chapter
   const now = new Date()
   const [updated] = await db
@@ -498,6 +498,7 @@ export async function archiveChapter(db: Db, actor: Actor, chapterId: string): P
 export async function restoreChapter(db: Db, actor: Actor, chapterId: string): Promise<ChapterRow> {
   return db.transaction(async (tx) => {
     const { chapter } = await loadChapter(tx, actor, chapterId, 'editor')
+    await requireRegisteredUser(tx, actor.userId)
     if (!chapter.archivedAt) return chapter
 
     const [clash] = await tx

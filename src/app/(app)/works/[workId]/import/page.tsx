@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/app/page-header'
 import { ImportWizard } from '@/components/import/import-wizard'
+import { TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { hasRole } from '@/server/access'
 import { listImportJobs } from '@/server/imports'
 import { guardPage, pageContext } from '@/server/page-helpers'
@@ -10,8 +11,10 @@ export const maxDuration = 300
 
 export default async function ImportPage({ params }: { params: Promise<{ workId: string }> }) {
   const { workId } = await params
-  const { db, actor } = await pageContext(`/works/${workId}/import`)
+  const { db, actor, user } = await pageContext(`/works/${workId}/import`)
   const work = await guardPage(() => getWork(db, actor, workId))
+  if (user.isAnonymous)
+    return <PageHeader title="원고 가져오기" description={TRIAL_SIGNUP_MESSAGE} />
   const jobs = await guardPage(() => listImportJobs(db, actor, workId))
 
   return (

@@ -32,6 +32,7 @@ import {
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { createChaptersBulk } from '@/server/chapters'
 import { insertProposals } from '@/server/proposal-store'
+import { requireRegisteredUser } from '@/server/trial-access'
 
 // Manuscript import jobs (F6). A job holds the uploaded chapters and a cursor. Each advance call
 // runs chapter-extract for the chapter at the cursor and stores the result as import proposals;
@@ -95,6 +96,7 @@ export async function createImportJob(
   input: { workId: string; fileName: string; totalChapters: number },
 ): Promise<ImportJobRow> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   if (
     !Number.isInteger(input.totalChapters) ||
     input.totalChapters < 1 ||

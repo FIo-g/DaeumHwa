@@ -39,6 +39,7 @@ import { isUndecidedOnlyAnswer } from '@/lib/undecided-answer'
 import { requireRowWork, requireWorkRole } from '@/server/access'
 import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { insertProposals } from '@/server/proposal-store'
+import { requireRegisteredUser } from '@/server/trial-access'
 
 // F1 interview service. Questions and answers are stored as interview_sessions / interview_turns.
 // Answers go through the AI extraction task and become pending proposals (source 'interview').
@@ -90,6 +91,7 @@ export async function startInterview(
   workId: string,
 ): Promise<InterviewSessionRow> {
   await requireWorkRole(db, workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   const existing = await findActiveSession(db, workId)
   if (existing) return existing
   const [session] = await db

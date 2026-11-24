@@ -45,15 +45,22 @@ type StyleCardsProps = {
   cards: StyleCardItem[]
   characters: { id: string; name: string }[]
   canEdit: boolean
+  canSuggest?: boolean
 }
 
 const NONE = '__none__'
 
 /** Style cards (말투, 규칙, 예시) and the AI suggestion entry point for each character. */
-export function StyleCards({ workId, cards, characters, canEdit }: StyleCardsProps) {
+export function StyleCards({
+  workId,
+  cards,
+  characters,
+  canEdit,
+  canSuggest = canEdit,
+}: StyleCardsProps) {
   return (
     <div className="flex flex-col gap-8">
-      {canEdit && (
+      {canSuggest && (
         <section aria-labelledby="style-suggest-heading" className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <h2 id="style-suggest-heading" className="text-base font-semibold">

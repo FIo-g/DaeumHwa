@@ -9,7 +9,7 @@ import { getWork } from '@/server/works'
 
 export default async function ChaptersPage({ params }: { params: Promise<{ workId: string }> }) {
   const { workId } = await params
-  const { db, actor } = await pageContext(`/works/${workId}/chapters`)
+  const { db, actor, user } = await pageContext(`/works/${workId}/chapters`)
   const work = await guardPage(() => getWork(db, actor, workId))
   const rows = await guardPage(() => listChapters(db, actor, workId, { includeArchived: true }))
   const canEdit = hasRole(work.role, 'editor')
@@ -39,6 +39,7 @@ export default async function ChaptersPage({ params }: { params: Promise<{ workI
         chapters={chapters}
         targetChars={targetChars}
         canEdit={canEdit}
+        trial={user.isAnonymous}
       />
     </div>
   )

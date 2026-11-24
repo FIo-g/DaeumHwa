@@ -84,6 +84,7 @@ import { splitParagraphs } from '@/lib/korean/paragraphs'
 import { DRAFT_ERROR_MARK, DRAFT_REPLACE_MARK } from '@/lib/draft-stream'
 import { createTextPipe, type TextPipe } from '@/lib/text-pipe'
 import { requireWorkRole } from '@/server/access'
+import { requireRegisteredUser } from '@/server/trial-access'
 import { getEntryAppearances } from '@/server/appearances'
 import { assertEntryInWork, listFacts } from '@/server/facts'
 import { checkDraftDirectives, type DirectiveFinding } from '@/lib/directive-check'
@@ -168,6 +169,7 @@ export async function runReaderSimulation(
 ): Promise<{ runId: string; result: ReaderSimResult }> {
   const chapterRow = await getChapter(db, actor, input.chapterId)
   await requireWorkRole(db, chapterRow.workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   if (chapterRow.body.trim() === '') {
     throw new AppError('VALIDATION', '원고가 비어 있어 독자 시뮬레이션을 할 수 없습니다.')
   }
@@ -241,6 +243,7 @@ export async function runDirectionAdvice(
 ): Promise<{ runId: string; result: AdviceResult }> {
   const { workId } = input
   await requireWorkRole(db, workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   const work = await getWork(db, actor, workId)
   const latestPosition = await getLatestPosition(db, workId)
   const all = await listChapters(db, actor, workId)
@@ -323,6 +326,7 @@ export async function suggestStyleCard(
 ): Promise<ProposalRow> {
   const { workId, entryId } = input
   await requireWorkRole(db, workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   const entry = await assertEntryInWork(db, workId, entryId)
   const names = [entry.name, ...entry.aliases].filter((name) => name.trim() !== '')
   const samples = await collectDialogueSamples(db, workId, names)
@@ -582,6 +586,7 @@ export async function planDraft(
 ): Promise<{ runId: string; card: DraftPlanCard; warnings: string[] }> {
   const { workId } = input
   await requireWorkRole(db, workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
 
   const { promptInput, chapterId, targetChars } = await buildDraftContext(db, actor, {
     workId,
@@ -689,12 +694,12 @@ export async function startDraft(
   // First statement: the role check and the context work below count against the same budget.
   const startedAt = Date.now()
   const { workId } = input
+  await requireWorkRole(db, workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   const instructions = input.instructions.trim()
   if (!instructions && !input.plan) {
     throw new AppError('VALIDATION', '무슨 일이 일어나야 하는지 적어 주세요.')
   }
-  await requireWorkRole(db, workId, actor.userId, 'editor')
-
   const context = await buildDraftContext(db, actor, {
     workId,
     chapterId: input.chapterId,

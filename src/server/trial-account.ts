@@ -2,8 +2,12 @@ import { and, eq } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import {
   aiRuns,
+  authorDirectives,
   changeLog,
   chapterVersions,
+  comments,
+  issues,
+  proposals,
   session,
   userWorkState,
   workMembers,
@@ -11,7 +15,7 @@ import {
 } from '@/db/schema'
 import { lockActiveTrial } from './trial-access'
 
-/** Transfers the read-only sample and its history after Better Auth signs in the permanent user. */
+/** Transfers the sample and its history after Better Auth signs in the permanent user. */
 export async function linkTrialWork(db: Db, trialUserId: string, newUserId: string): Promise<void> {
   await db.transaction(async (tx) => {
     if (!(await lockActiveTrial(tx, trialUserId))) return
@@ -34,6 +38,26 @@ export async function linkTrialWork(db: Db, trialUserId: string, newUserId: stri
         .update(changeLog)
         .set({ actorId: newUserId })
         .where(eq(changeLog.actorId, trialUserId))
+      await tx
+        .update(issues)
+        .set({ resolvedBy: newUserId })
+        .where(eq(issues.resolvedBy, trialUserId))
+      await tx
+        .update(proposals)
+        .set({ decidedBy: newUserId })
+        .where(eq(proposals.decidedBy, trialUserId))
+      await tx
+        .update(authorDirectives)
+        .set({ createdBy: newUserId })
+        .where(eq(authorDirectives.createdBy, trialUserId))
+      await tx
+        .update(comments)
+        .set({ authorId: newUserId })
+        .where(eq(comments.authorId, trialUserId))
+      await tx
+        .update(comments)
+        .set({ resolvedBy: newUserId })
+        .where(eq(comments.resolvedBy, trialUserId))
       await tx.update(aiRuns).set({ userId: newUserId }).where(eq(aiRuns.userId, trialUserId))
       await tx
         .update(userWorkState)

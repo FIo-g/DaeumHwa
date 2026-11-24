@@ -11,6 +11,7 @@ import { cancelAutoCheck, useAutoCheck } from '@/lib/client/auto-check'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
 import { markAutoChecked, wasAutoChecked } from '@/lib/client/sample-session'
+import { flushPendingSaves } from '@/lib/client/use-autosave'
 import { useAiRun } from '@/lib/client/use-ai-run'
 import { ISSUE_KIND_LABEL, SEVERITY_LABEL } from '@/lib/labels'
 import { isTrialCheckChapter, TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
@@ -43,7 +44,7 @@ type CheckPanelProps = {
  */
 export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
   const editable = canEditChapter(data)
-  const canCheck = editable || (data.trial && isTrialCheckChapter(data.chapter.position))
+  const canCheck = editable && (!data.trial || isTrialCheckChapter(data.chapter.position))
   const [issues, setIssues] = useState<IssueRow[]>(data.issues)
   // Re-sync when the page reloads the chapter's open issues.
   const [synced, setSynced] = useState<IssueRow[]>(data.issues)
@@ -153,7 +154,7 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
     api.refresh()
   }
 
-  function applyFix(issue: IssueRow) {
+  async function applyFix(issue: IssueRow) {
     if (!canApplySuggestion(issue)) return
     const before = api.getText()
     const replaced = api.replaceQuote(issue.quote, issue.suggestion, issue.quoteStart ?? undefined)
@@ -161,8 +162,13 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
       toast.error('원고가 바뀌어 문장을 찾지 못했습니다. 다시 점검해 주세요.')
       return
     }
-    offerUndo(api, before, '문장을 바꿨습니다.')
-    void resolve(issue, 'accepted')
+    setBusyId(issue.id)
+    if (await flushPendingSaves()) {
+      offerUndo(api, before, '문장을 바꿨습니다.')
+      await resolve(issue, 'accepted')
+    } else {
+      setBusyId(null)
+    }
   }
 
   function handleFixed(issueId: string) {
@@ -280,12 +286,17 @@ export function CheckPanel({ data, api, text, autoRun }: CheckPanelProps) {
               {editable && (
                 <div className="flex flex-wrap gap-2">
                   {canApplySuggestion(issue) && (
-                    <Button size="sm" disabled={busy} onClick={() => applyFix(issue)}>
+                    <Button size="sm" disabled={busy} onClick={() => void applyFix(issue)}>
                       제안대로 고치기
                     </Button>
                   )}
                   {issue.factId && (
-                    <Button size="sm" variant="outline" onClick={() => setFixing(issue)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => setFixing(issue)}
+                    >
                       위키 고치기
                     </Button>
                   )}

@@ -181,9 +181,9 @@ export function WritingWorkspace({
     if (next === 'done') await saveNow()
     const result = await runAction(setChapterStatusAction({ chapterId: chapter.id, status: next }))
     if (result) {
-      if (next === 'done') fireDirectiveInfer(workId, chapter.id)
+      if (next === 'done' && !data.trial) fireDirectiveInfer(workId, chapter.id)
       router.refresh()
-      if (wasDraft && next === 'done') {
+      if (wasDraft && next === 'done' && !data.trial) {
         startAutoCheck({
           workId,
           chapterId: chapter.id,

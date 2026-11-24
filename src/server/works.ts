@@ -1,9 +1,9 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { workMembers, works } from '@/db/schema'
+import { user, workMembers, works } from '@/db/schema'
 import type { Actor, Role, WorkRow, WorkSettings } from '@/db/types'
 import { AppError } from '@/lib/errors'
-import { requireWorkRole } from '@/server/access'
+import { requireWorkRole, workMemberRole, workMembershipScope } from '@/server/access'
 import { requireRegisteredUser } from '@/server/trial-access'
 
 export type CreateWorkInput = {
@@ -47,7 +47,11 @@ export async function createWork(
         synopsis: input.synopsis ?? '',
       })
       .returning()
-    await tx.insert(workMembers).values({ workId: work.id, userId: actor.userId, role: 'owner' })
+    await tx.insert(workMembers).values({
+      workId: work.id,
+      userId: actor.userId,
+      role: options?.trialSample ? 'editor' : 'owner',
+    })
     return work
   })
 }
@@ -62,12 +66,13 @@ export async function listMyWorks(
   actor: Actor,
   o?: { includeArchived?: boolean },
 ): Promise<(WorkRow & { role: Role })[]> {
-  const conditions = [eq(workMembers.userId, actor.userId)]
+  const conditions = [eq(workMembers.userId, actor.userId), workMembershipScope]
   if (!o?.includeArchived) conditions.push(eq(works.status, 'active'))
   const rows = await db
-    .select({ work: works, role: workMembers.role })
+    .select({ work: works, role: workMemberRole })
     .from(workMembers)
     .innerJoin(works, eq(works.id, workMembers.workId))
+    .innerJoin(user, eq(user.id, workMembers.userId))
     .where(and(...conditions))
     .orderBy(desc(works.updatedAt))
   return rows.map((r) => ({ ...r.work, role: r.role }))

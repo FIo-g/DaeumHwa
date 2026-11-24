@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm'
-import { chapters as chapterTable, workMembers, works } from '@/db/schema'
+import { chapters as chapterTable, works } from '@/db/schema'
 import type { Actor } from '@/db/types'
 import { AppError } from '@/lib/errors'
 import type { Db } from '@/db/client'
@@ -34,13 +34,16 @@ export async function createSampleWork(
       const [existing] = await tx
         .select({ workId: works.id, chapterId: chapterTable.id })
         .from(works)
-        .innerJoin(
+        .leftJoin(
           chapterTable,
           and(eq(chapterTable.workId, works.id), eq(chapterTable.position, data.landingChapter)),
         )
         .where(eq(works.ownerId, actor.userId))
         .limit(1)
-      if (existing) return existing
+      if (existing) {
+        if (!existing.chapterId) throw new AppError('BAD_STATE', '샘플 회차를 찾을 수 없습니다.')
+        return { workId: existing.workId, chapterId: existing.chapterId }
+      }
     }
 
     const work = await createWork(
@@ -113,12 +116,6 @@ export async function createSampleWork(
 
     const landingId = chapterByPosition.get(data.landingChapter)
     if (!landingId) throw new AppError('BAD_STATE', '샘플 회차를 찾을 수 없습니다.')
-    if (trial) {
-      await tx
-        .update(workMembers)
-        .set({ role: 'viewer' })
-        .where(and(eq(workMembers.workId, work.id), eq(workMembers.userId, actor.userId)))
-    }
     return { workId: work.id, chapterId: landingId }
   })
 }

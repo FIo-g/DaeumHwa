@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/app/page-header'
 import { InterviewSession } from '@/components/interview/interview-session'
+import { TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { hasRole } from '@/server/access'
 import { getInterviewState } from '@/server/interview'
 import { guardPage, pageContext } from '@/server/page-helpers'
@@ -10,8 +11,9 @@ export const maxDuration = 300
 
 export default async function InterviewPage({ params }: { params: Promise<{ workId: string }> }) {
   const { workId } = await params
-  const { db, actor } = await pageContext(`/works/${workId}/interview`)
+  const { db, actor, user } = await pageContext(`/works/${workId}/interview`)
   const work = await guardPage(() => getWork(db, actor, workId))
+  if (user.isAnonymous) return <PageHeader title="인터뷰" description={TRIAL_SIGNUP_MESSAGE} />
   const state = await guardPage(() => getInterviewState(db, actor, workId))
 
   return (

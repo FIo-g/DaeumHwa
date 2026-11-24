@@ -32,7 +32,7 @@ export default async function WikiPage({
 }) {
   const { workId } = await params
   const sp = await searchParams
-  const { db, actor } = await pageContext(`/works/${workId}/wiki`)
+  const { db, actor, user } = await pageContext(`/works/${workId}/wiki`)
   const work = await guardPage(() => getWork(db, actor, workId))
   const canEdit = hasRole(work.role, 'editor')
 
@@ -113,6 +113,7 @@ export default async function WikiPage({
         cards={cards}
         characters={characters.map((c) => ({ id: c.id, name: c.name }))}
         canEdit={canEdit}
+        canSuggest={canEdit && !user.isAnonymous}
       />
     )
   }

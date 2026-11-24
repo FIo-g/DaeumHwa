@@ -39,7 +39,7 @@ import {
 } from '@/lib/korean/sentences'
 import { isTrialCheckChapter, TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { requireRowWork, requireWorkRole } from '@/server/access'
-import { isTrialUser } from '@/server/trial-access'
+import { isTrialUser, requireRegisteredUser } from '@/server/trial-access'
 import { type NewIssue, replaceOpenIssues } from '@/server/issues'
 import { loadKnownEntries, loadKnownFactTexts } from '@/server/known-entries'
 import { listNamingRules } from '@/server/naming'
@@ -235,13 +235,17 @@ async function loadEditableChapter(
   allowTrialCheck = false,
 ): Promise<{ chapter: ChapterRow; workId: string }> {
   const workId = await requireRowWork(db, 'chapters', chapterId)
-  const trial = allowTrialCheck && (await isTrialUser(db, actor.userId))
-  await requireWorkRole(db, workId, actor.userId, trial ? 'viewer' : 'editor')
+  await requireWorkRole(db, workId, actor.userId, 'editor')
+  if (!allowTrialCheck) await requireRegisteredUser(db, actor.userId)
   const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1)
   if (!chapter || chapter.archivedAt !== null) {
     throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
   }
-  if (trial && !isTrialCheckChapter(chapter.position)) {
+  if (
+    allowTrialCheck &&
+    !isTrialCheckChapter(chapter.position) &&
+    (await isTrialUser(db, actor.userId))
+  ) {
     throw new AppError('FORBIDDEN', TRIAL_SIGNUP_MESSAGE)
   }
   return { chapter, workId }
@@ -289,6 +293,7 @@ export async function runChapterCheck(
     userId: actor.userId,
     workId,
     chapterId: chapter.id,
+    trialCheck: true as const,
     signal: signal ? AbortSignal.any([signal, sibling.signal]) : sibling.signal,
   }
 

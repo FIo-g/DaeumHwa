@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, or, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import {
   authorDirectives,
@@ -17,9 +17,11 @@ import {
   styleCards,
   threadEvents,
   threads,
+  user,
   wikiEntries,
   workInvites,
   workMembers,
+  works,
 } from '@/db/schema'
 import type { Role } from '@/db/types'
 import { AppError } from '@/lib/errors'
@@ -32,6 +34,10 @@ export function hasRole(role: Role, min: Role): boolean {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Trials can only access their own sample, including accounts provisioned with the old viewer role.
+export const workMembershipScope = or(eq(user.isAnonymous, false), eq(works.ownerId, user.id))
+export const workMemberRole = sql<Role>`case when ${user.isAnonymous} then 'editor' else ${workMembers.role} end`
 
 export type RowTable =
   | 'chapters'
@@ -61,9 +67,11 @@ export async function getMembership(
 ): Promise<{ role: Role } | null> {
   if (!UUID_RE.test(workId)) return null
   const [row] = await db
-    .select({ role: workMembers.role })
+    .select({ role: workMemberRole })
     .from(workMembers)
-    .where(and(eq(workMembers.workId, workId), eq(workMembers.userId, userId)))
+    .innerJoin(works, eq(works.id, workMembers.workId))
+    .innerJoin(user, eq(user.id, workMembers.userId))
+    .where(and(eq(workMembers.workId, workId), eq(workMembers.userId, userId), workMembershipScope))
     .limit(1)
   return row ? { role: row.role } : null
 }

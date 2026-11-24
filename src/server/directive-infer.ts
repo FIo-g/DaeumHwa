@@ -15,6 +15,7 @@ import { editHunks } from '@/lib/edit-hunks'
 import { AppError } from '@/lib/errors'
 import { requireWorkRole } from '@/server/access'
 import { createDirective, listDirectives } from '@/server/directives'
+import { requireRegisteredUser } from '@/server/trial-access'
 import { recordUsageEvent } from '@/server/usage-events'
 
 // Lasting requests inferred from the author's edits to an AI draft (stage 4, task 2). The
@@ -121,6 +122,7 @@ export async function inferDirectives(
   signal?: AbortSignal,
 ): Promise<{ runId: string | null; proposals: InferredProposal[] }> {
   await requireWorkRole(db, input.workId, actor.userId, 'editor')
+  await requireRegisteredUser(db, actor.userId)
   const [chapter] = await db
     .select()
     .from(chapters)
