@@ -3,7 +3,7 @@
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type KeyboardEvent, useRef, useState } from 'react'
+import { type CSSProperties, type KeyboardEvent, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
@@ -121,7 +121,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
+      <div className="b-paper flex items-center gap-2 px-3 py-1">
         <Checkbox
           id="show-archived-chapters"
           aria-label="보관한 회차 보기"
@@ -133,162 +133,172 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
 
       {shown.length === 0 ? (
         <EmptyState
-          title="아직 회차가 없습니다"
+          title="아직 회차가 없어요"
           description={canEdit ? '새 회차를 만들어 원고를 시작해 보세요.' : undefined}
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>회차</TableHead>
-              <TableHead>상태</TableHead>
-              <TableHead className="text-right">글자 수 (공백 포함)</TableHead>
-              <TableHead>연재일</TableHead>
-              <TableHead className="hidden md:table-cell">수정일</TableHead>
-              {canOrganize && <TableHead>순서</TableHead>}
-              {canOrganize && <TableHead>관리</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {shown.map((chapter) => {
-              const archived = chapter.archivedAt !== null
-              const label = chapterLabel(chapter.position, chapter.title)
-              const visibleIndex = visible.findIndex((c) => c.id === chapter.id)
-              const busy = busyKey !== null && busyKey.endsWith(chapter.id)
-              return (
-                <TableRow
-                  key={chapter.id}
-                  className={archived ? 'text-muted-foreground' : undefined}
-                >
-                  <TableCell className="font-medium">
-                    {archived ? (
-                      <span>
-                        {label}
-                        <span className="ml-2 text-xs">(보관됨)</span>
-                      </span>
-                    ) : (
-                      <Link
-                        href={`/works/${workId}/chapters/${chapter.id}`}
-                        className="hover:underline"
-                      >
-                        {label}
-                      </Link>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {canEdit && !archived ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        aria-label={`${chapter.position}화 상태 바꾸기`}
-                        disabled={busy}
-                        onClick={() => void toggleStatus(chapter)}
-                      >
-                        {CHAPTER_STATUS_LABEL[chapter.status]}
-                      </Button>
-                    ) : (
-                      <span>{CHAPTER_STATUS_LABEL[chapter.status]}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {chapter.charCount.toLocaleString('ko-KR')}
-                  </TableCell>
-                  <TableCell>
-                    <PublishedOnInput
-                      position={chapter.position}
-                      value={chapter.publishedOn}
-                      disabled={!canEdit || archived}
-                      onSave={(next) =>
-                        perform(
-                          `date-${chapter.id}`,
-                          setChapterPublishedOnAction({ chapterId: chapter.id, publishedOn: next }),
-                        )
-                      }
-                    />
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    {formatKoreanDateTime(chapter.updatedAt)}
-                  </TableCell>
-                  {canOrganize && (
-                    <TableCell>
-                      {!archived && (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`${chapter.position}화 위로 이동`}
-                            disabled={busy || visibleIndex <= 0}
-                            onClick={() =>
-                              perform(
-                                `move-${chapter.id}`,
-                                moveChapterAction({ chapterId: chapter.id, direction: 'up' }),
-                              )
-                            }
-                          >
-                            <ArrowUpIcon />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`${chapter.position}화 아래로 이동`}
-                            disabled={busy || visibleIndex === visible.length - 1}
-                            onClick={() =>
-                              perform(
-                                `move-${chapter.id}`,
-                                moveChapterAction({ chapterId: chapter.id, direction: 'down' }),
-                              )
-                            }
-                          >
-                            <ArrowDownIcon />
-                          </Button>
-                        </div>
-                      )}
-                    </TableCell>
-                  )}
-                  {canOrganize && (
-                    <TableCell>
+        <div className="b-writing-chapter-table b-paper overflow-clip">
+          <Table>
+            <TableHeader className="bg-leaf">
+              <TableRow>
+                <TableHead>회차</TableHead>
+                <TableHead>상태</TableHead>
+                <TableHead className="text-right">글자 수 (공백 포함)</TableHead>
+                <TableHead>연재일</TableHead>
+                <TableHead className="hidden md:table-cell">수정일</TableHead>
+                {canOrganize && <TableHead>순서</TableHead>}
+                {canOrganize && <TableHead>관리</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {shown.map((chapter, index) => {
+                const archived = chapter.archivedAt !== null
+                const label = chapterLabel(chapter.position, chapter.title)
+                const visibleIndex = visible.findIndex((c) => c.id === chapter.id)
+                const busy = busyKey !== null && busyKey.endsWith(chapter.id)
+                return (
+                  <TableRow
+                    key={chapter.id}
+                    className={
+                      archived
+                        ? 'b-writing-chapter-row text-muted-foreground'
+                        : 'b-writing-chapter-row'
+                    }
+                    style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+                  >
+                    <TableCell className="font-medium">
                       {archived ? (
-                        <ConfirmButton
-                          title="이 회차를 복원할까요?"
-                          description="회차 목록에 다시 나타납니다."
-                          confirmLabel="복원하기"
-                          size="sm"
-                          disabled={busy}
-                          onConfirm={async () => {
-                            await perform(
-                              `restore-${chapter.id}`,
-                              restoreChapterAction({ chapterId: chapter.id }),
-                              '회차를 복원했습니다.',
-                            )
-                          }}
-                        >
-                          복원
-                        </ConfirmButton>
+                        <span>
+                          {label}
+                          <span className="ml-2 text-xs">(보관됨)</span>
+                        </span>
                       ) : (
-                        <ConfirmButton
-                          title="이 회차를 보관할까요?"
-                          description="보관해도 원고와 이력은 남아 있고, 보관한 회차 보기에서 되돌릴 수 있습니다."
-                          confirmLabel="보관하기"
-                          size="sm"
-                          disabled={busy}
-                          onConfirm={async () => {
-                            await perform(
-                              `archive-${chapter.id}`,
-                              archiveChapterAction({ chapterId: chapter.id }),
-                              '회차를 보관했습니다.',
-                            )
-                          }}
+                        <Link
+                          href={`/works/${workId}/chapters/${chapter.id}`}
+                          className="b-writing-row-label focus-visible:underline"
                         >
-                          보관
-                        </ConfirmButton>
+                          {label}
+                        </Link>
                       )}
                     </TableCell>
-                  )}
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+                    <TableCell>
+                      {canEdit && !archived ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          aria-label={`${chapter.position}화 상태 바꾸기`}
+                          disabled={busy}
+                          onClick={() => void toggleStatus(chapter)}
+                        >
+                          {CHAPTER_STATUS_LABEL[chapter.status]}
+                        </Button>
+                      ) : (
+                        <span>{CHAPTER_STATUS_LABEL[chapter.status]}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {chapter.charCount.toLocaleString('ko-KR')}
+                    </TableCell>
+                    <TableCell>
+                      <PublishedOnInput
+                        position={chapter.position}
+                        value={chapter.publishedOn}
+                        disabled={!canEdit || archived}
+                        onSave={(next) =>
+                          perform(
+                            `date-${chapter.id}`,
+                            setChapterPublishedOnAction({
+                              chapterId: chapter.id,
+                              publishedOn: next,
+                            }),
+                          )
+                        }
+                      />
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {formatKoreanDateTime(chapter.updatedAt)}
+                    </TableCell>
+                    {canOrganize && (
+                      <TableCell>
+                        {!archived && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`${chapter.position}화 위로 이동`}
+                              disabled={busy || visibleIndex <= 0}
+                              onClick={() =>
+                                perform(
+                                  `move-${chapter.id}`,
+                                  moveChapterAction({ chapterId: chapter.id, direction: 'up' }),
+                                )
+                              }
+                            >
+                              <ArrowUpIcon />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`${chapter.position}화 아래로 이동`}
+                              disabled={busy || visibleIndex === visible.length - 1}
+                              onClick={() =>
+                                perform(
+                                  `move-${chapter.id}`,
+                                  moveChapterAction({ chapterId: chapter.id, direction: 'down' }),
+                                )
+                              }
+                            >
+                              <ArrowDownIcon />
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    )}
+                    {canOrganize && (
+                      <TableCell>
+                        {archived ? (
+                          <ConfirmButton
+                            title="이 회차를 복원할까요?"
+                            description="회차 목록에서 다시 볼 수 있어요."
+                            confirmLabel="복원하기"
+                            size="sm"
+                            disabled={busy}
+                            onConfirm={async () => {
+                              await perform(
+                                `restore-${chapter.id}`,
+                                restoreChapterAction({ chapterId: chapter.id }),
+                                '회차를 복원했어요.',
+                              )
+                            }}
+                          >
+                            복원
+                          </ConfirmButton>
+                        ) : (
+                          <ConfirmButton
+                            title="이 회차를 보관할까요?"
+                            description="원고와 이력은 남아요. ‘보관한 회차 보기’에서 복원할 수 있어요."
+                            confirmLabel="보관하기"
+                            size="sm"
+                            disabled={busy}
+                            onConfirm={async () => {
+                              await perform(
+                                `archive-${chapter.id}`,
+                                archiveChapterAction({ chapterId: chapter.id }),
+                                '회차를 보관했어요.',
+                              )
+                            }}
+                          >
+                            보관
+                          </ConfirmButton>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       <CompleteConfirmDialog
@@ -336,14 +346,14 @@ function PublishedOnInput({ position, value, disabled, onSave }: PublishedOnInpu
     // A half-typed date reads as '' but is not a request to clear the date.
     const input = inputRef.current
     if (input?.validity.badInput) {
-      toast.error('연재일이 올바르지 않습니다.')
+      toast.error('연재일을 확인해 주세요.')
       input.value = saved
       setDraft(saved)
       return
     }
     if (draft === saved) return
     if (draft !== '' && !isPlausibleIsoDate(draft)) {
-      toast.error('연재일이 올바르지 않습니다.')
+      toast.error('연재일을 확인해 주세요.')
       setDraft(saved)
       return
     }

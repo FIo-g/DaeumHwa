@@ -1,5 +1,6 @@
 'use client'
 
+import type { CSSProperties } from 'react'
 import type { VersionSource } from '@/db/types'
 import { formatKoreanDateTime } from '@/lib/dates'
 import { cn } from '@/lib/utils'
@@ -32,25 +33,29 @@ type VersionListProps = {
 /** Newest first. Each row is a button, so the list works with the keyboard. */
 export function VersionList({ versions, currentVersion, selectedId, onSelect }: VersionListProps) {
   if (versions.length === 0) {
-    return <p className="text-sm text-muted-foreground">저장된 버전이 없습니다.</p>
+    return <p className="text-sm text-muted-foreground">저장된 버전이 없어요.</p>
   }
   return (
-    <ul className="flex flex-col gap-1" aria-label="버전 목록">
-      {versions.map((v) => {
+    <ul className="b-paper grid gap-2 bg-leaf/45 p-3" aria-label="버전 목록">
+      {versions.map((v, index) => {
         const selected = v.id === selectedId
         return (
-          <li key={v.id}>
+          <li
+            key={v.id}
+            className="b-writing-version-row"
+            style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+          >
             <button
               type="button"
               aria-pressed={selected}
               onClick={() => onSelect(v.id)}
               className={cn(
-                'flex w-full flex-col gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted',
-                selected && 'border-ring bg-muted',
+                'flex w-full flex-col gap-0.5 rounded-field border-2 border-ink bg-paper px-3 py-2 text-left text-sm transition-colors hover:bg-leaf focus-visible:bg-leaf',
+                selected && 'bg-leaf',
               )}
             >
-              <span className="flex flex-wrap items-center gap-2 font-medium">
-                버전 {v.version}
+              <span className="flex flex-wrap items-center gap-2 font-bold">
+                <span className="b-writing-row-label">버전 {v.version}</span>
                 {v.version === currentVersion && (
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-normal text-secondary-foreground">
                     현재

@@ -21,11 +21,7 @@ type VersionDiffProps = {
 type DiffState =
   { status: 'loading' } | { status: 'error' } | { status: 'ready'; parts: DiffPart[] }
 
-/**
- * Compares a saved version with the current manuscript. Green text is in the version but not in
- * the current text (restoring adds it back); struck red text is in the current text only
- * (restoring removes it).
- */
+/** Compares the selected version with the latest manuscript in restoration order. */
 export function VersionDiff({
   workId,
   chapterId,
@@ -61,19 +57,22 @@ export function VersionDiff({
   async function restore() {
     const result = await runAction(
       restoreVersionAction({ versionId, expectedVersion: currentVersion }),
-      { success: `버전 ${versionNumber}으로 되돌렸습니다.` },
+      { success: `버전 ${versionNumber}으로 되돌렸어요.` },
     )
     if (result) router.push(`/works/${workId}/chapters/${chapterId}`)
   }
 
   return (
-    <section aria-label="버전 비교" className="flex min-w-0 flex-1 flex-col gap-3">
+    <section
+      aria-label="버전 비교"
+      className="b-writing-history-diff b-paper flex min-w-0 flex-1 flex-col gap-3 p-4 sm:p-5"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">버전 {versionNumber}과 현재 원고 비교</h2>
+        <h2 className="b-subhead">버전 {versionNumber}과 현재 원고 비교</h2>
         {canRestore && (
           <ConfirmButton
             title="이 버전으로 되돌릴까요?"
-            description="현재 원고는 새 버전으로 바뀌고, 이 버전의 내용이 원고가 됩니다."
+            description="선택한 버전의 내용으로 원고를 바꿔요. 현재 원고도 이력에 남아요."
             confirmLabel="되돌리기"
             onConfirm={restore}
           >
@@ -83,9 +82,7 @@ export function VersionDiff({
       </div>
 
       {state.status === 'loading' && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
-      {state.status === 'error' && (
-        <p className="text-sm text-destructive">버전을 불러오지 못했습니다.</p>
-      )}
+      {state.status === 'error' && <p className="text-sm text-ink">버전을 불러오지 못했어요.</p>}
       {state.status === 'ready' && <DiffBody parts={state.parts} />}
     </section>
   )
@@ -96,23 +93,20 @@ function DiffBody({ parts }: { parts: DiffPart[] }) {
   return (
     <>
       <p className="text-xs text-muted-foreground">
-        <span className="text-emerald-700 dark:text-emerald-300">
+        <span className="rounded-field bg-mustard px-1.5 py-0.5 text-ink">
           이 버전에만 있는 글 {stats.inserted}자
         </span>
         {' · '}
-        <span className="text-red-700 dark:text-red-400">
+        <span className="text-ink underline decoration-dashed underline-offset-4">
           현재 원고에만 있는 글 {stats.deleted}자
         </span>
       </p>
-      <div className="max-h-[70vh] overflow-y-auto rounded-xl border bg-background p-4 text-[15px] leading-7 whitespace-pre-wrap [overflow-wrap:anywhere]">
-        {parts.length === 0 && <span className="text-muted-foreground">내용이 없습니다.</span>}
+      <div className="max-h-[70vh] overflow-y-auto rounded-card border border-ink bg-paper p-4 text-[15px] leading-7 whitespace-pre-wrap [overflow-wrap:anywhere]">
+        {parts.length === 0 && <span className="text-muted-foreground">내용이 없어요.</span>}
         {parts.map((part, index) => {
           if (part.type === 'insert') {
             return (
-              <ins
-                key={index}
-                className="bg-emerald-100 text-emerald-900 no-underline dark:bg-emerald-950 dark:text-emerald-200"
-              >
+              <ins key={index} className="bg-mustard text-ink no-underline">
                 {part.value}
               </ins>
             )
@@ -121,7 +115,7 @@ function DiffBody({ parts }: { parts: DiffPart[] }) {
             return (
               <del
                 key={index}
-                className="bg-red-100 text-red-900 line-through decoration-red-700 dark:bg-red-950 dark:text-red-200"
+                className="bg-muted text-ink line-through decoration-ink decoration-2"
               >
                 {part.value}
               </del>

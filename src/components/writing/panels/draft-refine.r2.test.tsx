@@ -88,7 +88,7 @@ describe('DraftRefine', () => {
     })
     expect(region.querySelectorAll('ins')).toHaveLength(1)
     expect(region.querySelectorAll('del')).toHaveLength(1)
-    expect(screen.getByText('긴 문단 1곳을 고쳤습니다.')).toBeTruthy()
+    expect(screen.getByText('긴 문단 1곳을 고쳤어요.')).toBeTruthy()
     expect(applyDraftRefinementAction).not.toHaveBeenCalled()
     expect(onApplied).not.toHaveBeenCalled()
     expect(onPreviewChange).toHaveBeenLastCalledWith(true)
@@ -113,7 +113,7 @@ describe('DraftRefine', () => {
     })
     expect(screen.queryByRole('region', { name: '다듬기 미리보기' })).toBeNull()
     expect(onPreviewChange).toHaveBeenLastCalledWith(false)
-    expect(toast.success).toHaveBeenCalledWith('다듬은 초안으로 바꿨습니다.')
+    expect(toast.success).toHaveBeenCalledWith('다듬은 초안으로 바꿨어요.')
   })
 
   it('버리기 closes the preview and calls nothing', async () => {
@@ -162,8 +162,8 @@ describe('DraftRefine', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '다듬기' }))
 
-    expect(await screen.findByText('시간이 모자라 문장 고치기는 건너뛰었습니다.')).toBeTruthy()
-    expect(screen.queryByText('다듬을 곳을 찾지 못했습니다.')).toBeNull()
+    expect(await screen.findByText('시간이 모자라 문장 고치기는 건너뛰었어요.')).toBeTruthy()
+    expect(screen.queryByText('다듬을 곳을 찾지 못했어요.')).toBeNull()
   })
 
   it('says nothing needed fixing when the server found no change', async () => {
@@ -177,7 +177,7 @@ describe('DraftRefine', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '다듬기' }))
 
-    expect(await screen.findByText('다듬을 곳을 찾지 못했습니다.')).toBeTruthy()
+    expect(await screen.findByText('다듬을 곳을 찾지 못했어요.')).toBeTruthy()
     expect(screen.queryByRole('region', { name: '다듬기 미리보기' })).toBeNull()
     expect(onPreviewChange).not.toHaveBeenCalledWith(true)
   })
@@ -186,16 +186,14 @@ describe('DraftRefine', () => {
     renderRefine()
     await openPreview({ ...PREVIEW, repairState: 'failed' })
 
-    expect(
-      screen.getByText('문장 고치기는 하지 못했습니다. 문단 다듬기 결과만 보입니다.'),
-    ).toBeTruthy()
+    expect(screen.getByText('문장 고치기는 못했어요. 문단 다듬기 결과만 보여요.')).toBeTruthy()
   })
 
   it('shows the skipped repair note', async () => {
     renderRefine()
     await openPreview({ ...PREVIEW, repairState: 'skipped' })
 
-    expect(screen.getByText('시간이 모자라 문장 고치기는 건너뛰었습니다.')).toBeTruthy()
+    expect(screen.getByText('시간이 모자라 문장 고치기는 건너뛰었어요.')).toBeTruthy()
   })
 
   it('cancel stops the run and leaves no preview', async () => {

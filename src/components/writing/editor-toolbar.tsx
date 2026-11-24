@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { ChevronLeftIcon, ChevronRightIcon, HistoryIcon, SaveIcon } from 'lucide-react'
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, HistoryIcon, SaveIcon } from 'lucide-react'
 import { ChapterPicker } from '@/components/app/chapter-picker'
 import { Button, buttonVariants } from '@/components/ui/button'
 import type { ChapterStatus } from '@/db/types'
@@ -23,9 +23,9 @@ const STATUS_TONE: Record<AutosaveStatus, string> = {
   saved: 'text-muted-foreground',
   dirty: 'text-muted-foreground',
   saving: 'text-muted-foreground',
-  offline: 'text-amber-700 dark:text-amber-300',
-  conflict: 'text-destructive',
-  error: 'text-destructive',
+  offline: 'text-ink',
+  conflict: 'text-ink',
+  error: 'text-ink',
 }
 
 export type EditorToolbarProps = {
@@ -60,10 +60,16 @@ export function EditorToolbar({
   const hrefOf = (id: string) => `/works/${workId}/chapters/${id}`
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b pb-3">
+    <div className="b-writing-toolbar b-paper flex min-w-0 flex-wrap items-center gap-2 p-2">
       <div className="flex items-center gap-2">
         {canEdit ? (
-          <p role="status" className={cn('text-sm', STATUS_TONE[status])}>
+          <p
+            role="status"
+            className={cn(
+              'b-writing-save-status rounded-full px-2.5 py-1 text-sm font-semibold',
+              STATUS_TONE[status],
+            )}
+          >
             {SAVE_STATUS_TEXT[status]}
           </p>
         ) : (
@@ -107,7 +113,7 @@ export function EditorToolbar({
         </Button>
       </div>
 
-      <div className="ml-auto flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto">
         {panelTrigger}
         {canEdit && (
           <div role="group" aria-label="회차 상태" className="flex items-center gap-1">
@@ -119,6 +125,9 @@ export function EditorToolbar({
                 aria-pressed={chapterStatus === value}
                 onClick={() => onStatusChange(value)}
               >
+                {value === 'done' && chapterStatus === 'done' && (
+                  <CheckIcon aria-hidden="true" className="b-writing-done-stamp" />
+                )}
                 {CHAPTER_STATUS_LABEL[value]}
               </Button>
             ))}

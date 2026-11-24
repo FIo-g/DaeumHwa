@@ -29,7 +29,7 @@ export function VersionHistory({
 
   return (
     <div className="flex flex-col gap-6 md:flex-row">
-      <div className="md:w-72 md:shrink-0">
+      <div className="b-writing-versions md:w-52 md:shrink-0 xl:w-64">
         <VersionList
           versions={versions}
           currentVersion={currentVersion}

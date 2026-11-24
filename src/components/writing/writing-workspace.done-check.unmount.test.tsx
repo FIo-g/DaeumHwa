@@ -138,7 +138,7 @@ describe('WritingWorkspace done auto check after unmount', () => {
 
     await waitFor(() =>
       expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
-        '4화 점검을 마쳤습니다.',
+        '4화 점검을 마쳤어요.',
         expect.objectContaining({ description: '지적 0건, 승인 대기 후보 0건' }),
       ),
     )

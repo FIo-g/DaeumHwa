@@ -23,7 +23,7 @@ vi.mock('@/server/actions/ai-features', () => ({
 
 const encoder = new TextEncoder()
 const NOTICE =
-  '초안 품질을 높이려고 초안을 쓴 횟수와 고친 글자 비율 같은 숫자만 셉니다. 원고 내용은 모으지 않습니다.'
+  '초안 품질을 높이려고 작성 횟수와 수정한 글자 비율을 세어요. 원고 내용은 모으지 않아요.'
 
 function makeData(): WritingData {
   return {

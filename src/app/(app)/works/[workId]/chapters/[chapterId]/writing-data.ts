@@ -25,7 +25,7 @@ export async function loadWritingData(
 ): Promise<WritingData> {
   const work = await getWork(db, actor, workId)
   const chapter = await getChapter(db, actor, chapterId)
-  if (chapter.workId !== workId) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+  if (chapter.workId !== workId) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
 
   const [chapters, entries, namingRules, threads, issues, comments, pendingProposalCount] =
     await Promise.all([

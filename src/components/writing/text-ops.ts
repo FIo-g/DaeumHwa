@@ -75,3 +75,36 @@ export function segmentText(text: string, highlights: Highlight[]): LayerSegment
   }
   return out
 }
+
+/** Keeps only the middle that changed, so the proof note stays close to the edited words. */
+export function changeMiddle(before: string, after: string) {
+  const original = Array.from(before)
+  const replacement = Array.from(after)
+  let prefix = 0
+  while (prefix < original.length && original[prefix] === replacement[prefix]) prefix += 1
+  let suffix = 0
+  const remaining = Math.min(original.length, replacement.length) - prefix
+  while (suffix < remaining && original.at(-1 - suffix) === replacement.at(-1 - suffix)) suffix += 1
+  if (prefix === original.length && prefix === replacement.length) {
+    return { offset: before.length, before: '', after: '' }
+  }
+  const word = /[\p{L}\p{N}]/u
+  while (
+    prefix > 0 &&
+    word.test(original[prefix - 1]) &&
+    (word.test(original[prefix] ?? '') || word.test(replacement[prefix] ?? ''))
+  )
+    prefix -= 1
+  while (
+    suffix > 0 &&
+    word.test(original[original.length - suffix]) &&
+    (word.test(original[original.length - suffix - 1] ?? '') ||
+      word.test(replacement[replacement.length - suffix - 1] ?? ''))
+  )
+    suffix -= 1
+  return {
+    offset: original.slice(0, prefix).join('').length,
+    before: original.slice(prefix, original.length - suffix).join(''),
+    after: replacement.slice(prefix, replacement.length - suffix).join(''),
+  }
+}

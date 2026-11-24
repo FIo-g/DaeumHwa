@@ -30,7 +30,7 @@ export function CompleteConfirmDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>분량이 목표보다 적습니다</AlertDialogTitle>
+          <AlertDialogTitle>분량이 목표보다 적어요</AlertDialogTitle>
           <AlertDialogDescription>{message}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

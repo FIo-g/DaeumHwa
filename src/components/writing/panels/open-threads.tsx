@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { type CSSProperties, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
 import { Button } from '@/components/ui/button'
 import type { ThreadEventKind } from '@/db/types'
@@ -22,9 +22,9 @@ type QuickKind = Extract<ThreadEventKind, 'planted' | 'developed' | 'resolved'>
 const OPEN_STATUSES = ['planned', 'planted', 'developing'] as const
 
 const SUCCESS_MESSAGE: Record<QuickKind, string> = {
-  planted: '이 회차에 심었다고 기록했습니다.',
-  developed: '이 회차의 발전을 기록했습니다.',
-  resolved: '이 회차에서 회수했다고 기록했습니다.',
+  planted: '이 회차에 심었다고 기록했어요.',
+  developed: '이 회차의 발전을 기록했어요.',
+  resolved: '이 회차에서 회수했다고 기록했어요.',
 }
 
 /**
@@ -64,13 +64,13 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
 
       {open.length === 0 && (
         <EmptyState
-          title="열린 떡밥이 없습니다."
+          title="열린 떡밥이 없어요."
           description="떡밥은 설정 보드의 떡밥 장부에서 만듭니다."
         />
       )}
 
       <ul className="grid gap-2">
-        {open.map((thread) => {
+        {open.map((thread, index) => {
           const busy = busyId === thread.id
           const kinds = allowedEventKinds(thread.status)
           // Same rules as addThreadEvent: developed is at or after the planted chapter,
@@ -79,10 +79,18 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
           const developedBlocked = planted === null || data.chapter.position < planted
           const resolvedBlocked = planted === null || data.chapter.position <= planted
           return (
-            <li key={thread.id} className="grid gap-2 rounded-lg border p-3">
+            <li
+              key={thread.id}
+              style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+              className="b-writing-panel-card b-paper grid gap-2 p-3"
+            >
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="font-medium">{thread.title}</span>
-                {thread.overdue && <span className="text-xs text-mark">회수 목표 지남</span>}
+                {thread.overdue && (
+                  <span className="rounded-field bg-apricot px-1.5 py-0.5 text-xs text-ink">
+                    회수 목표 지남
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
                 <span>{THREAD_STATUS_LABEL[thread.status]}</span>
@@ -129,8 +137,8 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
                   {kinds.includes('developed') && (
                     <p className="text-xs text-muted-foreground">
                       {planted === null
-                        ? '먼저 심은 회차를 기록해야 합니다.'
-                        : `회수는 ${planted}화 다음 회차부터 기록할 수 있습니다.`}
+                        ? '떡밥을 심은 회차부터 기록해 주세요.'
+                        : `회수는 ${planted}화 다음 회차부터 기록할 수 있어요.`}
                     </p>
                   )}
                 </div>

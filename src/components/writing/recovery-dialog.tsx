@@ -35,12 +35,10 @@ export function RecoveryDialog({
       <Dialog open={open} onOpenChange={() => {}}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>
-              다른 곳에서 수정된 원고가 있어, 이 기기의 임시 저장본과 다릅니다.
-            </DialogTitle>
+            <DialogTitle>서버 원고와 이 기기의 임시 저장본이 달라요.</DialogTitle>
             <DialogDescription>
-              이 기기에는 {when}임시 저장된 원고가 있습니다. 복구하면 현재 서버 원고가 이 원고로
-              바뀝니다. 이전 원고는 버전 이력에 남습니다.
+              이 기기에는 {when}임시 저장된 원고가 있어요. 복구는 서버 원고를 이 기기의 원고로
+              바꿔요. 이전 원고는 버전 이력에 남아요.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -58,11 +56,11 @@ export function RecoveryDialog({
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>저장되지 않은 변경이 있습니다. 복구할까요?</DialogTitle>
+          <DialogTitle>저장하지 않은 변경이 있어요. 복구할까요?</DialogTitle>
           <DialogDescription>
             {savedAt !== null
-              ? `${formatKoreanDateTime(new Date(savedAt))}에 이 기기에 임시 저장된 원고입니다.`
-              : '이 기기에 임시 저장된 원고입니다.'}
+              ? `${formatKoreanDateTime(new Date(savedAt))}에 이 기기에 임시 저장된 원고예요.`
+              : '이 기기에 임시 저장된 원고예요.'}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

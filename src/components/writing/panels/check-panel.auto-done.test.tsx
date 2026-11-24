@@ -119,8 +119,8 @@ describe('CheckPanel auto check', () => {
     expect(screen.getByText('자동 점검 중… 5초')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '회차 점검' })).toBeNull()
     // A running check is not an empty result: the empty state waits until it finishes.
-    expect(screen.getByRole('status')).toHaveTextContent('보통 15~25초 걸립니다.')
-    expect(screen.queryByText('열린 지적이 없습니다.')).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('보통 15~25초 걸려요.')
+    expect(screen.queryByText('열린 지적이 없어요.')).toBeNull()
 
     vi.mocked(useAutoCheck).mockReturnValue({ running: false, elapsedSec: 0, result: null })
     rerender(<CheckPanel data={makeData()} api={makeApi()} text="본문" />)
@@ -128,9 +128,7 @@ describe('CheckPanel auto check', () => {
     expect(screen.getByRole('button', { name: '회차 점검' })).toBeInTheDocument()
     expect(screen.queryByRole('status')).toBeNull()
     expect(
-      screen.getByText(
-        '회차 점검을 누르거나 회차를 완료로 바꾸면 설정과 어긋나는 문장을 찾아 줍니다.',
-      ),
+      screen.getByText('‘회차 점검’을 눌러 보세요. 설정과 어긋난 문장을 찾아 드려요.'),
     ).toBeInTheDocument()
   })
 
@@ -141,7 +139,7 @@ describe('CheckPanel auto check', () => {
     vi.mocked(useAutoCheck).mockReturnValue({ running: true, elapsedSec: 3, result: null })
 
     const { rerender } = render(<CheckPanel data={data} api={api} text="본문" />)
-    expect(screen.queryByText('열린 지적이 없습니다.')).toBeNull()
+    expect(screen.queryByText('열린 지적이 없어요.')).toBeNull()
 
     vi.mocked(useAutoCheck).mockReturnValue({
       running: false,
@@ -151,7 +149,7 @@ describe('CheckPanel auto check', () => {
     rerender(<CheckPanel data={data} api={api} text="본문" />)
 
     expect(screen.getByText(issue.quote)).toBeInTheDocument()
-    expect(screen.queryByText('열린 지적이 없습니다.')).toBeNull()
+    expect(screen.queryByText('열린 지적이 없어요.')).toBeNull()
   })
 
   it('cancels the auto check from the panel', async () => {

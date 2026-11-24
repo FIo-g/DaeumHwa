@@ -121,6 +121,6 @@ describe('OpenThreads', () => {
     render(<OpenThreads data={makeData('viewer', makeThread({ status: 'planned' }))} api={api} />)
 
     expect(screen.queryByRole('button', { name: '이 회차에 심음' })).toBeNull()
-    expect(screen.getByText('편집자 이상만 실행할 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('편집 권한이 있어야 실행할 수 있어요.')).toBeTruthy()
   })
 })

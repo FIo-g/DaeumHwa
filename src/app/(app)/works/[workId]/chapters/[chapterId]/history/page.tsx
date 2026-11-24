@@ -18,7 +18,7 @@ export default async function ChapterHistoryPage({
   const work = await guardPage(() => getWork(db, actor, workId))
   const chapter = await guardPage(async () => {
     const found = await getChapter(db, actor, chapterId)
-    if (found.workId !== workId) throw new AppError('NOT_FOUND', '회차를 찾을 수 없습니다.')
+    if (found.workId !== workId) throw new AppError('NOT_FOUND', '회차를 찾을 수 없어요.')
     return found
   })
   const versions = await guardPage(() => listVersions(db, actor, chapterId))
@@ -26,9 +26,10 @@ export default async function ChapterHistoryPage({
     (work.role === 'owner' || work.role === 'editor') && chapter.archivedAt === null
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="b-writing-page flex flex-col gap-6">
       <PageHeader
         title="원고 이력"
+        band="apricot"
         description={chapterLabel(chapter.position, chapter.title)}
         actions={
           <Link

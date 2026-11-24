@@ -75,15 +75,15 @@ export function CheckContext(props: {
         </Button>
       </div>
       {open && (
-        <section aria-label="AI가 참고한 설정" className="grid gap-3 rounded-lg border p-3">
+        <section aria-label="AI가 참고한 설정" className="b-paper grid min-w-0 gap-3 p-3">
           {loading ? (
             <p className="text-sm text-muted-foreground">불러오는 중…</p>
           ) : failed || !view ? (
-            <p className="text-sm text-muted-foreground">불러오지 못했습니다.</p>
+            <p className="text-sm text-muted-foreground">불러오지 못했어요.</p>
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                {`회차 점검은 저장된 원고에 나온 카드와 항상 넣기로 정한 카드, ${position}화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보냅니다.`}
+                {`회차 점검은 저장된 원고에 나온 카드와 항상 넣기로 정한 카드, ${position}화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보내요.`}
               </p>
               <div className="grid gap-2">
                 <h3 className="text-sm font-semibold">
@@ -91,7 +91,7 @@ export function CheckContext(props: {
                 </h3>
                 {view.entries.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    원고에 이름이 나온 설정 카드가 없습니다.
+                    원고에 이름이 나온 설정 카드가 없어요.
                   </p>
                 ) : (
                   <ul className="grid gap-2">
@@ -120,7 +120,7 @@ export function CheckContext(props: {
                                 key={fact.id}
                                 className="flex flex-wrap items-center gap-2 text-sm"
                               >
-                                <span>{fact.content}</span>
+                                <span className="text-canon">{fact.content}</span>
                                 <Badge variant="outline">{FACT_STATUS_LABEL[fact.status]}</Badge>
                                 {validity && (
                                   <span className="text-xs text-muted-foreground">{validity}</span>
@@ -154,7 +154,7 @@ export function CheckContext(props: {
                             {`회수 목표 ${thread.targetPosition}화`}
                           </span>
                         )}
-                        {thread.overdue && <Badge variant="destructive">회수 목표 지남</Badge>}
+                        {thread.overdue && <Badge variant="secondary">회수 목표 지남</Badge>}
                       </li>
                     ))}
                   </ul>
@@ -174,7 +174,7 @@ export function CheckContext(props: {
               )}
               {(view.relationCount > 0 || view.namingRuleCount > 0) && (
                 <p className="text-xs text-muted-foreground">
-                  {`관계 ${view.relationCount}개, 이름 규칙 ${view.namingRuleCount}개도 함께 보냅니다.`}
+                  {`관계 ${view.relationCount}개, 이름 규칙 ${view.namingRuleCount}개도 보내요.`}
                 </p>
               )}
             </>

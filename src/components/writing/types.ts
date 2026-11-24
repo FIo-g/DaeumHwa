@@ -13,6 +13,8 @@ export type Highlight = {
   end: number
   kind: HighlightKind
   active?: boolean
+  order?: number
+  closing?: boolean
 }
 
 /** Everything the writing screen needs, loaded on the server and passed down as plain data. */
@@ -47,10 +49,30 @@ export type WorkspaceApi = {
   refresh(): void
 }
 
+export type CheckState = { checking: boolean; resultKey: number; issueCount: number }
+
+export type ProofRevision = {
+  start: number
+  before: string
+  after: string
+}
+
+export type FindingLinks = {
+  linkedId: string | null
+  readingId: string | null
+  requestedId: string | null
+  onLink(id: string | null): void
+  onRequestHandled(): void
+  onJump(start: number, end: number, issueId: string): void
+  onRevision(revision: ProofRevision): void
+  onCheckState(state: CheckState): void
+}
+
 export type WritingSidePanelProps = {
   data: WritingData
   api: WorkspaceApi
   text: string
   position: number
   autoCheck?: boolean
+  findings?: FindingLinks
 }

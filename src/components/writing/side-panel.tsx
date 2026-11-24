@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { usePrefersReducedMotion } from '@/components/motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAutoCheck } from '@/lib/client/auto-check'
 import { isSampleChapter } from '@/lib/client/sample-session'
@@ -31,11 +33,22 @@ const TABS: { value: TabKey; label: string }[] = [
  * The writing screen's side panels. Every panel stays mounted (inactive ones are hidden), so a
  * running draft or a loaded check result survives switching tabs.
  */
-export function WritingSidePanel({ data, api, text, position, autoCheck }: WritingSidePanelProps) {
+export function WritingSidePanel({
+  data,
+  api,
+  text,
+  position,
+  autoCheck,
+  findings,
+}: WritingSidePanelProps) {
+  const tabList = useRef<HTMLDivElement>(null)
+  const tabRail = useRef<HTMLDivElement>(null)
+  const reduced = usePrefersReducedMotion()
+  const [railState, setRailState] = useState({ overflowing: false, before: false, after: false })
   const auto = useAutoCheck(data.chapter.id)
   // The panel only mounts on the client (after the layout effect), so the session read is safe.
   const [tab, setTab] = useState<TabKey>(() =>
-    autoCheck || isSampleChapter(data.chapter.id) ? 'check' : 'related',
+    autoCheck || findings?.requestedId || isSampleChapter(data.chapter.id) ? 'check' : 'related',
   )
   // Render-time previous-value state: switch tabs as soon as an auto check starts, without an effect.
   const [autoWasRunning, setAutoWasRunning] = useState(false)
@@ -44,46 +57,136 @@ export function WritingSidePanel({ data, api, text, position, autoCheck }: Writi
     if (auto.running) setTab('check')
   }
 
-  return (
-    <div data-chapter-position={position} className="flex min-w-0 flex-col gap-3">
-      <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-3">
-        <TabsList
-          variant="line"
-          aria-label="작업 패널 탭"
-          className="h-auto w-full flex-wrap justify-start gap-x-3 gap-y-2 rounded-none border-b border-rule p-0 pb-2 group-data-horizontal/tabs:h-auto"
-        >
-          {TABS.filter((item) => !data.trial || TRIAL_TABS.has(item.value)).map((item) => (
-            <TabsTrigger
-              key={item.value}
-              value={item.value}
-              className="flex-none rounded-none px-0 py-1 text-muted-foreground group-data-horizontal/tabs:after:bottom-[-9px] data-active:font-semibold"
-            >
-              {item.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+  const requested = findings?.requestedId ?? null
+  const [previousRequest, setPreviousRequest] = useState(requested)
+  if (requested !== previousRequest) {
+    setPreviousRequest(requested)
+    if (requested) setTab('check')
+  }
 
-        <TabsContent value="related" keepMounted>
+  useEffect(() => {
+    const rail = tabRail.current
+    const list = tabList.current
+    const dock = rail?.parentElement
+    if (!rail || !list || !dock) return
+
+    const update = () => {
+      const next = {
+        overflowing: list.scrollWidth > dock.clientWidth + 1,
+        before: rail.scrollLeft > 1,
+        after: rail.scrollLeft + rail.clientWidth < rail.scrollWidth - 1,
+      }
+      setRailState((current) =>
+        current.overflowing === next.overflowing &&
+        current.before === next.before &&
+        current.after === next.after
+          ? current
+          : next,
+      )
+    }
+    update()
+    rail.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(rail)
+    observer?.observe(list)
+    return () => {
+      rail.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+      observer?.disconnect()
+    }
+  }, [])
+
+  function revealTab(target: HTMLElement | null | undefined) {
+    const rail = tabRail.current
+    if (!rail || !target) return
+    const item = target.getBoundingClientRect()
+    const viewport = rail.getBoundingClientRect()
+    if (item.right > viewport.right - 4) rail.scrollLeft += item.right - viewport.right + 4
+    else if (item.left < viewport.left + 4) rail.scrollLeft += item.left - viewport.left - 4
+  }
+
+  useEffect(() => {
+    revealTab(tabList.current?.querySelector<HTMLElement>('[aria-selected="true"]'))
+  }, [tab, railState.overflowing])
+
+  function advanceTabs(direction: number) {
+    const rail = tabRail.current
+    if (!rail) return
+    rail.scrollBy({
+      left: direction * rail.clientWidth * 0.7,
+      behavior: reduced ? 'instant' : 'smooth',
+    })
+  }
+
+  return (
+    <div data-chapter-position={position} className="b-writing-panel flex min-w-0 flex-col gap-3">
+      <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-3">
+        <div className="b-writing-tab-dock" data-overflow={railState.overflowing}>
+          {railState.overflowing && (
+            <button
+              type="button"
+              className="b-writing-tab-edge"
+              aria-label="앞쪽 탭 보기"
+              aria-disabled={!railState.before}
+              onClick={() => railState.before && advanceTabs(-1)}
+            >
+              <ChevronLeftIcon aria-hidden="true" />
+            </button>
+          )}
+          <div ref={tabRail} className="b-writing-tab-rail">
+            <TabsList
+              ref={tabList}
+              variant="line"
+              aria-label="작업 패널 탭"
+              className="b-writing-tabs flex w-max min-w-full max-w-none flex-nowrap justify-start gap-1 px-1 pb-1"
+            >
+              {TABS.filter((item) => !data.trial || TRIAL_TABS.has(item.value)).map((item) => (
+                <TabsTrigger
+                  key={item.value}
+                  value={item.value}
+                  className="flex-none px-2 py-1"
+                  onFocus={(event) => revealTab(event.currentTarget)}
+                >
+                  {item.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          {railState.overflowing && (
+            <button
+              type="button"
+              className="b-writing-tab-edge"
+              aria-label="뒤쪽 탭 보기"
+              aria-disabled={!railState.after}
+              onClick={() => railState.after && advanceTabs(1)}
+            >
+              <ChevronRightIcon aria-hidden="true" />
+            </button>
+          )}
+        </div>
+
+        <TabsContent value="related" keepMounted className="b-writing-tab-content">
           <RelatedCards data={data} api={api} text={text} />
         </TabsContent>
-        <TabsContent value="threads" keepMounted>
+        <TabsContent value="threads" keepMounted className="b-writing-tab-content">
           <OpenThreads data={data} api={api} />
         </TabsContent>
-        <TabsContent value="check" keepMounted>
-          <CheckPanel data={data} api={api} text={text} autoRun={autoCheck} />
+        <TabsContent value="check" keepMounted className="b-writing-tab-content">
+          <CheckPanel data={data} api={api} text={text} autoRun={autoCheck} findings={findings} />
         </TabsContent>
         {!data.trial && (
           <>
-            <TabsContent value="proofread" keepMounted>
+            <TabsContent value="proofread" keepMounted className="b-writing-tab-content">
               <ProofreadPanel data={data} api={api} text={text} />
             </TabsContent>
-            <TabsContent value="comments" keepMounted>
+            <TabsContent value="comments" keepMounted className="b-writing-tab-content">
               <CommentsPanel data={data} api={api} text={text} />
             </TabsContent>
-            <TabsContent value="draft" keepMounted>
+            <TabsContent value="draft" keepMounted className="b-writing-tab-content">
               <DraftPanel data={data} api={api} />
             </TabsContent>
-            <TabsContent value="reader" keepMounted>
+            <TabsContent value="reader" keepMounted className="b-writing-tab-content">
               <ReaderPanel data={data} api={api} text={text} />
             </TabsContent>
           </>

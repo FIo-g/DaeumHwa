@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { replaceQuoteText, replaceRangeText, segmentText } from './text-ops'
+import { changeMiddle, replaceQuoteText, replaceRangeText, segmentText } from './text-ops'
 
 describe('replaceRangeText', () => {
   it('replaces the half-open range', () => {
@@ -60,5 +60,19 @@ describe('segmentText', () => {
     expect(segmentText('가나', [{ id: 'x', start: 1, end: 1, kind: 'issue' }])).toEqual([
       { text: '가나' },
     ])
+  })
+})
+
+describe('changeMiddle', () => {
+  it('keeps the correction at a word boundary', () => {
+    expect(changeMiddle('그는 왼손에 검을 쥐었다.', '그는 오른손에 검을 쥐었다.')).toEqual({
+      offset: 3,
+      before: '왼손에',
+      after: '오른손에',
+    })
+  })
+
+  it('does not split a Unicode character and gives textarea offsets', () => {
+    expect(changeMiddle('🙂 😀.', '🙂 😇.')).toEqual({ offset: 3, before: '😀', after: '😇' })
   })
 })

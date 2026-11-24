@@ -1,4 +1,4 @@
-import { PageHeader } from '@/components/app/page-header'
+import { ChapterHeading } from '@/components/writing/chapter-heading'
 import { SampleBanner } from '@/components/writing/sample-banner'
 import { WritingWorkspace } from '@/components/writing/writing-workspace'
 import { chapterLabel } from '@/lib/labels'
@@ -22,9 +22,9 @@ export default async function ChapterWritingPage({
   const data = await guardPage(() => loadWritingData(db, actor, workId, chapterId))
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
+      <ChapterHeading
         title={chapterLabel(data.chapter.position, data.chapter.title)}
-        description={data.workTitle}
+        workTitle={data.workTitle}
       />
       <SampleBanner
         demo={demo}

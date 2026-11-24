@@ -48,7 +48,7 @@ export function DraftRefine({
     if (result === null) return
     if (!result.changed) {
       // A skipped sentence repair says why nothing else was done; otherwise the draft is clean.
-      setNothing(refineRepairNote(result) ?? '다듬을 곳을 찾지 못했습니다.')
+      setNothing(refineRepairNote(result) ?? '다듬을 곳을 찾지 못했어요.')
       return
     }
     setPreview(result)
@@ -61,7 +61,7 @@ export function DraftRefine({
     const applied = await runAction(
       applyDraftRefinementAction({ workId, runId, token: preview.token }),
       {
-        success: '다듬은 초안으로 바꿨습니다.',
+        success: '다듬은 초안으로 바꿨어요.',
       },
     )
     setApplying(false)
@@ -91,16 +91,13 @@ export function DraftRefine({
         </p>
         {note && <p className="text-sm text-muted-foreground">{note}</p>}
         <p className="text-xs text-muted-foreground">
-          초록은 새 글, 빨강 취소선은 지워지는 글입니다.
+          겨자색으로 새 글을 표시해요. 지울 글에는 취소선을 그어요.
         </p>
         <div className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg border bg-muted/30 p-3 text-sm leading-7">
           {preview.parts.map((part, index) => {
             if (part.type === 'insert') {
               return (
-                <ins
-                  key={index}
-                  className="bg-emerald-100 text-emerald-900 no-underline dark:bg-emerald-950 dark:text-emerald-200"
-                >
+                <ins key={index} className="bg-mustard text-ink no-underline">
                   {part.value}
                 </ins>
               )
@@ -109,7 +106,7 @@ export function DraftRefine({
               return (
                 <del
                   key={index}
-                  className="bg-red-100 text-red-900 line-through decoration-red-700 dark:bg-red-950 dark:text-red-200"
+                  className="bg-muted text-ink line-through decoration-ink decoration-2"
                 >
                   {part.value}
                 </del>
@@ -119,7 +116,7 @@ export function DraftRefine({
           })}
         </div>
         <p className="text-xs text-muted-foreground">
-          적용하거나 버린 뒤에 원고에 붙일 수 있습니다.
+          미리 보기를 적용하거나 버려 주세요. 그 뒤에 원고에 붙일 수 있어요.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => void apply()} disabled={applying}>
@@ -141,7 +138,7 @@ export function DraftRefine({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        긴 문단과 반복되는 표현을 고칩니다. 결과를 보고 적용할지 정합니다.
+        긴 문단과 반복되는 표현을 다듬어요. 결과를 보고 적용 여부를 정할 수 있어요.
       </p>
       {nothing && <p className="text-sm text-muted-foreground">{nothing}</p>}
     </div>

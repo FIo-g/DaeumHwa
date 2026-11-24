@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { type CSSProperties, useEffect, useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -162,10 +162,14 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
       {output && (
         <div className="grid gap-4">
           <p className="text-sm leading-6">{output.result.summary}</p>
-          {output.result.personas.map((persona) => {
+          {output.result.personas.map((persona, index) => {
             const rating = Math.min(5, Math.max(1, Math.round(persona.rating)))
             return (
-              <article key={persona.personaId} className="grid gap-2 rounded-lg border p-3">
+              <article
+                key={persona.personaId}
+                style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+                className="b-writing-panel-card b-paper grid gap-2 p-3"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-medium">{nameOf(persona.personaId)}</h3>
                   <span className="text-sm" aria-label={`평점 ${rating}점 (5점 만점)`}>

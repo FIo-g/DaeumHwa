@@ -23,10 +23,10 @@ export function ConflictDialog({ open, pending, onLoadServer, onOverwrite }: Con
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>다른 곳에서 먼저 수정된 원고가 있습니다.</DialogTitle>
+          <DialogTitle>다른 곳에서 먼저 수정한 원고가 있어요.</DialogTitle>
           <DialogDescription>
-            서버 원고를 불러오면 이 기기의 변경은 사라집니다. 내 원고로 덮어쓰면 서버 원고가 바뀌고,
-            이전 서버 원고는 버전 이력에 남습니다.
+            서버 원고를 불러오는 경우 이 기기의 수정 내용은 사라져요. 내 원고로 덮어써도 이전 서버
+            원고는 버전 이력에 남아요.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

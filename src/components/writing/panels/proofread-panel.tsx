@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AiBadge } from '@/components/app/ai-badge'
 import { AiRunStatus } from '@/components/app/ai-run-status'
@@ -98,10 +98,10 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
     const before = api.getText()
     const replaced = api.replaceQuote(item.quote, item.replacement, item.start)
     if (!replaced) {
-      toast.error('원고가 바뀌어 문장을 찾지 못했습니다. 다시 검사해 주세요.')
+      toast.error('원고가 바뀌어 문장을 찾지 못했어요. 다시 검사해 주세요.')
       return false
     }
-    offerUndo(api, before, '문장을 바꿨습니다.')
+    offerUndo(api, before, '문장을 바꿨어요.')
     setItems((prev) => (prev ? prev.filter((x) => x !== item) : prev))
     return true
   }
@@ -113,11 +113,11 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
     const before = api.getText()
     const done = rules.filter((item) => api.replaceQuote(item.quote, item.replacement, item.start))
     if (done.length < rules.length) {
-      toast.error(`${rules.length - done.length}곳은 원고가 바뀌어 고치지 못했습니다.`)
+      toast.error(`${rules.length - done.length}곳은 원고가 바뀌어 고치지 못했어요.`)
     }
     if (done.length > 0) {
       // One snapshot for the whole batch, so a single 되돌리기 restores every change.
-      offerUndo(api, before, `${done.length}곳을 고쳤습니다.`)
+      offerUndo(api, before, `${done.length}곳을 고쳤어요.`)
       setItems((prev) => (prev ? prev.filter((x) => !done.includes(x)) : prev))
     }
   }
@@ -157,16 +157,19 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
 
       {items === null && (
         <p className="text-sm text-muted-foreground">
-          규칙 검사는 흔한 맞춤법과 띄어쓰기 오류를 바로 찾습니다. AI 교정은 어색한 표현까지
-          찾습니다.
+          규칙 검사는 맞춤법과 띄어쓰기를 살펴요. AI 교정은 어색한 표현도 찾아요.
         </p>
       )}
 
-      {items !== null && items.length === 0 && <EmptyState title="고칠 곳을 찾지 못했습니다." />}
+      {items !== null && items.length === 0 && <EmptyState title="고칠 곳을 찾지 못했어요." />}
 
       <ul className="grid gap-2">
         {(items ?? []).map((item, index) => (
-          <li key={`${item.start}-${index}`} className="grid gap-2 rounded-lg border p-3">
+          <li
+            key={`${item.start}-${index}`}
+            style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+            className="b-writing-panel-card b-paper grid gap-2 p-3"
+          >
             <div className="flex flex-wrap items-center gap-1.5">
               <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
               {item.source === 'ai' && <AiBadge />}

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -88,7 +88,7 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
   if (data.entries.length === 0) {
     return (
       <EmptyState
-        title="아직 카드가 없습니다."
+        title="아직 카드가 없어요."
         description="원고에 나오는 인물과 장소 카드가 여기에 뜹니다. 카드는 설정 보드에서 만듭니다."
         action={
           <Link
@@ -105,22 +105,19 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
   return (
     <section aria-label="관련 카드" className="grid gap-3">
       {cards.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          이 회차 원고에 나온 카드가 없습니다. 이름이 나오면 여기에 표시됩니다.
-        </p>
+        <p className="text-sm text-muted-foreground">이 회차 원고에 이름이 나온 카드가 없어요.</p>
       )}
 
       <ul className="grid gap-2">
-        {cards.map(({ mention, entry }) => {
+        {cards.map(({ mention, entry }, index) => {
           const active = entry.id === selectedId
           return (
-            <li key={entry.id}>
-              <div
-                className={cn(
-                  'grid gap-1 rounded-lg border p-3',
-                  active && 'border-primary bg-muted/40',
-                )}
-              >
+            <li
+              key={entry.id}
+              className="b-writing-panel-card b-paper"
+              style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+            >
+              <div className={cn('grid gap-1 rounded-card p-3', active && 'bg-leaf/30')}>
                 <div className="flex items-center justify-between gap-2">
                   <button
                     type="button"

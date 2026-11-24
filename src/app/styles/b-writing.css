@@ -1,1 +1,821 @@
-/* Screen styles for the writing area. Class names start with b-writing-. */
+.b-writing-heading {
+  position: relative;
+  isolation: isolate;
+}
+
+.b-writing-heading > .b-page-header {
+  min-block-size: clamp(8rem, 15vw, 13rem);
+  margin-block-end: 0;
+  padding-block: clamp(1.125rem, 2.4vw, 2.25rem);
+  padding-inline-end: clamp(5rem, 17vw, 13rem);
+  align-items: center;
+}
+
+.b-writing-heading h1 {
+  font-size: clamp(2rem, 4.6vw, 4.75rem);
+}
+
+.b-writing-heading h1,
+.b-writing-page h1 {
+  text-wrap: balance;
+}
+
+.b-writing-index {
+  position: absolute;
+  inset: 0 1px 0 auto;
+  display: grid;
+  width: clamp(4.5rem, 17vw, 13rem);
+  overflow: clip;
+  place-items: center;
+}
+
+.b-writing-index-face {
+  position: relative;
+  width: clamp(3.25rem, 10vw, 8rem);
+  height: clamp(3.5rem, 8vw, 6.5rem);
+}
+
+.b-writing-slip {
+  position: absolute;
+  inset: 10% 9%;
+  rotate: -12deg;
+}
+
+.b-writing-slip:nth-child(2) {
+  translate: 9% -10%;
+  rotate: 4deg;
+}
+
+.b-writing-slip:nth-child(3) {
+  translate: 18% 1%;
+  rotate: 13deg;
+}
+
+.b-writing-slip > span {
+  --b-delay: calc(var(--b-i) * var(--b-stagger));
+  position: absolute;
+  inset: 0;
+  display: block;
+  border: 2px solid var(--b-ink);
+  border-radius: var(--b-r-field);
+  background: var(--b-writing-slip-color);
+}
+
+.b-writing-slip:last-child > span::before {
+  position: absolute;
+  inset: -2px -2px auto auto;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--b-ink);
+  border-radius: 0 0 0 3px;
+  background: var(--b-mustard);
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+  content: '';
+}
+
+.b-writing-slip:last-child > span::after {
+  position: absolute;
+  inset: 53% 20% auto;
+  height: 10px;
+  border-block: 2px solid var(--b-ink);
+  content: '';
+}
+
+.b-writing-toolbar {
+  position: sticky;
+  inset-block-start: var(--b-nav);
+  z-index: 5;
+}
+
+.b-writing-toolbar button:not(:disabled):is(:hover, :focus-visible) svg {
+  translate: 0 -2px;
+}
+
+.b-writing-toolbar svg {
+  transition: translate var(--b-step) var(--b-out);
+}
+
+.b-writing-save-status {
+  background: var(--b-leaf);
+}
+
+.b-writing-done-stamp {
+  animation: b-writing-stamp var(--b-draw) var(--b-pop) both;
+}
+
+.b-writing-stage {
+  gap: 0.625rem;
+  padding: clamp(0.375rem, 1.2vw, 1.25rem);
+  border: 2px solid var(--b-ink);
+  border-radius: var(--b-r-card);
+  background: var(--b-leaf);
+}
+
+.b-writing-paper {
+  --b-writing-gutter: clamp(0.75rem, 2vw, 1.75rem);
+  --b-writing-type: 1.125rem;
+  min-width: 0;
+  padding: 0;
+}
+
+.b-writing-progress {
+  inset-block-start: calc(var(--b-nav) + 4rem);
+  margin: 0.6rem 0.8rem 0;
+  background: color-mix(in srgb, var(--b-paper), var(--b-ink) 14%);
+}
+
+.b-writing-paper-head {
+  padding: 0.65rem var(--b-writing-gutter) 0;
+}
+
+.b-writing-title-input {
+  padding-inline: 0.625rem;
+  border: 1px solid var(--b-muted);
+  background: color-mix(in srgb, var(--b-paper), var(--b-mustard) 15%);
+}
+
+.b-writing-manuscript {
+  padding: 1rem var(--b-writing-gutter) 1.25rem;
+  font-family: var(--b-font-body);
+  font-size: var(--b-writing-type);
+  line-height: calc(1em + 22px);
+  text-wrap: pretty;
+  letter-spacing: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+
+.b-writing-character-count {
+  padding: 0.75rem var(--b-writing-gutter);
+  border-block-start: 1px solid var(--b-ink);
+}
+
+.b-writing-proof-jump {
+  min-block-size: 2.25rem;
+  min-inline-size: 2.25rem;
+  background: var(--b-paper);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.b-writing-proof-jump:is(:hover, :focus-visible) {
+  color: var(--b-paper);
+  background: var(--b-ink);
+}
+
+.b-writing-mark[data-active='true'] {
+  background: color-mix(in srgb, var(--b-mustard) 52%, transparent);
+}
+
+.b-writing-proof {
+  position: absolute;
+}
+
+.b-writing-proof .b-proof-ink {
+  inset-block-end: 0;
+}
+
+.b-writing-proof[data-existing='true'] .b-proof-ink path {
+  animation-duration: var(--b-quick);
+}
+
+.b-writing-proof[data-closing='true'] {
+  animation: b-writing-retract var(--b-draw) var(--b-out) both;
+}
+
+.b-writing-revision {
+  z-index: 2;
+  inset-inline: 0;
+  overflow: clip;
+  color: var(--b-ink);
+  animation: b-writing-revision calc(var(--b-arrival) + var(--b-step)) var(--b-out) both;
+}
+
+.b-writing-revision::after {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: var(--b-writing-revision-anchor);
+  width: 1px;
+  height: 3px;
+  background: currentColor;
+  content: '';
+}
+
+.b-writing-revision-note {
+  position: absolute;
+  inset-block-end: 3px;
+  inset-inline-start: var(--b-writing-revision-anchor);
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: max-content;
+  max-width: 8rem;
+  max-height: calc(100% - 3px);
+  font-size: 0.625rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.b-writing-revision[data-align='start'] .b-writing-revision-note {
+  translate: none;
+}
+
+.b-writing-revision[data-align='end'] .b-writing-revision-note {
+  translate: -100% 0;
+}
+
+.b-writing-revision-note .b-proof-word,
+.b-writing-revision-note .b-hand {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.b-writing-revision-note .b-hand {
+  font-size: min(0.875rem, calc(var(--b-writing-revision-gap) - 3px));
+  line-height: 1;
+}
+
+.b-writing-scan-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.b-writing-scan-window {
+  position: sticky;
+  inset-block-start: calc(var(--b-nav) + 5rem);
+  height: min(53dvh, 19rem);
+}
+
+.b-writing-scan::after {
+  height: 3px;
+  background: var(--b-ink);
+  animation: b-writing-scan var(--b-cycle) var(--b-in-out) infinite;
+}
+
+.b-writing-aside {
+  inset-block-start: calc(var(--b-nav) + 4.625rem);
+  max-block-size: calc(100dvh - var(--b-nav) - 5.5rem);
+  padding-inline: 2px;
+  scrollbar-width: thin;
+  scroll-padding-block-start: 11rem;
+}
+
+.b-writing-tab-dock {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--b-paper);
+  border: 2px solid var(--b-ink);
+  border-radius: var(--b-r-field);
+}
+
+.b-writing-tab-dock[data-overflow='true'] {
+  grid-template-columns: 1.5rem minmax(0, 1fr) 1.5rem;
+}
+
+.b-writing-tab-rail {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.b-writing-tab-edge {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  color: var(--b-ink);
+  background: var(--b-leaf);
+  cursor: pointer;
+}
+
+.b-writing-tab-edge:first-child {
+  border-start-start-radius: calc(var(--b-r-field) - 2px);
+  border-end-start-radius: calc(var(--b-r-field) - 2px);
+  border-inline-end: 1px solid var(--b-ink);
+}
+
+.b-writing-tab-edge:last-child {
+  border-start-end-radius: calc(var(--b-r-field) - 2px);
+  border-end-end-radius: calc(var(--b-r-field) - 2px);
+  border-inline-start: 1px solid var(--b-ink);
+}
+
+.b-writing-tab-edge[aria-disabled='true'] {
+  color: var(--b-muted);
+  background: var(--b-paper);
+  cursor: default;
+}
+
+.b-writing-tab-edge:focus-visible {
+  outline: 2px solid var(--b-ink);
+  outline-offset: -3px;
+}
+
+.b-writing-tab-edge svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.b-writing-tabs {
+  border: 0;
+}
+
+.b-writing-tabs button {
+  min-block-size: 2.35rem;
+}
+
+.b-writing-tab-content:not([hidden]) > section:not(.b-writing-check) {
+  padding: 0.75rem;
+  border: 2px solid var(--b-ink);
+  border-radius: var(--b-r-card);
+  background: var(--b-paper);
+}
+
+.b-writing-panel-card {
+  transition:
+    translate var(--b-step) var(--b-out),
+    background-color var(--b-quick) var(--b-out);
+}
+
+.b-writing-panel-card:is(:hover, :focus-within) {
+  background: color-mix(in srgb, var(--b-leaf) 22%, var(--b-paper));
+}
+
+.b-writing-panel-card:is(:hover, :focus-within):not(:has(textarea)) {
+  translate: 0 -2px;
+}
+
+.b-writing-tab-content .b-writing-panel-card:not(:has(textarea)),
+.b-writing-chapter-row,
+.b-writing-version-row {
+  animation: b-writing-row-in var(--b-draw) var(--b-out) calc(var(--b-i, 0) * var(--b-stagger)) both;
+}
+
+.b-writing-chapter-row:is(:hover, :focus-within) .b-writing-row-label,
+.b-writing-version-row:is(:hover, :focus-within) .b-writing-row-label {
+  text-decoration: underline;
+  text-underline-offset: 0.24em;
+}
+
+.b-writing-check-head {
+  position: sticky;
+  inset-block-start: 3.25rem;
+  z-index: 3;
+  background: var(--b-paper);
+}
+
+.b-writing-check-loading::before {
+  display: block;
+  height: 3px;
+  margin-bottom: 0.45rem;
+  background: var(--b-ink);
+  transform-origin: left;
+  animation: b-writing-pending var(--b-cycle) var(--b-in-out) infinite;
+  content: '';
+}
+
+.b-writing-match {
+  display: grid;
+  width: 3.75rem;
+  height: 1.75rem;
+  overflow: clip;
+  place-items: center;
+}
+
+.b-writing-match span {
+  --b-from-x: -18px;
+  display: block;
+  width: 0.85rem;
+  height: 0.95rem;
+  border: 1px solid var(--b-ink);
+  border-radius: 2px;
+  background: var(--b-mustard);
+  rotate: -13deg;
+}
+
+.b-writing-match .b-meet {
+  animation-name: b-writing-meet;
+  animation-duration: var(--b-draw);
+}
+
+.b-writing-match span:last-child {
+  --b-from-x: 18px;
+  --b-delay: var(--b-stagger);
+  margin-inline-start: -0.25rem;
+  background: var(--b-leaf);
+  rotate: 15deg;
+}
+
+.b-writing-check:has(.b-writing-check-loading) .b-writing-match {
+  animation: b-writing-fold var(--b-cycle) var(--b-out) 2;
+}
+
+.b-writing-finding {
+  position: relative;
+  padding: 0;
+  scroll-margin-block: 0.5rem;
+  transition: translate var(--b-step) var(--b-out);
+}
+
+.b-writing-finding[data-arrival='existing'] {
+  animation: b-writing-row-in var(--b-quick) var(--b-out) both;
+}
+
+.b-writing-finding:is([data-arrival='odd'], [data-arrival='even']) {
+  animation: var(--b-writing-result-animation) var(--b-scene) var(--b-out)
+    calc(var(--b-i) * var(--b-stagger)) both;
+}
+
+.b-writing-finding[data-arrival='odd'] {
+  --b-writing-result-animation: b-writing-result-in;
+}
+
+.b-writing-finding[data-arrival='even'] {
+  --b-writing-result-animation: b-writing-result-in-again;
+}
+
+.b-writing-finding:is([data-linked='true'], [data-reading='true'], :focus-within):not([data-exit]) {
+  translate: 0 -2px;
+}
+
+.b-writing-finding:is([data-linked='true'], [data-reading='true'], :focus-within) .b-number {
+  color: var(--b-paper);
+  background: var(--b-ink);
+}
+
+.b-writing-finding-disclosure > button {
+  width: 100%;
+  padding: 0.6rem 0.65rem;
+  min-width: 0;
+  border-radius: calc(var(--b-r-card) - 2px);
+}
+
+.b-writing-finding-disclosure > button[aria-expanded='true'] {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.b-writing-finding-disclosure > .b-disclosure[data-open='true'] {
+  animation: b-writing-answer var(--b-step) var(--b-out) var(--b-stagger) both;
+}
+
+.b-writing-finding-title {
+  position: relative;
+  width: fit-content;
+  overflow-wrap: anywhere;
+}
+
+.b-writing-finding-title::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: currentColor;
+  scale: 0 1;
+  transform-origin: left;
+  transition: scale var(--b-draw) var(--b-out);
+  content: '';
+}
+
+.b-writing-finding:is([data-linked='true'], [data-reading='true'], :focus-within)
+  .b-writing-finding-title::after {
+  scale: 1 1;
+}
+
+.b-writing-finding:is([data-arrival='odd'], [data-arrival='even'])
+  .b-disclosure[data-open='true']
+  .b-writing-evidence {
+  animation: var(--b-writing-result-animation) var(--b-step) var(--b-out)
+    calc((var(--b-i) + var(--b-writing-step)) * var(--b-stagger)) both;
+}
+
+.b-writing-evidence[data-step='manuscript'] {
+  --b-writing-step: 1;
+}
+
+.b-writing-evidence[data-step='wiki'] {
+  --b-writing-step: 2;
+}
+
+.b-writing-evidence[data-step='proposal'] {
+  --b-writing-step: 3;
+}
+
+.b-writing-quote {
+  background: color-mix(in srgb, var(--b-mustard) 23%, var(--b-paper));
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.b-writing-quote:is(:hover, :focus-visible) {
+  background: var(--b-mustard);
+}
+
+.b-writing-source {
+  display: inline-flex;
+  cursor: help;
+}
+
+.b-writing-wiki-quote {
+  border-inline-start: 1px solid color-mix(in srgb, var(--b-ink), transparent 70%);
+  padding: 0.55rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--b-ink), transparent 70%);
+  border-radius: var(--b-r-field);
+  font-size: 1rem;
+}
+
+.b-writing-wiki-strike {
+  animation: b-writing-wiki-strike var(--b-step) steps(1, end) both;
+}
+
+.b-writing-finding[data-exit] {
+  animation: b-writing-card-close var(--b-scene) var(--b-out) both;
+}
+
+.b-writing-finding[data-exit='wiki'] {
+  animation: b-writing-wiki-close var(--b-arrival) var(--b-out) both;
+}
+
+.b-writing-wiki-quote .b-hand-write {
+  animation-duration: var(--b-draw);
+}
+
+.b-writing-finding[data-exit] .b-disclosure-trigger {
+  pointer-events: none;
+}
+
+.b-writing-resolved {
+  display: flex;
+  height: 3px;
+  padding-inline: 0.65rem;
+}
+
+.b-writing-resolved > span {
+  flex: 1;
+  background: var(--b-ink);
+}
+
+.b-writing-resolved > span:last-child {
+  --b-i: 1;
+  --b-origin: right;
+  background: var(--b-mustard);
+}
+
+.b-writing-mobile-dock {
+  position: sticky;
+  inset-block-end: 0.5rem;
+  z-index: 5;
+}
+
+.b-writing-sheet {
+  padding: 0;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+  border-start-start-radius: var(--b-r-sheet);
+  border-start-end-radius: var(--b-r-sheet);
+  transition:
+    translate var(--b-draw) var(--b-out),
+    opacity var(--b-draw) var(--b-out);
+}
+
+.b-writing-sheet:is([data-starting-style], [data-ending-style]) {
+  translate: 0 100%;
+  opacity: 0.55;
+}
+
+.b-writing-sheet header,
+.b-writing-sheet [data-slot='sheet-header'] {
+  border-block-end: 1px solid var(--b-ink);
+}
+
+.b-writing-sheet .b-writing-check-head {
+  position: relative;
+  inset-block-start: auto;
+}
+
+.b-writing-chapter-table {
+  padding: 0;
+}
+
+.b-writing-history-diff {
+  min-width: 0;
+  border-radius: var(--b-r-card);
+}
+
+.b-writing-versions {
+  align-self: start;
+}
+
+@media (width >= 64rem) and (width < 80rem) {
+  .b-writing-stage {
+    padding: 0.375rem;
+  }
+
+  .b-writing-paper {
+    --b-writing-gutter: 0.55rem;
+    --b-writing-type: 0.9375rem;
+  }
+}
+
+@media (width < 48rem) {
+  .b-writing-paper {
+    --b-writing-type: 1rem;
+  }
+
+  .b-writing-toolbar {
+    position: relative;
+    inset-block-start: auto;
+  }
+
+  .b-writing-progress {
+    inset-block-start: var(--b-nav);
+  }
+
+  .b-writing-scan-window {
+    inset-block-start: var(--b-nav);
+  }
+
+  .b-writing-versions {
+    align-self: stretch;
+  }
+}
+
+@keyframes b-writing-stamp {
+  from {
+    scale: 1.65;
+    rotate: -20deg;
+    opacity: 0.45;
+  }
+
+  to {
+    scale: 1;
+    rotate: 0deg;
+    opacity: 1;
+  }
+}
+
+@keyframes b-writing-meet {
+  from {
+    opacity: 0.75;
+    transform: translateX(var(--b-from-x));
+  }
+}
+
+@keyframes b-writing-answer {
+  from {
+    opacity: 0.78;
+    translate: 0 3px;
+  }
+}
+
+@keyframes b-writing-fold {
+  0%,
+  58%,
+  100% {
+    rotate: 0deg;
+  }
+  22% {
+    rotate: -9deg;
+  }
+  40% {
+    rotate: 5deg;
+  }
+}
+
+@keyframes b-writing-retract {
+  to {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0;
+  }
+}
+
+@keyframes b-writing-revision {
+  0% {
+    opacity: 0.5;
+  }
+  18%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes b-writing-scan {
+  0% {
+    translate: 0 0;
+    opacity: 0;
+  }
+  12%,
+  85% {
+    opacity: 0.76;
+  }
+  100% {
+    translate: 0 calc(min(53dvh, 19rem) - 3px);
+    opacity: 0;
+  }
+}
+
+@keyframes b-writing-pending {
+  0%,
+  100% {
+    scale: 0.12 1;
+  }
+  65% {
+    scale: 1 1;
+  }
+}
+
+@keyframes b-writing-row-in {
+  from {
+    opacity: 0.65;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes b-writing-result-in {
+  from {
+    opacity: 0.45;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes b-writing-result-in-again {
+  from {
+    opacity: 0.45;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes b-writing-card-close {
+  0%,
+  45% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 0.98;
+  }
+}
+
+@keyframes b-writing-wiki-close {
+  0%,
+  86% {
+    opacity: 1;
+    scale: 1;
+  }
+
+  100% {
+    opacity: 0;
+    scale: 0.98;
+  }
+}
+
+@keyframes b-writing-wiki-strike {
+  to {
+    text-decoration: line-through;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .b-writing-heading *,
+  .b-writing-toolbar *,
+  .b-writing-panel *,
+  .b-writing-sheet,
+  .b-writing-proof,
+  .b-writing-proof *,
+  .b-writing-chapter-row,
+  .b-writing-version-row {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .b-writing-finding,
+  .b-writing-panel-card,
+  .b-writing-toolbar svg {
+    translate: none !important;
+  }
+
+  .b-writing-scan,
+  .b-writing-revision {
+    display: none;
+  }
+}

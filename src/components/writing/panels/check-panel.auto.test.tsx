@@ -157,7 +157,7 @@ describe('CheckPanel autoRun', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(fetchMock.mock.calls[0][0]).toBe('/api/works/work-1/chapters/c1/check')
     expect(replaceSpy).toHaveBeenCalled()
-    expect(toast).not.toHaveBeenCalledWith('취소했습니다.')
+    expect(toast).not.toHaveBeenCalledWith('취소했어요.')
   })
 
   it('does not open the approval dialog in auto mode', async () => {

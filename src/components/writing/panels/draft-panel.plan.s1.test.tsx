@@ -23,7 +23,8 @@ vi.mock('@/server/actions/ai-features', () => ({
 
 const encoder = new TextEncoder()
 
-const PLACEHOLDER = '무슨 일이 일어나야 하나요? 비워 두면 위키와 지난 화를 보고 계획을 제안해요.'
+const PLACEHOLDER =
+  '무슨 일이 일어나야 하나요? 지시 없이도 위키와 앞 회차를 바탕으로 계획을 받을 수 있어요.'
 const REVISION_PLACEHOLDER = '계획을 한 줄로 고쳐 주세요 (예: 2장면에서 윤서가 먼저 말을 걸게)'
 
 function makeData(): WritingData {

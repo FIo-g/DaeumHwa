@@ -82,7 +82,7 @@ describe('DraftPlanCardView keep guard (stage 2 review)', () => {
     expect(createDirectiveAction).toHaveBeenCalledTimes(1)
 
     resolve({ ok: true, data: {} })
-    await waitFor(() => expect(screen.getByText('장부에 넣었습니다')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('장부에 넣었어요')).toBeInTheDocument())
     expect(createDirectiveAction).toHaveBeenCalledTimes(1)
     expect(onKept).toHaveBeenCalledTimes(1)
   })

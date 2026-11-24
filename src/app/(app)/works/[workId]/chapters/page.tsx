@@ -28,10 +28,11 @@ export default async function ChaptersPage({ params }: { params: Promise<{ workI
   const visibleCount = chapters.filter((c) => c.archivedAt === null).length
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="b-writing-page flex flex-col gap-6">
       <PageHeader
         title="회차 관리"
-        description={`${visibleCount}화`}
+        band="mustard"
+        description={`회차 ${visibleCount}개`}
         actions={canEdit ? <NewChapterButton workId={workId} /> : undefined}
       />
       <ChapterTable

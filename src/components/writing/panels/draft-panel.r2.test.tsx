@@ -156,7 +156,7 @@ describe('DraftPanel 다듬기', () => {
     renderPanel()
 
     startDraft()
-    await screen.findByText('중간에 멈춘 초안입니다.')
+    await screen.findByText('중간에 멈춘 초안이에요.')
     expect(screen.queryByRole('button', { name: '다듬기' })).toBeNull()
 
     vi.mocked(fetch).mockResolvedValueOnce(draftResponse(fullStream('완성된 초안입니다.')))

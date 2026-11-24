@@ -136,7 +136,7 @@ export function DraftPlanCardView({
   }
 
   return (
-    <section aria-label="이번 화 계획" className="grid gap-3 rounded-lg border p-3">
+    <section aria-label="이번 화 계획" className="b-paper grid gap-3 p-3">
       <div className="grid gap-1">
         <h3 className="text-sm font-medium">이번 화 계획</h3>
         {warnings.map((warning) => (
@@ -223,7 +223,7 @@ export function DraftPlanCardView({
               <li key={index} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span className="min-w-0 flex-1">{request}</span>
                 {kept.includes(index) ? (
-                  <span className="shrink-0 text-xs text-muted-foreground">장부에 넣었습니다</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">장부에 넣었어요</span>
                 ) : (
                   <Button
                     variant="outline"

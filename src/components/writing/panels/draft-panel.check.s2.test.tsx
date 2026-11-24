@@ -75,7 +75,7 @@ describe('DirectiveFindingsView', () => {
     expect(screen.getByText('요청과 다른 곳')).toBeTruthy()
     expect(screen.getByText("'입꼬리' 2곳")).toBeTruthy()
     expect(screen.getByText('민준의 말투가 요청과 다른 대사 1곳')).toBeTruthy()
-    expect(screen.getByText('분량이 요청한 5000자와 다릅니다')).toBeTruthy()
+    expect(screen.getByText('분량이 요청한 5000자와 달라요')).toBeTruthy()
   })
 
   it('renders nothing without findings', () => {

@@ -37,6 +37,21 @@ afterEach(() => {
 })
 
 describe('ManuscriptEditor', () => {
+  it('labels each finding link as a number and hides the links while rechecking', () => {
+    const onShowIssue = vi.fn()
+    const { rerender, props } = renderEditor({
+      highlights: [{ id: 'issue', start: 0, end: 2, kind: 'issue', order: 0 }],
+      onShowIssue,
+    })
+    expect(screen.getByRole('group', { name: '원고의 지적 번호' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '지적 1번 보기' }))
+    expect(onShowIssue).toHaveBeenCalledWith('issue')
+    rerender(
+      <ManuscriptEditor {...props} check={{ checking: true, resultKey: 0, issueCount: 1 }} />,
+    )
+    expect(screen.queryByRole('button', { name: '지적 1번 보기' })).toBeNull()
+  })
+
   it('reports typed text through onBodyChange', () => {
     const { props } = renderEditor()
     fireEvent.change(bodyBox(), { target: { value: '가나다라마바사아' } })
