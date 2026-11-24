@@ -20,7 +20,7 @@ export default async function InterviewPage({ params }: { params: Promise<{ work
       <TrialToolGate
         title="인터뷰"
         band="sand"
-        description="AI가 작품에 대해 물어요. 답에서 설정 카드와 떡밥 후보를 찾아요."
+        description="답에서 설정 카드와 떡밥 후보를 찾아요."
       />
     )
   const state = await guardPage(() => getInterviewState(db, actor, workId))
