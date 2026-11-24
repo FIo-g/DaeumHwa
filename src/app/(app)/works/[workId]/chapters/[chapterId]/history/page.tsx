@@ -26,15 +26,14 @@ export default async function ChapterHistoryPage({
     (work.role === 'owner' || work.role === 'editor') && chapter.archivedAt === null
 
   return (
-    <div className="b-writing-page flex flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-6">
       <PageHeader
         title="원고 이력"
-        band="cream"
         description={chapterLabel(chapter.position, chapter.title)}
         actions={
           <Link
             href={`/works/${workId}/chapters/${chapterId}`}
-            className={buttonVariants({ variant: 'outline' })}
+            className={buttonVariants({ variant: 'link' })}
           >
             집필로 돌아가기
           </Link>

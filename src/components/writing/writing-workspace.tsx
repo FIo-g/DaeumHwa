@@ -127,7 +127,7 @@ export function WritingWorkspace({
   useEffect(() => {
     if (!revision) return
     const frame = requestAnimationFrame(() => {
-      const note = textareaRef.current?.parentElement?.querySelector('.b-writing-revision')
+      const note = textareaRef.current?.parentElement?.querySelector('.wg-writing-revision')
       const rect = note?.getBoundingClientRect()
       if (rect && (rect.top < 180 || rect.bottom > window.innerHeight - 96)) {
         window.scrollTo({
@@ -418,25 +418,26 @@ export function WritingWorkspace({
         focusRange(jump.start, jump.end, jump.id)
       }}
     >
-      <div className="b-writing-mobile-dock b-paper flex items-center justify-between gap-2 px-3 py-2 lg:hidden">
+      <div className="wg-writing-mobile-dock">
         <span className="text-sm font-bold">
           {check.checking ? '점검 중…' : `열린 지적 ${check.issueCount}건`}
         </span>
-        <SheetTrigger render={<Button variant="outline" size="sm" className="lg:hidden" />}>
+        <SheetTrigger render={<Button variant="outline" size="sm" />}>
           <MenuIcon open={panelOpen} />
           패널 열기
         </SheetTrigger>
       </div>
       {wide === false && (
         <Dialog.Portal keepMounted>
-          <Dialog.Backdrop className="b-overlay-motion fixed inset-0 z-50 bg-ink/[52%]" />
+          <Dialog.Backdrop data-slot="sheet-overlay" className="wg-ui-overlay fixed inset-0 z-50" />
           <Dialog.Popup
             data-slot="sheet-content"
-            className="b-writing-sheet b-paper fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto"
+            data-side="bottom"
+            className="wg-writing-sheet wg-ui-popup wg-ui-sheet fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto"
             initialFocus={closeButton}
             finalFocus={() => !jumpAfterClose.current && !revisionAfterClose.current}
           >
-            <SheetHeader className="flex-row items-center justify-between gap-2 bg-sand">
+            <SheetHeader className="wg-writing-sheet-head flex-row items-center justify-between gap-2">
               <SheetTitle>작업 패널</SheetTitle>
               <SheetClose
                 ref={closeButton}
@@ -446,7 +447,7 @@ export function WritingWorkspace({
                 <MenuIcon open={panelOpen} />
               </SheetClose>
             </SheetHeader>
-            <div className="px-3 pb-4">
+            <div className="px-3 pt-3 pb-4">
               <WritingSidePanel {...panelProps} />
             </div>
           </Dialog.Popup>
@@ -458,7 +459,7 @@ export function WritingWorkspace({
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {chapter.archivedAt && (
-        <div className="b-paper flex flex-wrap items-center justify-between gap-3 bg-cream p-4 text-sm">
+        <div className="wg-writing-notice">
           <p>보관된 회차예요. 수정하기 전에 다시 열어 주세요.</p>
           {canManage && (
             <Button size="sm" variant="outline" onClick={() => void reopenChapter()}>
@@ -480,9 +481,10 @@ export function WritingWorkspace({
         onNavigate={(href) => void navigate(href)}
       />
 
-      <div className="b-writing-stage flex min-w-0 items-start">
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+      <div className="wg-writing-stage">
+        <div className="min-w-0">
           <ManuscriptEditor
+            page={chapter.position}
             title={title}
             body={body}
             onTitleChange={setTitle}
@@ -507,7 +509,10 @@ export function WritingWorkspace({
         </div>
         {/* The column is reserved by CSS from the first paint, so the manuscript keeps its width
             when the panel mounts after hydration. */}
-        <aside className="b-writing-aside sticky top-[calc(var(--b-nav)+1.5rem)] hidden max-h-[calc(100dvh-var(--b-nav)-3rem)] w-[320px] shrink-0 overflow-y-auto lg:block xl:w-[380px]">
+        <aside className="wg-writing-aside">
+          <p className="wg-writing-panel-page" aria-hidden="true">
+            {String(chapter.position).padStart(2, '0')}
+          </p>
           {wide && <WritingSidePanel {...panelProps} />}
         </aside>
       </div>
@@ -554,8 +559,8 @@ function useIsSampleChapter(chapterId: string): boolean {
   )
 }
 
-// Keep the panel mount in sync with Tailwind's lg breakpoint.
-const WIDE_QUERY = '(min-width: 64rem)'
+// Keep the panel mount in sync with the writing layout in wg-writing.css.
+const WIDE_QUERY = '(min-width: 1093px)'
 
 function wideQuery(): MediaQueryList | null {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null

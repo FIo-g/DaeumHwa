@@ -3,13 +3,15 @@
 import Link from 'next/link'
 import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
-import { Badge } from '@/components/ui/badge'
+import { FactStatusBadge } from '@/components/app/fact-status-badge'
+import { GridTitle } from '@/components/motion'
 import { buttonVariants } from '@/components/ui/button'
 import { getTextWorker } from '@/lib/client/worker-client'
 import type { Mention } from '@/lib/korean/mentions'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import type { Highlight, WorkspaceApi, WritingData } from '../types'
-import { cn } from '@/lib/utils'
+import { getCheckContextAction } from '@/server/actions/checks'
+import type { CheckContextView } from '@/server/check-context'
 
 const DEBOUNCE_MS = 1000
 
@@ -26,6 +28,9 @@ type RelatedCardsProps = {
 export function RelatedCards({ data, api, text }: RelatedCardsProps) {
   const [mentions, setMentions] = useState<Mention[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [context, setContext] = useState<CheckContextView | null>(null)
+  const chapterId = data.chapter.id
+  const archived = data.chapter.archivedAt !== null
 
   const targets = useMemo(
     () => data.entries.map((entry) => ({ id: entry.id, names: [entry.name, ...entry.aliases] })),
@@ -56,6 +61,20 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
       }),
     [mentions, data.entries],
   )
+
+  const hasCards = cards.length > 0
+  useEffect(() => {
+    if (!hasCards || archived) return
+    let cancelled = false
+    void getCheckContextAction({ chapterId })
+      .then((result) => {
+        if (!cancelled && result.ok) setContext(result.data)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [archived, chapterId, data.entries, hasCards])
 
   const selected = cards.find((card) => card.entry.id === selectedId) ?? null
 
@@ -103,43 +122,64 @@ export function RelatedCards({ data, api, text }: RelatedCardsProps) {
   }
 
   return (
-    <section aria-label="관련 카드" className="grid gap-3">
+    <section aria-label="관련 카드" className="wg-panels-section">
+      <GridTitle>관련 카드</GridTitle>
       {cards.length === 0 && (
         <p className="text-sm text-muted-foreground">이 회차 원고에 이름이 나온 카드가 없어요.</p>
       )}
 
-      <ul className="grid gap-2">
+      <ul className="wg-panels-list">
         {cards.map(({ mention, entry }, index) => {
           const active = entry.id === selectedId
+          const facts = context?.entries.find((item) => item.id === entry.id)?.facts ?? []
+          const statuses = [...new Set(facts.map((fact) => fact.status))]
           return (
             <li
               key={entry.id}
-              className="b-writing-panel-card b-paper"
-              style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+              className="wg-panels-row wg-panels-related"
+              style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
             >
-              <div className={cn('grid gap-1 rounded-card p-3', active && 'bg-sand/30')}>
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => setSelectedId(active ? null : entry.id)}
-                    className="text-left font-medium underline-offset-4 hover:underline"
-                  >
-                    {entry.name}
-                  </button>
-                  <span className="shrink-0 text-xs text-muted-foreground">{mention.count}회</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{ENTRY_KIND_LABEL[entry.kind]}</Badge>
-                  <Link
-                    href={`/works/${data.workId}/wiki/entries/${entry.id}`}
-                    className="text-xs underline underline-offset-4"
-                  >
-                    카드 열기
-                  </Link>
-                </div>
-                {entry.summary && (
-                  <p className="line-clamp-2 text-sm text-muted-foreground">{entry.summary}</p>
+              <div className="wg-panels-related-meta">
+                <button
+                  type="button"
+                  aria-pressed={active}
+                  aria-controls={`related-facts-${entry.id}`}
+                  onClick={() => setSelectedId(active ? null : entry.id)}
+                  className="b-link wg-panels-related-title"
+                >
+                  {entry.name}
+                </button>
+                <span className="wg-panels-kind">{ENTRY_KIND_LABEL[entry.kind]}</span>
+                <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
+                  {mention.count}회
+                </span>
+              </div>
+              {entry.summary && <p className="text-sm text-muted-foreground">{entry.summary}</p>}
+              <div className="wg-panels-related-meta">
+                {statuses.map((status) => (
+                  <FactStatusBadge key={status} status={status} />
+                ))}
+                <Link
+                  href={`/works/${data.workId}/wiki/entries/${entry.id}`}
+                  className="b-link ml-auto text-xs"
+                >
+                  카드 열기
+                </Link>
+              </div>
+              <div id={`related-facts-${entry.id}`} hidden={!active}>
+                {active && facts.length > 0 && (
+                  <ul className="wg-panels-list">
+                    {facts.map((fact, factIndex) => (
+                      <li
+                        key={fact.id}
+                        className="wg-panels-fact"
+                        style={{ '--wg-panels-row': Math.min(factIndex, 3) } as CSSProperties}
+                      >
+                        <blockquote className="wg-panels-wiki-text">{fact.content}</blockquote>
+                        <FactStatusBadge status={fact.status} />
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             </li>

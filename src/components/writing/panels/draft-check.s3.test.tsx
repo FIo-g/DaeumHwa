@@ -171,9 +171,7 @@ describe('DraftCheck', () => {
     expect(screen.getByText('장면 2: 중요한 순간을 설명으로 넘김')).toBeTruthy()
     expect(screen.getByText('장면 3: 요청과 다름')).toBeTruthy()
     expect(screen.getByText('고친 장면 미리 보기')).toBeTruthy()
-    expect(
-      screen.getByText('겨자색으로 새 글을 표시해요. 지울 글에는 취소선을 그어요.'),
-    ).toBeTruthy()
+    expect(screen.getByText('표시한 부분은 새 글이에요. 지울 글에는 취소선을 그어요.')).toBeTruthy()
     expect(onPreviewChange).toHaveBeenLastCalledWith(true)
   })
 

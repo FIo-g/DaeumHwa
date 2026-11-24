@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
+import { GridTitle, ScanLine } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -69,7 +70,7 @@ export function DirectiveFindingsView({
 }) {
   if (findings.length === 0) return null
   return (
-    <div className="grid gap-1 rounded-lg border p-3 text-sm">
+    <div className="wg-panels-form text-sm">
       <p className="font-medium">{FINDINGS_TITLE}</p>
       <ul className="grid gap-1 text-muted-foreground">
         {findings.map((finding) => (
@@ -460,7 +461,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
       : null
 
   return (
-    <section aria-label="AI 초안" className="grid gap-4">
+    <section aria-label="AI 초안" className="wg-panels-section">
+      <GridTitle>AI 초안</GridTitle>
       <div className="grid gap-2">
         <Label htmlFor="draft-instructions">무슨 일이 일어나야 하나요?</Label>
         {activeRequests !== null && activeRequests > 0 && (
@@ -553,7 +555,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
 
       <div className="flex flex-wrap gap-2">
         {streaming ? (
-          <div className="b-writing-check-loading w-full">
+          <div className="w-full">
             <AiRunStatus label="쓰는 중" elapsedSec={ai.elapsedSec} onCancel={ai.cancel} />
           </div>
         ) : (
@@ -572,6 +574,8 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
         )}
       </div>
 
+      <ScanLine active={planning && !streaming} />
+
       <p className="text-xs text-muted-foreground">{USAGE_NOTICE}</p>
 
       {draft !== null && (
@@ -580,7 +584,7 @@ export function DraftPanel({ data, api }: DraftPanelProps) {
             role="region"
             aria-label="AI 초안 미리보기"
             aria-live="polite"
-            className="b-writing-panel-card b-paper max-h-96 overflow-y-auto whitespace-pre-wrap bg-paper p-3 text-sm leading-7 wrap-anywhere"
+            className="b-ruled wg-panels-manuscript"
           >
             {draft === '' ? '초안을 기다리는 중이에요.' : draft}
           </div>

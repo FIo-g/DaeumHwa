@@ -24,17 +24,19 @@ export function VersionHistory({
 }: VersionHistoryProps) {
   // Start on the newest version that is not the current one, since that is the usual reason to look.
   const first = versions.find((v) => v.version !== currentVersion) ?? versions[0]
-  const [selectedId, setSelectedId] = useState<string | null>(first?.id ?? null)
-  const selected = versions.find((v) => v.id === selectedId) ?? null
+  const [selection, setSelection] = useState({ id: first?.id ?? null, replay: false })
+  const selected = versions.find((v) => v.id === selection.id) ?? null
 
   return (
-    <div className="flex flex-col gap-6 md:flex-row">
-      <div className="b-writing-versions md:w-52 md:shrink-0 xl:w-64">
+    <div className="wg-chapters-history">
+      <div className="min-w-0">
         <VersionList
           versions={versions}
           currentVersion={currentVersion}
           selectedId={selected?.id ?? null}
-          onSelect={setSelectedId}
+          onSelect={(id) => {
+            if (id !== selection.id) setSelection({ id, replay: true })
+          }}
         />
       </div>
       {selected ? (
@@ -47,6 +49,7 @@ export function VersionHistory({
           currentBody={currentBody}
           currentVersion={currentVersion}
           canRestore={canRestore}
+          replay={selection.replay}
         />
       ) : (
         <p className="text-sm text-muted-foreground">비교할 버전을 고르세요.</p>

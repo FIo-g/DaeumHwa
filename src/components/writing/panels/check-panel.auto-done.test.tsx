@@ -148,7 +148,7 @@ describe('CheckPanel auto check', () => {
     })
     rerender(<CheckPanel data={data} api={api} text="본문" />)
 
-    expect(screen.getByText(issue.quote)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: issue.quote })).toHaveTextContent(issue.quote)
     expect(screen.queryByText('열린 지적이 없어요.')).toBeNull()
   })
 

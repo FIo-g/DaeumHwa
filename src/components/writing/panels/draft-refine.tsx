@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
+import { ProofStrike } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
@@ -91,24 +92,21 @@ export function DraftRefine({
         </p>
         {note && <p className="text-sm text-muted-foreground">{note}</p>}
         <p className="text-xs text-muted-foreground">
-          겨자색으로 새 글을 표시해요. 지울 글에는 취소선을 그어요.
+          표시한 부분은 새 글이에요. 지울 글에는 취소선을 그어요.
         </p>
-        <div className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg border bg-muted/30 p-3 text-sm leading-7">
+        <div className="b-ruled wg-panels-manuscript">
           {preview.parts.map((part, index) => {
             if (part.type === 'insert') {
               return (
-                <ins key={index} className="bg-kraft text-ink no-underline">
+                <ins key={index} className="wg-panels-insertion">
                   {part.value}
                 </ins>
               )
             }
             if (part.type === 'delete') {
               return (
-                <del
-                  key={index}
-                  className="bg-muted text-ink line-through decoration-ink decoration-2"
-                >
-                  {part.value}
+                <del key={index} className="no-underline">
+                  <ProofStrike>{part.value}</ProofStrike>
                 </del>
               )
             }

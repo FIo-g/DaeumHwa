@@ -1,0 +1,293 @@
+@layer components {
+  .wg-chapters-contents,
+  .wg-chapters-versions {
+    position: relative;
+  }
+
+  .wg-chapters-contents > [data-slot='table-container'] {
+    scrollbar-width: thin;
+    scrollbar-color: var(--b-muted) var(--b-paper);
+  }
+
+  .wg-chapters-contents::before,
+  .wg-chapters-versions::before {
+    position: absolute;
+    z-index: 1;
+    inset: 0 0 auto;
+    height: var(--b-line);
+    background: var(--b-grid);
+    pointer-events: none;
+    content: '';
+  }
+
+  .wg-chapters-title {
+    display: inline-block;
+    max-inline-size: 18rem;
+    font: 700 1rem/1.65 var(--b-font-title);
+    vertical-align: middle;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  a.wg-chapters-title {
+    text-decoration: underline;
+    text-decoration-thickness: var(--b-line);
+  }
+
+  .wg-chapters-table-row:is(:hover, :focus-within) a.wg-chapters-title {
+    text-decoration-thickness: var(--b-rule);
+  }
+
+  .wg-chapters-table-row[data-archived] {
+    color: var(--b-muted);
+  }
+
+  .wg-chapters-line-number {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 0.625rem;
+    transform: translateY(-50%);
+    font: 400 0.6875rem/1 var(--b-font-mono);
+    color: var(--b-muted);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :is(.wg-chapters-table-row, .wg-chapters-version-row):is(:hover, :focus-within)
+    .wg-chapters-line-number {
+    opacity: 1;
+  }
+
+  .wg-chapters-status {
+    position: relative;
+    display: inline-block;
+    padding-inline-start: 1.125rem;
+  }
+
+  .wg-chapters-status::before,
+  .wg-chapters-status::after {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 0;
+    inline-size: 0.6875rem;
+    block-size: 0.6875rem;
+    border-radius: 50%;
+    content: '';
+  }
+
+  .wg-chapters-status::before {
+    transform: translateY(-50%);
+    clip-path: inset(0 100% 0 0);
+    background: currentColor;
+  }
+
+  .wg-chapters-status::after {
+    transform: translateY(-50%);
+    border: 3px double currentColor;
+  }
+
+  .wg-chapters-status[data-status='done']::before {
+    clip-path: inset(0);
+  }
+
+  .wg-chapters-status[data-status='done']::after {
+    opacity: 0;
+  }
+
+  .wg-chapters-date[data-empty]:not(:focus)::-webkit-datetime-edit {
+    opacity: 0;
+  }
+
+  .wg-chapters-history {
+    display: grid;
+    align-items: start;
+    gap: var(--b-s5);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wg-chapters-version-row {
+    position: relative;
+    border-block-end: var(--b-line) solid var(--b-grid);
+  }
+
+  .wg-chapters-version-row:is(:hover, :focus-within) {
+    border-block-end-color: var(--b-ink);
+  }
+
+  .wg-chapters-version-button {
+    position: relative;
+    display: grid;
+    gap: var(--b-s1);
+    inline-size: 100%;
+    padding: var(--b-s3) var(--b-s2) var(--b-s3) 2.5rem;
+    text-align: start;
+  }
+
+  .wg-chapters-version-button::before {
+    position: absolute;
+    inset: 0 auto 0 0;
+    inline-size: var(--b-rule);
+    transform: scaleY(0);
+    transform-origin: top;
+    background: var(--b-ink);
+    pointer-events: none;
+    content: '';
+  }
+
+  .wg-chapters-version-button[aria-pressed='true']::before {
+    transform: scaleY(1);
+  }
+
+  .wg-chapters-version-button:is(:hover, :focus-visible, [aria-pressed='true'])
+    .wg-chapters-version-label {
+    text-decoration: underline;
+    text-underline-offset: 0.24em;
+  }
+
+  .wg-chapters-version-button[aria-pressed='true'] .wg-chapters-version-label {
+    text-decoration-thickness: var(--b-rule);
+  }
+
+  .wg-chapters-proof {
+    display: grid;
+    gap: var(--b-s2);
+  }
+
+  .wg-chapters-proof-scroll {
+    max-inline-size: none;
+    max-block-size: 70vh;
+    max-block-size: round(down, 70vh, 1lh);
+    overflow-y: auto;
+    padding-inline: var(--b-s2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .wg-chapters-proof-lines {
+    position: relative;
+  }
+
+  .wg-chapters-proof-lines :is(ins, del) {
+    text-decoration: none;
+  }
+
+  .wg-chapters-proof-lines :is(ins, [data-mark='insert']) {
+    font-weight: 700;
+  }
+
+  .wg-chapters-proof-lines del {
+    color: var(--b-muted);
+  }
+
+  .wg-chapters-proof-marks {
+    position: absolute;
+    inset: 0;
+    color: transparent;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .wg-chapters-proof-marks [data-mark]::before {
+    content: attr(data-content);
+  }
+
+  .wg-chapters-proof-marks [data-mark='insert'] {
+    text-decoration: underline var(--b-ink) var(--b-line);
+    text-underline-offset: 0.22em;
+  }
+
+  .wg-chapters-proof-marks [data-mark='delete'] {
+    text-decoration: line-through var(--b-ink) var(--b-line);
+  }
+
+  @media (width >= 48rem) {
+    .wg-chapters-history {
+      grid-template-columns: minmax(13rem, 1fr) minmax(0, 3fr);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wg-chapters-contents::before,
+    .wg-chapters-versions::before {
+      animation: wg-chapters-draw var(--b-quick) var(--b-out) var(--b-step) both;
+    }
+
+    .wg-chapters-row-text,
+    .wg-chapters-status,
+    .wg-chapters-version-heading {
+      animation: wg-chapters-write var(--b-quick) var(--b-out)
+        calc(var(--b-step) + var(--b-quick) + var(--wg-chapters-row, 0) * var(--b-stagger)) both;
+    }
+
+    .wg-chapters-table-row:focus-within :is(.wg-chapters-row-text, .wg-chapters-status),
+    .wg-chapters-version-button:focus-visible .wg-chapters-version-heading {
+      animation: none;
+    }
+
+    .wg-chapters-line-number,
+    .wg-chapters-status::after {
+      transition: opacity var(--b-quick) var(--b-out);
+    }
+
+    .wg-chapters-status::before {
+      transition: clip-path var(--b-quick) var(--b-out);
+    }
+
+    .wg-chapters-version-button::before {
+      transition: transform var(--b-quick) var(--b-out);
+    }
+
+    .wg-chapters-proof-scroll[data-replay] {
+      animation: wg-chapters-write-lines var(--b-step) steps(8, end) both;
+    }
+
+    .wg-chapters-proof-scroll[data-replay] .wg-chapters-proof-marks {
+      animation: wg-chapters-draw var(--b-draw) var(--b-out) var(--b-step) both;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .wg-chapters-proof-marks {
+      display: none;
+    }
+
+    .wg-chapters-proof-lines ins {
+      text-decoration: underline;
+    }
+
+    .wg-chapters-proof-lines del {
+      text-decoration: line-through;
+    }
+  }
+
+  @keyframes wg-chapters-write {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes wg-chapters-write-lines {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+
+    to {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes wg-chapters-draw {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+
+    to {
+      clip-path: inset(0);
+    }
+  }
+}

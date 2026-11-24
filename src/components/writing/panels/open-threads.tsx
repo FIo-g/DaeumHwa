@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { type CSSProperties, useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
+import { GridTitle } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import type { ThreadEventKind } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
@@ -40,6 +41,15 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
     (OPEN_STATUSES as readonly string[]).includes(thread.status),
   )
 
+  const positions = [
+    data.chapter.position,
+    ...open.flatMap((thread) => [thread.plantedPosition, thread.targetChapterPosition]),
+  ].filter((position): position is number => position !== null)
+  const first = Math.min(...positions)
+  const last = Math.max(...positions)
+  const span = Math.max(1, last - first)
+  const onAxis = (position: number) => `${((position - first) / span) * 100}%`
+
   async function record(threadId: string, kind: QuickKind) {
     setBusyId(threadId)
     const result = await runAction(
@@ -51,7 +61,8 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
   }
 
   return (
-    <section aria-label="열린 떡밥" className="grid gap-3">
+    <section aria-label="열린 떡밥" className="wg-panels-section">
+      <GridTitle>떡밥</GridTitle>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">열린 떡밥 {open.length}개</p>
         <Link
@@ -66,36 +77,66 @@ export function OpenThreads({ data, api }: OpenThreadsProps) {
         <EmptyState title="열린 떡밥이 없어요." description="새 떡밥은 장부에서 추가해 보세요." />
       )}
 
-      <ul className="grid gap-2">
+      <ul className="wg-panels-list">
         {open.map((thread, index) => {
           const busy = busyId === thread.id
           const kinds = allowedEventKinds(thread.status)
           // Same rules as addThreadEvent: developed is at or after the planted chapter,
           // resolved strictly after it. A thread that was never planted cannot be developed.
           const planted = thread.plantedPosition
+          const target = thread.targetChapterPosition
           const developedBlocked = planted === null || data.chapter.position < planted
           const resolvedBlocked = planted === null || data.chapter.position <= planted
           return (
             <li
               key={thread.id}
-              style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
-              className="b-writing-panel-card b-paper grid gap-2 p-3"
+              style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
+              className="wg-panels-row grid gap-2"
             >
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-medium">{thread.title}</span>
-                {thread.overdue && (
-                  <span className="rounded-field bg-cream px-1.5 py-0.5 text-xs text-ink">
-                    회수 목표 지남
-                  </span>
-                )}
+                <span className="wg-panels-subhead">{thread.title}</span>
+                {thread.overdue && <span className="wg-panels-kind">회수 목표 지남</span>}
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-                <span>{THREAD_STATUS_LABEL[thread.status]}</span>
+                <span className="b-state" data-mark={planted === null ? 'dash' : 'dot'}>
+                  {THREAD_STATUS_LABEL[thread.status]}
+                </span>
                 <span>중요도 {IMPORTANCE_LABEL[thread.importance]}</span>
-                {thread.plantedPosition !== null && <span>{thread.plantedPosition}화에 심음</span>}
-                {thread.targetChapterPosition !== null && (
-                  <span>목표 {thread.targetChapterPosition}화</span>
+                {thread.plantedPosition !== null && (
+                  <span className="font-mono">{thread.plantedPosition}화에 심음</span>
                 )}
+                {thread.targetChapterPosition !== null && (
+                  <span className="font-mono">목표 {thread.targetChapterPosition}화</span>
+                )}
+              </div>
+              <div className="wg-panels-axis" aria-hidden="true">
+                <div className="wg-panels-axis-track">
+                  <span
+                    className="wg-panels-axis-line"
+                    data-planned={planted === null}
+                    style={{
+                      insetInlineStart: onAxis(Math.min(planted ?? first, target ?? last)),
+                      insetInlineEnd:
+                        target === null
+                          ? '0%'
+                          : `calc(100% - ${onAxis(Math.max(planted ?? first, target))})`,
+                    }}
+                  />
+                  {target !== null && (
+                    <span
+                      className="wg-panels-axis-target"
+                      style={{ insetInlineStart: onAxis(target) }}
+                    />
+                  )}
+                  {planted !== null && (
+                    <span
+                      className="wg-panels-axis-seed"
+                      style={{ insetInlineStart: onAxis(planted) }}
+                    />
+                  )}
+                </div>
+                <span>{first}화</span>
+                {last !== first && <span>{last}화</span>}
               </div>
               {editable ? (
                 <div className="grid gap-2">

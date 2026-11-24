@@ -1,35 +1,24 @@
 'use client'
 
 import { memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { HandNote, ProofStrike, ProofUnderline } from '@/components/motion'
+import { ProofStrike, ProofUnderline } from '@/components/motion'
 import { cn } from '@/lib/utils'
-import { type LayerSegment, segmentText } from './text-ops'
-import type { Highlight, HighlightKind, ProofRevision } from './types'
+import { segmentText } from './text-ops'
+import type { Highlight, ProofRevision } from './types'
 
 /** Both layers need the same type metrics and wrapping for the marks to follow the text. */
-export const MANUSCRIPT_TEXT_CLASS = 'b-writing-manuscript w-full border-0'
-
-const MARK_CLASS: Record<HighlightKind, string> = {
-  issue: '',
-  naming: '',
-  spelling: 'underline decoration-ink decoration-wavy decoration-1 underline-offset-[6px]',
-  comment: 'bg-cream/60',
-  reader: 'bg-sand/60',
-  search: 'bg-kraft/70',
-}
+export const MANUSCRIPT_TEXT_CLASS = 'wg-writing-text'
 
 export function isProofHighlight(highlight: Highlight) {
   return highlight.kind === 'issue' || highlight.kind === 'naming'
 }
 
 type Paint = {
-  id: string
   x: number
   y: number
   width: number
   height: number
   gap: number
-  surfaceWidth: number
 }
 
 type HighlightLayerProps = {
@@ -50,7 +39,12 @@ export const HighlightLayer = memo(function HighlightLayer({
   revision,
 }: HighlightLayerProps) {
   const layer = useRef<HTMLDivElement>(null)
-  const [rects, setRects] = useState<Paint[]>([])
+  const [{ rects, surfaceWidth }, setLayout] = useState<{ rects: Paint[][]; surfaceWidth: number }>(
+    {
+      rects: [],
+      surfaceWidth: 0,
+    },
+  )
   const proof = useMemo(
     () => new Map(highlights.filter(isProofHighlight).map((item) => [item.id, item])),
     [highlights],
@@ -82,22 +76,31 @@ export const HighlightLayer = memo(function HighlightLayer({
     const element = layer.current
     if (!element) return
     function measure() {
-      if (!element) return
+      const node = element?.firstChild
+      if (!element || !node) return
+      const range = document.createRange()
+      if (typeof range.getClientRects !== 'function') return
       const root = element.getBoundingClientRect()
       const lineHeight = parseFloat(getComputedStyle(element).lineHeight)
-      const textRange = document.createRange()
-      const ink: DOMRect[] = []
-      if (revision && typeof textRange.getClientRects === 'function') {
-        textRange.selectNodeContents(element)
-        ink.push(...Array.from(textRange.getClientRects()).filter((rect) => rect.height > 0))
-      }
-      const next = Array.from(element.querySelectorAll<HTMLElement>('[data-proof-id]')).flatMap(
-        (mark) =>
-          Array.from(mark.getClientRects(), (rect) => {
-            const id = mark.dataset.proofId ?? ''
+      range.selectNodeContents(element)
+      const ink = revision
+        ? Array.from(range.getClientRects()).filter((rect) => rect.height > 0)
+        : []
+      let offset = 0
+      const next = segments.map((segment) => {
+        const start = offset
+        offset += segment.text.length
+        if (!segment.kind) return []
+        // Splitting the mirror into styled spans can move a soft wrap. Measure ranges in one
+        // text node so the browser wraps the same string as it wraps inside the textarea.
+        range.setStart(node, start)
+        range.setEnd(node, offset)
+        return Array.from(range.getClientRects())
+          .filter((rect) => rect.width > 0)
+          .map((rect) => {
             let top = rect.top
             let gap = 0
-            if (id === 'revision') {
+            if (segment.id === 'revision') {
               const rowThreshold = rect.top - lineHeight / 2
               top = Math.min(
                 rect.top,
@@ -110,101 +113,120 @@ export const HighlightLayer = memo(function HighlightLayer({
               gap = Math.max(0, Math.floor(top - previousBottom))
             }
             return {
-              id,
               x: rect.left - root.left,
               y: top - root.top,
               width: rect.width,
               height: rect.height,
               gap,
-              surfaceWidth: root.width,
             }
-          }).filter((rect) => rect.width > 0),
-      )
-      setRects(next)
+          })
+      })
+      setLayout({ rects: next, surfaceWidth: root.width })
     }
     measure()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
     observer?.observe(element)
     let disposed = false
-    void document.fonts?.ready.then(() => {
+    const fonts = document.fonts
+    const remeasure = () => {
       if (!disposed) measure()
-    })
+    }
+    void fonts?.ready.then(remeasure)
+    fonts?.addEventListener('loadingdone', remeasure)
     return () => {
       disposed = true
       observer?.disconnect()
+      fonts?.removeEventListener('loadingdone', remeasure)
     }
   }, [revision, segments])
+
+  const revisionIndex = segments.findIndex((segment) => segment.id === 'revision')
+  const revisionRect = rects[revisionIndex]?.[0]
 
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 text-transparent">
       <div ref={layer} className={cn(MANUSCRIPT_TEXT_CLASS, 'absolute inset-0 overflow-hidden')}>
-        {segments.map((segment, index) => (
-          <SegmentView
-            key={index}
-            segment={segment}
-            active={segment.id === (linkedId ?? readingId)}
-          />
-        ))}
+        {text}
       </div>
-      {rects.map(({ id, x, y, width, height, gap, surfaceWidth }, index) => {
-        const order = proof.get(id)?.order ?? 0
-        const position = { left: x, top: y, width, height } as CSSProperties
-        if (id === 'revision' && revision) {
-          if (!gap || rects.findIndex((rect) => rect.id === 'revision') !== index) return null
-          const anchor =
-            x + (revision.after ? width / 2 : revision.start === text.length ? width : 0)
-          const align = anchor < 64 ? 'start' : surfaceWidth - anchor < 64 ? 'end' : 'center'
-          return (
-            <span
-              key={index}
-              className="b-writing-revision absolute"
-              data-align={align}
-              style={
-                {
-                  top: y - gap,
-                  height: gap,
-                  '--b-writing-revision-anchor': `${anchor}px`,
-                  '--b-writing-revision-gap': `${gap}px`,
-                } as CSSProperties
-              }
-            >
-              <span className="b-writing-revision-note">
-                {revision.before.replaceAll('\n', ' ') && (
-                  <ProofStrike>{revision.before.replaceAll('\n', ' ')}</ProofStrike>
-                )}
-                {revision.after && <HandNote>{revision.after.replaceAll('\n', ' ')}</HandNote>}
-              </span>
-            </span>
-          )
-        }
-        if (!proof.has(id)) return null
+      {segments.map((segment, index) => {
+        if (!segment.id || !segment.kind) return null
+        const issue = proof.get(segment.id)
+        const active = segment.active || segment.id === (linkedId ?? readingId)
         return (
-          <ProofUnderline
-            key={`${id}-${index}`}
-            replayKey={resultKey}
-            delay={resultKey ? Math.min(order, 5) * 70 : 0}
-            data-existing={resultKey === 0}
-            data-closing={proof.get(id)?.closing}
-            className="b-writing-proof absolute"
-            style={position}
-          />
+          <mark key={index} data-kind={segment.kind} className="wg-writing-mark">
+            <span className="sr-only">{segment.text}</span>
+            {segment.id !== 'revision' &&
+              rects[index]?.map(({ x, y, width, height }, fragment) => {
+                const style = { left: x, top: y, width, height }
+                if (issue) {
+                  return (
+                    <ProofUnderline
+                      key={fragment}
+                      replayKey={resultKey}
+                      delay={resultKey ? Math.min(issue.order ?? 0, 5) * 70 : 0}
+                      data-proof-id={issue.id}
+                      data-active={active}
+                      data-closing={issue.closing}
+                      className="wg-writing-proof absolute"
+                      style={style}
+                    />
+                  )
+                }
+                return (
+                  <span
+                    key={fragment}
+                    data-active={active}
+                    className="wg-writing-fragment absolute"
+                    style={style}
+                  />
+                )
+              })}
+          </mark>
         )
       })}
+      {revision && revisionRect && revisionRect.gap > 0 && (
+        <RevisionNote
+          revision={revision}
+          rect={revisionRect}
+          textLength={text.length}
+          surfaceWidth={surfaceWidth}
+        />
+      )}
     </div>
   )
 })
 
-function SegmentView({ segment, active }: { segment: LayerSegment; active: boolean }) {
-  if (!segment.id || !segment.kind) return <span>{segment.text}</span>
-  const proof = segment.kind === 'issue' || segment.kind === 'naming'
+function RevisionNote({
+  revision,
+  rect: { x, y, width, gap },
+  textLength,
+  surfaceWidth,
+}: {
+  revision: ProofRevision
+  rect: Paint
+  textLength: number
+  surfaceWidth: number
+}) {
+  const anchor = x + (revision.after ? width / 2 : revision.start === textLength ? width : 0)
+  const align = anchor < 64 ? 'start' : surfaceWidth - anchor < 64 ? 'end' : 'center'
+  const before = revision.before.replaceAll('\n', ' ')
+  const after = revision.after.replaceAll('\n', ' ')
   return (
-    <mark
-      data-kind={segment.kind}
-      data-proof-id={proof ? segment.id : undefined}
-      data-active={active || segment.active ? 'true' : undefined}
-      className={cn('b-writing-mark bg-transparent text-transparent', MARK_CLASS[segment.kind])}
+    <span
+      className="wg-writing-revision absolute"
+      data-align={align}
+      style={
+        {
+          top: y - gap,
+          height: gap,
+          '--wg-writing-revision-anchor': `${anchor}px`,
+        } as CSSProperties
+      }
     >
-      {segment.text}
-    </mark>
+      <span className="wg-writing-revision-note">
+        {before && <ProofStrike>{before}</ProofStrike>}
+        {after && <span>{after}</span>}
+      </span>
+    </span>
   )
 }

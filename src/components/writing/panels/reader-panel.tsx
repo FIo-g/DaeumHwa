@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { type CSSProperties, useEffect, useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
-import { Badge } from '@/components/ui/badge'
+import { GridTitle } from '@/components/motion'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -106,7 +106,8 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
   const nameOf = (id: string) => PERSONAS.find((p) => p.id === id)?.name ?? id
 
   return (
-    <section aria-label="독자 반응" className="grid gap-4">
+    <section aria-label="독자 반응" className="wg-panels-section">
+      <GridTitle>독자 반응</GridTitle>
       {!editable && <p className="text-xs text-muted-foreground">{EDITOR_ONLY_NOTE}</p>}
 
       {editable && (
@@ -167,19 +168,19 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
             return (
               <article
                 key={persona.personaId}
-                style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
-                className="b-writing-panel-card b-paper grid gap-2 p-3"
+                style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
+                className="wg-panels-row grid gap-2"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-medium">{nameOf(persona.personaId)}</h3>
+                  <h3 className="wg-panels-subhead">{nameOf(persona.personaId)}</h3>
                   <span className="text-sm" aria-label={`평점 ${rating}점 (5점 만점)`}>
                     {'★'.repeat(rating)}
                     {'☆'.repeat(5 - rating)}
                   </span>
                 </div>
-                <Badge variant="outline" className="w-fit">
+                <span className="wg-panels-kind w-fit">
                   이탈 위험 {RISK_LABEL[persona.dropOffRisk] ?? persona.dropOffRisk}
-                </Badge>
+                </span>
                 <p className="text-sm leading-6">{persona.overall}</p>
                 {persona.moments.length > 0 && (
                   <ul className="grid gap-2">
@@ -188,7 +189,7 @@ export function ReaderPanel({ data, api, text }: ReaderPanelProps) {
                         <button
                           type="button"
                           onClick={() => focusQuote(moment.quote)}
-                          className="rounded-md bg-muted/60 p-2 text-left leading-6 hover:bg-muted"
+                          className="wg-panels-quote"
                         >
                           {moment.quote}
                         </button>

@@ -25,7 +25,7 @@ import { lengthShortfall, shortfallMessage } from '@/lib/chapter-length'
 import { startAutoCheck } from '@/lib/client/auto-check'
 import { runAction } from '@/lib/client/run-action'
 import { formatKoreanDateTime, isPlausibleIsoDate } from '@/lib/dates'
-import { CHAPTER_STATUS_LABEL, chapterLabel } from '@/lib/labels'
+import { CHAPTER_STATUS_LABEL, chapterLabel, stripEpisodePrefix } from '@/lib/labels'
 import type { ActionResult } from '@/lib/result'
 import {
   archiveChapterAction,
@@ -41,6 +41,8 @@ export type ChapterTableRow = {
   title: string
   status: ChapterStatus
   charCount: number
+  issueCount?: number
+  pendingProposalCount?: number
   publishedOn: string | null
   /** ISO timestamp. */
   updatedAt: string
@@ -120,8 +122,8 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="b-paper flex items-center gap-2 px-3 py-1">
+    <div className="flex min-w-0 flex-col gap-4">
+      <div className="flex items-center gap-2">
         <Checkbox
           id="show-archived-chapters"
           aria-label="보관한 회차 보기"
@@ -137,13 +139,15 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
           description={canEdit ? '새 회차를 만들어 원고를 시작해 보세요.' : undefined}
         />
       ) : (
-        <div className="b-writing-chapter-table b-paper overflow-clip">
+        <div className="wg-chapters-contents min-w-0">
           <Table>
-            <TableHeader className="bg-sand">
+            <TableHeader>
               <TableRow>
-                <TableHead>회차</TableHead>
+                <TableHead className="pl-10">회차</TableHead>
                 <TableHead>상태</TableHead>
                 <TableHead className="text-right">글자 수 (공백 포함)</TableHead>
+                <TableHead className="text-right">지적</TableHead>
+                <TableHead className="text-right">승인 대기</TableHead>
                 <TableHead>연재일</TableHead>
                 <TableHead className="hidden md:table-cell">수정일</TableHead>
                 {canOrganize && <TableHead>순서</TableHead>}
@@ -159,45 +163,63 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
                 return (
                   <TableRow
                     key={chapter.id}
-                    className={
-                      archived
-                        ? 'b-writing-chapter-row text-muted-foreground'
-                        : 'b-writing-chapter-row'
-                    }
-                    style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+                    className="wg-chapters-table-row"
+                    data-archived={archived || undefined}
+                    style={{ '--wg-chapters-row': Math.min(index, 4) } as CSSProperties}
                   >
-                    <TableCell className="font-medium">
+                    <TableCell className="relative min-w-46 pl-10">
+                      <span className="wg-chapters-line-number" aria-hidden="true">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
                       {archived ? (
-                        <span>
+                        <span className="wg-chapters-row-text wg-chapters-title">
                           {label}
-                          <span className="ml-2 text-xs">(보관됨)</span>
+                          <span className="ml-2 font-sans text-xs font-normal">(보관됨)</span>
                         </span>
                       ) : (
                         <Link
                           href={`/works/${workId}/chapters/${chapter.id}`}
-                          className="b-writing-row-label focus-visible:underline"
+                          className="wg-chapters-row-text wg-chapters-title"
                         >
-                          {label}
+                          <span className="font-mono font-normal">{chapter.position}화</span>{' '}
+                          {stripEpisodePrefix(chapter.title, chapter.position)}
                         </Link>
                       )}
                     </TableCell>
                     <TableCell>
                       {canEdit && !archived ? (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
+                          className="px-0"
                           aria-label={`${chapter.position}화 상태 바꾸기`}
                           disabled={busy}
                           onClick={() => void toggleStatus(chapter)}
                         >
-                          {CHAPTER_STATUS_LABEL[chapter.status]}
+                          <span className="wg-chapters-status" data-status={chapter.status}>
+                            {CHAPTER_STATUS_LABEL[chapter.status]}
+                          </span>
                         </Button>
                       ) : (
-                        <span>{CHAPTER_STATUS_LABEL[chapter.status]}</span>
+                        <span className="wg-chapters-status text-sm" data-status={chapter.status}>
+                          {CHAPTER_STATUS_LABEL[chapter.status]}
+                        </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {chapter.charCount.toLocaleString('ko-KR')}
+                    <TableCell className="text-right">
+                      <span className="wg-chapters-row-text font-mono tabular-nums">
+                        {chapter.charCount.toLocaleString('ko-KR')}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="wg-chapters-row-text font-mono tabular-nums">
+                        {(chapter.issueCount ?? 0).toLocaleString('ko-KR')}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="wg-chapters-row-text font-mono tabular-nums">
+                        {(chapter.pendingProposalCount ?? 0).toLocaleString('ko-KR')}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <PublishedOnInput
@@ -216,7 +238,9 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
                       />
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {formatKoreanDateTime(chapter.updatedAt)}
+                      <time className="wg-chapters-row-text font-mono" dateTime={chapter.updatedAt}>
+                        {formatKoreanDateTime(chapter.updatedAt)}
+                      </time>
                     </TableCell>
                     {canOrganize && (
                       <TableCell>
@@ -261,6 +285,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
                             title="이 회차를 복원할까요?"
                             description="회차 목록에서 다시 볼 수 있어요."
                             confirmLabel="복원하기"
+                            variant="link"
                             size="sm"
                             disabled={busy}
                             onConfirm={async () => {
@@ -278,6 +303,7 @@ export function ChapterTable({ workId, chapters, targetChars, canEdit, trial }: 
                             title="이 회차를 보관할까요?"
                             description="원고와 이력은 남아요. ‘보관한 회차 보기’에서 복원할 수 있어요."
                             confirmLabel="보관하기"
+                            variant="link"
                             size="sm"
                             disabled={busy}
                             onConfirm={async () => {
@@ -376,6 +402,7 @@ function PublishedOnInput({ position, value, disabled, onSave }: PublishedOnInpu
     <Input
       ref={inputRef}
       type="date"
+      data-empty={draft === '' || undefined}
       aria-label={`${position}화 연재일`}
       min="2000-01-01"
       max="2100-12-31"
@@ -384,7 +411,7 @@ function PublishedOnInput({ position, value, disabled, onSave }: PublishedOnInpu
       onChange={(event) => setDraft(event.currentTarget.value)}
       onBlur={() => void commit()}
       onKeyDown={onKeyDown}
-      className="w-40"
+      className="wg-chapters-date w-36 font-mono"
     />
   )
 }

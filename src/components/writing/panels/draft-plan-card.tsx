@@ -1,10 +1,10 @@
 'use client'
 
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { type CSSProperties, useEffect, useRef, useState } from 'react'
+import { Sheet } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { runAction } from '@/lib/client/run-action'
@@ -136,9 +136,9 @@ export function DraftPlanCardView({
   }
 
   return (
-    <section aria-label="이번 화 계획" className="b-paper grid gap-3 p-3">
+    <Sheet aria-label="이번 화 계획" className="wg-panels-plan">
       <div className="grid gap-1">
-        <h3 className="text-sm font-medium">이번 화 계획</h3>
+        <h3 className="wg-panels-subhead">이번 화 계획</h3>
         {warnings.map((warning) => (
           <p key={warning} className="text-xs text-muted-foreground">
             {warning}
@@ -146,11 +146,15 @@ export function DraftPlanCardView({
         ))}
       </div>
 
-      <ol ref={listRef} className="grid gap-3">
+      <ol ref={listRef} className="wg-panels-list">
         {card.scenes.map((scene, index) => (
-          <li key={index} className="grid gap-2 rounded-md bg-muted/30 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">
+          <li
+            key={index}
+            className="wg-panels-row grid gap-2"
+            style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
+          >
+            <div className="wg-panels-plan-scene">
+              <p className="font-mono text-sm">
                 {`장면 ${index + 1} · ${SCENE_ROLE_LABELS[scene.role]} · 약 ${(sceneChars ?? scene.targetChars).toLocaleString('ko-KR')}자`}
               </p>
               <div className="flex shrink-0 gap-1">
@@ -220,8 +224,11 @@ export function DraftPlanCardView({
           <p className="text-sm font-medium">계속 지킬 요청으로 보이는 것</p>
           <ul className="grid gap-2">
             {(card.requests ?? []).map((request, index) => (
-              <li key={index} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 flex-1">{request}</span>
+              <li
+                key={index}
+                className="wg-panels-plan-row flex flex-wrap items-center justify-between gap-2 text-sm"
+              >
+                <span className="min-w-0 flex-[1_1_11rem]">{request}</span>
                 {kept.includes(index) ? (
                   <span className="shrink-0 text-xs text-muted-foreground">장부에 넣었어요</span>
                 ) : (
@@ -241,14 +248,15 @@ export function DraftPlanCardView({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Input
+        <Textarea
           aria-label="계획 고치는 말"
-          className="min-w-0 flex-1"
+          className="min-h-11 min-w-0 flex-[1_1_11rem] resize-none"
           placeholder={REVISION_PLACEHOLDER}
           value={note}
+          rows={1}
           maxLength={300}
           disabled={busy}
-          onChange={(event) => setNote(event.target.value)}
+          onChange={(event) => setNote(event.target.value.replace(/[\r\n]/g, ''))}
         />
         <Button variant="outline" disabled={busy || note.trim() === ''} onClick={revise}>
           다시 계획
@@ -269,7 +277,7 @@ export function DraftPlanCardView({
           이 계획으로 쓰기
         </Button>
       </div>
-    </section>
+    </Sheet>
   )
 }
 
@@ -277,7 +285,7 @@ export function DraftPlanCardView({
 function PlanRow({ label, value }: { label: string; value: string }) {
   if (value.trim() === '') return null
   return (
-    <div className="flex gap-2">
+    <div className="wg-panels-plan-row">
       <dt className="shrink-0 text-muted-foreground">{label}</dt>
       <dd>{value}</dd>
     </div>

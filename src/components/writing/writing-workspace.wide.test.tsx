@@ -109,7 +109,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: vi.fn((query: string) => ({
-      matches: query === '(min-width: 64rem)',
+      matches: query === '(min-width: 1093px)',
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })),
@@ -188,11 +188,9 @@ describe('WritingWorkspace wide layout', () => {
     const doc = new DOMParser().parseFromString(html, 'text/html')
 
     const aside = doc.querySelector('aside')
-    expect(aside?.classList).toContain('lg:block')
-    expect(aside?.classList).toContain('w-[320px]')
-    expect(aside?.classList).toContain('xl:w-[380px]')
+    expect(aside?.classList).toContain('wg-writing-aside')
     expect(doc.querySelector('[role="dialog"]')).toBeNull()
     const trigger = [...doc.querySelectorAll('button')].find((b) => b.textContent === '패널 열기')
-    expect(trigger?.classList).toContain('lg:hidden')
+    expect(trigger?.parentElement?.classList).toContain('wg-writing-mobile-dock')
   })
 })

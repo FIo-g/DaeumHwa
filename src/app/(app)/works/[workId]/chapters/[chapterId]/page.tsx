@@ -21,7 +21,7 @@ export default async function ChapterWritingPage({
   const { db, actor, user } = await pageContext(`/works/${workId}/chapters/${chapterId}`)
   const data = await guardPage(() => loadWritingData(db, actor, workId, chapterId))
   return (
-    <div className="flex flex-col gap-6">
+    <div className="wg-writing-chapter">
       <ChapterHeading
         title={chapterLabel(data.chapter.position, data.chapter.title)}
         workTitle={data.workTitle}

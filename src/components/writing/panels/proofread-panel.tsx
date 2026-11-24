@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { AiBadge } from '@/components/app/ai-badge'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
-import { Badge } from '@/components/ui/badge'
+import { GridTitle, ProofStrike, ScanLine } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { postAction } from '@/lib/client/post-json'
 import { runAction } from '@/lib/client/run-action'
@@ -125,7 +125,8 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
   const ruleCount = items?.filter((item) => item.source === 'rule').length ?? 0
 
   return (
-    <section aria-label="맞춤법과 표현" className="grid gap-3">
+    <section aria-label="맞춤법과 표현" className="wg-panels-section">
+      <GridTitle>맞춤법</GridTitle>
       <div className="flex flex-wrap items-center gap-2">
         {editable ? (
           <>
@@ -155,6 +156,8 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
         )}
       </div>
 
+      <ScanLine active={ruleRunning} />
+
       {items === null && (
         <p className="text-sm text-muted-foreground">
           규칙 검사는 맞춤법과 띄어쓰기를 살펴요. AI 교정은 어색한 표현도 찾아요.
@@ -163,26 +166,27 @@ export function ProofreadPanel({ data, api, text }: ProofreadPanelProps) {
 
       {items !== null && items.length === 0 && <EmptyState title="고칠 곳을 찾지 못했어요." />}
 
-      <ul className="grid gap-2">
+      <ul className="wg-panels-list">
         {(items ?? []).map((item, index) => (
           <li
             key={`${item.start}-${index}`}
-            style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
-            className="b-writing-panel-card b-paper grid gap-2 p-3"
+            style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
+            className="wg-panels-row wg-panels-finding grid gap-2"
           >
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
+              <h3 className="wg-panels-finding-title">{KIND_LABEL[item.kind]}</h3>
               {item.source === 'ai' && <AiBadge />}
             </div>
-            <p className="text-sm leading-6">
-              <span className="line-through decoration-destructive">{item.quote}</span>
-              <span aria-hidden="true"> → </span>
-              <span className="font-medium">{item.replacement}</span>
+            <p className="wg-panels-sentence wg-panels-spelling">
+              <span className="wg-panels-revision">
+                <span className="wg-panels-correction">{item.replacement}</span>
+                <ProofStrike>{item.quote}</ProofStrike>
+              </span>
             </p>
             <p className="text-sm text-muted-foreground">{item.reason}</p>
             {editable && (
               <div>
-                <Button size="sm" variant="outline" onClick={() => apply(item)}>
+                <Button size="sm" onClick={() => apply(item)}>
                   적용
                 </Button>
               </div>

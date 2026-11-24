@@ -2,15 +2,19 @@
 
 import Link from 'next/link'
 import { BookOpenIcon } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
 import { AiRunStatus } from '@/components/app/ai-run-status'
 import { EmptyState } from '@/components/app/empty-state'
 import {
+  CountCell,
   Disclosure,
-  HandNote,
-  ProofUnderline,
+  GridTitle,
+  MarginNote,
   PopButton,
+  ProofPair,
+  ProofStrike,
+  ProofUnderline,
   usePrefersReducedMotion,
 } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -26,7 +30,7 @@ import { isTrialCheckChapter, TRIAL_SIGNUP_MESSAGE } from '@/lib/trial'
 import { resolveIssueAction } from '@/server/actions/issues'
 import type { ChapterCheckResult } from '@/server/chapter-check'
 import { changeMiddle } from '../text-ops'
-import type { FindingLinks, Highlight, WorkspaceApi, WritingData } from '../types'
+import type { FindingLinks, Highlight, ProofRevision, WorkspaceApi, WritingData } from '../types'
 import { ApprovalDialog } from './approval-dialog'
 import { CheckContext } from './check-context'
 import { EDITOR_ONLY_NOTE, canEditChapter, offerUndo, rangeOf } from './shared'
@@ -57,6 +61,7 @@ type FindingExit = {
   order: number
   kind: 'apply' | 'dismiss' | 'wiki'
   replacement?: string
+  revision?: ProofRevision
 }
 
 const RESOLVED_TEXT = {
@@ -129,10 +134,31 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
     return () => api.setHighlights('check', [])
   }, [api])
 
+  const showRevision = useEffectEvent((revision: ProofRevision) => findings?.onRevision(revision))
   useEffect(() => {
     if (!exit) return
-    const duration = exit.kind === 'wiki' ? 900 : 640
-    const timer = window.setTimeout(() => setExit(null), reduced ? 0 : duration)
+    let active = true
+    function complete() {
+      if (!active || !exit) return
+      setExit(null)
+      if (exit.revision) showRevision(exit.revision)
+    }
+    const row = cards.current?.querySelector('[data-exit]')
+    const fold = reduced
+      ? undefined
+      : row
+          ?.getAnimations?.()
+          .find(
+            (animation) =>
+              'animationName' in animation && animation.animationName === 'wg-panels-fold',
+          )
+    if (fold) {
+      void fold.finished.then(complete, complete)
+      return () => {
+        active = false
+      }
+    }
+    const timer = window.setTimeout(complete, 0)
     return () => window.clearTimeout(timer)
   }, [exit, reduced])
 
@@ -205,12 +231,19 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
     else api.focusRange(range.start, range.end)
   }
 
-  async function resolve(issue: IssueRow, status: 'accepted' | 'dismissed') {
+  async function resolve(
+    issue: IssueRow,
+    status: 'accepted' | 'dismissed',
+    revision?: ProofRevision,
+  ) {
     setBusyId(issue.id)
     const result = await runAction(resolveIssueAction({ issueId: issue.id, status }))
     setBusyId(null)
-    if (!result) return
-    finish(issue, status === 'dismissed' ? 'dismiss' : 'apply')
+    if (!result) {
+      if (revision) findings?.onRevision(revision)
+      return
+    }
+    finish(issue, status === 'dismissed' ? 'dismiss' : 'apply', { revision })
     api.refresh()
   }
 
@@ -226,26 +259,26 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
       toast.error('원고가 바뀌어 문장을 찾지 못했어요. 다시 점검해 주세요.')
       return
     }
-    if (start >= 0) {
-      const change = changeMiddle(issue.quote, issue.suggestion)
-      if (change.before || change.after) {
-        findings?.onRevision({
-          start: start + change.offset,
-          before: change.before,
-          after: change.after,
-        })
-      }
-    }
+    const change = changeMiddle(issue.quote, issue.suggestion)
+    const revision =
+      start >= 0 && (change.before || change.after)
+        ? { start: start + change.offset, before: change.before, after: change.after }
+        : undefined
     setBusyId(issue.id)
     if (await flushPendingSaves()) {
       offerUndo(api, before, '문장을 바꿨어요.')
-      await resolve(issue, 'accepted')
+      await resolve(issue, 'accepted', revision)
     } else {
       setBusyId(null)
+      if (revision) findings?.onRevision(revision)
     }
   }
 
-  function finish(issue: IssueRow, kind: FindingExit['kind'], replacement?: string) {
+  function finish(
+    issue: IssueRow,
+    kind: FindingExit['kind'],
+    detail?: Pick<FindingExit, 'replacement' | 'revision'>,
+  ) {
     const order = issues.findIndex((item) => item.id === issue.id)
     const activeCard = document.activeElement?.closest('[data-finding-id]')
     if (activeCard?.getAttribute('data-finding-id') === issue.id) {
@@ -256,13 +289,13 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
       target?.focus({ preventScroll: true })
     }
     setResolved(RESOLVED_TEXT[kind])
-    if (!reduced) setExit({ issue, order, kind, replacement })
+    if (!reduced) setExit({ issue, order, kind, ...detail })
     setIssues((prev) => prev.filter((item) => item.id !== issue.id))
   }
 
   function handleFixed(issueId: string, replacement: string) {
     const issue = issues.find((item) => item.id === issueId)
-    if (issue) finish(issue, 'wiki', replacement)
+    if (issue) finish(issue, 'wiki', { replacement })
     setFixing(null)
     api.refresh()
   }
@@ -285,17 +318,9 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
   }
 
   return (
-    <section aria-label="회차 점검" className="b-writing-check grid min-w-0 gap-3">
-      <div className="b-writing-check-head b-paper grid gap-3 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="b-subhead">회차 점검</h2>
-          <div className="b-writing-match" aria-hidden="true">
-            <div key={checkedKey} className="flex">
-              <span className="b-meet" />
-              <span className="b-meet" />
-            </div>
-          </div>
-        </div>
+    <section aria-label="회차 점검" className="wg-panels-section">
+      <div className="wg-panels-check-head">
+        <GridTitle columns={5}>회차 점검</GridTitle>
         <div ref={checkControls} className="flex flex-wrap items-center justify-between gap-2">
           {canCheck &&
             (ai.running ? (
@@ -307,7 +332,9 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
                 onCancel={() => cancelAutoCheck(data.chapter.id)}
               />
             ) : (
-              <PopButton onClick={() => void runCheck()}>회차 점검</PopButton>
+              <PopButton arrow={false} onClick={() => void runCheck()}>
+                회차 점검
+              </PopButton>
             ))}
           {!canCheck && (
             <p className="text-sm text-muted-foreground">
@@ -315,18 +342,16 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
             </p>
           )}
           {!checking && (
-            <span className="rounded-full border border-ink bg-sand px-2.5 py-1 text-xs font-bold">
-              열린 지적 {issues.length}건
+            <span className="wg-panels-count" aria-live="polite">
+              열린 지적 <CountCell value={issues.length} />건
             </span>
           )}
         </div>
 
         {checking && (
-          <div className="b-writing-check-loading">
-            <p role="status" className="text-sm text-muted-foreground">
-              설정과 어긋나는 문장을 찾고 있어요. 보통 15~25초 걸려요.
-            </p>
-          </div>
+          <p role="status" className="text-sm text-muted-foreground">
+            설정과 어긋나는 문장을 찾고 있어요. 보통 15~25초 걸려요.
+          </p>
         )}
         {resolved && !checking && (
           <p role="status" className="text-sm">
@@ -357,15 +382,58 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
 
       <ul
         ref={cards}
-        hidden={checking || shown.length === 0}
+        hidden={shown.length === 0}
         inert={checking}
-        className="grid gap-3"
+        aria-hidden={checking || undefined}
+        data-checking={checking}
+        className="wg-panels-list"
       >
         {shown.map(({ issue, order, transition }) => {
           const entry = data.entries.find((item) => item.id === issue.entryId)
           const busy = busyId === issue.id
           const isOpen = expanded[issue.id] ?? issues.length === 1
           const wikiChange = transition?.kind === 'wiki' ? transition.replacement : undefined
+          const editableQuote = canApplySuggestion(issue)
+          const change = editableQuote ? changeMiddle(issue.quote, issue.suggestion) : null
+          const marked = change?.before || issue.quote
+          const offset = change?.before ? change.offset : 0
+          const applying = transition?.kind === 'apply'
+          const manuscript = (
+            <>
+              <p className="wg-panels-label">원고</p>
+              <button
+                type="button"
+                aria-label={issue.quote}
+                onClick={() => focusIssue(issue)}
+                className="wg-panels-quote"
+              >
+                {issue.quote.slice(0, offset)}
+                {applying ? (
+                  <span className="wg-panels-revision">
+                    {change?.after && (
+                      <span aria-hidden="true" className="wg-panels-correction">
+                        {change.after}
+                      </span>
+                    )}
+                    {change?.before ? <ProofStrike>{marked}</ProofStrike> : marked}
+                  </span>
+                ) : (
+                  <ProofUnderline replayKey={checkedKey}>{marked}</ProofUnderline>
+                )}
+                {issue.quote.slice(offset + marked.length)}
+              </button>
+            </>
+          )
+          const evidence = (
+            <MarginNote>
+              {issue.wikiExcerpt && (
+                <span className={wikiChange ? 'wg-panels-wiki-previous' : undefined}>
+                  {issue.wikiExcerpt}
+                </span>
+              )}
+              {wikiChange && <span className="block">{wikiChange}</span>}
+            </MarginNote>
+          )
           return (
             <li
               key={issue.id}
@@ -373,9 +441,11 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
               data-linked={findings?.linkedId === issue.id}
               data-reading={findings?.readingId === issue.id}
               data-exit={transition?.kind}
-              className="b-writing-finding b-paper min-w-0"
-              data-arrival={checkedKey === 0 ? 'existing' : checkedKey % 2 ? 'odd' : 'even'}
-              style={{ '--b-i': Math.min(order, 5) } as CSSProperties}
+              className="wg-panels-row wg-panels-finding"
+              data-arrival={checkedKey % 2 ? 'odd' : 'even'}
+              aria-hidden={transition ? true : undefined}
+              inert={Boolean(transition)}
+              style={{ '--wg-panels-row': Math.min(order, 3) } as CSSProperties}
               onPointerEnter={(event) => {
                 if (event.pointerType === 'mouse') findings?.onLink(issue.id)
               }}
@@ -386,96 +456,74 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
               }}
             >
               <Disclosure
-                className="b-writing-finding-disclosure"
-                open={transition ? transition.kind === 'wiki' : isOpen}
+                className="wg-panels-finding-disclosure"
+                open={transition ? true : isOpen}
                 onOpenChange={(open) => {
                   if (!transition) setExpanded((previous) => ({ ...previous, [issue.id]: open }))
                 }}
                 title={
-                  <span className="flex items-center gap-2">
-                    <span className="b-number" aria-hidden="true">
-                      {order + 1}
-                    </span>
-                    <span>
-                      <span className="b-writing-finding-title block">
-                        {ISSUE_KIND_LABEL[issue.kind]}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        심각도 {SEVERITY_LABEL[issue.severity]}
-                      </span>
+                  <span className="wg-panels-finding-label">
+                    <span className="wg-panels-finding-title">{ISSUE_KIND_LABEL[issue.kind]}</span>
+                    <span className="wg-panels-severity">
+                      심각도 {SEVERITY_LABEL[issue.severity]}
                     </span>
                   </span>
                 }
               >
-                <div className="grid min-w-0 gap-3 p-3" inert={Boolean(transition)}>
-                  <div className="b-writing-evidence grid gap-1" data-step="manuscript">
-                    <p className="text-xs font-bold text-muted-foreground">원고</p>
-                    <button
-                      type="button"
-                      onClick={() => focusIssue(issue)}
-                      className="b-writing-quote rounded-field px-2 py-1 text-left wrap-anywhere"
-                    >
-                      <ProofUnderline>{issue.quote}</ProofUnderline>
-                    </button>
-                  </div>
-                  <div className="b-writing-evidence grid gap-1" data-step="wiki">
-                    <p className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
-                      위키 원문
-                      {entry && (
-                        <span
-                          tabIndex={0}
-                          className="b-tooltip-anchor b-writing-source"
-                          aria-describedby={`source-${issue.id}`}
-                        >
-                          <BookOpenIcon className="size-4" aria-hidden="true" />
-                          <span id={`source-${issue.id}`} role="tooltip" className="b-tooltip">
-                            {entry.name} 카드
-                          </span>
-                        </span>
-                      )}
-                    </p>
-                    {issue.wikiExcerpt ? (
-                      <blockquote className="b-writing-wiki-quote b-quote b-quote--wiki min-w-0 wrap-anywhere">
-                        <span className={wikiChange ? 'b-writing-wiki-strike' : undefined}>
-                          {issue.wikiExcerpt}
-                        </span>
-                        {wikiChange && <HandNote className="block">{wikiChange}</HandNote>}
-                      </blockquote>
-                    ) : (
+                <div className="wg-panels-finding-body">
+                  {issue.wikiExcerpt ? (
+                    <ProofPair manuscript={manuscript} note={evidence} className="wg-panels-pair" />
+                  ) : (
+                    <div className="wg-panels-single">
+                      {manuscript}
+                      <p className="wg-panels-label">위키 원문</p>
                       <p className="text-sm text-muted-foreground">근거 없음</p>
-                    )}
-                    {entry && (
+                    </div>
+                  )}
+                  {entry && (
+                    <div className="wg-panels-source">
                       <Link
                         href={`/works/${data.workId}/wiki/entries/${entry.id}`}
-                        className="b-link w-fit text-xs underline underline-offset-4"
+                        className="b-link"
                       >
-                        <span>{entry.name} 카드 열기</span>
+                        {entry.name} 카드 열기
                       </Link>
-                    )}
-                  </div>
-
-                  <div className="b-writing-evidence grid gap-2" data-step="proposal">
-                    {issue.explanation && (
-                      <p className="text-sm wrap-anywhere text-pretty">{issue.explanation}</p>
-                    )}
-                    {issue.suggestion && (
-                      <p className="rounded-field bg-cream/50 px-2.5 py-2 text-sm wrap-anywhere text-pretty">
-                        <strong>제안</strong> {issue.suggestion}
-                      </p>
-                    )}
-                  </div>
-
+                      <span
+                        tabIndex={0}
+                        className="b-tooltip-anchor wg-panels-source-icon"
+                        aria-describedby={`source-${issue.id}`}
+                      >
+                        <BookOpenIcon className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+                        <span id={`source-${issue.id}`} role="tooltip" className="b-tooltip">
+                          {entry.name} 카드
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                  {issue.explanation && (
+                    <p className="wg-panels-explanation">{issue.explanation}</p>
+                  )}
+                  {issue.suggestion && (
+                    <div className="wg-panels-proposal">
+                      <p className="wg-panels-label">제안</p>
+                      <p className="wg-panels-sentence">{issue.suggestion}</p>
+                    </div>
+                  )}
                   {editable && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {canApplySuggestion(issue) && (
-                        <Button size="sm" disabled={busy} onClick={() => void applyFix(issue)}>
+                    <div className="wg-panels-actions">
+                      {editableQuote && (
+                        <PopButton
+                          arrow={false}
+                          disabled={busy}
+                          onClick={() => void applyFix(issue)}
+                        >
                           제안대로 고치기
-                        </Button>
+                        </PopButton>
                       )}
                       {issue.factId && (
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="link"
                           disabled={busy}
                           onClick={() => setFixing(issue)}
                         >
@@ -484,7 +532,7 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
                       )}
                       <Button
                         size="sm"
-                        variant="ghost"
+                        variant="link"
                         disabled={busy}
                         onClick={() => void resolve(issue, 'dismissed')}
                       >
@@ -494,12 +542,6 @@ export function CheckPanel({ data, api, text, autoRun, findings }: CheckPanelPro
                   )}
                 </div>
               </Disclosure>
-              {transition && (
-                <div className="b-writing-resolved" aria-hidden="true">
-                  <span className="b-pass" />
-                  <span className="b-pass" />
-                </div>
-              )}
             </li>
           )
         })}

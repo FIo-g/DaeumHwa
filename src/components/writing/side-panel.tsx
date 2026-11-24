@@ -120,13 +120,13 @@ export function WritingSidePanel({
   }
 
   return (
-    <div data-chapter-position={position} className="b-writing-panel flex min-w-0 flex-col gap-3">
+    <div data-chapter-position={position} className="min-w-0">
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-3">
-        <div className="b-writing-tab-dock" data-overflow={railState.overflowing}>
+        <div className="wg-writing-tab-dock" data-overflow={railState.overflowing}>
           {railState.overflowing && (
             <button
               type="button"
-              className="b-writing-tab-edge"
+              className="wg-writing-tab-edge"
               aria-label="앞쪽 탭 보기"
               aria-disabled={!railState.before}
               onClick={() => railState.before && advanceTabs(-1)}
@@ -134,18 +134,17 @@ export function WritingSidePanel({
               <ChevronLeftIcon aria-hidden="true" />
             </button>
           )}
-          <div ref={tabRail} className="b-writing-tab-rail">
+          <div ref={tabRail} className="wg-writing-tab-rail">
             <TabsList
               ref={tabList}
-              variant="line"
               aria-label="작업 패널 탭"
-              className="b-writing-tabs flex w-max min-w-full max-w-none flex-nowrap justify-start gap-1 px-1 pb-1"
+              className="wg-writing-tabs flex w-max min-w-full max-w-none flex-nowrap"
             >
               {TABS.filter((item) => !data.trial || TRIAL_TABS.has(item.value)).map((item) => (
                 <TabsTrigger
                   key={item.value}
                   value={item.value}
-                  className="flex-none px-2 py-1"
+                  className="wg-writing-tab"
                   onFocus={(event) => revealTab(event.currentTarget)}
                 >
                   {item.label}
@@ -156,7 +155,7 @@ export function WritingSidePanel({
           {railState.overflowing && (
             <button
               type="button"
-              className="b-writing-tab-edge"
+              className="wg-writing-tab-edge"
               aria-label="뒤쪽 탭 보기"
               aria-disabled={!railState.after}
               onClick={() => railState.after && advanceTabs(1)}
@@ -166,27 +165,27 @@ export function WritingSidePanel({
           )}
         </div>
 
-        <TabsContent value="related" keepMounted className="b-writing-tab-content">
+        <TabsContent value="related" keepMounted>
           <RelatedCards data={data} api={api} text={text} />
         </TabsContent>
-        <TabsContent value="threads" keepMounted className="b-writing-tab-content">
+        <TabsContent value="threads" keepMounted>
           <OpenThreads data={data} api={api} />
         </TabsContent>
-        <TabsContent value="check" keepMounted className="b-writing-tab-content">
+        <TabsContent value="check" keepMounted>
           <CheckPanel data={data} api={api} text={text} autoRun={autoCheck} findings={findings} />
         </TabsContent>
         {!data.trial && (
           <>
-            <TabsContent value="proofread" keepMounted className="b-writing-tab-content">
+            <TabsContent value="proofread" keepMounted>
               <ProofreadPanel data={data} api={api} text={text} />
             </TabsContent>
-            <TabsContent value="comments" keepMounted className="b-writing-tab-content">
+            <TabsContent value="comments" keepMounted>
               <CommentsPanel data={data} api={api} text={text} />
             </TabsContent>
-            <TabsContent value="draft" keepMounted className="b-writing-tab-content">
+            <TabsContent value="draft" keepMounted>
               <DraftPanel data={data} api={api} />
             </TabsContent>
-            <TabsContent value="reader" keepMounted className="b-writing-tab-content">
+            <TabsContent value="reader" keepMounted>
               <ReaderPanel data={data} api={api} text={text} />
             </TabsContent>
           </>

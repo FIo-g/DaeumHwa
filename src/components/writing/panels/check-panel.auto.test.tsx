@@ -202,7 +202,11 @@ describe('CheckPanel autoRun', () => {
       </StrictMode>,
     )
 
-    await waitFor(() => expect(screen.getByText('그는 왼손에 검을 쥐었다.')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '그는 왼손에 검을 쥐었다.' })).toHaveTextContent(
+        '그는 왼손에 검을 쥐었다.',
+      ),
+    )
     expect(completed()).toBe(1)
     await waitFor(() => expect(screen.queryByText('점검 중')).toBeNull())
   })

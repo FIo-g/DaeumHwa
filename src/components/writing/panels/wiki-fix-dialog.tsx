@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { FactStatusSelect } from '@/components/app/fact-status-select'
+import { MarginNote, ProofPair, ProofUnderline } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,6 +18,7 @@ import type { FactStatus, IssueRow } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { resolveIssueAction } from '@/server/actions/issues'
 import { supersedeFactAction, updateFactAction } from '@/server/actions/wiki'
+import { changeMiddle } from '../text-ops'
 import type { WritingData } from '../types'
 
 type WikiFixDialogProps = {
@@ -76,10 +78,13 @@ export function WikiFixDialog({ issue, data, onClose, onDone }: WikiFixDialogPro
   }
 
   const canSubmit = content.trim().length > 0 && !busy
+  const change = issue.suggestion ? changeMiddle(issue.quote, issue.suggestion) : null
+  const marked = change?.before || issue.quote
+  const offset = change?.before ? change.offset : 0
 
   return (
     <Dialog open onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="wg-panels-wiki-dialog sm:max-w-md">
         <DialogHeader>
           <DialogTitle>위키 고치기</DialogTitle>
           <DialogDescription>
@@ -87,7 +92,24 @@ export function WikiFixDialog({ issue, data, onClose, onDone }: WikiFixDialogPro
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-2">
+        {issue.wikiExcerpt && (
+          <ProofPair
+            className="wg-panels-pair"
+            manuscript={
+              <>
+                <p className="wg-panels-label">원고</p>
+                <p className="wg-panels-sentence">
+                  {issue.quote.slice(0, offset)}
+                  <ProofUnderline>{marked}</ProofUnderline>
+                  {issue.quote.slice(offset + marked.length)}
+                </p>
+              </>
+            }
+            note={<MarginNote>{issue.wikiExcerpt}</MarginNote>}
+          />
+        )}
+
+        <div className="wg-panels-form">
           <Label htmlFor="wiki-fix-content">사실 내용</Label>
           <Textarea
             id="wiki-fix-content"
@@ -97,7 +119,7 @@ export function WikiFixDialog({ issue, data, onClose, onDone }: WikiFixDialogPro
           />
         </div>
 
-        <div className="grid gap-2">
+        <div className="wg-panels-form">
           <p className="text-sm font-medium">새 사실의 상태 (이 회차부터 바뀜일 때)</p>
           <FactStatusSelect value={status} onChange={setStatus} />
         </div>

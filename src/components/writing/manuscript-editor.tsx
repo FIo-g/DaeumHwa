@@ -1,7 +1,7 @@
 'use client'
 
 import { type RefObject, useEffect, useLayoutEffect, useState } from 'react'
-import { ReadingProgress, ScanLine, usePrefersReducedMotion } from '@/components/motion'
+import { ReadingProgress, ScanLine, Sheet } from '@/components/motion'
 import { Input } from '@/components/ui/input'
 import { countChars } from '@/lib/korean/chars'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,7 @@ import { HighlightLayer, isProofHighlight, MANUSCRIPT_TEXT_CLASS } from './highl
 import type { CheckState, Highlight, ProofRevision, SelectionRange } from './types'
 
 export type ManuscriptEditorProps = {
+  page?: number
   title: string
   body: string
   onTitleChange(value: string): void
@@ -40,6 +41,7 @@ type Layer = { text: string; highlights: Highlight[] }
  * fingers. They catch up on compositionend.
  */
 export function ManuscriptEditor({
+  page,
   title,
   body,
   onTitleChange,
@@ -60,7 +62,6 @@ export function ManuscriptEditor({
   onIssueFocus,
   onShowIssue,
 }: ManuscriptEditorProps) {
-  const reduced = usePrefersReducedMotion()
   const [composing, setComposing] = useState(false)
   const [layer, setLayer] = useState<Layer>({ text: body, highlights })
 
@@ -82,8 +83,18 @@ export function ManuscriptEditor({
       const el = textareaRef.current
       if (el) fit(el)
     }
+    const fonts = document.fonts
+    let active = true
+    void fonts?.ready.then(() => {
+      if (active) onResize()
+    })
+    fonts?.addEventListener('loadingdone', onResize)
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    return () => {
+      active = false
+      fonts?.removeEventListener('loadingdone', onResize)
+      window.removeEventListener('resize', onResize)
+    }
   }, [textareaRef])
 
   const proof = layer.highlights.filter(isProofHighlight)
@@ -109,12 +120,14 @@ export function ManuscriptEditor({
   }
 
   return (
-    <article
-      className="b-writing-paper b-paper mx-auto flex w-full max-w-[48rem] flex-col"
+    <Sheet
+      as="article"
+      page={page === undefined ? undefined : String(page).padStart(2, '0')}
+      className="wg-writing-paper"
       aria-label="회차 원고"
     >
-      <ReadingProgress className="b-writing-progress" />
-      <header className="b-writing-paper-head flex flex-wrap items-center gap-2">
+      <ReadingProgress className="wg-writing-progress" />
+      <header className="wg-writing-paper-head">
         <Input
           aria-label="회차 제목"
           value={title}
@@ -122,20 +135,16 @@ export function ManuscriptEditor({
           onChange={(e) => onTitleChange(e.target.value)}
           onCompositionStart={() => onComposingChange(true)}
           onCompositionEnd={() => onComposingChange(false)}
-          className="b-writing-title-input h-11 w-auto min-w-0 flex-1 basis-36 border-0 bg-transparent text-lg font-bold"
+          className="wg-writing-title-input h-auto min-w-0 flex-1 basis-36 font-heading text-[length:clamp(1.3125rem,2vw,1.5rem)] leading-tight font-bold"
         />
         {onShowIssue && openProof.length > 0 && !check?.checking && (
-          <div
-            role="group"
-            aria-label="원고의 지적 번호"
-            className="flex flex-wrap items-center gap-1"
-          >
-            <span className="pr-1 text-xs font-bold">지적</span>
+          <div role="group" aria-label="원고의 지적 번호" className="wg-writing-proof-nav">
+            <span className="text-sm">지적</span>
             {openProof.map(({ id, order }) => (
               <button
                 key={id}
                 type="button"
-                className="b-writing-proof-jump b-number"
+                className="wg-writing-proof-jump font-mono"
                 aria-label={`지적 ${(order ?? 0) + 1}번 보기`}
                 onClick={() => onShowIssue(id)}
                 onFocus={() => onIssueFocus?.(id)}
@@ -149,7 +158,7 @@ export function ManuscriptEditor({
           </div>
         )}
       </header>
-      <div className="relative">
+      <div className="wg-writing-surface">
         <HighlightLayer
           text={layer.text}
           highlights={layer.highlights}
@@ -161,7 +170,7 @@ export function ManuscriptEditor({
         <textarea
           ref={textareaRef}
           aria-label="원고 본문"
-          rows={12}
+          rows={10}
           value={body}
           readOnly={readOnly}
           spellCheck={false}
@@ -200,22 +209,18 @@ export function ManuscriptEditor({
             onIssueHover(hit?.dataset.proofId ?? null)
           }}
           onPointerLeave={() => onIssueHover?.(null)}
-          className={cn(
-            MANUSCRIPT_TEXT_CLASS,
-            'relative block resize-none overflow-hidden bg-transparent outline-none caret-foreground focus-visible:ring-0',
-            readOnly && 'cursor-default',
-          )}
+          className={cn(MANUSCRIPT_TEXT_CLASS, 'wg-writing-input', readOnly && 'cursor-default')}
         />
-        <div className="b-writing-scan-track" aria-hidden="true">
-          <div className="b-writing-scan-window">
-            <ScanLine active={Boolean(check?.checking && !reduced)} className="b-writing-scan" />
+        <div className="wg-writing-scan-track" aria-hidden="true">
+          <div className="wg-writing-scan-window">
+            <ScanLine active={Boolean(check?.checking)} className="wg-writing-scan" />
           </div>
         </div>
       </div>
-      <p className="b-writing-character-count text-right text-xs text-muted-foreground">
+      <p className="wg-writing-character-count font-mono text-right text-xs text-muted-ink">
         공백 포함 {counts.withSpaces}자 · 제외 {counts.withoutSpaces}자 · 목표 대비 {percent}%
       </p>
-    </article>
+    </Sheet>
   )
 }
 

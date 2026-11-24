@@ -1,9 +1,9 @@
 'use client'
 
 import type { CSSProperties } from 'react'
+import { EmptyState } from '@/components/app/empty-state'
 import type { VersionSource } from '@/db/types'
 import { formatKoreanDateTime } from '@/lib/dates'
-import { cn } from '@/lib/utils'
 
 /** One saved version of a chapter, without its body. */
 export type VersionListEntry = {
@@ -33,40 +33,46 @@ type VersionListProps = {
 /** Newest first. Each row is a button, so the list works with the keyboard. */
 export function VersionList({ versions, currentVersion, selectedId, onSelect }: VersionListProps) {
   if (versions.length === 0) {
-    return <p className="text-sm text-muted-foreground">저장된 버전이 없어요.</p>
+    return <EmptyState title="저장된 버전이 없어요." />
   }
   return (
-    <ul className="b-paper grid gap-2 bg-sand/45 p-3" aria-label="버전 목록">
+    <ul className="wg-chapters-versions" aria-label="버전 목록">
       {versions.map((v, index) => {
         const selected = v.id === selectedId
         return (
           <li
             key={v.id}
-            className="b-writing-version-row"
-            style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+            className="wg-chapters-version-row"
+            style={{ '--wg-chapters-row': Math.min(index, 4) } as CSSProperties}
           >
             <button
               type="button"
               aria-pressed={selected}
               onClick={() => onSelect(v.id)}
-              className={cn(
-                'flex w-full flex-col gap-0.5 rounded-field border-2 border-ink bg-paper px-3 py-2 text-left text-sm transition-colors hover:bg-sand focus-visible:bg-sand',
-                selected && 'bg-kraft underline decoration-2 hover:bg-kraft focus-visible:bg-kraft',
-              )}
+              className="wg-chapters-version-button"
             >
-              <span className="flex flex-wrap items-center gap-2 font-bold">
-                <span className="b-writing-row-label">버전 {v.version}</span>
+              <span className="wg-chapters-version-heading flex flex-wrap items-baseline gap-x-2">
+                <span className="wg-chapters-version-label font-medium">
+                  버전 <span className="font-mono">{v.version}</span>
+                </span>
                 {v.version === currentVersion && (
-                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-normal text-secondary-foreground">
-                    현재
-                  </span>
+                  <span className="text-xs text-muted-ink">현재</span>
                 )}
               </span>
-              <span className="text-xs text-muted-foreground">
-                {VERSION_SOURCE_LABEL[v.source]} · {formatKoreanDateTime(v.updatedAt)} · 공백 포함{' '}
-                {v.charCount}자
+              <span className="text-xs leading-relaxed text-muted-ink">
+                {VERSION_SOURCE_LABEL[v.source]} ·{' '}
+                <time className="font-mono whitespace-nowrap" dateTime={v.updatedAt.toISOString()}>
+                  {formatKoreanDateTime(v.updatedAt)}
+                </time>
+                {' · '}
+                <span className="whitespace-nowrap">
+                  공백 포함 <span className="font-mono">{v.charCount}자</span>
+                </span>
               </span>
             </button>
+            <span className="wg-chapters-line-number" aria-hidden="true">
+              {String(index + 1).padStart(2, '0')}
+            </span>
           </li>
         )
       })}

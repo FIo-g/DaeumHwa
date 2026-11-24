@@ -4,7 +4,7 @@ import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
-import { Badge } from '@/components/ui/badge'
+import { GridTitle } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -136,12 +136,13 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
   }
 
   return (
-    <section aria-label="코멘트" className="grid gap-4">
+    <section aria-label="코멘트" className="wg-panels-section">
+      <GridTitle>코멘트</GridTitle>
       {canComment && (
-        <div className="grid gap-3 rounded-lg border p-3">
+        <div className="wg-panels-form">
           {selection ? (
             <>
-              <p className="rounded-md bg-muted/60 p-2 text-sm leading-6">“{selection.text}”</p>
+              <p className="wg-panels-sentence">“{selection.text}”</p>
               <Label htmlFor="comment-body">코멘트 내용</Label>
               <Textarea
                 id="comment-body"
@@ -189,42 +190,38 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
 
       {data.comments.length === 0 && <EmptyState title="아직 코멘트가 없어요." />}
 
-      <ul className="grid gap-3">
+      <ul className="wg-panels-list">
         {data.comments.map((comment, index) => {
           const resolved = comment.status === 'resolved'
           return (
             <li
               key={comment.id}
-              style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
-              className={
-                resolved
-                  ? 'b-writing-panel-card b-paper grid gap-2 p-3 text-muted-foreground'
-                  : 'b-writing-panel-card b-paper grid gap-2 p-3'
-              }
+              style={{ '--wg-panels-row': Math.min(index, 3) } as CSSProperties}
+              className="wg-panels-row grid gap-2"
             >
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{comment.authorName}</span>
-                <span>{formatKoreanDateTime(comment.createdAt)}</span>
-                {resolved && <Badge variant="secondary">해결됨</Badge>}
+                <span className="font-mono">{formatKoreanDateTime(comment.createdAt)}</span>
+                {resolved && (
+                  <span className="b-state" data-mark="dot">
+                    해결됨
+                  </span>
+                )}
               </div>
               {comment.quote && (
-                <button
-                  type="button"
-                  onClick={() => focus(comment)}
-                  className="rounded-md bg-muted/60 p-2 text-left text-sm leading-6 hover:bg-muted"
-                >
+                <button type="button" onClick={() => focus(comment)} className="wg-panels-quote">
                   “{comment.quote}”
                 </button>
               )}
               <p className="whitespace-pre-wrap text-sm leading-6">{comment.body}</p>
 
               {comment.replies.length > 0 && (
-                <ul className="grid gap-2 border-t pt-3 pl-3">
+                <ul className="wg-panels-replies">
                   {comment.replies.map((reply) => (
                     <li key={reply.id} className="grid gap-1">
                       <div className="text-xs text-muted-foreground">
                         <span className="font-medium text-foreground">{reply.authorName}</span>{' '}
-                        {formatKoreanDateTime(reply.createdAt)}
+                        <span className="font-mono">{formatKoreanDateTime(reply.createdAt)}</span>
                       </div>
                       <p className="whitespace-pre-wrap text-sm leading-6">{reply.body}</p>
                     </li>
@@ -261,7 +258,7 @@ export function CommentsPanel({ data, api, text }: CommentsPanelProps) {
               )}
 
               {canComment && replyTo === comment.id && (
-                <div className="grid gap-2">
+                <div className="wg-panels-replies">
                   <Label htmlFor={`reply-${comment.id}`}>답글 내용</Label>
                   <Textarea
                     id={`reply-${comment.id}`}

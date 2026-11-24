@@ -102,7 +102,7 @@ function ApprovalQueue({
       {items !== null && items.length === 0 && <EmptyState title="승인 대기 중인 후보가 없어요." />}
 
       {items !== null && items.length > 0 && (
-        <div className="grid gap-3">
+        <div className="wg-panels-approval-list">
           {items.map((item) => (
             <ProposalCard
               key={item.id}

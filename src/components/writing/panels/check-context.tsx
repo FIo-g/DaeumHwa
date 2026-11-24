@@ -2,8 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, type JSX } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Disclosure } from '@/components/motion'
 import { runAction } from '@/lib/client/run-action'
 import {
   ENTRY_KIND_LABEL,
@@ -35,8 +34,8 @@ export function CheckContext(props: {
     setFailed(false)
   }
 
-  function toggle() {
-    if (open) {
+  function toggle(next: boolean) {
+    if (!next) {
       setOpen(false)
       return
     }
@@ -68,14 +67,14 @@ export function CheckContext(props: {
   const loading = view === null && !failed
 
   return (
-    <div className="grid gap-2">
-      <div>
-        <Button variant="outline" size="sm" aria-expanded={open} onClick={toggle}>
-          {open ? '접기' : 'AI가 참고한 설정 보기'}
-        </Button>
-      </div>
+    <Disclosure
+      className="wg-panels-context"
+      open={open}
+      onOpenChange={toggle}
+      title={open ? '접기' : 'AI가 참고한 설정 보기'}
+    >
       {open && (
-        <section aria-label="AI가 참고한 설정" className="b-paper grid min-w-0 gap-3 p-3">
+        <section aria-label="AI가 참고한 설정" className="wg-panels-context-body">
           {loading ? (
             <p className="text-sm text-muted-foreground">불러오는 중…</p>
           ) : failed || !view ? (
@@ -86,7 +85,7 @@ export function CheckContext(props: {
                 {`회차 점검은 저장된 원고에 나온 카드와 항상 넣기로 정한 카드, ${position}화에 유효한 사실, 열린 떡밥, 앞 회차 요약만 AI에 보내요.`}
               </p>
               <div className="grid gap-2">
-                <h3 className="text-sm font-semibold">
+                <h3 className="wg-panels-subhead">
                   {`설정 카드 ${view.entries.length}개 (전체 ${view.totalEntries}개 중)`}
                 </h3>
                 {view.entries.length === 0 ? (
@@ -96,15 +95,15 @@ export function CheckContext(props: {
                 ) : (
                   <ul className="grid gap-2">
                     {view.entries.map((entry) => (
-                      <li key={entry.id} className="grid gap-1">
+                      <li key={entry.id} className="wg-panels-row grid gap-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <Link
                             href={`/works/${workId}/wiki/entries/${entry.id}`}
-                            className="text-sm font-medium underline underline-offset-4"
+                            className="b-link font-heading text-sm font-bold"
                           >
                             {entry.name}
                           </Link>
-                          <Badge variant="outline">{ENTRY_KIND_LABEL[entry.kind]}</Badge>
+                          <span className="wg-panels-kind">{ENTRY_KIND_LABEL[entry.kind]}</span>
                         </div>
                         {entry.summary !== '' && (
                           <p className="text-xs text-muted-foreground">{entry.summary}</p>
@@ -120,8 +119,19 @@ export function CheckContext(props: {
                                 key={fact.id}
                                 className="flex flex-wrap items-center gap-2 text-sm"
                               >
-                                <span className="text-canon">{fact.content}</span>
-                                <Badge variant="outline">{FACT_STATUS_LABEL[fact.status]}</Badge>
+                                <span className="wg-panels-wiki-text">{fact.content}</span>
+                                <span
+                                  className="b-state"
+                                  data-mark={
+                                    fact.status === 'confirmed'
+                                      ? 'dot'
+                                      : fact.status === 'assumed'
+                                        ? 'ring'
+                                        : 'dash'
+                                  }
+                                >
+                                  {FACT_STATUS_LABEL[fact.status]}
+                                </span>
                                 {validity && (
                                   <span className="text-xs text-muted-foreground">{validity}</span>
                                 )}
@@ -141,7 +151,7 @@ export function CheckContext(props: {
               </div>
               {view.threads.length > 0 && (
                 <div className="grid gap-2">
-                  <h3 className="text-sm font-semibold">{`열린 떡밥 ${view.threads.length}개`}</h3>
+                  <h3 className="wg-panels-subhead">{`열린 떡밥 ${view.threads.length}개`}</h3>
                   <ul className="grid gap-1">
                     {view.threads.map((thread) => (
                       <li key={thread.id} className="flex flex-wrap items-center gap-2 text-sm">
@@ -154,7 +164,7 @@ export function CheckContext(props: {
                             {`회수 목표 ${thread.targetPosition}화`}
                           </span>
                         )}
-                        {thread.overdue && <Badge variant="secondary">회수 목표 지남</Badge>}
+                        {thread.overdue && <span className="wg-panels-kind">회수 목표 지남</span>}
                       </li>
                     ))}
                   </ul>
@@ -162,7 +172,7 @@ export function CheckContext(props: {
               )}
               {view.previousSummaries.length > 0 && (
                 <div className="grid gap-1">
-                  <h3 className="text-sm font-semibold">앞 회차 요약</h3>
+                  <h3 className="wg-panels-subhead">앞 회차 요약</h3>
                   <ul className="grid gap-1">
                     {view.previousSummaries.map((summary) => (
                       <li key={summary.position} className="text-sm">
@@ -181,6 +191,6 @@ export function CheckContext(props: {
           )}
         </section>
       )}
-    </div>
+    </Disclosure>
   )
 }

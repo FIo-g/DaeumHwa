@@ -252,7 +252,7 @@ describe('CheckPanel', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  it('hides the previous count, findings and proof marks during a recheck, then restores them on cancel', async () => {
+  it('hides the previous count, disables findings and removes proof marks during a recheck, then restores them on cancel', async () => {
     fetchMock.mockImplementation(
       (_url, init) =>
         new Promise<Response>((_resolve, reject) => {
@@ -261,20 +261,22 @@ describe('CheckPanel', () => {
           )
         }),
     )
+    const count = () => screen.queryByText((_, element) => element?.textContent === '열린 지적 1건')
     const api = makeApi()
     render(<CheckPanel data={makeData()} api={api} text={`안녕.\n${QUOTE}`} />)
-    expect(screen.getByText('열린 지적 1건')).toBeVisible()
+    expect(count()).toBeVisible()
     expect(screen.getByRole('button', { name: '제안대로 고치기' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '회차 점검' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
 
-    expect(screen.queryByText('열린 지적 1건')).toBeNull()
+    expect(count()).toBeNull()
     expect(screen.queryByRole('button', { name: '제안대로 고치기' })).toBeNull()
+    expect(screen.getByText(WIKI)).toBeVisible()
     expect(api.setHighlights).toHaveBeenLastCalledWith('check', [])
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
 
     expect(await screen.findByRole('button', { name: '제안대로 고치기' })).toBeVisible()
-    expect(screen.getByText('열린 지적 1건')).toBeVisible()
+    expect(count()).toBeVisible()
     expect(api.setHighlights).toHaveBeenLastCalledWith('check', [
       expect.objectContaining({ id: 'issue-1' }),
     ])
@@ -308,7 +310,7 @@ describe('CheckPanel', () => {
 
     expect(screen.getByText('원고')).toBeTruthy()
     expect(screen.getByText('위키 원문')).toBeTruthy()
-    expect(screen.getByText(QUOTE)).toBeTruthy()
+    expect(screen.getByRole('button', { name: QUOTE })).toHaveTextContent(QUOTE)
     expect(screen.getByText(WIKI)).toBeTruthy()
   })
 
