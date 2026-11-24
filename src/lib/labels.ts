@@ -10,6 +10,7 @@ import type {
   FactSourceType,
   FactStatus,
   Importance,
+  ProposerType,
   IssueKind,
   IssueStatus,
   ProposalSource,
@@ -104,6 +105,11 @@ export const IMPORTANCE_LABEL: Record<Importance, string> = {
   low: '낮음',
   medium: '보통',
   high: '높음',
+}
+
+export const CREATOR_TYPE_LABEL: Record<ProposerType, string> = {
+  author: '작가',
+  ai: 'AI',
 }
 
 export const ROLE_LABEL: Record<Role, string> = {
