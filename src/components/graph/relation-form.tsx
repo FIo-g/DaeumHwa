@@ -84,10 +84,10 @@ export function RelationForm({
       }
       const saved = relation
         ? await runAction(updateRelationAction({ relationId: relation.id, ...fields }), {
-            success: '관계를 고쳤습니다.',
+            success: '관계를 고쳤어요.',
           })
         : await runAction(createRelationAction({ workId, ...fields }), {
-            success: '관계를 추가했습니다.',
+            success: '관계를 추가했어요.',
           })
       if (saved) {
         router.refresh()
@@ -210,7 +210,7 @@ export function RelationForm({
       </div>
 
       {formError && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-ink">
           {formError}
         </p>
       )}

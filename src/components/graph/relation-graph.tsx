@@ -6,6 +6,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import type { Core, ElementDefinition, LayoutOptions, StylesheetStyle } from 'cytoscape'
 import { ConfirmButton } from '@/components/app/confirm-button'
 import { EmptyState } from '@/components/app/empty-state'
+import { PopButton } from '@/components/motion'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,6 +19,7 @@ import { ENTRY_KINDS, type EntryKind, type Role } from '@/db/types'
 import { runAction } from '@/lib/client/run-action'
 import { ENTRY_KIND_LABEL } from '@/lib/labels'
 import { archiveRelationAction } from '@/server/actions/relations'
+import { readMotionDuration } from '@/components/wiki/wiki-motion'
 import {
   type GraphEdge,
   type GraphNode,
@@ -28,7 +30,13 @@ import {
   visibleGraph,
 } from './graph-model'
 import { GraphControls } from './graph-controls'
-import { ENTRY_KIND_MARK, GRAPH_FONT, GRAPH_INK, type KindShape, RELATION_INK } from './graph-style'
+import {
+  ENTRY_KIND_MARK,
+  GRAPH_FONT,
+  type GraphPalette,
+  type KindShape,
+  readGraphPalette,
+} from './graph-style'
 import { KindIcon } from './kind-icon'
 import { RelationForm } from './relation-form'
 
@@ -83,71 +91,82 @@ function circleLayout(nodes: GraphNode[], edges: GraphEdge[]): LayoutOptions {
   }
 }
 
-const GRAPH_STYLE: StylesheetStyle[] = [
-  {
-    selector: 'node',
-    style: {
-      shape: (node) => node.data('shape'),
-      width: 'data(size)',
-      height: 'data(size)',
-      'background-color': 'data(fill)',
-      'border-width': 'data(border)',
-      'border-color': 'data(ink)',
-      label: 'data(name)',
-      'font-family': GRAPH_FONT,
-      'font-size': 12,
-      'font-weight': 500,
-      color: GRAPH_INK.graphite,
-      'text-valign': 'bottom',
-      'text-margin-y': 5,
-      'text-background-color': GRAPH_INK.sheet,
-      'text-background-opacity': 0.9,
-      'text-background-padding': '1px',
-      'overlay-color': GRAPH_INK.graphite,
-      'overlay-padding': 4,
+function graphStyle(palette: GraphPalette, step: number): StylesheetStyle[] {
+  return [
+    {
+      selector: 'node',
+      style: {
+        shape: (node) => node.data('shape'),
+        width: 'data(size)',
+        height: 'data(size)',
+        'background-color': 'data(fill)',
+        'border-width': 'data(border)',
+        'border-color': 'data(ink)',
+        label: 'data(name)',
+        'font-family': GRAPH_FONT,
+        'font-size': 12,
+        'font-weight': 500,
+        color: palette.ink,
+        'text-valign': 'bottom',
+        'text-margin-y': 5,
+        'text-background-color': palette.paper,
+        'text-background-opacity': 0.9,
+        'text-background-padding': '1px',
+        'overlay-color': palette.ink,
+        'overlay-padding': 4,
+      },
     },
-  },
-  {
-    selector: 'edge',
-    style: {
-      label: 'data(label)',
-      width: 1.25,
-      'line-color': RELATION_INK,
-      'target-arrow-color': RELATION_INK,
-      'target-arrow-shape': 'none',
-      'arrow-scale': 0.8,
-      'curve-style': 'bezier',
-      'font-family': GRAPH_FONT,
-      'font-size': 11,
-      color: GRAPH_INK.muted,
-      'text-background-color': GRAPH_INK.sheet,
-      'text-background-opacity': 0.95,
-      'text-background-padding': '2px',
-      'overlay-color': GRAPH_INK.graphite,
+    {
+      selector: 'edge',
+      style: {
+        label: 'data(label)',
+        width: 1.25,
+        'line-color': palette.ink,
+        'target-arrow-color': palette.ink,
+        'target-arrow-shape': 'none',
+        'arrow-scale': 0.8,
+        'curve-style': 'bezier',
+        'font-family': GRAPH_FONT,
+        'font-size': 11,
+        color: palette.muted,
+        'text-background-color': palette.paper,
+        'text-background-opacity': 0.95,
+        'text-background-padding': '2px',
+        'overlay-color': palette.ink,
+      },
     },
-  },
-  {
-    selector: 'edge[?directed]',
-    style: { 'target-arrow-shape': 'triangle' },
-  },
-  // Blue pencil marks focus only: the card or relation the side panel is showing.
-  {
-    selector: 'node:selected',
-    style: { 'border-width': 2, 'border-color': GRAPH_INK.canon },
-  },
-  {
-    selector: 'edge:selected',
-    style: {
-      width: 2,
-      'line-color': GRAPH_INK.canon,
-      'target-arrow-color': GRAPH_INK.canon,
-      color: GRAPH_INK.canon,
+    {
+      selector: 'edge[?directed]',
+      style: { 'target-arrow-shape': 'triangle' },
     },
-  },
-  { selector: '.hidden', style: { display: 'none' } },
-]
+    {
+      selector: 'node.chosen',
+      style: {
+        'background-color': palette.selection,
+        'border-width': 2,
+        'border-color': palette.ink,
+      },
+    },
+    { selector: 'edge.chosen', style: { width: 3 } },
+    { selector: 'edge.connected', style: { width: 2.5 } },
+    { selector: '.dimmed', style: { opacity: 0.23 } },
+    { selector: '.hidden', style: { opacity: 0, events: 'no' } },
+    {
+      selector: '.animated',
+      style: {
+        'transition-property': 'opacity, width, background-color',
+        'transition-duration': step,
+        'transition-timing-function': 'ease-out',
+      },
+    },
+  ]
+}
 
-function toElements(nodes: GraphNode[], edges: GraphEdge[]): ElementDefinition[] {
+function toElements(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  palette: GraphPalette,
+): ElementDefinition[] {
   return [
     ...nodes.map((n) => {
       const mark = ENTRY_KIND_MARK[n.kind]
@@ -158,8 +177,8 @@ function toElements(nodes: GraphNode[], edges: GraphEdge[]): ElementDefinition[]
           shape: CY_SHAPE[mark.shape],
           // Pointed shapes look smaller than a circle of the same box.
           size: mark.shape === 'circle' || mark.shape === 'square' ? 13 : 16,
-          fill: mark.filled ? mark.ink : GRAPH_INK.sheet,
-          ink: mark.ink,
+          fill: mark.filled ? palette[mark.ink] : palette.paper,
+          ink: palette[mark.ink],
           border: mark.filled ? 0 : 1.5,
         },
       }
@@ -176,17 +195,33 @@ function toElements(nodes: GraphNode[], edges: GraphEdge[]): ElementDefinition[]
   ]
 }
 
-function applyVisibility(
+function applyGraphState(
   cy: Core | null,
   visible: { nodeIds: Set<string>; edgeIds: Set<string> },
-): void {
+  selection: Selection,
+) {
   if (!cy) return
+  const active =
+    selection && (selection.type === 'node' ? visible.nodeIds : visible.edgeIds).has(selection.id)
+      ? selection
+      : null
+  const focused = active ? cy.getElementById(active.id) : null
+  const connecting = focused?.isNode()
+    ? focused.connectedEdges().filter((edge) => visible.edgeIds.has(edge.id()))
+    : focused
+  const relatedNodes = connecting?.connectedNodes().union(focused ?? cy.collection())
+
   cy.batch(() => {
-    cy.nodes().forEach((n) => {
-      n.toggleClass('hidden', !visible.nodeIds.has(n.id()))
+    cy.nodes().forEach((node) => {
+      node.toggleClass('hidden', !visible.nodeIds.has(node.id()))
+      node.toggleClass('chosen', active?.type === 'node' && node.id() === active.id)
+      node.toggleClass('dimmed', Boolean(active && !relatedNodes?.contains(node)))
     })
-    cy.edges().forEach((e) => {
-      e.toggleClass('hidden', !visible.edgeIds.has(e.id()))
+    cy.edges().forEach((edge) => {
+      edge.toggleClass('hidden', !visible.edgeIds.has(edge.id()))
+      edge.toggleClass('chosen', active?.type === 'edge' && edge.id() === active.id)
+      edge.toggleClass('connected', Boolean(active?.type === 'node' && connecting?.contains(edge)))
+      edge.toggleClass('dimmed', Boolean(active && !connecting?.contains(edge)))
     })
   })
 }
@@ -220,27 +255,31 @@ export function RelationGraph({
     () => visibleGraph({ nodes, edges }, showAll ? null : position, hiddenKinds),
     [nodes, edges, showAll, position, hiddenKinds],
   )
-  const visibleRef = useRef(visible)
+  const graphStateRef = useRef({ visible, selection })
 
   useEffect(() => {
-    visibleRef.current = visible
-    applyVisibility(cyRef.current, visible)
-  }, [visible])
+    graphStateRef.current = { visible, selection }
+    applyGraphState(cyRef.current, visible, selection)
+  }, [visible, selection])
 
   // Mount cytoscape once per data set. The dynamic import keeps it out of the server render.
   useEffect(() => {
     let cancelled = false
     let cy: Core | null = null
+    let cleanUpMotion: (() => void) | undefined
     async function mount() {
       const container = containerRef.current
       if (!container) return
       const { default: cytoscape } = await import('cytoscape')
       if (cancelled) return
+      const step = readMotionDuration(container, '--b-step', 260)
+      const palette = readGraphPalette(container)
       cy = cytoscape({
         container,
-        elements: toElements(nodes, edges),
-        style: GRAPH_STYLE,
+        elements: toElements(nodes, edges, palette),
+        style: graphStyle(palette, step),
         maxZoom: 3,
+        autounselectify: true,
         layout: circleLayout(nodes, edges),
       })
       cy.on('tap', 'node', (e) => setSelection({ type: 'node', id: e.target.id() }))
@@ -249,12 +288,19 @@ export function RelationGraph({
         if (e.target === cy) setSelection(null)
       })
       cyRef.current = cy
-      applyVisibility(cy, visibleRef.current)
+      const state = graphStateRef.current
+      applyGraphState(cy, state.visible, state.selection)
+      const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+      const syncMotion = () => cy?.elements().toggleClass('animated', !motion.matches)
+      syncMotion()
+      motion.addEventListener('change', syncMotion)
+      cleanUpMotion = () => motion.removeEventListener('change', syncMotion)
     }
     void mount()
     return () => {
       cancelled = true
       cyRef.current = null
+      cleanUpMotion?.()
       cy?.destroy()
     }
   }, [nodes, edges])
@@ -295,7 +341,7 @@ export function RelationGraph({
 
   async function archiveEdge(relationId: string) {
     const saved = await runAction(archiveRelationAction({ relationId }), {
-      success: '관계를 보관했습니다.',
+      success: '관계를 보관했어요.',
     })
     if (saved) {
       setSelection(null)
@@ -306,48 +352,46 @@ export function RelationGraph({
   const formKey = `${dialog ?? 'none'}-${selectedEdge?.id ?? selectedNode?.id ?? 'new'}`
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          {intro}
-          {(actions || canEdit) && (
+    <div className="flex min-w-0 flex-col gap-4">
+      <GraphControls
+        intro={intro}
+        actions={
+          (actions || canEdit) && (
             <div className="flex flex-wrap items-center gap-2">
               {actions}
-              {canEdit && <Button onClick={() => setDialog('create')}>관계 추가</Button>}
+              {canEdit && <PopButton onClick={() => setDialog('create')}>관계 추가</PopButton>}
             </div>
-          )}
-        </div>
-        <GraphControls
-          latestPosition={latestPosition}
-          position={position}
-          onPositionChange={setPosition}
-          showAll={showAll}
-          onShowAllChange={setShowAll}
-          kinds={kinds}
-          hiddenKinds={hiddenKinds}
-          onToggleKind={toggleKind}
-        />
-      </div>
+          )
+        }
+        latestPosition={latestPosition}
+        position={position}
+        onPositionChange={setPosition}
+        showAll={showAll}
+        onShowAllChange={setShowAll}
+        kinds={kinds}
+        hiddenKinds={hiddenKinds}
+        onToggleKind={toggleKind}
+      />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex flex-col gap-2">
+      <div className="b-wiki-graph-arrive grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex min-w-0 flex-col gap-2">
           <div
             ref={containerRef}
             role="img"
             aria-label="관계 그래프"
-            className="h-[60vh] min-h-72 w-full rounded-sm border border-rule bg-sheet"
+            className="h-[clamp(20rem,55vh,38rem)] w-full min-w-0 overflow-hidden rounded-card border-2 border-ink bg-paper"
           />
-          <p className="text-xs text-muted-foreground">
-            카드를 누르면 카드 정보를, 선을 누르면 관계를 봅니다.
-          </p>
+          {visibleNodes.length === 0 && (
+            <p role="status" className="b-label b-muted">
+              조건에 맞는 카드가 없어요.
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">카드나 선을 눌러 자세히 보세요.</p>
         </div>
 
-        <aside
-          aria-label="선택한 항목"
-          className="flex flex-col gap-4 rounded-sm border border-rule bg-sheet p-4 text-sm"
-        >
+        <aside aria-label="선택한 항목" className="b-wiki-graph-panel text-sm">
           {selectedNode && (
-            <div className="flex flex-col gap-2">
+            <div key={selectedNode.id} className="b-wiki-graph-selection flex flex-col gap-2">
               <p className="text-base font-medium">{selectedNode.name}</p>
               <p className="text-muted-foreground">
                 {ENTRY_KIND_LABEL[selectedNode.kind]} ·{' '}
@@ -365,7 +409,7 @@ export function RelationGraph({
           )}
 
           {selectedEdge && (
-            <div className="flex flex-col gap-2">
+            <div key={selectedEdge.id} className="b-wiki-graph-selection flex flex-col gap-2">
               <p className="text-base font-medium">
                 {nodeById.get(selectedEdge.source)?.name} —{' '}
                 {nodeById.get(selectedEdge.target)?.name}
@@ -384,7 +428,7 @@ export function RelationGraph({
                   <ConfirmButton
                     size="sm"
                     title="이 관계를 보관할까요?"
-                    description="보관해도 기록은 남고, 그래프에서만 사라집니다."
+                    description="기록은 남아요. 그래프에서만 빠져요."
                     confirmLabel="보관"
                     onConfirm={() => archiveEdge(selectedEdge.id)}
                   >
@@ -406,7 +450,7 @@ export function RelationGraph({
                 <li key={n.id}>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left hover:bg-muted aria-pressed:bg-muted"
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left b-wiki-graph-option hover:bg-leaf focus-visible:bg-leaf aria-pressed:bg-apricot"
                     aria-pressed={selectedNode?.id === n.id}
                     onClick={() => setSelection({ type: 'node', id: n.id })}
                   >
@@ -428,7 +472,7 @@ export function RelationGraph({
                 <li key={e.id}>
                   <button
                     type="button"
-                    className="w-full rounded-sm px-2 py-1 text-left hover:bg-muted aria-pressed:bg-muted"
+                    className="w-full rounded-sm px-2 py-1 text-left b-wiki-graph-option hover:bg-leaf focus-visible:bg-leaf aria-pressed:bg-apricot"
                     aria-pressed={selectedEdge?.id === e.id}
                     onClick={() => setSelection({ type: 'edge', id: e.id })}
                   >
@@ -447,9 +491,7 @@ export function RelationGraph({
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{dialog === 'edit' ? '관계 수정' : '관계 추가'}</DialogTitle>
-            <DialogDescription>
-              두 카드 사이의 관계와 그 관계가 이어지는 회차를 적습니다.
-            </DialogDescription>
+            <DialogDescription>두 카드 사이의 관계와 이어지는 회차를 적어요.</DialogDescription>
           </DialogHeader>
           {dialog !== null && (
             <RelationForm

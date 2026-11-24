@@ -4,6 +4,7 @@ import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, type ReactNode, useState } from 'react'
 import { SubmitButton } from '@/components/app/submit-button'
+import { PopButton } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -71,7 +72,11 @@ export function EntryFormDialog({
   const [open, setOpen] = useState(false)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant={triggerVariant} size={triggerSize} />}>
+      <DialogTrigger
+        render={
+          mode === 'create' ? <PopButton /> : <Button variant={triggerVariant} size={triggerSize} />
+        }
+      >
         {triggerLabel}
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
@@ -146,10 +151,10 @@ function EntryFormFields({
     const saved =
       mode === 'create' || !entry
         ? await runAction(createEntryAction({ workId, ...input }), {
-            success: '카드를 만들었습니다.',
+            success: '카드를 만들었어요.',
           })
         : await runAction(updateEntryAction({ entryId: entry.id, ...input }), {
-            success: '카드를 저장했습니다.',
+            success: '카드를 저장했어요.',
           })
     setPending(false)
     if (saved) {
@@ -178,7 +183,7 @@ function EntryFormFields({
       />
       <TextField id="entry-summary" label="한 줄 요약" value={summary} onChange={setSummary} />
       <p className="-mt-2 text-xs text-muted-foreground">
-        짧게 쓸수록 AI가 같은 묘사를 덜 반복합니다.
+        짧게 쓸수록 AI가 같은 묘사를 덜 반복해요.
       </p>
       <SelectField
         id="entry-context-tier"

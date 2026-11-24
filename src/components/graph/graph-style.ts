@@ -1,39 +1,61 @@
 import type { EntryKind } from '@/db/types'
 
-// One look for every relationship graph renderer (cytoscape, force-graph 2D and 3D, the chips).
-// Canvas renderers cannot read CSS variables, so the DESIGN.md inks are repeated here.
-export const GRAPH_INK = {
-  graphite: '#2b2d2c',
-  muted: '#565b58',
-  pencil: '#8f9591',
-  rule: '#c9cdc8',
-  sheet: '#fafbf9',
-  /** Blue pencil: only for the selected card or relation (focus). */
-  canon: '#2f5d9e',
+export const GRAPH_COLOR_TOKENS = {
+  ink: '--b-ink',
+  muted: '--b-muted',
+  paper: '--b-paper',
+  selection: '--b-mustard',
 } as const
 
-/** Relations are plain pencil lines; their kind is written on the line, not coded by hue. */
-export const RELATION_INK = GRAPH_INK.pencil
+export type GraphPalette = Record<keyof typeof GRAPH_COLOR_TOKENS, string>
+type GraphInk = 'ink' | 'muted'
+
+export function readGraphPalette(
+  element: Element,
+  context?: CanvasRenderingContext2D | null,
+): GraphPalette {
+  const computed = getComputedStyle(element)
+
+  function read(role: keyof GraphPalette, fallback: string) {
+    const color = computed.getPropertyValue(GRAPH_COLOR_TOKENS[role]).trim() || fallback
+    if (!context) return color
+
+    // The renderer accepts sRGB, so resolve CSS color functions through a single pixel.
+    context.clearRect(0, 0, 1, 1)
+    context.fillStyle = fallback
+    context.fillStyle = color
+    context.fillRect(0, 0, 1, 1)
+    const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data
+    return alpha ? `rgb(${red}, ${green}, ${blue})` : fallback
+  }
+
+  return {
+    ink: read('ink', computed.color),
+    muted: read('muted', computed.color),
+    paper: read('paper', computed.backgroundColor),
+    selection: read('selection', computed.color),
+  }
+}
 
 export const GRAPH_FONT =
   '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif'
 
 export type KindShape = 'circle' | 'square' | 'diamond' | 'hexagon' | 'triangle'
-export type KindMark = { shape: KindShape; ink: string; filled: boolean }
+export type KindMark = { shape: KindShape; ink: GraphInk; filled: boolean }
 
 /**
  * Card kinds read without hue: the shape first, then a filled or outlined mark, then graphite,
- * muted or pencil grey. Proof red and blue pencil keep their own jobs (errors; canon and focus).
+ * muted or pencil grey. Selection uses mustard.
  */
 export const ENTRY_KIND_MARK: Record<EntryKind, KindMark> = {
-  character: { shape: 'circle', ink: GRAPH_INK.graphite, filled: true },
-  place: { shape: 'square', ink: GRAPH_INK.muted, filled: true },
-  organization: { shape: 'hexagon', ink: GRAPH_INK.graphite, filled: false },
-  item: { shape: 'diamond', ink: GRAPH_INK.pencil, filled: true },
-  rule: { shape: 'square', ink: GRAPH_INK.muted, filled: false },
-  event: { shape: 'triangle', ink: GRAPH_INK.graphite, filled: false },
-  term: { shape: 'diamond', ink: GRAPH_INK.muted, filled: false },
-  other: { shape: 'circle', ink: GRAPH_INK.pencil, filled: false },
+  character: { shape: 'circle', ink: 'ink', filled: true },
+  place: { shape: 'square', ink: 'muted', filled: true },
+  organization: { shape: 'hexagon', ink: 'ink', filled: false },
+  item: { shape: 'diamond', ink: 'muted', filled: true },
+  rule: { shape: 'square', ink: 'muted', filled: false },
+  event: { shape: 'triangle', ink: 'ink', filled: false },
+  term: { shape: 'diamond', ink: 'muted', filled: false },
+  other: { shape: 'circle', ink: 'muted', filled: false },
 }
 
 /** Outline points of a shape centred on (x, y) that fits a circle of radius r. */
@@ -81,8 +103,9 @@ export function drawKindMark(
   x: number,
   y: number,
   r: number,
-  paper: string,
+  palette: GraphPalette,
   lineWidth: number,
+  surface = palette.paper,
 ): void {
   const { shape, ink, filled } = ENTRY_KIND_MARK[kind]
   // Keep outlined marks the same outer size as filled ones.
@@ -96,12 +119,12 @@ export function drawKindMark(
     for (const [px, py] of rest) context.lineTo(px, py)
     context.closePath()
   }
-  context.fillStyle = filled ? ink : paper
+  context.fillStyle = filled ? palette[ink] : surface
   context.fill()
   if (!filled) {
     context.lineWidth = lineWidth
     context.lineJoin = 'round'
-    context.strokeStyle = ink
+    context.strokeStyle = palette[ink]
     context.stroke()
   }
 }

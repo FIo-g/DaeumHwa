@@ -1,11 +1,13 @@
 import type { GraphEdge, GraphNode } from './graph-model'
-import { RELATION_INK } from './graph-style'
+import type { GraphPalette } from './graph-style'
 
 export type ForceGraphRendererProps = {
   data: { nodes: GraphNode[]; links: GraphEdge[] }
   width: number
   height: number
-  palette: { foreground: string; background: string }
+  palette: GraphPalette
+  selectedEdgeId?: string
+  selectedNodeId?: string
   onNodeSelect: (id: string) => void
   onLinkSelect: (id: string) => void
   onBackgroundSelect: () => void
@@ -22,11 +24,6 @@ export function nodeLabel(node: GraphNode): string {
 
 export function relationLabel(link: GraphEdge): string {
   return tooltipText(link.kind)
-}
-
-/** Every relation is a pencil line; its kind shows on hover and in the side list. */
-export function relationColor(): string {
-  return RELATION_INK
 }
 
 export function linkCurvatures(links: GraphEdge[]): Map<string, number> {

@@ -1,5 +1,6 @@
 'use client'
 
+import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { EmptyState } from '@/components/app/empty-state'
@@ -27,15 +28,19 @@ export function ChapterSummaries({ chapters, canEdit }: ChapterSummariesProps) {
   if (chapters.length === 0) {
     return (
       <EmptyState
-        title="아직 회차가 없습니다."
-        description="회차를 만들면 요약을 적을 수 있습니다."
+        title="아직 회차가 없어요."
+        description="요약은 회차가 생긴 뒤에 적을 수 있어요."
       />
     )
   }
   return (
-    <ul className="flex flex-col gap-4">
-      {chapters.map((chapter) => (
-        <li key={chapter.id}>
+    <ul className="b-wiki-records">
+      {chapters.map((chapter, index) => (
+        <li
+          key={chapter.id}
+          className="p-4"
+          style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+        >
           <ChapterSummaryRow chapter={chapter} canEdit={canEdit} />
         </li>
       ))}
@@ -61,7 +66,7 @@ function ChapterSummaryRow({
     setPending(true)
     const result = await runAction(
       setChapterSummaryAction({ chapterId: chapter.id, summary: draft.trim() }),
-      { success: '요약을 저장했습니다.' },
+      { success: '요약을 저장했어요.' },
     )
     setPending(false)
     if (result) {
@@ -74,15 +79,18 @@ function ChapterSummaryRow({
   if (!canEdit) {
     return (
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-sm text-muted-foreground">{saved || '요약이 없습니다'}</p>
+        <p className="b-row__title text-sm">{label}</p>
+        <p className="text-sm text-muted-foreground">{saved || '요약이 없어요'}</p>
       </div>
     )
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={`summary-${chapter.id}`}>{`${label} 요약`}</Label>
+      <Label
+        className="b-wiki-record-label b-row__title"
+        htmlFor={`summary-${chapter.id}`}
+      >{`${label} 요약`}</Label>
       <Textarea
         id={`summary-${chapter.id}`}
         rows={3}
@@ -92,7 +100,7 @@ function ChapterSummaryRow({
         onChange={(e) => setDraft(e.target.value)}
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {!saved && <span className="text-xs text-muted-foreground">요약이 없습니다</span>}
+        {!saved && <span className="text-xs text-muted-foreground">요약이 없어요</span>}
         <Button type="button" size="sm" disabled={!dirty || pending} onClick={save}>
           요약 저장
         </Button>

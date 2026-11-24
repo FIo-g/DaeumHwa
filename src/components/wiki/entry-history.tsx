@@ -14,7 +14,7 @@ export type EntryHistoryItem = {
 /** Change log of one card, newest first, with who made each change (AI or author). */
 export function EntryHistory({ changes }: { changes: EntryHistoryItem[] }) {
   if (changes.length === 0) {
-    return <EmptyState title="아직 변경 이력이 없습니다." />
+    return <EmptyState title="아직 변경 이력이 없어요." />
   }
   return (
     <ol className="flex flex-col divide-y rounded-lg border">

@@ -1,6 +1,7 @@
 'use client'
 
 import { SparklesIcon } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 import { AiRunStatus } from '@/components/app/ai-run-status'
@@ -59,38 +60,10 @@ export function StyleCards({
   canSuggest = canEdit,
 }: StyleCardsProps) {
   return (
-    <div className="flex flex-col gap-8">
-      {canSuggest && (
-        <section aria-labelledby="style-suggest-heading" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <h2 id="style-suggest-heading" className="text-base font-semibold">
-              AI로 문체 카드 제안
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              인물 이름 근처의 대사를 원고에서 모아 문체 카드 초안을 승인 대기에 올립니다.
-            </p>
-          </div>
-          {characters.length === 0 ? (
-            <EmptyState title="아직 인물이 없습니다." />
-          ) : (
-            <ul className="flex flex-col divide-y rounded-lg border">
-              {characters.map((character) => (
-                <li
-                  key={character.id}
-                  className="flex flex-wrap items-center justify-between gap-2 p-3"
-                >
-                  <span className="text-sm font-medium">{character.name}</span>
-                  <SuggestButton workId={workId} entryId={character.id} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
+    <div className="flex flex-col gap-5">
       <section aria-labelledby="style-cards-heading" className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="style-cards-heading" className="text-base font-semibold">
+        <div className="b-wiki-toolbar">
+          <h2 id="style-cards-heading" className="b-wiki-section-title">
             문체 카드
           </h2>
           {canEdit && (
@@ -103,16 +76,17 @@ export function StyleCards({
         </div>
         {cards.length === 0 ? (
           <EmptyState
-            title="아직 문체 카드가 없습니다."
-            description="인물의 말투와 예시를 적어 두면 초안이 그 목소리를 따릅니다."
+            title="아직 문체 카드가 없어요."
+            description="인물 말투와 예시 대사를 적어 두세요. AI 초안이 그 말투를 따라 써요."
           />
         ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {cards.map((card) => (
+          <div className="b-wiki-records">
+            {cards.map((card, index) => (
               <StyleCardView
                 key={card.id}
                 workId={workId}
                 card={card}
+                index={index}
                 characters={characters}
                 canEdit={canEdit}
               />
@@ -120,6 +94,34 @@ export function StyleCards({
           </div>
         )}
       </section>
+      {canSuggest && (
+        <section aria-labelledby="style-suggest-heading" className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <h2 id="style-suggest-heading" className="text-base font-semibold">
+              AI로 문체 카드 제안
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              원고에서 인물 대사를 모아 문체 카드 초안을 만들어 승인 대기에 올려요.
+            </p>
+          </div>
+          {characters.length === 0 ? (
+            <EmptyState title="아직 인물이 없어요." />
+          ) : (
+            <ul className="b-wiki-records">
+              {characters.map((character, index) => (
+                <li
+                  key={character.id}
+                  style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+                  className="flex flex-wrap items-center justify-between gap-2 p-3"
+                >
+                  <span className="b-row__title text-sm">{character.name}</span>
+                  <SuggestButton workId={workId} entryId={character.id} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   )
 }
@@ -132,7 +134,7 @@ function SuggestButton({ workId, entryId }: { workId: string; entryId: string })
     void ai.run((signal) =>
       runAction(
         postAction<ProposalRow>(`/api/works/${workId}/style-suggest`, { entryId }, { signal }),
-        { success: '문체 카드 제안을 승인 대기에 올렸습니다.' },
+        { success: '문체 카드 제안을 승인 대기에 올렸어요.' },
       ),
     )
   }
@@ -153,17 +155,22 @@ function SuggestButton({ workId, entryId }: { workId: string; entryId: string })
 function StyleCardView({
   workId,
   card,
+  index,
   characters,
   canEdit,
 }: {
   workId: string
   card: StyleCardItem
+  index: number
   characters: { id: string; name: string }[]
   canEdit: boolean
 }) {
   const router = useRouter()
   return (
-    <article className="flex flex-col gap-3 rounded-xl border p-4">
+    <article
+      className="flex flex-col gap-3 p-4"
+      style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5">
           <h3 className="font-medium">{card.name}</h3>
@@ -185,7 +192,7 @@ function StyleCardView({
               size="sm"
               onConfirm={async () => {
                 const saved = await runAction(archiveStyleCardAction({ cardId: card.id }), {
-                  success: '문체 카드를 보관했습니다.',
+                  success: '문체 카드를 보관했어요.',
                 })
                 if (saved) router.refresh()
               }}
@@ -274,10 +281,10 @@ function StyleCardFields({
     setPending(true)
     const saved = card
       ? await runAction(updateStyleCardAction({ cardId: card.id, ...fields }), {
-          success: '문체 카드를 저장했습니다.',
+          success: '문체 카드를 저장했어요.',
         })
       : await runAction(createStyleCardAction({ workId, ...fields }), {
-          success: '문체 카드를 추가했습니다.',
+          success: '문체 카드를 추가했어요.',
         })
     setPending(false)
     if (saved) {

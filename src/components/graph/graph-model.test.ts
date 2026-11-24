@@ -186,6 +186,21 @@ describe('circleOrder', () => {
     expect(circleOrder(nodes, edges)).toEqual(['j', 'h', 'd', 's', 'k'])
   })
 
+  it('keeps a hundred-card circle reachable below the usual zoom floor', () => {
+    const nodes = Array.from({ length: 100 }, (_, index) => card(`c${index}`, `인물 ${index + 1}`))
+    const edges = nodes
+      .slice(1)
+      .map((node, index) => edge(`e${index}`, nodes[index].id, node.id, null, null))
+    const order = circleOrder(nodes, edges)
+    expect(order).toHaveLength(100)
+    expect(new Set(order)).toEqual(new Set(nodes.map(({ id }) => id)))
+
+    const diameter = 2 * 24 * order.length
+    const fitZoom = (512 - 2 * 48) / diameter
+    expect(fitZoom).toBeLessThan(0.3)
+    expect(fitMinZoom(fitZoom)).toBe(fitZoom)
+  })
+
   it('puts every card in once and ignores relations to cards it was not given', () => {
     const nodes = [card('a', '가'), card('b', '나'), card('c', '다')]
     const edges = [edge('e1', 'a', 'b', null, null), edge('e2', 'b', 'x', null, null)]

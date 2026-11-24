@@ -71,7 +71,7 @@ describe('DirectiveList inferred proposals (s4)', () => {
     )
     expect(screen.getByText('수정에서 찾은 요청')).toBeInTheDocument()
     expect(
-      screen.getByText('작가님이 고친 곳을 보고 찾은 것입니다. 추가해야 적용됩니다.'),
+      screen.getByText('작가님이 초안을 고친 곳에서 찾아낸 요청이에요. 추가해야 적용돼요.'),
     ).toBeInTheDocument()
     // Above the active list.
     const inferredHeading = screen.getByText('수정에서 찾은 요청')

@@ -80,7 +80,7 @@ export function ThreadEventForm({ thread, chapters, onDone }: ThreadEventFormPro
           if (!result.ok) setError(result.error.message)
           return result
         }),
-        { success: '기록을 남겼습니다.' },
+        { success: '기록을 남겼어요.' },
       )
       if (saved) {
         setNote('')
@@ -153,7 +153,7 @@ export function ThreadEventForm({ thread, chapters, onDone }: ThreadEventFormPro
         />
       </div>
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-ink">
           {error}
         </p>
       )}

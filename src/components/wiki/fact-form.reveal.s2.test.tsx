@@ -45,7 +45,7 @@ describe('FactFormDialog reveal chapter', () => {
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '사실 추가' }))
-    expect(screen.getByText('이 회차 전에는 AI 초안에 넣지 않습니다.')).toBeInTheDocument()
+    expect(screen.getByText('이 회차 전에는 AI 초안에 넣지 않아요.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('사실 내용'), { target: { value: '비밀 통로가 있다.' } })
     fireEvent.change(screen.getByLabelText('공개 회차'), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('button', { name: '저장' }))

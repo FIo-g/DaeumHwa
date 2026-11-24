@@ -62,9 +62,7 @@ describe('ThreadDetailDialog event archive', () => {
     const dialog = screen.getByRole('alertdialog')
     expect(within(dialog).getByText('이 기록을 보관할까요?')).toBeInTheDocument()
     expect(
-      within(dialog).getByText(
-        '보관한 기록은 타임라인에서 사라지고, 떡밥 상태는 남은 기록에 맞춰 다시 계산됩니다.',
-      ),
+      within(dialog).getByText('타임라인에서 빠져요. 떡밥 상태는 남은 기록으로 다시 계산해요.'),
     ).toBeInTheDocument()
   })
 })

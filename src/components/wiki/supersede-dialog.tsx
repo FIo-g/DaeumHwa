@@ -39,7 +39,7 @@ export function SupersedeDialog({ fact, chapters }: SupersedeDialogProps) {
         <DialogHeader>
           <DialogTitle>특정 회차부터 바뀜</DialogTitle>
           <DialogDescription>
-            기존 사실은 그 전 회차까지만 유효하게 남고, 새 사실이 그 회차부터 유효해집니다.
+            기존 사실은 직전 회차까지만 유효해요. 이 회차부터는 새 사실을 따라요.
           </DialogDescription>
         </DialogHeader>
         <SupersedeFields fact={fact} chapters={chapters} onDone={() => setOpen(false)} />
@@ -77,7 +77,7 @@ function SupersedeFields({
         sourceChapterId: chapter.id,
         sourceType: 'chapter',
       }),
-      { success: '바뀐 사실을 기록했습니다.' },
+      { success: '바뀐 사실을 기록했어요.' },
     )
     setPending(false)
     if (saved) {

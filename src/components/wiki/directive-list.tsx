@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
@@ -125,20 +126,21 @@ export function DirectiveList({
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-5">
       {inferredState.length > 0 && (
         <section aria-labelledby="directives-inferred-heading" className="flex flex-col gap-3">
-          <h2 id="directives-inferred-heading" className="text-base font-semibold">
+          <h2 id="directives-inferred-heading" className="b-wiki-section-title">
             수정에서 찾은 요청
           </h2>
           <p className="text-sm text-muted-foreground">
-            작가님이 고친 곳을 보고 찾은 것입니다. 추가해야 적용됩니다.
+            작가님이 초안을 고친 곳에서 찾아낸 요청이에요. 추가해야 적용돼요.
           </p>
-          <ul className="flex flex-col divide-y rounded-lg border">
-            {inferredState.map((proposal) => (
+          <ul className="b-wiki-records">
+            {inferredState.map((proposal, index) => (
               <InferredRow
                 key={`${proposal.runId}-${proposal.index}`}
                 proposal={proposal}
+                rowIndex={index}
                 canEdit={canEdit}
                 onDecide={(decision) => void handleDecide(proposal, decision)}
               />
@@ -147,15 +149,20 @@ export function DirectiveList({
         </section>
       )}
       <section aria-labelledby="directives-active-heading" className="flex flex-col gap-3">
-        <h2 id="directives-active-heading" className="text-base font-semibold">
+        <h2 id="directives-active-heading" className="b-wiki-section-title">
           적용 중인 요청
         </h2>
         {active.length === 0 ? (
-          <EmptyState title="아직 요청이 없습니다. AI가 계속 지켜야 할 것을 적어 두세요." />
+          <EmptyState title="아직 요청이 없어요. AI가 매번 지켜야 할 걸 적어 두세요." />
         ) : (
-          <ul className="flex flex-col divide-y rounded-lg border">
-            {active.map((directive) => (
-              <DirectiveRow key={directive.id} directive={directive} canEdit={canEdit} />
+          <ul className="b-wiki-records">
+            {active.map((directive, index) => (
+              <DirectiveRow
+                key={directive.id}
+                directive={directive}
+                canEdit={canEdit}
+                rowIndex={index}
+              />
             ))}
           </ul>
         )}
@@ -166,9 +173,14 @@ export function DirectiveList({
           <h2 id="directives-off-heading" className="text-base font-semibold">
             꺼 둔 요청
           </h2>
-          <ul className="flex flex-col divide-y rounded-lg border">
-            {off.map((directive) => (
-              <DirectiveRow key={directive.id} directive={directive} canEdit={canEdit} />
+          <ul className="b-wiki-records">
+            {off.map((directive, index) => (
+              <DirectiveRow
+                key={directive.id}
+                directive={directive}
+                canEdit={canEdit}
+                rowIndex={index}
+              />
             ))}
           </ul>
         </section>
@@ -189,7 +201,7 @@ export function DirectiveList({
           </Link>
         </div>
         {styleCards.length === 0 && speaking.length === 0 ? (
-          <p className="text-sm text-muted-foreground">아직 문체 카드나 말투가 없습니다.</p>
+          <p className="text-sm text-muted-foreground">아직 문체 카드나 말투가 없어요.</p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {styleCards.map((card) => (
@@ -222,10 +234,12 @@ function inferredScopeText(proposal: InferredProposal): string {
 
 function InferredRow({
   proposal,
+  rowIndex,
   canEdit,
   onDecide,
 }: {
   proposal: InferredProposal
+  rowIndex: number
   canEdit: boolean
   onDecide: (decision: 'add' | 'ignore') => void
 }) {
@@ -241,7 +255,10 @@ function InferredRow({
   }
 
   return (
-    <li className="flex flex-col gap-2 p-3">
+    <li
+      className="flex flex-col gap-2 p-3"
+      style={{ '--b-i': Math.min(rowIndex, 5) } as CSSProperties}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{inferredScopeText(proposal)}</Badge>
         <Badge variant="outline">{DIRECTIVE_KIND_LABEL[proposal.kind]}</Badge>
@@ -273,7 +290,15 @@ function InferredRow({
   )
 }
 
-function DirectiveRow({ directive, canEdit }: { directive: DirectiveItem; canEdit: boolean }) {
+function DirectiveRow({
+  directive,
+  canEdit,
+  rowIndex,
+}: {
+  directive: DirectiveItem
+  canEdit: boolean
+  rowIndex: number
+}) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const nextStatus: DirectiveStatus = directive.status === 'active' ? 'off' : 'active'
@@ -288,7 +313,10 @@ function DirectiveRow({ directive, canEdit }: { directive: DirectiveItem; canEdi
   }
 
   return (
-    <li className="flex flex-col gap-2 p-3">
+    <li
+      className="flex flex-col gap-2 p-3"
+      style={{ '--b-i': Math.min(rowIndex, 5) } as CSSProperties}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{scopeText(directive)}</Badge>
         <Badge variant="outline">{DIRECTIVE_KIND_LABEL[directive.kind]}</Badge>
@@ -347,7 +375,7 @@ function DirectiveAddForm({ workId, characters }: { workId: string; characters: 
         targetChars: kind === 'length' && targetChars.trim() !== '' ? Number(targetChars) : null,
         source: 'author',
       }),
-      { success: '요청을 추가했습니다.' },
+      { success: '요청을 추가했어요.' },
     )
     setPending(false)
     if (saved) {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { readMotionDuration } from './wiki-motion'
 import { SettingsBoardHeader, WikiTabs } from './wiki-tabs'
 
 afterEach(() => {
@@ -36,5 +37,13 @@ describe('WikiTabs', () => {
     expect(screen.getByRole('navigation', { name: '설정 보드 탭' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '떡밥 장부' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: '관계 그래프' })).not.toHaveAttribute('aria-current')
+  })
+})
+
+describe('wiki motion timing', () => {
+  it.each(['2.4s', '2400ms'])('reads %s from a compiled CSS token in milliseconds', (duration) => {
+    const element = document.createElement('div')
+    element.style.setProperty('--b-cycle', duration)
+    expect(readMotionDuration(element, '--b-cycle', 0)).toBe(2400)
   })
 })

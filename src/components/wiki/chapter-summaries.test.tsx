@@ -37,7 +37,7 @@ afterEach(() => {
 describe('ChapterSummaries', () => {
   it('shows an empty-summary notice for chapters without a summary', () => {
     render(<ChapterSummaries chapters={chapters} canEdit />)
-    expect(screen.getByText('요약이 없습니다')).toBeInTheDocument()
+    expect(screen.getByText('요약이 없어요')).toBeInTheDocument()
     expect(screen.getByLabelText('1화 만남 요약')).toHaveValue('서윤이 도현을 만난다.')
   })
 

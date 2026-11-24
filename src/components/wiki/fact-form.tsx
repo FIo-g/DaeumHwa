@@ -135,7 +135,7 @@ function FactFormFields({
       nextToPosition !== null &&
       nextToPosition < nextFromPosition
     ) {
-      toast.error('끝 회차는 시작 회차보다 앞설 수 없습니다.')
+      toast.error('끝 회차는 시작 회차보다 앞설 수 없어요.')
       return
     }
     // On edit, send a range key only when the author changed it. An old superseded fact may store
@@ -163,7 +163,7 @@ function FactFormFields({
               revealAtPosition,
               ...range,
             }),
-            { success: '사실을 추가했습니다.' },
+            { success: '사실을 추가했어요.' },
           )
         : fact
           ? await runAction(
@@ -176,7 +176,7 @@ function FactFormFields({
                 revealAtPosition,
                 ...range,
               }),
-              { success: '사실을 고쳤습니다.' },
+              { success: '사실을 고쳤어요.' },
             )
           : null
     setPending(false)
@@ -221,7 +221,7 @@ function FactFormFields({
           value={reveal}
           onChange={(e) => setReveal(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">이 회차 전에는 AI 초안에 넣지 않습니다.</p>
+        <p className="text-xs text-muted-foreground">이 회차 전에는 AI 초안에 넣지 않아요.</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <div className="grid grid-cols-2 gap-3">
@@ -246,7 +246,7 @@ function FactFormFields({
             />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">비워 두면 처음부터 끝까지 유효합니다.</p>
+        <p className="text-xs text-muted-foreground">빈칸은 처음부터 끝까지 적용돼요.</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fact-evidence">근거 문장</Label>
@@ -283,7 +283,7 @@ export function FactTagDialog({
     event.preventDefault()
     setPending(true)
     const saved = await runAction(updateFactAction({ factId, status: picked }), {
-      success: '태그를 바꿨습니다.',
+      success: '태그를 바꿨어요.',
     })
     setPending(false)
     if (saved) {

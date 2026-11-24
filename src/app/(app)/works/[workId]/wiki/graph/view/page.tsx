@@ -1,6 +1,5 @@
-import Link from 'next/link'
+import { PopLink } from '@/components/motion'
 import { RelationGraphView } from '@/components/graph/relation-graph-view'
-import { buttonVariants } from '@/components/ui/button'
 import { SettingsBoardHeader } from '@/components/wiki/wiki-tabs'
 import { guardPage, pageContext } from '@/server/page-helpers'
 import { getGraphViewData } from '@/server/relations'
@@ -12,17 +11,17 @@ export default async function GraphViewPage({ params }: { params: Promise<{ work
   const graph = await guardPage(() => getGraphViewData(db, actor, workId))
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="b-wiki-workspace flex min-w-0 flex-col gap-4">
       {/* The 3D view is part of the 관계 그래프 tab, so that tab stays marked. */}
       <SettingsBoardHeader workId={workId} active="graph" />
       <section aria-labelledby="graph-3d-heading" className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 id="graph-3d-heading" className="text-base font-semibold">
+        <div className="b-wiki-toolbar">
+          <h2 id="graph-3d-heading" className="b-wiki-section-title">
             3D 관계 그래프
           </h2>
-          <Link href={graphPath} className={buttonVariants({ variant: 'outline' })}>
+          <PopLink href={graphPath} variant="paper">
             3D 닫기
-          </Link>
+          </PopLink>
         </div>
         <RelationGraphView workId={workId} {...graph} />
       </section>

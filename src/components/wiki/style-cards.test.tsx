@@ -76,7 +76,7 @@ describe('StyleCards', () => {
     )
     await waitFor(() => expect(run).toHaveBeenCalled())
     expect(run).toHaveBeenCalledWith(expect.anything(), {
-      success: '문체 카드 제안을 승인 대기에 올렸습니다.',
+      success: '문체 카드 제안을 승인 대기에 올렸어요.',
     })
   })
 

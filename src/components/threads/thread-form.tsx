@@ -93,7 +93,7 @@ export function ThreadForm({
               importance,
               relatedEntryIds: relatedIds,
             }),
-            { success: '떡밥을 고쳤습니다.' },
+            { success: '떡밥을 고쳤어요.' },
           )
         : await runAction(
             createThreadAction({
@@ -106,7 +106,7 @@ export function ThreadForm({
               importance,
               relatedEntryIds: relatedIds,
             }),
-            { success: '떡밥을 만들었습니다.' },
+            { success: '떡밥을 만들었어요.' },
           )
       if (saved) {
         router.refresh()
@@ -141,7 +141,7 @@ export function ThreadForm({
 
       {editing ? (
         <p className="text-sm text-muted-foreground">
-          상태와 심은 회차는 아래 기록 추가에서 바꿉니다.
+          상태와 심은 회차는 아래 기록 추가에서 바꿔요.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -226,7 +226,7 @@ export function ThreadForm({
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1.5 text-sm leading-none font-medium">관련 카드</legend>
         {entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">연결할 카드가 없습니다.</p>
+          <p className="text-sm text-muted-foreground">연결할 카드가 없어요.</p>
         ) : (
           <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
             {entries.map((entry) => {

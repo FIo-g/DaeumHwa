@@ -7,7 +7,6 @@ import { getThread, listThreads } from '@/server/threads'
 import { getWork } from '@/server/works'
 import { listEntries } from '@/server/wiki'
 
-// 떡밥 장부 (F4): one column per thread status, with each thread's timeline loaded for its dialog.
 export default async function ThreadsPage({ params }: { params: Promise<{ workId: string }> }) {
   const { workId } = await params
   const { db, actor } = await pageContext(`/works/${workId}/wiki/threads`)
@@ -46,15 +45,9 @@ export default async function ThreadsPage({ params }: { params: Promise<{ workId
   }))
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="b-wiki-workspace flex min-w-0 flex-col gap-4">
       <SettingsBoardHeader workId={workId} active="threads" />
       <section aria-labelledby="threads-heading" className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 id="threads-heading" className="text-base font-semibold">
-            떡밥 장부
-          </h2>
-          <p className="text-sm text-muted-foreground">심은 떡밥과 회수 기록을 상태별로 봅니다.</p>
-        </div>
         <ThreadBoard
           workId={workId}
           role={work.role}

@@ -143,7 +143,7 @@ describe('DirectiveList', () => {
   it('shows the empty message when no request is active', () => {
     render(<DirectiveList workId="w1" directives={[]} characters={[]} styleCards={[]} canEdit />)
     expect(
-      screen.getByText('아직 요청이 없습니다. AI가 계속 지켜야 할 것을 적어 두세요.'),
+      screen.getByText('아직 요청이 없어요. AI가 매번 지켜야 할 걸 적어 두세요.'),
     ).toBeInTheDocument()
     expect(screen.queryByText('꺼 둔 요청')).not.toBeInTheDocument()
   })

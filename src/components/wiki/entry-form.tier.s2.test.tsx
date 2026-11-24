@@ -46,7 +46,7 @@ describe('EntryFormDialog context tier', () => {
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '새 장소' }))
-    expect(screen.getByText('짧게 쓸수록 AI가 같은 묘사를 덜 반복합니다.')).toBeInTheDocument()
+    expect(screen.getByText('짧게 쓸수록 AI가 같은 묘사를 덜 반복해요.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('이름'), { target: { value: '왕궁' } })
     await user.click(screen.getByRole('combobox', { name: 'AI 문맥' }))
     await user.click(await screen.findByRole('option', { name: '항상 넣기' }))

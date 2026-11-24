@@ -1,5 +1,6 @@
 'use client'
 
+import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
@@ -16,14 +17,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { runAction } from '@/lib/client/run-action'
 import {
   archiveNamingRuleAction,
@@ -48,56 +41,57 @@ type NamingRulesProps = {
 export function NamingRules({ workId, rules, canEdit }: NamingRulesProps) {
   return (
     <section aria-labelledby="naming-heading" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="b-wiki-toolbar">
         <div className="flex flex-col gap-1">
-          <h2 id="naming-heading" className="text-base font-semibold">
+          <h2 id="naming-heading" className="b-wiki-section-title">
             표기 통일
           </h2>
-          <p className="text-sm text-muted-foreground">
-            작품에서 쓸 올바른 표기와 피해야 할 표기를 정합니다.
-          </p>
+          <p className="text-sm text-muted-foreground">작품에서 쓸 표기와 피할 표기를 정해요.</p>
         </div>
         {canEdit && <NamingRuleDialog workId={workId} triggerLabel="표기 규칙 추가" />}
       </div>
 
       {rules.length === 0 ? (
-        <EmptyState title="아직 표기 규칙이 없습니다." />
+        <EmptyState title="아직 표기 규칙이 없어요." />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>올바른 표기</TableHead>
-              <TableHead>잘못된 표기</TableHead>
-              <TableHead>메모</TableHead>
-              {canEdit && <TableHead className="text-right">관리</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rules.map((rule) => (
-              <TableRow key={rule.id}>
-                <TableCell className="font-medium">{rule.canonical}</TableCell>
-                <TableCell>
-                  <span className="flex flex-wrap gap-1">
+        <ul className="b-wiki-records">
+          {rules.map((rule, index) => (
+            <li
+              key={rule.id}
+              className="flex flex-col gap-3 p-4"
+              style={{ '--b-i': Math.min(index, 5) } as CSSProperties}
+            >
+              <dl className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-3">
+                <div>
+                  <dt className="b-label b-muted">올바른 표기</dt>
+                  <dd className="b-row__title">{rule.canonical}</dd>
+                </div>
+                <div>
+                  <dt className="b-label b-muted">잘못된 표기</dt>
+                  <dd className="flex flex-wrap gap-1">
                     {rule.variants.map((variant) => (
-                      <span key={variant} className="rounded-md border px-1.5 py-0.5 text-xs">
+                      <span key={variant} className="b-wiki-tag">
                         {variant}
                       </span>
                     ))}
-                  </span>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{rule.note}</TableCell>
-                {canEdit && (
-                  <TableCell>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <NamingRuleDialog workId={workId} triggerLabel="수정" rule={rule} />
-                      <ArchiveRuleButton ruleId={rule.id} />
-                    </div>
-                  </TableCell>
+                  </dd>
+                </div>
+                {rule.note && (
+                  <div>
+                    <dt className="b-label b-muted">메모</dt>
+                    <dd>{rule.note}</dd>
+                  </div>
                 )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+              </dl>
+              {canEdit && (
+                <div className="flex flex-wrap gap-2">
+                  <NamingRuleDialog workId={workId} triggerLabel="수정" rule={rule} />
+                  <ArchiveRuleButton ruleId={rule.id} />
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   )
@@ -112,7 +106,7 @@ function ArchiveRuleButton({ ruleId }: { ruleId: string }) {
       size="sm"
       onConfirm={async () => {
         const saved = await runAction(archiveNamingRuleAction({ ruleId }), {
-          success: '표기 규칙을 보관했습니다.',
+          success: '표기 규칙을 보관했어요.',
         })
         if (saved) router.refresh()
       }}
@@ -174,10 +168,10 @@ function NamingRuleFields({
     setPending(true)
     const saved = rule
       ? await runAction(updateNamingRuleAction({ ruleId: rule.id, ...input }), {
-          success: '표기 규칙을 저장했습니다.',
+          success: '표기 규칙을 저장했어요.',
         })
       : await runAction(createNamingRuleAction({ workId, ...input }), {
-          success: '표기 규칙을 추가했습니다.',
+          success: '표기 규칙을 추가했어요.',
         })
     setPending(false)
     if (saved) {

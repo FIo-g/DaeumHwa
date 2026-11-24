@@ -1,6 +1,10 @@
+'use client'
+
+import { BookOpenIcon, BookmarkIcon, NotebookIcon } from 'lucide-react'
 import Link from 'next/link'
-import { PageHeader } from '@/components/app/page-header'
-import { cn } from '@/lib/utils'
+import { type CSSProperties, useLayoutEffect, useRef } from 'react'
+import { ColorBand, usePointerTilt } from '@/components/motion'
+import { readMotionDuration } from './wiki-motion'
 
 export type WikiTab =
   'characters' | 'world' | 'threads' | 'graph' | 'naming' | 'summaries' | 'styles' | 'requests'
@@ -16,41 +20,110 @@ const TABS: { key: WikiTab; label: string; path: (workId: string) => string }[] 
   { key: 'requests', label: '요청', path: (w) => `/works/${w}/wiki?tab=requests` },
 ]
 
-/** Tab bar of the settings board. Tabs are links so each state has its own URL. */
+let previousTab: { workId: string; index: number } | undefined
+
 export function WikiTabs({ workId, active }: { workId: string; active: WikiTab }) {
+  const index = TABS.findIndex((tab) => tab.key === active)
+  const scrollRef = useRef<HTMLElement>(null)
+  const indicatorRef = useRef<HTMLSpanElement>(null)
+
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current
+    const indicator = indicatorRef.current
+    const current = scroll?.querySelector<HTMLAnchorElement>('[aria-current="page"]')
+    if (!scroll || !indicator || !current) return
+
+    const oldIndex = previousTab?.workId === workId ? previousTab.index : index
+    previousTab = { workId, index }
+    const from = (oldIndex - index) * current.offsetWidth
+    if (from && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      const motion = getComputedStyle(indicator)
+      indicator.animate?.(
+        [{ transform: 'translateX(' + from + 'px)' }, { transform: 'translateX(0)' }],
+        {
+          duration: readMotionDuration(indicator, '--b-step', 260),
+          easing: motion.getPropertyValue('--b-out').trim() || 'ease-out',
+        },
+      )
+    }
+    const revealActive = () => {
+      if (
+        current.offsetLeft < scroll.scrollLeft ||
+        current.offsetLeft + current.offsetWidth > scroll.scrollLeft + scroll.clientWidth
+      ) {
+        scroll.scrollLeft = current.offsetLeft - (scroll.clientWidth - current.offsetWidth) / 2
+      }
+    }
+    revealActive()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(revealActive)
+    observer.observe(scroll)
+    return () => observer.disconnect()
+  }, [index, workId])
+
   return (
-    <nav aria-label="설정 보드 탭" className="flex flex-wrap gap-x-5 gap-y-2 border-b border-rule">
-      {TABS.map((tab) => {
-        const current = tab.key === active
-        return (
+    <nav ref={scrollRef} aria-label="설정 보드 탭" className="b-wiki-tabs">
+      <div className="b-wiki-tabs-strip" style={{ '--b-wiki-tab': index } as CSSProperties}>
+        {TABS.map((tab) => (
           <Link
             key={tab.key}
             href={tab.path(workId)}
-            aria-current={current ? 'page' : undefined}
-            className={cn(
-              'relative pb-2 text-sm',
-              current
-                ? 'font-semibold text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
+            aria-current={tab.key === active ? 'page' : undefined}
+            className="b-wiki-tab b-link"
           >
-            {tab.label}
+            <span>{tab.label}</span>
           </Link>
-        )
-      })}
+        ))}
+        <span ref={indicatorRef} className="b-wiki-tab-indicator" aria-hidden="true" />
+      </div>
     </nav>
   )
 }
 
-/**
- * Head of every settings board tab, including the threads ledger and the relation graphs that live
- * on their own pages: one title, one description, and the tab bar with the current tab marked.
- */
+function IndexSlips() {
+  const tilt = usePointerTilt()
+  const icons = [BookmarkIcon, BookOpenIcon, NotebookIcon]
+
+  return (
+    <div {...tilt} className="b-wiki-slips b-pointer" aria-hidden="true">
+      <div className="b-pointer__face">
+        {icons.map((Icon, index) => (
+          <span
+            key={index}
+            className="b-wiki-slip b-piece"
+            style={
+              {
+                '--b-wiki-slip': index,
+                '--b-delay': 'calc(' + index + ' * var(--b-stagger))',
+              } as CSSProperties
+            }
+          >
+            <span className="b-wiki-slip-paper">
+              <span className="b-wiki-slip-face b-cycle-paper">
+                <Icon />
+              </span>
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function SettingsBoardHeader({ workId, active }: { workId: string; active: WikiTab }) {
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="설정 보드" description="작품 설정을 모아 두는 곳입니다." />
+    <ColorBand
+      color="leaf"
+      density="app"
+      className="b-wiki-band b-scene-run"
+      innerClassName="b-wiki-hero"
+    >
+      <div className="b-wiki-hero-title">
+        <h1 className="b-title">설정 보드</h1>
+        <p className="b-lede">작품 설정을 모아 둔 곳이에요.</p>
+      </div>
+      <IndexSlips />
       <WikiTabs workId={workId} active={active} />
-    </div>
+    </ColorBand>
   )
 }

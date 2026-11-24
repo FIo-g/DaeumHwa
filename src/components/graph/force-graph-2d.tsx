@@ -6,7 +6,6 @@ import type { GraphEdge, GraphNode } from './graph-model'
 import {
   linkCurvatures,
   nodeLabel,
-  relationColor,
   relationLabel,
   type ForceGraphRendererProps,
 } from './force-graph-renderer'
@@ -19,6 +18,8 @@ export default function Graph2D({
   width,
   height,
   palette,
+  selectedEdgeId,
+  selectedNodeId,
   onNodeSelect,
   onLinkSelect,
   onBackgroundSelect,
@@ -30,13 +31,13 @@ export default function Graph2D({
       graphData={data}
       width={width}
       height={height}
-      backgroundColor={palette.background}
+      backgroundColor={palette.paper}
       nodeRelSize={NODE_RADIUS}
       nodeLabel={nodeLabel}
       nodeCanvasObjectMode={() => 'replace'}
       nodeCanvasObject={(node, context, scale) => {
         if (node.x === undefined || node.y === undefined) return
-        drawKindMark(context, node.kind, node.x, node.y, NODE_RADIUS, palette.background, 1.2)
+        drawKindMark(context, node.kind, node.x, node.y, NODE_RADIUS, palette, 1.2)
         const fontSize = Math.min(9, 13 / scale)
         if (fontSize * scale < 8) return
 
@@ -45,18 +46,25 @@ export default function Graph2D({
         context.textAlign = 'center'
         context.textBaseline = 'top'
         const labelWidth = context.measureText(node.name).width
-        context.fillStyle = palette.background
-        context.fillRect(node.x - labelWidth / 2 - 2, labelY - 1, labelWidth + 4, fontSize + 2)
-        context.fillStyle = palette.foreground
+        const selected = node.id === selectedNodeId
+        const labelX = node.x - labelWidth / 2 - 2
+        context.fillStyle = selected ? palette.selection : palette.paper
+        context.fillRect(labelX, labelY - 1, labelWidth + 4, fontSize + 2)
+        if (selected) {
+          context.strokeStyle = palette.ink
+          context.lineWidth = 1.2
+          context.strokeRect(labelX, labelY - 1, labelWidth + 4, fontSize + 2)
+        }
+        context.fillStyle = palette.ink
         context.fillText(node.name, node.x, labelY)
       }}
-      linkColor={relationColor}
-      linkWidth={1.25}
+      linkColor={palette.ink}
+      linkWidth={(link) => (link.id === selectedEdgeId ? 3 : 1.25)}
       linkHoverPrecision={7}
       linkCurvature={(link) => curvatures.get(link.id) ?? 0}
       linkLabel={relationLabel}
       linkDirectionalArrowLength={(link) => (link.directed ? 5 : 0)}
-      linkDirectionalArrowColor={relationColor}
+      linkDirectionalArrowColor={palette.ink}
       linkDirectionalArrowRelPos={0.85}
       warmupTicks={24}
       cooldownTicks={90}

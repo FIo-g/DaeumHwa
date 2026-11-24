@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic'
 import { Component, memo, type ReactNode, useEffect, useRef, useState } from 'react'
 import type { ForceGraphRendererProps } from './force-graph-renderer'
+import { readGraphPalette } from './graph-style'
 
 const ForceGraph2D = dynamic(() => import('./force-graph-2d'), {
   ssr: false,
@@ -22,7 +23,7 @@ type GraphViewportProps = Omit<ForceGraphRendererProps, keyof Viewport> & {
 function GraphLoading() {
   return (
     <div role="status" className="grid size-full min-h-72 place-items-center px-4">
-      <p className="text-sm text-muted-foreground">관계 그래프를 불러오는 중입니다.</p>
+      <p className="text-sm text-muted-foreground">관계 그래프를 불러오는 중이에요.</p>
     </div>
   )
 }
@@ -49,7 +50,7 @@ class GraphErrorBoundary extends Component<
         role="status"
         className="grid size-full place-items-center px-4 text-center text-sm text-muted-foreground"
       >
-        그래프를 불러오지 못했습니다. 목록에서 카드와 관계를 볼 수 있습니다.
+        그래프를 불러오지 못했어요. 목록에서도 카드와 관계를 볼 수 있어요.
       </p>
     )
   }
@@ -63,17 +64,6 @@ function supportsWebGL() {
   } catch {
     return false
   }
-}
-
-// Three.js expects sRGB color strings. Convert the theme's CSS colors (including OKLCH).
-function srgbColor(context: CanvasRenderingContext2D | null, cssColor: string, fallback: string) {
-  if (!context) return fallback
-  context.clearRect(0, 0, 1, 1)
-  context.fillStyle = fallback
-  context.fillStyle = cssColor
-  context.fillRect(0, 0, 1, 1)
-  const [r, g, b, alpha] = context.getImageData(0, 0, 1, 1).data
-  return alpha ? `rgb(${r}, ${g}, ${b})` : fallback
 }
 
 export const GraphViewport = memo(function GraphViewport({
@@ -98,16 +88,16 @@ export const GraphViewport = memo(function GraphViewport({
       const width = container.clientWidth
       const height = container.clientHeight
       if (!width || !height) return
-      const computed = getComputedStyle(container)
-      const foreground = srgbColor(colorContext, computed.color, '#252525')
-      const background = srgbColor(colorContext, computed.backgroundColor, '#ffffff')
+      const palette = readGraphPalette(container, colorContext)
       setViewport((previous) =>
         previous?.width === width &&
         previous.height === height &&
-        previous.palette.foreground === foreground &&
-        previous.palette.background === background
+        previous.palette.ink === palette.ink &&
+        previous.palette.muted === palette.muted &&
+        previous.palette.paper === palette.paper &&
+        previous.palette.selection === palette.selection
           ? previous
-          : { width, height, palette: { foreground, background } },
+          : { width, height, palette },
       )
     }
 
@@ -120,7 +110,11 @@ export const GraphViewport = memo(function GraphViewport({
     sizeObserver.observe(container)
     const themeObserver = new MutationObserver(updateViewport)
     const options = { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] }
-    for (let ancestor = container.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    for (
+      let ancestor: HTMLElement | null = container;
+      ancestor;
+      ancestor = ancestor.parentElement
+    ) {
       themeObserver.observe(ancestor, options)
     }
     const scheme = window.matchMedia('(prefers-color-scheme: dark)')
@@ -140,7 +134,7 @@ export const GraphViewport = memo(function GraphViewport({
   if (rendererProps.data.nodes.length === 0) {
     content = (
       <p className="grid size-full place-items-center px-4 text-center text-sm text-muted-foreground">
-        현재 조건에 맞는 카드가 없습니다.
+        조건에 맞는 카드가 없어요.
       </p>
     )
   } else if (!viewport || (mode === '3d' && !webglReady)) {
@@ -164,7 +158,7 @@ export const GraphViewport = memo(function GraphViewport({
       ref={containerRef}
       role="region"
       aria-label="관계 그래프"
-      className="h-[clamp(20rem,60vh,44rem)] w-full min-w-0 overflow-hidden rounded-sm border border-rule bg-sheet text-foreground"
+      className="h-[clamp(20rem,60vh,44rem)] w-full min-w-0 overflow-hidden rounded-card border-2 border-ink bg-paper text-ink"
     >
       {content}
     </div>

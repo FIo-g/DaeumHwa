@@ -19,14 +19,25 @@ type FactListProps = {
   facts: FactView[]
   chapters: FactChapterOption[]
   canEdit: boolean
+  hideHeading?: boolean
 }
 
 /** Facts of one card with tags, validity ranges, sources and the edit menu for editors. */
-export function FactList({ workId, entryId, facts, chapters, canEdit }: FactListProps) {
+export function FactList({
+  workId,
+  entryId,
+  facts,
+  chapters,
+  canEdit,
+  hideHeading = false,
+}: FactListProps) {
   return (
     <section aria-labelledby="entry-facts-heading" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="entry-facts-heading" className="text-base font-semibold">
+        <h2
+          id="entry-facts-heading"
+          className={hideHeading ? 'sr-only' : 'text-base font-semibold'}
+        >
           사실
         </h2>
         {canEdit && (
@@ -40,7 +51,7 @@ export function FactList({ workId, entryId, facts, chapters, canEdit }: FactList
         )}
       </div>
       {facts.length === 0 ? (
-        <EmptyState title="아직 사실이 없습니다." />
+        <EmptyState title="아직 사실이 없어요." />
       ) : (
         <ul className="flex flex-col gap-2">
           {facts.map((fact) => (
@@ -77,8 +88,9 @@ function FactItem({
   return (
     <li
       id={`fact-${fact.id}`}
+      data-status={fact.status}
       className={cn(
-        'flex flex-col gap-2 rounded-sm border border-rule bg-sheet p-3',
+        'b-wiki-fact b-wiki-fact-insert flex flex-col gap-2 rounded-card bg-paper p-3',
         superseded && 'opacity-60',
       )}
     >
@@ -94,21 +106,24 @@ function FactItem({
           </span>
         )}
       </div>
-      {/* Set like the wiki original on a check finding: a canon quote in blue pencil. An
-          undecided fact is not canon yet, so it keeps the serif but not the blue. */}
-      <p
-        className={cn(
-          'font-serif text-[15px] leading-7',
-          fact.status === 'undecided' ? 'text-muted-foreground' : 'text-canon',
-        )}
+      <blockquote
+        key={JSON.stringify([
+          fact.content,
+          fact.status,
+          fact.validFromPosition,
+          fact.validToPosition,
+          fact.sourceChapterId,
+          fact.evidence,
+        ])}
+        className="b-quote b-quote--wiki b-wiki-fact-insert wrap-anywhere"
       >
         {fact.content}
-      </p>
+      </blockquote>
       <div className="text-xs text-muted-foreground">
         <SourceLabel workId={workId} sourceType={fact.sourceType} chapter={fact.sourceChapter} />
       </div>
       {fact.evidence && (
-        <blockquote className="border-l border-rule pl-3 font-serif text-sm leading-relaxed text-foreground/80">
+        <blockquote className="border-t border-rule pt-2 text-sm leading-relaxed wrap-anywhere text-muted-ink">
           {fact.evidence}
         </blockquote>
       )}
@@ -141,11 +156,11 @@ function FactItem({
           )}
           <ConfirmButton
             title="이 사실을 보관할까요?"
-            description="보관한 사실은 목록에서 빠집니다. 이력에서 되돌릴 수 있습니다."
+            description="보관한 사실은 목록에서 빠져요. 이력에서 되돌릴 수 있어요."
             confirmLabel="보관"
             onConfirm={async () => {
               const saved = await runAction(archiveFactAction({ factId: fact.id }), {
-                success: '사실을 보관했습니다.',
+                success: '사실을 보관했어요.',
               })
               if (saved) router.refresh()
             }}

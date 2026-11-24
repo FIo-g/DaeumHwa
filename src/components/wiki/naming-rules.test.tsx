@@ -36,7 +36,7 @@ afterEach(() => {
 describe('NamingRules', () => {
   it('lists the correct spelling with its wrong spellings as chips', () => {
     render(<NamingRules workId="w1" rules={rules} canEdit />)
-    const row = screen.getByText('서윤').closest('tr') as HTMLElement
+    const row = screen.getByText('서윤').closest('li') as HTMLElement
     expect(within(row).getByText('서연')).toBeInTheDocument()
     expect(within(row).getByText('서유')).toBeInTheDocument()
     expect(within(row).getByText('주인공 이름')).toBeInTheDocument()

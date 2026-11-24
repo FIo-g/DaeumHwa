@@ -6,6 +6,7 @@ import { NamingRules } from '@/components/wiki/naming-rules'
 import { StyleCards } from '@/components/wiki/style-cards'
 import { SettingsBoardHeader } from '@/components/wiki/wiki-tabs'
 import { ENTRY_KINDS, type EntryKind } from '@/db/types'
+import { getFirstAppearances } from '@/server/appearances'
 import { hasRole } from '@/server/access'
 import { listChapters } from '@/server/chapters'
 import { listInferredProposals } from '@/server/directive-infer'
@@ -28,7 +29,7 @@ export default async function WikiPage({
   searchParams,
 }: {
   params: Promise<{ workId: string }>
-  searchParams: Promise<{ tab?: string; kind?: string; q?: string }>
+  searchParams: Promise<{ tab?: string; kind?: string; q?: string; entry?: string }>
 }) {
   const { workId } = await params
   const sp = await searchParams
@@ -46,13 +47,23 @@ export default async function WikiPage({
   if (tab === 'characters' || tab === 'world') {
     const listKinds: EntryKind[] =
       tab === 'characters' ? ['character'] : kindFilter ? [kindFilter] : WORLD_KINDS
-    const [entries, facts] = await Promise.all([
-      guardPage(() => listEntries(db, actor, workId, { kinds: listKinds, query })),
+    const [entries, facts, appearances] = await Promise.all([
+      guardPage(() => listEntries(db, actor, workId, { kinds: listKinds })),
       guardPage(() => listFacts(db, actor, workId)),
+      getFirstAppearances(db, workId),
     ])
-    const counts = new Map<string, number>()
+    const factsByEntry = new Map<string, EntryListItem['facts']>()
     for (const fact of facts) {
-      if (fact.entryId) counts.set(fact.entryId, (counts.get(fact.entryId) ?? 0) + 1)
+      if (!fact.entryId) continue
+      const previews = factsByEntry.get(fact.entryId) ?? []
+      previews.push({
+        id: fact.id,
+        content: fact.content,
+        status: fact.status,
+        validFromPosition: fact.validFromPosition,
+        validToPosition: fact.validToPosition,
+      })
+      factsByEntry.set(fact.entryId, previews)
     }
     const items: EntryListItem[] = entries.map((e) => ({
       id: e.id,
@@ -60,10 +71,13 @@ export default async function WikiPage({
       name: e.name,
       aliases: e.aliases,
       summary: e.summary,
-      factCount: counts.get(e.id) ?? 0,
+      factCount: factsByEntry.get(e.id)?.length ?? 0,
+      facts: factsByEntry.get(e.id) ?? [],
+      firstAppearance: appearances.get(e.id) ?? null,
     }))
     content = (
       <EntryList
+        key={`${tab}:${kindFilter}:${query}:${sp.entry ?? ''}`}
         workId={workId}
         tab={tab}
         entries={items}
@@ -72,6 +86,7 @@ export default async function WikiPage({
         filterKinds={tab === 'world' ? WORLD_KINDS : undefined}
         kindFilter={kindFilter}
         query={query}
+        initialEntryId={sp.entry}
         canEdit={canEdit}
       />
     )
@@ -80,7 +95,14 @@ export default async function WikiPage({
     content = <NamingRules workId={workId} rules={rules} canEdit={canEdit} />
   } else if (tab === 'summaries') {
     const chapters = await guardPage(() => listChapters(db, actor, workId))
-    content = <ChapterSummaries chapters={chapters} canEdit={canEdit} />
+    content = (
+      <section aria-labelledby="wiki-summaries-heading" className="b-wiki-index">
+        <h2 id="wiki-summaries-heading" className="b-wiki-section-title">
+          회차 요약
+        </h2>
+        <ChapterSummaries chapters={chapters} canEdit={canEdit} />
+      </section>
+    )
   } else if (tab === 'requests') {
     const [directives, characters, cards, inferred] = await Promise.all([
       guardPage(() => listDirectives(db, actor, workId)),
@@ -119,7 +141,7 @@ export default async function WikiPage({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="b-wiki-workspace flex min-w-0 flex-col gap-4">
       <SettingsBoardHeader workId={workId} active={tab} />
       {content}
     </div>
