@@ -65,24 +65,20 @@ export function ThreadBoard({ workId, role, threads, chapters, entries }: Thread
           description="작품에 심은 떡밥을 여기에 모아 두면 회수 시점을 놓치지 않습니다."
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-5">
+        // Five columns only from xl, where each column still holds about 180px of card; below
+        // that the columns wrap into rows of three or two.
+        <div className="grid gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {COLUMN_STATUSES.map((status) => {
             const items = threads.filter((t) => t.status === status)
             const label = THREAD_STATUS_LABEL[status]
             return (
-              <section
-                key={status}
-                aria-label={label}
-                className="flex min-w-0 flex-col gap-2 rounded-xl bg-muted/40 p-3"
-              >
-                <h2 className="flex items-center justify-between gap-2 px-1 text-sm font-medium">
+              <section key={status} aria-label={label} className="flex min-w-0 flex-col gap-2">
+                <h2 className="flex items-baseline justify-between gap-2 border-b border-rule pb-2 text-sm font-medium">
                   <span data-slot="column-label">{label}</span>
-                  <span className="text-muted-foreground">{items.length}</span>
+                  <span className="text-muted-foreground tabular-nums">{items.length}</span>
                 </h2>
                 {items.length === 0 && (
-                  <p className="px-1 py-4 text-center text-sm text-muted-foreground">
-                    떡밥이 없습니다.
-                  </p>
+                  <p className="py-2 text-sm text-muted-foreground">떡밥이 없습니다.</p>
                 )}
                 {items.map((thread) => (
                   <ThreadCardButton
@@ -120,31 +116,36 @@ function ThreadCardButton({ thread, onOpen }: { thread: ThreadItem; onOpen: () =
     <button
       type="button"
       onClick={onOpen}
-      className={cn(
-        'flex flex-col gap-2 rounded-lg border bg-background p-3 text-left text-sm transition-colors hover:bg-muted',
-        thread.overdue && 'border-destructive/50',
-      )}
+      className="flex flex-col gap-1.5 rounded-sm border border-rule bg-sheet p-3 text-left text-sm outline-none transition-colors hover:border-input focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
     >
+      {/* An overdue thread reads like a finding: a proof-red label and the target underlined. */}
+      {thread.overdue && <span className="text-xs font-medium text-mark">회수 목표 지남</span>}
       <span className="flex items-start justify-between gap-2">
-        <span className="font-medium break-words">{thread.title}</span>
+        <span className="min-w-0 font-medium break-words break-keep">{thread.title}</span>
         <Badge variant="outline">{IMPORTANCE_LABEL[thread.importance]}</Badge>
       </span>
       {thread.plantedPosition !== null && (
         <span className="text-muted-foreground">심은 회차 {thread.plantedPosition}화</span>
       )}
       {thread.targetChapterPosition !== null && (
-        <span className="text-muted-foreground">목표 {thread.targetChapterPosition}화</span>
+        <span
+          className={cn(
+            'w-fit',
+            thread.overdue
+              ? 'underline decoration-mark decoration-2 underline-offset-[5px]'
+              : 'text-muted-foreground',
+          )}
+        >
+          목표 {thread.targetChapterPosition}화
+        </span>
       )}
       {thread.relatedEntries.length > 0 && (
-        <span className="flex flex-wrap gap-1">
+        <span className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           {thread.relatedEntries.map((entry) => (
-            <span key={entry.id} className="rounded-md bg-muted px-1.5 py-0.5 text-xs">
-              {entry.name}
-            </span>
+            <span key={entry.id}>{entry.name}</span>
           ))}
         </span>
       )}
-      {thread.overdue && <Badge variant="destructive">회수 목표 지남</Badge>}
     </button>
   )
 }

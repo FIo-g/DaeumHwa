@@ -102,6 +102,12 @@ describe('ThreadBoard', () => {
     expect(within(card).getByText('서윤')).toBeInTheDocument()
   })
 
+  it('marks an overdue thread with a plain label, not a filled badge', () => {
+    renderBoard('editor')
+    const card = screen.getByRole('button', { name: /빛나는 목걸이/ })
+    expect(within(card).getByText('회수 목표 지남')).not.toHaveAttribute('data-slot', 'badge')
+  })
+
   it('does not show the overdue badge for threads that are not overdue', () => {
     renderBoard('editor')
     const card = screen.getByRole('button', { name: /그림자 계약/ })

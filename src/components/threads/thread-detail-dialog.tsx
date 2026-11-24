@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { ConfirmButton } from '@/components/app/confirm-button'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -96,7 +95,9 @@ export function ThreadDetailDialog({
                 {thread.targetChapterPosition === null
                   ? '정하지 않음'
                   : `${thread.targetChapterPosition}화`}
-                {thread.overdue && <Badge variant="destructive">회수 목표 지남</Badge>}
+                {thread.overdue && (
+                  <span className="text-xs font-medium text-mark">회수 목표 지남</span>
+                )}
               </dd>
               <dt className="text-muted-foreground">관련 카드</dt>
               <dd>
@@ -133,7 +134,10 @@ export function ThreadDetailDialog({
           ) : (
             <ol className="flex flex-col gap-2">
               {thread.events.map((event) => (
-                <li key={event.id} className="flex flex-col gap-1 rounded-lg border p-3 text-sm">
+                <li
+                  key={event.id}
+                  className="flex flex-col gap-1 rounded-sm border border-rule p-3 text-sm"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">
                       {THREAD_EVENT_LABEL[event.kind]} ·{' '}
